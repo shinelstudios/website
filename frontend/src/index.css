@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- custom utilities for the creators marquee ---- */
+@layer utilities {
+  @keyframes marquee-ltr {
+    0%   { transform: translateX(-50%); }
+    100% { transform: translateX(0%); }
+  }
+
+  .animate-marquee-ltr {
+    animation: marquee-ltr 28s linear infinite;
+    width: max-content; /* track wider than viewport */
+  }
+}
