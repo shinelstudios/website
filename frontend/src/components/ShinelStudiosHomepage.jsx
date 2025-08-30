@@ -299,7 +299,7 @@ const ShinelStudiosHomepage = () => {
               Where Ideas <motion.span className="text-transparent bg-clip-text" style={{ backgroundImage: `linear-gradient(90deg, var(--orange), #ff9357)` }} {...float}>Shine</motion.span>
             </motion.h1>
             <motion.p variants={fadeIn} className="text-xl md:text-2xl mb-8 max-w-2xl mx-auto" style={{ color: 'var(--text-muted)' }}>
-              Shinel Studios — where creators & brands craft unforgettable visuals that drive results.
+              Shinel Studios — Helping creators grow with Editing • Thumbnails • Shorts • GFX
             </motion.p>
             <motion.div variants={fadeIn} className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <motion.a href="#services" className="text-white px-8 py-4 rounded-lg font-medium text-lg" style={{ background: 'var(--orange)' }}
@@ -321,16 +321,15 @@ const ShinelStudiosHomepage = () => {
   /* ===================== Creators Worked With ===================== */
   const CreatorsWorkedWith = () => {
     const creators = [
-      { name: 'MRBEAST', role: 'ENTERTAINMENT • PHILANTHROPY', subs: '200M+' },
-      { name: 'MKBHD', role: 'TECH • GADGETS', subs: '18M+' },
-      { name: 'PEWDIEPIE', role: 'GAMING • COMEDY', subs: '111M+' },
-      { name: 'ZACH KING', role: 'MAGIC • SHORTS', subs: '15M+' },
-      { name: 'ALI ABDAAL', role: 'PRODUCTIVITY • EDUCATION', subs: '5M+' },
-      { name: 'KSI', role: 'GAMING • BOXING • MUSIC', subs: '24M+' },
-      { name: 'EMMA CHAMBERLAIN', role: 'LIFESTYLE • FASHION', subs: '12M+' },
-      { name: 'NAS DAILY', role: 'TRAVEL • STORIES', subs: '22M+' },
-      { name: 'KHABY LAME', role: 'COMEDY • SHORTS', subs: '80M+' },
-      { name: 'ALEX HORMOZI', role: 'BUSINESS • ENTREPRENEURSHIP', subs: '1M+' },
+      { name: 'Kamz Inkzone', subs: '171K' },
+      { name: 'Deadlox Gaming', subs: '7K' },
+      { name: 'Kundan Parashar', subs: '7K' },
+      { name: 'Aish is Live', subs: '13K' },
+      { name: 'Gamer Mummy', subs: '14.7K' },
+      { name: 'Gamify Anchit', subs: '1.5K' },
+      { name: 'Maggie Live', subs: '22K' },
+      { name: 'Crown Ankit', subs: '3K' },
+      { name: 'Manav Maggie Sukhija', subs: '50K' },
     ];
     const loop = useMemo(() => [...creators, ...creators], []);
 
@@ -429,21 +428,19 @@ const ShinelStudiosHomepage = () => {
   /* ===================== Testimonials WALL ===================== */
   const TestimonialsWall = () => {
     const col1 = [
-      { name: 'Rajkumar Maskar', tag: 'YouTuber', text: 'From brand kit to shorts, Shinel handled end-to-end and kept everything on-brand.' },
-      { name: 'Sarah Johnson', tag: 'Marketing Director', text: 'Crystal-clear communication and fast turnarounds. Our product launch video crushed it.' },
-      { name: 'Mike Chen', tag: 'Content Creator', text: 'Thumbnails + packaging boosted CTR with smooth feedback loops and fast delivery.' },
-      { name: 'Aaryan Dev', tag: 'Streamer', text: 'Motion graphics on shorts are 🔥 — watch time went up immediately.' },
+      { name: 'Kamz Inkzone', tag: 'YouTuber', text: 'Our brand videos got a professional uplift, engagement went crazy!' },
+      { name: 'Deadlox Gaming', tag: 'Gamer', text: 'Editing & thumbnails gave me better CTR & retention 🔥' },
+      { name: 'Kundan Parashar', tag: 'Devotional Creator', text: 'They handled devotional content with respect & quality 🙏' },
     ];
     const col2 = [
-      { name: 'Rishav Chatterjee', tag: 'Brand Manager', text: 'Consistency + edits helped us reach millions — huge uplift in engagement.' },
-      { name: 'Priya Singh', tag: 'Growth Lead', text: 'They plan content like a marketing team and deliver like a studio.' },
-      { name: 'Ishita Rao', tag: 'Creator', text: 'Clean storytelling. They made my long vlog feel like a tight film.' },
-      { name: 'Walter Brown', tag: 'Creator', text: 'Thank you @Shinel for the revolution 🙌🏼🙌🏼' },
+      { name: 'Aish is Live', tag: 'Streamer', text: 'Livestream clips turned into viral shorts 🚀' },
+      { name: 'Gamer Mummy', tag: 'Gaming Creator', text: 'Editing consistency + branding helped scale fast.' },
+      { name: 'Gamify Anchit', tag: 'Gamer', text: 'Loved the creative storytelling & editing finesse.' },
     ];
     const col3 = [
-      { name: 'Emily Rodriguez', tag: 'Brand Manager', text: 'Strategic approach + creative execution. We reached millions of new customers.' },
-      { name: 'Alumalla Deepika', tag: 'Community', text: 'They kept the vibe of our brand while pushing fresh ideas.' },
-      { name: 'Ritika Mehta', tag: 'Ops', text: 'Calendars, scripts, edit — all managed smoothly.' },
+      { name: 'Maggie Live', tag: 'Lifestyle Creator', text: 'Packaging & thumbnails boosted CTR instantly.' },
+      { name: 'Crown Ankit', tag: 'Gaming Creator', text: 'The edits really brought out my personality 💯' },
+      { name: 'Manav Maggie Sukhija', tag: 'YouTuber', text: 'High quality, fast turnaround, professional team.' },
     ];
 
     const REPS = 4;
@@ -534,10 +531,10 @@ const ShinelStudiosHomepage = () => {
   /* ===================== Stats ===================== */
   const StatsSection = () => {
     const stats = [
-      { icon: <Users size={40} />, number: '500+', label: 'Happy Clients' },
-      { icon: <Target size={40} />, number: '1000+', label: 'Projects Completed' },
-      { icon: <Eye size={40} />, number: '50M+', label: 'Total Reach' },
-      { icon: <MessageCircle size={40} />, number: '10M+', label: 'Views Generated' },
+      { icon: <Users size={40} />, number: '20+', label: 'Active Clients' },
+      { icon: <Target size={40} />, number: '100+', label: 'Projects Completed' },
+      { icon: <Eye size={40} />, number: '100M+', label: 'Views Generated' },
+      { icon: <MessageCircle size={40} />, number: '10+', label: 'Niches Covered' },
     ];
     return (
       <section className="py-20" style={{ background: isDark ? '#000' : '#fff' }}>
@@ -552,7 +549,15 @@ const ShinelStudiosHomepage = () => {
                 whileHover={{ y: -6, boxShadow: '0 10px 24px rgba(0,0,0,0.15)' }}
               >
                 <div className="mb-4 flex justify-center" style={{ color: 'var(--orange)' }}>{st.icon}</div>
-                <div className="text-4xl font-bold mb-2 font-['Poppins']" style={{ color: 'var(--text)' }}>{st.number}</div>
+                <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 1 }}
+                className="text-4xl font-bold mb-2 font-['Poppins']"
+                style={{ color: 'var(--text)' }}
+                >
+                  {st.number}
+                </motion.div>
                 <div style={{ color: 'var(--text-muted)' }}>{st.label}</div>
               </motion.div>
             ))}
@@ -561,6 +566,14 @@ const ShinelStudiosHomepage = () => {
       </section>
     );
   };
+  <div className="text-center mt-10">
+    <a
+    href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
+    className="px-6 py-3 bg-[var(--orange)] text-white rounded-lg font-semibold"
+    >
+      Still have questions? Chat with us on WhatsApp
+      </a>
+  </div>
 
   /* ===================== FAQ ===================== */
   const FAQSection = () => {
@@ -622,7 +635,7 @@ const ShinelStudiosHomepage = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <motion.a
-              href="https://wa.me/919988090788"
+              href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel.%20Can%20we%20talk?"
               target="_blank" rel="noreferrer"
               className="bg-white text-black px-8 py-4 rounded-lg font-medium text-lg"
               whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}
@@ -632,6 +645,12 @@ const ShinelStudiosHomepage = () => {
             <motion.a href="#contact" className="border-2 border-white text-white px-8 py-4 rounded-lg font-medium text-lg"
               whileHover={{ y: -2, backgroundColor: '#fff', color: '#000' }} whileTap={{ scale: 0.98 }}>
               Contact Us
+            </motion.a>
+            <motion.a href="mailto:hello@shinelstudiosofficial.com"
+            className="px-8 py-4 rounded-lg font-medium text-lg border-2 border-white text-white"
+            whileHover={{ y: -2, backgroundColor: '#fff', color: '#000' }}
+            >
+              Email Us
             </motion.a>
           </div>
         </motion.div>
