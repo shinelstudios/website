@@ -1,30 +1,47 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-IN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- ✅ Favicon -->
-    <link rel="icon" type="image/png" href="/favicon.png" />
 
-    <!-- ✅ Title & Description -->
+    <!-- ✅ Favicons -->
+    <!-- Light mode -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
+    
+    <!-- Dark mode -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
+    
+    <!-- Apple/Android touch -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-light-32x32.png">
+    
+    <!-- Fallback favicon (default) -->
+    <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
+
+    <!-- ✅ Theme colors for mobile browsers -->
+    <meta name="theme-color" content="#E85002" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+
+    <!-- ✅ SEO Title & Description -->
     <title>Shinel Studios | Video Editing & YouTube Growth Agency</title>
     <meta name="description" content="Shinel Studios helps creators grow with Video Editing, Thumbnails, Shorts & GFX. Trusted by 20+ creators with 100M+ views." />
     <meta name="keywords" content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
-    <link rel="canonical" href="https://www.shinelstudios.com/" />
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.shinelstudios.in/" />
 
-    <!-- ✅ Open Graph (for Google, FB, LinkedIn previews) -->
+    <!-- ✅ Open Graph (FB/LinkedIn/Google) -->
     <meta property="og:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta property="og:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta property="og:url" content="https://www.shinelstudios.com/" />
+    <meta property="og:url" content="https://www.shinelstudios.in/" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="https://www.shinelstudios.in/og-image.png" />
 
     <!-- ✅ Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image" content="https://www.shinelstudios.in/og-image.png" />
 
     <!-- ✅ Schema Markup (Organization) -->
     <script type="application/ld+json">
@@ -32,8 +49,14 @@
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "Shinel Studios",
-      "url": "https://www.shinelstudios.com",
-      "logo": "https://www.shinelstudios.com/logo.png",
+      "url": "https://www.shinelstudios.in",
+      "logo": "https://www.shinelstudios.in/logo.png",
+      "contactPoint": [{
+        "@type": "ContactPoint",
+        "telephone": "+91-8968141585",
+        "contactType": "customer service",
+        "availableLanguage": ["en","hi"]
+      }],
       "sameAs": [
         "https://www.instagram.com/shinel.studios/",
         "https://www.linkedin.com/company/shinel-studios/"

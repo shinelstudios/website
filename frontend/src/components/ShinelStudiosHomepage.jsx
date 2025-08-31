@@ -40,6 +40,7 @@ const ShinelStudiosHomepage = () => {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle('dark', isDark);
+    
     const t = isDark ? BRAND.dark : BRAND.light;
     root.style.setProperty('--text', t.text);
     root.style.setProperty('--text-muted', t.textMuted);
@@ -49,7 +50,16 @@ const ShinelStudiosHomepage = () => {
     root.style.setProperty('--header-bg', t.headerBg);
     root.style.setProperty('--hero-bg', t.heroBg);
     root.style.setProperty('--orange', BRAND.orange);
+
+  // ✅ Update favicon dynamically
+    const favicon = document.getElementById("favicon");
+    if (favicon) {
+      favicon.href = isDark
+      ? "/favicon-dark-32x32.png"
+      : "/favicon-light-32x32.png";
+    }
   }, [isDark]);
+
 
   const fadeIn = { initial: { opacity: 0, y: 30 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6 } };
   const staggerContainer = { animate: { transition: { staggerChildren: 0.1 } } };
