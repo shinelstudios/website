@@ -1,0 +1,12 @@
+# robots.txt for Shinel Studios
+
+User-agent: *
+Allow: /
+
+# (Optional) Prevent crawlers from accessing dev/build files
+Disallow: /node_modules/
+Disallow: /src/
+Disallow: /vite.config.js
+
+# Sitemap location (tell Google where your sitemap is)
+Sitemap: https://www.shinelstudios.com/sitemap.xml
