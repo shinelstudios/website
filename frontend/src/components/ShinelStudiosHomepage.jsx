@@ -9,6 +9,10 @@ import {
 import logoLight from '../assets/logo_light.png';
 import logoDark  from '../assets/logo_dark.png';
 
+// helper: Indian currency formatting
+const formatINR = (n) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
 // 🎬 Animation Variants
 const animations = {
   fadeUp: {
@@ -54,217 +58,510 @@ const BRAND = {
   }
 };
 
+
 const ShinelStudiosHomepage = () => {
+  const reduceMotion = typeof window !== 'undefined'
+  && window.matchMedia
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [isDark, setIsDark] = useState(true);
   const [openFAQ, setOpenFAQ] = useState(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showCalendly, setShowCalendly] = useState(false);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', isDark);
-    
-    const t = isDark ? BRAND.dark : BRAND.light;
-    root.style.setProperty('--text', t.text);
-    root.style.setProperty('--text-muted', t.textMuted);
-    root.style.setProperty('--surface', t.surface);
-    root.style.setProperty('--surface-alt', t.surfaceAlt);
-    root.style.setProperty('--border', t.border);
-    root.style.setProperty('--header-bg', t.headerBg);
-    root.style.setProperty('--hero-bg', t.heroBg);
-    root.style.setProperty('--orange', BRAND.orange);
+  // 4a) Load theme + UTM once on mount
+useEffect(() => {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || saved === 'light') setIsDark(saved === 'dark');
 
-  // ✅ Update favicon dynamically
-    const favicon = document.getElementById("favicon");
-    if (favicon) {
-      favicon.href = isDark
-      ? "/favicon-dark-32x32.png"
-      : "/favicon-light-32x32.png";
-    }
-  }, [isDark]);
+  const params = new URLSearchParams(window.location.search);
+  const fields = ["utm_source","utm_medium","utm_campaign","utm_content","utm_term"];
+  const utm = fields.reduce((o,k)=>{ const v=params.get(k); if(v) o[k]=v; return o; },{});
+  if (Object.keys(utm).length) localStorage.setItem("utm", JSON.stringify(utm));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
+// 4b) Apply theme whenever isDark changes (and persist it)
+useEffect(() => {
+  const root = document.documentElement;
+  root.classList.toggle('dark', isDark);
+
+  const t = isDark ? BRAND.dark : BRAND.light;
+  root.style.setProperty('--text', t.text);
+  root.style.setProperty('--text-muted', t.textMuted);
+  root.style.setProperty('--surface', t.surface);
+  root.style.setProperty('--surface-alt', t.surfaceAlt);
+  root.style.setProperty('--border', t.border);
+  root.style.setProperty('--header-bg', t.headerBg);
+  root.style.setProperty('--hero-bg', t.heroBg);
+  root.style.setProperty('--orange', BRAND.orange);
+
+  const favicon = document.getElementById('favicon');
+  if (favicon) {
+    favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
+  }
+
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}, [isDark]);
 
   const fadeIn = { initial: { opacity: 0, y: 30 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6 } };
   const staggerContainer = { animate: { transition: { staggerChildren: 0.1 } } };
   const float = { animate: { y: [0, -6, 0], transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' } } };
   const tiltHover = { whileHover: { y: -8, rotateX: 2, rotateY: -2, transition: { type: 'spring', stiffness: 200, damping: 15 } } };
 
-  /* ===================== Header ===================== */
-  const Header = ({ isDark, setIsDark }) => {
-    const [workOpen, setWorkOpen] = useState(false);
-    const workRef = useRef(null);
+/* ===================== Header (bigger logo + active link + smart height var) ===================== */
+const Header = ({ isDark, setIsDark }) => {
+  const [workOpen, setWorkOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [hovered, setHovered] = useState(null);
+  const [active, setActive] = useState("Home"); // tracks section in view
 
-    const workItems = [
-      { name: 'Video Editing', href: '/video-editing' },
-      { name: 'GFX',           href: '/gfx' },
-      { name: 'Thumbnails',    href: '/thumbnails' },
-      { name: 'Shorts',        href: '/shorts' },
-    ];
+  const workRef = useRef(null);
+  const sections = ["Home", "Services", "Testimonials", "Contact"];
 
-    const closeWorkMenu = () => setWorkOpen(false);
+  const workItems = [
+    { name: "Video Editing", href: "/video-editing" },
+    { name: "GFX", href: "/gfx" },
+    { name: "Thumbnails", href: "/thumbnails" },
+    { name: "Shorts", href: "/shorts" },
+  ];
 
-    useEffect(() => {
-      const onDocDown = (e) => {
-        if (!workOpen) return;
-        if (workRef.current && !workRef.current.contains(e.target)) closeWorkMenu();
-      };
-      const onEsc = (e) => e.key === 'Escape' && closeWorkMenu();
-      document.addEventListener('mousedown', onDocDown);
-      document.addEventListener('touchstart', onDocDown, { passive: true });
-      document.addEventListener('keydown', onEsc);
-      return () => {
-        document.removeEventListener('mousedown', onDocDown);
-        document.removeEventListener('touchstart', onDocDown);
-        document.removeEventListener('keydown', onEsc);
-      };
-    }, [workOpen]);
+  const closeWorkMenu = () => setWorkOpen(false);
 
+  // Close dropdown on outside / esc
+  useEffect(() => {
+    const onDocDown = (e) => {
+      if (!workOpen) return;
+      if (workRef.current && !workRef.current.contains(e.target)) closeWorkMenu();
+    };
+    const onEsc = (e) => e.key === "Escape" && closeWorkMenu();
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("touchstart", onDocDown, { passive: true });
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("touchstart", onDocDown);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [workOpen]);
+
+  // Shrink on scroll + progress + expose header height via CSS var (--header-h)
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      setScrolled(y > 8);
+      const doc = document.documentElement;
+      const h = doc.scrollHeight - window.innerHeight;
+      setProgress(h > 0 ? Math.min(100, (y / h) * 100) : 0);
+
+      // keep QuickQuoteBar perfectly tucked under header
+      const headerH = y > 8 ? 72 : 96; // tweak here if you want thinner/thicker
+      document.documentElement.style.setProperty("--header-h", `${headerH}px`);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Active link indicator via IntersectionObserver
+  useEffect(() => {
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) {
+          const id = visible.target.id || "";
+          const match = sections.find((s) => s.toLowerCase() === id);
+          if (match) setActive(match);
+        }
+      },
+      { rootMargin: "-40% 0px -55% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+    sections.forEach((s) => {
+      const el = document.getElementById(s.toLowerCase());
+      if (el) io.observe(el);
+    });
+    return () => io.disconnect();
+  }, []);
+
+  const NavLink = ({ label }) => {
+    const isActive = active === label;
     return (
-      <motion.header
-        variants={animations.fadeDown}
-        initial="hidden"
-        animate="visible"
-        className="fixed top-0 w-full z-50 backdrop-blur-lg"
-        style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--border)' }}
+      <motion.a
+        href={`#${label.toLowerCase()}`}
+        className={`relative text-[15px] lg:text-base px-1 ${isActive ? "font-semibold" : ""}`}
+        style={{ color: isActive ? "var(--orange)" : "var(--text)" }}
+        onHoverStart={() => setHovered(label)}
+        onHoverEnd={() => setHovered(null)}
+        whileHover={{ color: "var(--orange)" }}
+        transition={{ duration: 0.2 }}
       >
-        <nav className="container mx-auto px-4 py-3 flex items-center justify-between">
-          {/* Logo (large) */}
-          <a href="#home" className="flex items-center">
-            <div className="h-12 flex items-center overflow-visible">
-              <img
-                src={isDark ? logoLight : logoDark}
-                alt="Shinel Studios"
-                className="h-full w-auto object-contain select-none transition-transform"
-                style={{ transform: 'scale(2.8)', transformOrigin: 'left center', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(2.9)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(2.8)')}
+        {label}
+        {(hovered === label || isActive) && (
+          <motion.span
+            layoutId="nav-underline"
+            className="absolute left-0 -bottom-1 h-[2px] w-full"
+            style={{
+              background: "linear-gradient(90deg, var(--orange) 0%, #ff9357 100%)",
+              borderRadius: 999,
+            }}
+            transition={{ type: "spring", stiffness: 450, damping: 30 }}
+          />
+        )}
+      </motion.a>
+    );
+  };
+
+  return (
+    <motion.header
+      variants={animations.fadeDown}
+      initial="hidden"
+      animate="visible"
+      className="fixed top-0 w-full z-50"
+      style={{
+        background: "var(--header-bg)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        borderBottom: "1px solid var(--border)",
+        boxShadow: scrolled ? "0 6px 18px rgba(0,0,0,0.16)" : "none",
+        transition: "box-shadow .25s ease",
+      }}
+    >
+      {/* ultra-thin progress line */}
+      <div
+        className="absolute left-0 top-0 h-[1.5px]"
+        style={{
+          width: `${progress}%`,
+          background: "linear-gradient(90deg, var(--orange), #ff9357)",
+        }}
+      />
+
+      <nav
+        className="container mx-auto px-4 flex items-center justify-between"
+        style={{
+          paddingTop: scrolled ? "6px" : "10px",
+          paddingBottom: scrolled ? "6px" : "10px",
+          transition: "padding .2s ease",
+        }}
+      >
+        {/* Brand */}
+        <a href="#home" className="flex items-center select-none">
+          <motion.img
+            src={isDark ? logoLight : logoDark}
+            alt="Shinel Studios"
+            className="w-auto object-contain block origin-left"
+            /* Larger visual read, still shrinks on scroll */
+            style={{
+              height: scrolled ? 72 : 96,
+              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
+            }}
+            initial={{ opacity: 0, y: -6, scale: 1.08 }}
+            animate={{ opacity: 1, y: 0, scale: scrolled ? 1.0 : 1.12 }}
+            whileHover={{ scale: 1.16, rotate: -0.4 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            decoding="async"
+          />
+        </a>
+
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-8">
+          {sections.filter(s => s !== "Home").reduce((arr, s, i) => {
+            // put Home first
+            if (i === 0) arr.unshift(<NavLink key="Home" label="Home" />);
+            arr.push(<NavLink key={s} label={s} />);
+            return arr;
+          }, [])}
+
+          {/* Our Work dropdown */}
+          <div className="relative" ref={workRef}>
+            <motion.button
+              className="inline-flex items-center gap-1 text-[15px] lg:text-base"
+              style={{ color: "var(--text)" }}
+              onClick={() => setWorkOpen((v) => !v)}
+              onMouseEnter={() => setHovered("Our Work")}
+              onMouseLeave={() => setHovered(null)}
+              whileHover={{ y: -2, color: "var(--orange)" }}
+              aria-expanded={workOpen}
+              aria-haspopup="menu"
+            >
+              Our Work
+              <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
+            </motion.button>
+
+            {hovered === "Our Work" && (
+              <motion.span
+                layoutId="nav-underline"
+                className="absolute left-0 -bottom-1 h-[2px] w-full"
+                style={{
+                  background: "linear-gradient(90deg, var(--orange) 0%, #ff9357 100%)",
+                  borderRadius: 999,
+                }}
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
               />
-            </div>
-          </a>
+            )}
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-8" style={{ color: 'var(--text)' }}>
-            <a href="#home" className="transition-colors hover:text-[var(--orange)]">Home</a>
-
-            {/* Our Work dropdown */}
-            <div className="relative" ref={workRef}>
-              <motion.button
-                whileHover={{ y: -2, color: 'var(--orange)' }}
-                onClick={() => setWorkOpen(v => !v)}
-                className="inline-flex items-center gap-1"
-                aria-expanded={workOpen}
-                aria-haspopup="menu"
-              >
-                Our Work <ChevronDown size={16} className={`transition-transform ${workOpen ? 'rotate-180' : ''}`} />
-              </motion.button>
-
-              <AnimatePresence>
-                {workOpen && (
-                  <motion.div
-                    role="menu"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                    onMouseLeave={closeWorkMenu}
-                  >
-                    {workItems.map((item) => (
-                      <a
-                        key={item.name}
-                        href={item.href}
-                        className="block w-full px-4 py-3 text-left font-semibold"
-                        style={{ color: 'var(--orange)', transition: 'color .15s, background-color .15s' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'var(--orange)';
-                          e.currentTarget.style.color = '#fff';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.color = 'var(--orange)';
-                        }}
-                        onClick={closeWorkMenu}
-                      >
-                        {item.name}
-                      </a>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <a href="#services" className="transition-colors hover:text-[var(--orange)]">Services</a>
-            <a href="#testimonials" className="transition-colors hover:text-[var(--orange)]">Testimonials</a>
-            <a href="#contact" className="transition-colors hover:text-[var(--orange)]">Contact</a>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-lg hover:opacity-90"
-              style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', color: 'var(--text)' }}
-              aria-label="Toggle theme"
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-
-            {/* Mobile menu toggle */}
-            <button onClick={() => setIsMenuOpen(s => !s)} className="md:hidden p-2" style={{ color: 'var(--text)' }} aria-label="Toggle menu">
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </nav>
-
-        {/* Mobile menu */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden"
-              style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}
-            >
-              <div className="px-4 py-4 space-y-2" style={{ color: 'var(--text)' }}>
-                <a href="#home" className="block py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
-
-                <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-                  {workItems.map((item, idx) => (
+            <AnimatePresence>
+              {workOpen && (
+                <motion.div
+                  role="menu"
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                >
+                  {workItems.map((item) => (
                     <a
-                      key={idx}
+                      key={item.name}
                       href={item.href}
-                      className="block w-full px-3 py-3 text-left"
-                      style={{ color: 'var(--orange)', fontWeight: 600 }}
-                      onClick={() => setIsMenuOpen(false)}
+                      className="block w-full px-4 py-3 text-left font-semibold"
+                      style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--orange)";
+                        e.currentTarget.style.color = "#fff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = "var(--orange)";
+                      }}
+                      onClick={closeWorkMenu}
                     >
                       {item.name}
                     </a>
                   ))}
-                </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
 
-                <a href="#services" className="block py-2" onClick={() => setIsMenuOpen(false)}>Services</a>
-                <a href="#testimonials" className="block py-2" onClick={() => setIsMenuOpen(false)}>Testimonials</a>
-                <a href="#contact" className="block py-2" onClick={() => setIsMenuOpen(false)}>Contact</a>
+        {/* Right actions */}
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* CTA (desktop) */}
+          <motion.button
+          onClick={() => setShowCalendly(true)}
+          className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white"
+          style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+          whileHover={{ y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
+          whileTap={{ scale: 0.98 }}
+          >
+            Book Free Audit
+            </motion.button>
+
+          {/* Theme toggle */}
+          <motion.button
+            onClick={() => setIsDark(!isDark)}
+            className="p-2 rounded-lg"
+            style={{
+              background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+              color: "var(--text)",
+            }}
+            aria-label="Toggle theme"
+            whileTap={{ rotate: 180, scale: 0.9 }}
+            transition={{ duration: 0.4 }}
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </motion.button>
+
+          {/* Mobile menu toggle */}
+          <button
+          onClick={() => setIsMenuOpen((s) => !s)}
+          className="md:hidden p-2"
+          style={{ color: "var(--text)" }}
+          aria-label="Toggle menu"
+          aria-expanded={isMenuOpen}
+          aria-controls="mobile-menu"
+          >
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile menu */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            id="mobile-menu"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="md:hidden"
+            style={{ background: "var(--surface)", borderTop: "1px solid var(--border)" }}
+          >
+            <div className="px-4 py-4 space-y-2" style={{ color: "var(--text)" }}>
+              <a href="#home" className="block py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
+
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+                {workItems.map((item, idx) => (
+                  <a
+                    key={idx}
+                    href={item.href}
+                    className="block w-full px-3 py-3 text-left"
+                    style={{ color: "var(--orange)", fontWeight: 600 }}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {item.name}
+                  </a>
+                ))}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.header>
-    );
-  };
 
-  /* ===================== Hero ===================== */
-  /* ===================== Hero ===================== */
+              {["Services", "Testimonials", "Contact"].map((label) => (
+                <a
+                  key={label}
+                  href={`#${label.toLowerCase()}`}
+                  className="block py-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {label}
+                </a>
+              ))}
+
+              <a
+                href="#contact"
+                className="mt-2 inline-flex rounded-full px-4 py-3 text-sm font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Get a Quote
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.header>
+  );
+};
+
+/* ===================== Calendly Modal ===================== */
+const CalendlyModal = ({open, onClose}) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[var(--surface)] rounded-2xl w-full max-w-3xl overflow-hidden border" style={{borderColor:'var(--border)'}}>
+        <div className="flex items-center justify-between px-4 py-3" style={{color:'var(--text)'}}>
+          <b>Free 15-min Content Audit</b>
+          <button onClick={onClose} className="text-sm opacity-75 hover:opacity-100">Close</button>
+        </div>
+        <div className="h-[70vh]">
+          <iframe
+            title="Book a call"
+            src="https://calendly.com/YOUR-CALENDLY-SLUG/15min?hide_event_type_details=1&hide_gdpr_banner=1"
+            className="w-full h-full"
+            style={{border:0}}
+            loading="lazy"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ===================== Trust Bar ===================== */
+const TrustBar = () => (
+  <div
+    className="w-full border-b"
+    style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+  >
+    <div className="container mx-auto px-4 py-2 flex items-center justify-center gap-4 text-xs md:text-sm">
+      <div className="flex items-center gap-2" style={{ color: 'var(--text)' }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z" stroke="currentColor"/>
+        </svg>
+        Rated <b className="mx-1">4.9/5</b> by creators
+      </div>
+      <span className="hidden md:inline" style={{ color: 'var(--text-muted)' }}>•</span>
+      <div className="hidden md:flex items-center gap-3" style={{ color: 'var(--text-muted)' }}>
+        <span>Trusted by 20+ active clients</span>
+        <span>•</span>
+        <span>19M+ views generated</span>
+      </div>
+    </div>
+  </div>
+);
+
+/* ===================== Quick Quote Bar ===================== */
+const QuickQuoteBar = ({ onBook }) => {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      const h = document.documentElement.scrollHeight - window.innerHeight;
+      setShow(h > 0 && y / h > 0.2);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      initial={{ y: -48, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -48, opacity: 0 }}
+      className="hidden md:block fixed left-0 right-0 z-40"
+      style={{ top: "calc(var(--header-h, 92px) + 6px)" }}
+    >
+      <div className="container mx-auto px-4">
+        <div
+          className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 shadow-lg"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            boxShadow: '0 10px 24px rgba(0,0,0,0.15)',
+          }}
+        >
+          <span className="text-sm md:text-base" style={{ color: 'var(--text)' }}>
+            🚀 Get a <b>free content audit</b> in 24 hours.
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onBook}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(90deg, var(--orange), #ff9357)' }}
+            >
+              Book Call
+            </button>
+            <a
+              href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20Can%20I%20get%20a%20quick%20audit%20of%20my%20channel%20please%3F"
+              target="_blank" rel="noreferrer"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(90deg, var(--orange), #ff9357)' }}
+            >
+              Get Free Audit
+            </a>
+            <a
+              href="#contact"
+              className="rounded-xl px-4 py-2 text-sm font-semibold"
+              style={{ border: '2px solid var(--orange)', color: 'var(--orange)' }}
+            >
+              Get Quote
+            </a>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+/* ===================== Hero ===================== */
 const HeroSection = () => {
   const starPalette = isDark ? ['#FFFFFF', '#FFEFC7', '#FFD37A'] : ['#B95600', '#FFB84C', '#FFA11E'];
-  const stars = Array.from({ length: 32 }).map((_, i) => ({
+  const stars = useMemo(() => (
+  reduceMotion ? [] : Array.from({ length: 32 }).map((_, i) => ({
     left: Math.random() * 100,
     top: Math.random() * 100,
     delay: Math.random() * 3.5,
     size: Math.random() * 10 + 6,
     color: starPalette[Math.floor(Math.random() * starPalette.length)],
     spinDir: Math.random() > 0.5 ? 1 : -1,
-  }));
+  }))
+), [reduceMotion, isDark]);
 
   const LightFlatBg = () => (
     <svg aria-hidden="true" className="absolute inset-0 w-full h-full" viewBox="0 0 1920 1080" preserveAspectRatio="none">
@@ -281,7 +578,7 @@ const HeroSection = () => {
       {!isDark && <LightFlatBg />}
 
       {/* Animated Stars */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {stars.map((s, i) => (
           <motion.svg
             key={i}
@@ -303,7 +600,7 @@ const HeroSection = () => {
               opacity: [isDark ? 0.4 : 0.55, 1, isDark ? 0.4 : 0.55],
               rotate: [0, s.spinDir * 180, s.spinDir * 360],
             }}
-            transition={{ duration: 2.2 + s.delay, repeat: Infinity, ease: 'easeInOut', delay: s.delay }}
+            transition={ reduceMotion ? { duration: 0.01 } : { duration: 2.2 + s.delay, repeat: Infinity, ease: 'easeInOut', delay: s.delay } }
           >
             {!isDark && <circle cx="12" cy="10" r="7" fill="url(#halo)" opacity="0.35" />}
             <polygon
@@ -340,7 +637,6 @@ const HeroSection = () => {
           animate="visible"
           className="max-w-4xl mx-auto"
         >
-          {/* Title */}
           <motion.h1
             variants={animations.fadeUp}
             className="text-5xl md:text-7xl font-bold mb-6 font-['Poppins']"
@@ -356,7 +652,6 @@ const HeroSection = () => {
             </motion.span>
           </motion.h1>
 
-          {/* Subtitle */}
           <motion.p
             variants={animations.fadeUp}
             transition={{ delay: 0.2 }}
@@ -366,7 +661,6 @@ const HeroSection = () => {
             Shinel Studios — Helping creators grow with Editing • Thumbnails • Shorts • GFX
           </motion.p>
 
-          {/* Buttons */}
           <motion.div
             variants={animations.fadeUp}
             transition={{ delay: 0.4 }}
@@ -425,31 +719,34 @@ const CreatorsWorkedWith = () => {
           Creators We Worked With
         </motion.h2>
 
-        <motion.div
-          className="flex gap-6"
-          animate={{ x: ["0%", "-50%"] }}
-          transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
-        >
-          {[...creators, ...creators].map((c, i) => (
-            <motion.div
-              key={i}
-              whileHover={{ scale: 1.08, y: -8 }}
-              className="min-w-[240px] sm:min-w-[280px] md:min-w-[320px] rounded-2xl overflow-hidden relative p-6"
-              style={{
-                background: 'linear-gradient(135deg, var(--surface), var(--surface-alt))',
-                border: '1px solid var(--border)',
-                boxShadow: '0 6px 20px rgba(0,0,0,0.08)',
-              }}
-            >
-              <div className="absolute top-4 right-4 text-xs font-bold px-3 py-1 rounded-full"
-                   style={{ background: 'var(--orange)', color: '#fff' }}>
-                {c.subs}
-              </div>
-              <h3 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{c.name}</h3>
-              <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>YouTube Creator</p>
-            </motion.div>
-          ))}
-        </motion.div>
+        {/* ✅ Overflow hidden wrapper to stop white gap */}
+        <div className="overflow-hidden">
+          <motion.div
+            className="flex gap-6"
+            animate={reduceMotion ? {} : { x: ["0%", "-50%"] }}
+            transition={reduceMotion ? {} : { repeat: Infinity, duration: 40, ease: "linear" }}
+          >
+            {[...creators, ...creators].map((c, i) => (
+              <motion.div
+                key={i}
+                whileHover={{ scale: 1.08, y: -8 }}
+                className="min-w-[240px] sm:min-w-[280px] md:min-w-[320px] rounded-2xl overflow-hidden relative p-6"
+                style={{
+                  background: 'linear-gradient(135deg, var(--surface), var(--surface-alt))',
+                  border: '1px solid var(--border)',
+                  boxShadow: '0 6px 20px rgba(0,0,0,0.08)',
+                }}
+              >
+                <div className="absolute top-4 right-4 text-xs font-bold px-3 py-1 rounded-full"
+                     style={{ background: 'var(--orange)', color: '#fff' }}>
+                  {c.subs}
+                </div>
+                <h3 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{c.name}</h3>
+                <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>YouTube Creator</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -508,6 +805,102 @@ const ServicesSection = () => {
             </motion.div>
           ))}
         </motion.div>
+      </div>
+    </section>
+  );
+};
+
+const BeforeAfter = ({before, after, label="Thumbnail Revamp", beforeAlt="Before", afterAlt="After"}) => {
+  const [v,setV]=useState(50);
+  return (
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="relative rounded-xl overflow-hidden border" style={{borderColor:'var(--border)'}}>
+        <img src={after} alt={afterAlt} className="w-full block" loading="lazy" decoding="async" />
+        <img src={before} alt={beforeAlt} className="w-full block absolute inset-0" style={{clipPath:`inset(0 ${100-v}% 0 0)`}} loading="lazy" decoding="async" />
+      </div>
+      <input type="range" min="0" max="100" value={v} onChange={e=>setV(+e.target.value)} className="w-full mt-3" />
+      <div className="text-center text-sm mt-1" style={{color:'var(--text-muted)'}}>{label}: drag to compare</div>
+    </div>
+  );
+};
+
+const ProofSection = () => (
+  <section className="py-16" style={{background:'var(--surface-alt)'}}>
+    <div className="container mx-auto px-4 text-center">
+      <h2 className="text-3xl md:text-4xl font-bold font-['Poppins'] mb-8" style={{color:'var(--text)'}}>Packaging That Lifts CTR</h2>
+      <BeforeAfter before="/assets/sample_before.jpg" after="/assets/sample_after.jpg" />
+    </div>
+  </section>
+);
+
+/* ===================== Case Studies ===================== */
+const CaseStudies = () => {
+  const items = [
+    { brand:'Kamz Inkzone', result:'+62% CTR', detail:'+41% avg view duration in 6 weeks', thumb:'', link:'#' },
+    { brand:'Gamer Mummy',  result:'+48% retention', detail:'Shorts pipeline + packaging', thumb:'', link:'#' },
+    { brand:'Aish is Live', result:'2.1x revenue', detail:'Clips → shorts → offers', thumb:'', link:'#' },
+  ];
+  return (
+    <section className="py-20" style={{background:'var(--surface)'}}>
+      <div className="container mx-auto px-4">
+        <h2 className="text-4xl md:text-5xl font-bold text-center mb-10 font-['Poppins']" style={{color:'var(--text)'}}>Recent Wins</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {items.map((it,i)=>(
+            <motion.a key={i} href={it.link} whileHover={{y:-6}} className="rounded-2xl p-6 border"
+              style={{background:'var(--surface-alt)', borderColor:'var(--border)'}}>
+              <div className="text-sm mb-2" style={{color:'var(--text-muted)'}}>Client</div>
+              <div className="text-xl font-semibold" style={{color:'var(--text)'}}>{it.brand}</div>
+              <div className="mt-4 text-3xl font-bold" style={{color:'var(--orange)'}}>{it.result}</div>
+              <div className="mt-2" style={{color:'var(--text-muted)'}}>{it.detail}</div>
+              <div className="mt-4 text-sm underline" style={{color:'var(--text)'}}>View breakdown →</div>
+            </motion.a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* ===================== Process Section ===================== */
+const ProcessSection = () => {
+  const steps = [
+    { n: 1, title: "Discovery Call (15–20 min)", desc: "Goals, niche, roadblocks, assets. Quick audit if needed." },
+    { n: 2, title: "Pilot Sprint (7–10 days)", desc: "2–3 edited videos + thumbnails/shorts to prove ROI fast." },
+    { n: 3, title: "Scale & Systemize", desc: "Monthly calendar, brand kit, iteration loop for retention/CTR." },
+  ];
+  return (
+    <section className="py-20" style={{ background: 'var(--surface)' }}>
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-12">
+          <h2 className="text-4xl md:text-5xl font-bold font-['Poppins']" style={{ color: 'var(--text)' }}>
+            How We Work
+          </h2>
+          <p className="text-lg mt-3" style={{ color: 'var(--text-muted)' }}>
+            A simple path to results (no fluff, just outcomes).
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {steps.map(s => (
+            <motion.div
+              key={s.n}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4 }}
+              className="p-6 rounded-2xl"
+              style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center font-bold mb-4"
+                style={{ background: 'var(--orange)', color: '#fff' }}
+              >
+                {s.n}
+              </div>
+              <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>{s.title}</h3>
+              <p style={{ color: 'var(--text-muted)' }}>{s.desc}</p>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -607,6 +1000,14 @@ const TestimonialsWall = () => {
       </div>
 
       <style>{`
+      @media (prefers-reduced-motion: reduce) {
+      .ss-col.slow,
+      .ss-col.medium,
+      .ss-col.fast {
+      animation: none !important;
+      }
+      }
+
         .ss-viewport {
           height: 600px;
           overflow: hidden;
@@ -630,7 +1031,8 @@ const TestimonialsWall = () => {
 
         @keyframes colUp   { 0% {transform:translateY(0)} 100% {transform:translateY(-50%)} }
         @keyframes colDown { 0% {transform:translateY(-50%)} 100% {transform:translateY(0)} }
-      `}</style>
+      `}
+      </style>
     </section>
   );
 };
@@ -639,10 +1041,10 @@ const TestimonialsWall = () => {
  /* ===================== Stats ===================== */
 const StatsSection = () => {
   const stats = [
-    { icon: <Users size={40} />, number: '20+', label: 'Active Clients' },
-    { icon: <Target size={40} />, number: '5000+', label: 'Projects Completed' },
-    { icon: <Eye size={40} />, number: '19M+', label: 'Views Generated' },
-    { icon: <MessageCircle size={40} />, number: '10+', label: 'Niches Covered' },
+    { icon:<Users size={40}/>, number:'20+',    label:'Active Clients' },
+    { icon:<Eye size={40}/>,   number:'+38%',   label:'Avg CTR lift (30 days)' },
+    { icon:<Target size={40}/>,number:'+27%',   label:'Avg watch time lift' },
+    { icon:<MessageCircle size={40}/>, number:'<2h', label:'Avg response time' },
   ];
 
   return (
@@ -783,6 +1185,228 @@ const StatsSection = () => {
   );
 };
 
+/* ===================== Pricing (3 packs + neon glow + custom button) ===================== */
+const Pricing = () => {
+  const tiers = [
+    {
+      name: "Starter",
+      priceInr: 3999,
+      bullet: [
+        "1 thumbnail",
+        "1 video edit (up to 8 min)",
+        "Basic SEO setup",
+      ],
+      cta: "Request Starter",
+    },
+    {
+      name: "Shorts Pack",
+      priceInr: 6000,
+      featured: true,
+      bullet: [
+        "30 shorts",
+        "Optimized for YT Shorts feed",
+        "Hook-first scripting support",
+      ],
+      cta: "Book Shorts Pack",
+    },
+    {
+      name: "Creator Essentials",
+      priceInr: 9999, // standard India-friendly monthly starter for creators
+      bullet: [
+        "Thumbnails + edits combo",
+        "Light brand kit & packaging",
+        "Monthly growth check-in",
+      ],
+      cta: "Book Essentials",
+    },
+  ];
+
+  return (
+    <section className="py-20" style={{ background: "var(--surface)" }}>
+      <div className="container mx-auto px-4">
+        <h2
+          className="text-4xl md:text-5xl font-bold text-center mb-10 font-['Poppins']"
+          style={{ color: "var(--text)" }}
+        >
+          Simple Packages
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {tiers.map((t, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true }}
+              whileHover={{ y: -6 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className={`group relative rounded-2xl p-6 border overflow-hidden ${
+                t.featured ? "ring-2 ring-[var(--orange)]/35" : ""
+              }`}
+              style={{
+                background: "var(--surface-alt)",
+                borderColor: "var(--border)",
+                boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
+              }}
+            >
+              {/* animated neon backlight */}
+              <motion.div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-10 -z-10 opacity-0 group-hover:opacity-100 blur-2xl"
+                style={{
+                  background:
+                    "radial-gradient(600px 200px at 50% -20%, rgba(232,80,2,0.18), transparent 60%), radial-gradient(400px 240px at 80% 120%, rgba(255,147,87,0.18), transparent 70%)",
+                }}
+                animate={{ opacity: [0.08, 0.16, 0.1, 0.16, 0.08] }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+              />
+
+              {/* glossy sweep line */}
+              <motion.span
+                aria-hidden="true"
+                className="absolute -top-10 -left-20 h-[200%] w-20 rotate-12 opacity-0 group-hover:opacity-25"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+                }}
+                animate={{ x: ["-20%", "140%"] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+              />
+
+              <div
+                className="text-sm mb-2"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {t.featured ? "Most Popular" : "\u00A0"}
+              </div>
+
+              <div
+                className="text-xl font-semibold"
+                style={{ color: "var(--text)" }}
+              >
+                {t.name}
+              </div>
+
+              <div
+                className="text-4xl font-bold mt-2"
+                style={{ color: "var(--text)" }}
+              >
+                {formatINR(t.priceInr)}
+              </div>
+
+              <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
+                {t.bullet.map((b, bi) => (
+                  <li key={bi}>• {b}</li>
+                ))}
+              </ul>
+
+              <button
+                onClick={() => setShowCalendly(true)}
+                className="w-full mt-6 rounded-xl py-3 font-semibold text-white"
+                style={{
+                  background:
+                    "linear-gradient(90deg, var(--orange), #ff9357)",
+                  boxShadow:
+                    "0 10px 24px rgba(232,80,2,0.35)",
+                }}
+                aria-label={t.cta}
+              >
+                {t.cta}
+              </button>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Custom quote button under the three cards */}
+        <div className="text-center mt-8">
+          <button
+            onClick={() => setShowCalendly(true)}
+            className="inline-flex items-center rounded-full px-6 py-3 font-semibold text-white"
+            style={{
+              background:
+                "linear-gradient(90deg, var(--orange), #ff9357)",
+              boxShadow: "0 10px 24px rgba(232,80,2,0.35)",
+            }}
+          >
+            Need something else? Get a Custom Quote
+          </button>
+          <div
+            className="mt-2 text-xs"
+            style={{ color: "var(--text-muted)" }}
+          >
+            GST not applicable
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* ===================== Quick Lead Form ===================== */
+const QuickLeadForm = () => {
+  const [name, setName]   = useState('');
+  const [handle, setHandle] = useState(''); // channel/IG handle
+  const [email, setEmail] = useState('');
+
+  const mailto = `mailto:hello@shinelstudiosofficial.com?subject=Quick%20Quote%20Request%20-%20${encodeURIComponent(name)}&body=${encodeURIComponent(
+    `Name: ${name}\nHandle: ${handle}\nEmail: ${email}\n\nHi Shinel Studios, I'd like a quick quote and a content audit.`
+  )}`;
+
+  return (
+    <section className="py-16" style={{ background: 'var(--surface-alt)' }}>
+      <div className="container mx-auto px-4 max-w-3xl">
+        <div className="text-center mb-8">
+          <h3 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: 'var(--text)' }}>
+            Get a Quick Quote
+          </h3>
+          <p className="mt-2" style={{ color: 'var(--text-muted)' }}>
+            Tell us where you post — we’ll reply within 24 hours.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input
+            value={name} onChange={e=>setName(e.target.value)}
+            placeholder="Your Name"
+            className="px-4 py-3 rounded-xl"
+            style={{ background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text)' }}
+          />
+          <input
+            value={handle} onChange={e=>setHandle(e.target.value)}
+            placeholder="@handle or channel URL"
+            className="px-4 py-3 rounded-xl"
+            style={{ background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text)' }}
+          />
+          <input
+            value={email} onChange={e=>setEmail(e.target.value)}
+            placeholder="Email"
+            className="px-4 py-3 rounded-xl"
+            style={{ background:'var(--surface)', border:'1px solid var(--border)', color:'var(--text)' }}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mt-4">
+          <a
+            href={mailto}
+            className="flex-1 text-center rounded-xl py-3 font-semibold text-white"
+            style={{ background:'linear-gradient(90deg, var(--orange), #ff9357)' }}
+          >
+            Send & Get Quote
+          </a>
+          <a
+            href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20Here's%20my%20handle:%20"
+            target="_blank" rel="noreferrer"
+            className="flex-1 text-center rounded-xl py-3 font-semibold"
+            style={{ border:'2px solid var(--orange)', color:'var(--orange)' }}
+          >
+            Message on WhatsApp
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 /* ===================== Contact ===================== */
 const ContactCTA = () => (
   <section
@@ -797,11 +1421,17 @@ const ContactCTA = () => (
         viewport={{ once: true }}
         className="max-w-4xl mx-auto"
       >
-        <h2 className="text-4xl md:text-6xl font-bold mb-6 font-['Poppins']" style={{ color: '#fff' }}>
-          Where Ideas Shine — for Shinel Studios
+        <h2
+          className="text-4xl md:text-6xl font-bold mb-6 font-['Poppins']"
+          style={{ color: '#fff' }}
+        >
+          Let’s Build Something Amazing Together
         </h2>
-        <p className="text-xl mb-8 max-w-2xl mx-auto" style={{ color: 'rgba(255,255,255,0.9)' }}>
-          Ready to create something amazing? Get in touch and let's start crafting your next success story.
+        <p
+          className="text-xl mb-8 max-w-2xl mx-auto"
+          style={{ color: 'rgba(255,255,255,0.9)' }}
+        >
+          Ready to take your content to the next level? Reach out and let’s start crafting your success story.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <motion.a
@@ -813,14 +1443,6 @@ const ContactCTA = () => (
             whileTap={{ scale: 0.98 }}
           >
             WhatsApp Us
-          </motion.a>
-          <motion.a
-            href="#contact"
-            className="border-2 border-white text-white px-8 py-4 rounded-lg font-medium text-lg"
-            whileHover={{ y: -2, backgroundColor: '#fff', color: '#000' }}
-            whileTap={{ scale: 0.98 }}
-          >
-            Contact Us
           </motion.a>
           <motion.a
             href="mailto:hello@shinelstudiosofficial.com"
@@ -835,7 +1457,33 @@ const ContactCTA = () => (
   </section>
 );
 
-  /* ===================== Footer (bigger zoomed logo + animations) ===================== */
+/* ===================== Sticky Mobile CTA ===================== */
+const StickyMobileCTA = () => (
+  <div className="md:hidden fixed bottom-3 left-0 right-0 z-40 px-3">
+    <div
+      className="flex gap-2 rounded-2xl p-2 shadow-xl"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+    >
+      <a
+        href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
+        target="_blank" rel="noreferrer"
+        className="flex-1 text-center rounded-xl py-3 font-semibold text-white"
+        style={{ background: 'linear-gradient(90deg, var(--orange), #ff9357)' }}
+      >
+        WhatsApp
+      </a>
+      <a
+        href="#contact"
+        className="flex-1 text-center rounded-xl py-3 font-semibold"
+        style={{ border: '2px solid var(--orange)', color: 'var(--orange)' }}
+      >
+        Get Quote
+      </a>
+    </div>
+  </div>
+);
+
+/* ===================== Footer (bigger zoomed logo + animations) ===================== */
 const Footer = () => (
   <motion.footer
     initial="hidden"
@@ -869,22 +1517,22 @@ const Footer = () => (
             We're a creative media agency dedicated to helping creators and brands shine through unforgettable visuals and strategic content.
           </p>
           <div className="flex gap-4">
-            {[ 
+            {[
               { icon: <Instagram size={28} />, href: "https://www.instagram.com/shinel.studios/?hl=en", label: "Instagram" },
-              { icon: <Twitter size={28} />, href: "https://linktr.ee/ShinelStudios", label: "Linktree" },
-              { icon: <Linkedin size={28} />, href: "https://www.linkedin.com/company/shinel-studios/posts/?feedView=all", label: "LinkedIn" }
+              { icon: <Twitter size={28} />,   href: "https://linktr.ee/ShinelStudios",               label: "Linktree"  },
+              { icon: <Linkedin size={28} />,  href: "https://www.linkedin.com/company/shinel-studios/posts/?feedView=all", label: "LinkedIn" }
             ].map((s, i) => (
-              <motion.a
-                key={i}
-                href={s.href}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={s.label}
-                whileHover={{ scale: 1.2, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-                style={{ color: 'rgba(255,255,255,0.8)' }}
-              >
-                {s.icon}
+            <motion.a
+            key={i}
+            href={s.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={s.label}
+            whileHover={{ scale: 1.2, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            style={{ color: 'rgba(255,255,255,0.8)' }}
+            >
+              {s.icon}
               </motion.a>
             ))}
           </div>
@@ -897,7 +1545,7 @@ const Footer = () => (
             {['Home','Services','Testimonials','Contact'].map((t) => (
               <li key={t}>
                 <a
-                  href={`/#${t.toLowerCase()}`}
+                  href={`#${t.toLowerCase()}`}
                   className="transition-colors hover:text-[var(--orange)]"
                   style={{ color: 'rgba(255,255,255,0.7)' }}
                 >
@@ -949,26 +1597,84 @@ const Footer = () => (
         className="mt-12 pt-8 text-center"
         style={{ borderTop: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}
       >
-        <p>&copy; 2025 Shinel Studios. All rights reserved. Where Ideas Shine.</p>
+        <p>© 2025 Shinel Studios™ — Where Ideas Shine. All rights reserved.</p>
       </motion.div>
     </div>
   </motion.footer>
 );
 
+const SeoSchema = () => {
+  useEffect(() => {
+    const ld = [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Shinel Studios",
+        "url": "https://shinelstudiosofficial.com",
+        "logo": "https://shinelstudiosofficial.com/logo_light.png",
+        "sameAs": [
+          "https://www.instagram.com/shinel.studios/",
+          "https://www.linkedin.com/company/shinel-studios/"
+        ]
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "YouTube Editing & Packaging",
+        "provider": { "@type": "Organization", "name": "Shinel Studios" },
+        "areaServed": "IN",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Starter",
+            "priceCurrency": "INR",
+            "price": "3999",
+            "availability": "https://schema.org/InStock"
+          },
+          {
+            "@type": "Offer",
+            "name": "Shorts Pack",
+            "priceCurrency": "INR",
+            "price": "6000",
+            "availability": "https://schema.org/InStock"
+          }
+        ],
+        "url": "https://shinelstudiosofficial.com/#services"
+      }
+    ];
+    const s = document.createElement("script");
+    s.type = "application/ld+json";
+    s.text = JSON.stringify(ld);
+    document.head.appendChild(s);
+    return () => document.head.removeChild(s);
+  }, []);
+  return null;
+};
 
-  return (
-    <div className={`min-h-screen ${isDark ? 'dark' : ''}`}>
-      <Header isDark={isDark} setIsDark={setIsDark} />
-      <HeroSection />
-      <CreatorsWorkedWith />
-      <ServicesSection />
-      <TestimonialsWall />
-      <StatsSection />
-      <FAQSection />
-      <ContactCTA />
-      <Footer />
-    </div>
-  );
+/* ===================== App Wrapper ===================== */
+return (
+  <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
+    <Header isDark={isDark} setIsDark={setIsDark} />
+    <TrustBar />
+    <QuickQuoteBar onBook={() => setShowCalendly(true)} />
+    <HeroSection />
+    <CreatorsWorkedWith />
+    <ServicesSection />
+    <CaseStudies />
+    <ProofSection />
+    <ProcessSection />
+    <TestimonialsWall />
+    <StatsSection />
+    <FAQSection />
+    <Pricing />
+    <QuickLeadForm />
+    <ContactCTA />
+    <Footer />
+    <StickyMobileCTA />
+    <SeoSchema />
+    <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
+  </div>
+);
 };
 
 export default ShinelStudiosHomepage;
