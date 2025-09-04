@@ -2,48 +2,65 @@
 <html lang="en-IN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
 
-    <!-- ✅ Favicons -->
-    <!-- Light mode -->
+    <!-- Preconnects (perf) -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- Calendly iframe host -->
+    <link rel="preconnect" href="https://calendly.com">
+
+    <!-- Fonts (optional: remove if you self-host Poppins) -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Favicons -->
+    <!-- System-driven fallbacks -->
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
-    
-    <!-- Dark mode -->
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
-    
-    <!-- Apple/Android touch -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-light-32x32.png">
-    
-    <!-- Fallback favicon (default) -->
+    <!-- Apple touch -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <!-- Fallback that JS will overwrite on theme toggle -->
     <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
 
-    <!-- ✅ Theme colors for mobile browsers -->
-    <meta name="theme-color" content="#E85002" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <!-- Theme colors (system). Your JS also updates a plain theme-color meta at runtime. -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
 
-    <!-- ✅ SEO Title & Description -->
-    <title>Shinel Studios | Video Editing & YouTube Growth Agency</title>
+    <!-- PWA niceties (optional) -->
+    <!-- <link rel="manifest" href="/site.webmanifest"> -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- SEO -->
+    <title>Shinel Studios | Video Editing &amp; YouTube Growth Agency</title>
     <meta name="description" content="Shinel Studios helps creators grow with Video Editing, Thumbnails, Shorts & GFX. Trusted by 20+ creators with 100M+ views." />
     <meta name="keywords" content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://www.shinelstudios.in/" />
+    <!-- Hreflang (expand if you add locales) -->
+    <link rel="alternate" href="https://www.shinelstudios.in/" hreflang="en-IN" />
+    <link rel="alternate" href="https://www.shinelstudios.in/" hreflang="x-default" />
 
-    <!-- ✅ Open Graph (FB/LinkedIn/Google) -->
+    <!-- Open Graph -->
     <meta property="og:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta property="og:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
     <meta property="og:url" content="https://www.shinelstudios.in/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Shinel Studios" />
     <meta property="og:image" content="https://www.shinelstudios.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
-    <!-- ✅ Twitter Card -->
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
     <meta name="twitter:image" content="https://www.shinelstudios.in/og-image.png" />
 
-    <!-- ✅ Schema Markup (Organization) -->
+    <!-- Schema Markup -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -53,18 +70,56 @@
       "logo": "https://www.shinelstudios.in/logo.png",
       "contactPoint": [{
         "@type": "ContactPoint",
-        "telephone": "+91-8968141585",
         "contactType": "customer service",
-        "availableLanguage": ["en","hi"]
+        "telephone": "+91-8968141585",
+        "email": "hello@shinelstudiosofficial.com",
+        "areaServed": "IN",
+        "availableLanguage": ["en", "hi"]
       }],
       "sameAs": [
         "https://www.instagram.com/shinel.studios/",
-        "https://www.linkedin.com/company/shinel-studios/"
+        "https://www.linkedin.com/company/shinel-studios/",
+        "https://linktr.ee/ShinelStudios"
       ]
     }
     </script>
+
+    <!-- Staging safety: uncomment to avoid indexing on previews -->
+    <!-- <meta name="robots" content="noindex,nofollow"> -->
   </head>
-  <body>
+    <body>
+    <script>
+      // --- Prepaint theme bootstrap (no dependencies) ---
+      (function () {
+        try {
+          var isDark =
+            (localStorage.getItem('theme') === 'dark') ||
+            (
+              !localStorage.getItem('theme') &&
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            );
+
+          var root = document.documentElement;
+          root.classList.toggle('dark', !!isDark);
+
+          // Sync theme-color (the *plain* one without media attr)
+          var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
+          if (!metaTheme) {
+            metaTheme = document.createElement('meta');
+            metaTheme.setAttribute('name', 'theme-color');
+            document.head.appendChild(metaTheme);
+          }
+          metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
+
+          // Swap favicon immediately
+          var favicon = document.getElementById('favicon');
+          if (favicon) {
+            favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
+          }
+        } catch (e) { /* no-op */ }
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

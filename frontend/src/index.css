@@ -2,15 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---- custom utilities for the creators marquee ---- */
+/* -------- Creators marquee utilities (perf + a11y) -------- */
 @layer utilities {
-  @keyframes marquee-ltr {
-    0%   { transform: translateX(-50%); }
-    100% { transform: translateX(0%); }
+  /* Directions */
+  @keyframes marquee-rtl { /* leftward (0% -> -50%) */
+    0%   { transform: translate3d(0,0,0); }
+    100% { transform: translate3d(-50%,0,0); }
+  }
+  @keyframes marquee-ltr { /* rightward (-50% -> 0%) */
+    0%   { transform: translate3d(-50%,0,0); }
+    100% { transform: translate3d(0,0,0); }
   }
 
+  /* Viewport (clips overflow) */
+  .marquee-viewport {
+    @apply relative overflow-hidden;
+  }
+
+  /* Optional soft edge fade (uses mask so it works on dark/light) */
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+            mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  }
+
+  /* Track (the long row you animate) */
+  .marquee-track {
+    display: inline-flex;
+    width: max-content;           /* wider than viewport */
+    will-change: transform;       /* GPU hint */
+  }
+
+  /* Animations (duration customizable via CSS var) */
+  .animate-marquee-rtl {
+    animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
+  }
   .animate-marquee-ltr {
-    animation: marquee-ltr 28s linear infinite;
-    width: max-content; /* track wider than viewport */
+    animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
+  }
+
+  /* Pause on hover for pointer devices only */
+  @media (hover:hover) and (pointer:fine) {
+    .marquee-hover-pause:hover .marquee-track { animation-play-state: paused; }
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee-rtl,
+    .animate-marquee-ltr {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transform: none !important;
+    }
   }
 }
