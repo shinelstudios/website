@@ -5,6 +5,7 @@ import VideoEditing from "./components/VideoEditing.jsx";
 import GFX from "./components/GFX.jsx";
 import Thumbnails from "./components/Thumbnails.jsx";
 import Shorts from "./components/Shorts.jsx"; // you have this file too
+import LoginPage from "./components/LoginPage.jsx"; // ✅ add this
 
 export default function App() {
   return (
@@ -17,6 +18,9 @@ export default function App() {
       <Route path="/gfx" element={<GFX />} />
       <Route path="/thumbnails" element={<Thumbnails />} />
       <Route path="/shorts" element={<Shorts />} />
+
+      {/* ✅ Login page */}
+      <Route path="/login" element={<LoginPage />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
