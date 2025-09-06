@@ -278,17 +278,19 @@ const Header = ({ isDark, setIsDark }) => {
     const isActive = active === label;
     return (
       <motion.a
-        href={`#${label.toLowerCase()}`}
-        className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-        aria-current={isActive ? "page" : undefined}
-        data-navlink
-        onMouseEnter={() => setHovered(label)}
-        onMouseLeave={() => setHovered(null)}
-        initial={false}
-        animate={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
-        whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-        transition={{ duration: 0.22 }}
-      >
+  href={`#${label.toLowerCase()}`}
+  className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+  aria-current={isActive ? "page" : undefined}
+  data-navlink
+  onMouseEnter={() => setHovered(label)}
+  onMouseLeave={() => setHovered(null)}
+  initial={false}
+  /* color now from CSS vars so theme swap is instant */
+  style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
+  whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+  transition={{ duration: 0.22 }}
+>
+
         <span className="nav-ink" aria-hidden="true" />
         <span className="sr-only">{isActive ? "Current section: " : ""}</span>
         <span aria-hidden="true" className="nav-label">{label}</span>
@@ -342,21 +344,26 @@ const Header = ({ isDark, setIsDark }) => {
           aria-label="Primary"
         >
           {/* Brand */}
-          <a href="#home" className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded">
-            <motion.img
-              src={isDark ? logoLight : logoDark}
-              alt="Shinel Studios"
-              className="w-auto object-contain block origin-left"
-              /* smaller logo: was 68/92 */
-              style={{ height: scrolled ? 56 : 72, filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))" }}
-              initial={{ opacity: 0, y: -6, scale: 1.05 }}
-              animate={{ opacity: 1, y: 0, scale: scrolled ? 1.0 : 1.06 }}
-              whileHover={reduceMotion ? {} : { scale: 1.06, rotate: -0.35 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              decoding="async"
-            />
-          </a>
+          {/* Brand (match Login sizing) */}
+<a
+  href="#home"
+  className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+>
+  <div className="h-12 flex items-center overflow-visible">
+    <img
+      src={isDark ? logoLight : logoDark}
+      alt="Shinel Studios"
+      className="h-full w-auto object-contain block select-none"
+      style={{
+        transform: "scale(2.8)",   // same size as Login
+        transformOrigin: "left center",
+        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
+      }}
+      decoding="async"
+    />
+  </div>
+</a>
+
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-10 relative">
@@ -373,19 +380,21 @@ const Header = ({ isDark, setIsDark }) => {
               onMouseLeave={onWorkLeave}
             >
               <motion.button
-                type="button"
-                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-                aria-expanded={workOpen}
-                aria-haspopup="menu"
-                aria-controls="our-work-menu"
-                onFocus={() => setHovered("Our Work")}
-                onBlur={() => setHovered(null)}
-                onClick={() => setWorkOpen((v) => !v)}
-                initial={false}
-                animate={{ color: hovered === "Our Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)" }}
-                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-                transition={{ duration: 0.22 }}
-              >
+  type="button"
+  className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+  aria-expanded={workOpen}
+  aria-haspopup="menu"
+  aria-controls="our-work-menu"
+  onFocus={() => setHovered("Our Work")}
+  onBlur={() => setHovered(null)}
+  onClick={() => setWorkOpen((v) => !v)}
+  initial={false}
+  /* color now from CSS vars */
+  style={{ color: (hovered === "Our Work" || workOpen) ? "var(--nav-hover)" : "var(--nav-link)" }}
+  whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+  transition={{ duration: 0.22 }}
+>
+
                 <span className="nav-ink" aria-hidden="true" />
                 <span className="nav-label">Our Work</span>
                 <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
@@ -441,6 +450,17 @@ const Header = ({ isDark, setIsDark }) => {
               </motion.button>
             )}
 
+{/* NEW: Login button */}
+  <motion.a
+    href="/login"   // this opens your LoginPage.jsx route
+    className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+    whileHover={{ y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
+    whileTap={{ scale: 0.98 }}
+  >
+    Login
+  </motion.a>
+
             <motion.button
               onClick={() => setIsDark(!isDark)}
               className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
@@ -490,13 +510,33 @@ const Header = ({ isDark, setIsDark }) => {
         <TrustBar />
 
         <style>{`
-  header[role="banner"] nav a:hover { color: inherit !important; }
+  /* Keep any decorative ::after off */
   header[role="banner"] nav a::after,
   header[role="banner"] nav [data-navlink]::after { content: none !important; display: none !important; }
-  header[role="banner"] *, 
+
+  /* Ensure text inherits from CSS vars set by theme */
+  header[role="banner"] nav .nav-label { color: inherit !important; }
+
+  /* Default link color from theme */
+  header[role="banner"] nav [data-navlink],
+  header[role="banner"] nav button[aria-controls="our-work-menu"] {
+    color: var(--nav-link) !important;
+  }
+
+  /* Active/hover state = brand orange */
+  header[role="banner"] nav [data-navlink]:hover,
+  header[role="banner"] nav [data-navlink][aria-current="page"],
+  header[role="banner"] nav button[aria-controls="our-work-menu"]:hover,
+  header[role="banner"] nav button[aria-controls="our-work-menu"][aria-expanded="true"] {
+    color: var(--nav-hover) !important;
+  }
+
+  /* Remove stray borders from the header stack */
+  header[role="banner"] *,
   header[role="banner"] { border-bottom-width: 0 !important; }
   header[role="banner"] .trustbar { border-top: 0 !important; }
 `}</style>
+
       </motion.header>
     </motion.div>
   );
@@ -2574,4 +2614,4 @@ return (
 );
 };
 
-export default ShinelStudiosHomepage;
+export default ShinelStudiosHomepage;w
