@@ -54,7 +54,7 @@ const Header = () => {
 
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo */}
-        <a href="/" className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3">
           <div className="h-12 flex items-center overflow-visible">
             <img
               src={logoLight}
@@ -67,14 +67,14 @@ const Header = () => {
               }}
             />
           </div>
-        </a>
+        </Link>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-7">
-          <a href="/#home" className="nav-link">Home</a>
-          <a href="/#services" className="nav-link">Services</a>
-          <a href="/#testimonials" className="nav-link">Testimonials</a>
-          <a href="/#contact" className="nav-link">Contact</a>
+          <Link to="/#home" className="nav-link">Home</Link>
+          <Link to="/#services" className="nav-link">Services</Link>
+          <Link to="/#testimonials" className="nav-link">Testimonials</Link>
+          <Link to="/#contact" className="nav-link">Contact</Link>
 
           {/* Our Work dropdown */}
           <div className="relative" ref={workRef}>
@@ -105,14 +105,14 @@ const Header = () => {
                     { name: "Thumbnails", href: "/thumbnails" },
                     { name: "Shorts", href: "/shorts" },
                   ].map((it) => (
-                    <a
+                    <Link
                       key={it.name}
-                      href={it.href}
+                      to={it.href}
                       className="block w-full px-4 py-3 text-left work-item"
                       onClick={() => setWorkOpen(false)}
                     >
                       {it.name}
-                    </a>
+                    </Link>
                   ))}
                 </motion.div>
               )}
@@ -122,13 +122,13 @@ const Header = () => {
 
         {/* Right actions */}
         <div className="flex items-center gap-3">
-          <a
-            href="/#contact"
+          <Link
+            to="/#contact"
             className="hidden md:block text-white px-5 py-2 rounded-lg font-medium"
             style={{ background: "linear-gradient(90deg, #E85002, #ff9357)" }}
           >
             Book Free Audit
-          </a>
+          </Link>
 
           <button className="md:hidden p-2 text-white" aria-label="Menu" onClick={() => setMobileOpen(true)}>
             <Menu size={22} />
@@ -160,11 +160,11 @@ const Header = () => {
               </div>
 
               <nav className="space-y-2 text-white">
-                <a href="/#home" className="block px-2 py-2">Home</a>
-                <a href="/#services" className="block px-2 py-2">Services</a>
-                <a href="/#testimonials" className="block px-2 py-2">Testimonials</a>
-                <a href="/#contact" className="block px-2 py-2">Contact</a>
-                <a href="/video-editing" className="block px-2 py-2">Our Work</a>
+                <Link to="/#home" className="block px-2 py-2">Home</Link>
+                <Link to="/#services" className="block px-2 py-2">Services</Link>
+                <Link to="/#testimonials" className="block px-2 py-2">Testimonials</Link>
+                <Link to="/#contact" className="block px-2 py-2">Contact</Link>
+                <Link to="/video-editing" className="block px-2 py-2">Our Work</Link>
               </nav>
             </motion.div>
           </motion.div>
@@ -252,13 +252,13 @@ const Footer = () => (
           <ul className="space-y-3">
             {["Home", "Services", "Testimonials", "Contact"].map((t) => (
               <li key={t}>
-                <a
-                  href={`/#${t.toLowerCase()}`}
+                <Link
+                  to={`/#${t.toLowerCase()}`}
                   className="transition-colors hover:text-[var(--orange)]"
                   style={{ color: "rgba(255,255,255,0.7)" }}
                 >
                   {t}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
@@ -330,7 +330,6 @@ const LoginPage = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter a valid email address.";
     if (!password || password.length < 8) next.password = "Password must be at least 8 characters.";
     return next;
-    // (Keep logic simple; plug in your real auth later)
   };
 
   const handleSubmit = (e) => {
@@ -377,78 +376,78 @@ const LoginPage = () => {
           </h1>
 
           <form onSubmit={handleSubmit} noValidate autoComplete="off">
-  {/* Email */}
-  <input
-    id="email"
-    type="email"
-    placeholder="Email address"
-    value={email}
-    onChange={(e) => setEmail(e.target.value)}
-    autoComplete="off"   // ⬅ stop browser autofill
-    className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
-    style={{ background: "#243041", color: "#EAF1FF" }}
-  />
-  {errors.email && (
-    <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-      <AlertCircle size={14} /> {errors.email}
-    </p>
-  )}
+            {/* Email */}
+            <input
+              id="email"
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
+              className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
+              style={{ background: "#243041", color: "#EAF1FF" }}
+            />
+            {errors.email && (
+              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
+                <AlertCircle size={14} /> {errors.email}
+              </p>
+            )}
 
-  {/* Password */}
-  <div className="relative mb-2">
-    <input
-      id="password"
-      type={showPwd ? "text" : "password"}
-      placeholder="Password"
-      value={password}
-      onChange={(e) => setPassword(e.target.value)}
-      autoComplete="new-password" // ⬅ recommended for password field
-      className="w-full px-4 py-3 rounded-lg outline-none pr-12"
-      style={{ background: "#243041", color: "#EAF1FF" }}
-    />
-    <button
-      type="button"
-      onClick={() => setShowPwd((v) => !v)}
-      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
-      aria-label={showPwd ? "Hide password" : "Show password"}
-      title={showPwd ? "Hide password" : "Show password"}
-    >
-      {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  </div>
-  {errors.password && (
-    <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-      <AlertCircle size={14} /> {errors.password}
-    </p>
-  )}
+            {/* Password */}
+            <div className="relative mb-2">
+              <input
+                id="password"
+                type={showPwd ? "text" : "password"}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                className="w-full px-4 py-3 rounded-lg outline-none pr-12"
+                style={{ background: "#243041", color: "#EAF1FF" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
+                aria-label={showPwd ? "Hide password" : "Show password"}
+                title={showPwd ? "Hide password" : "Show password"}
+              >
+                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
+                <AlertCircle size={14} /> {errors.password}
+              </p>
+            )}
 
-  {/* Row: remember + forgot */}
-  <div className="flex items-center justify-between mb-4 text-sm">
-    <label className="flex items-center gap-2 select-none">
-      <input
-        type="checkbox"
-        checked={remember}
-        onChange={(e) => setRemember(e.target.checked)}
-        autoComplete="off" // ⬅ also disable here
-      />
-      Keep me signed in
-    </label>
-    <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
-      Forgot password?
-    </Link>
-  </div>
+            {/* Row: remember + forgot */}
+            <div className="flex items-center justify-between mb-4 text-sm">
+              <label className="flex items-center gap-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  autoComplete="off"
+                />
+                Keep me signed in
+              </label>
+              <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
+                Forgot password?
+              </Link>
+            </div>
 
-  {/* Submit */}
-  <button
-    type="submit"
-    disabled={submitting}
-    className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
-    style={{ background: "#E85002", color: "#fff" }}
-  >
-    {submitting && <Loader2 size={18} className="animate-spin" />}
-    {submitting ? "Signing in..." : "Login"}
-  </button>
-</form>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
+              style={{ background: "#E85002", color: "#fff" }}
+            >
+              {submitting && <Loader2 size={18} className="animate-spin" />}
+              {submitting ? "Signing in..." : "Login"}
+            </button>
+          </form>
 
         </motion.div>
       </main>

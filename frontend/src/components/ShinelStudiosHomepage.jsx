@@ -1,13 +1,65 @@
-// src/components/ShinelStudiosHomepage.jsx
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
-  Sun, Moon, Menu, X, Play, Image, TrendingUp, FileText, ChevronDown,
+  Sun, Moon, Menu, X, Play, Image, TrendingUp, FileText,
+  ChevronDown,           // ← add this
   MessageCircle, Users, Eye, Target, Mail, Twitter, Instagram, Linkedin
-} from 'lucide-react';
+} from "lucide-react";
+import logoLight from "../assets/logo_light.png";
+import logoDark  from "../assets/logo_dark.png";
 
-import logoLight from '../assets/logo_light.png';
-import logoDark  from '../assets/logo_dark.png';
+
+/* --------- sample image resolver (handles missing files & any extension) --------- */
+const allAssetMods = import.meta.glob('../assets/**/*.{png,jpg,jpeg,webp,svg}', { eager: true });
+const findAssetByBase = (basename) => {
+  // returns first match whose file name starts with basename (case-insensitive)
+  const entries = Object.entries(allAssetMods);
+  for (const [p, mod] of entries) {
+    const file = p.split('/').pop()?.toLowerCase() || '';
+    if (file.startsWith(basename.toLowerCase())) return mod.default;
+  }
+  return null;
+};
+// creator logos (auto-import any .png/.jpg/.jpeg/.webp/.svg in src/assets/creators)
+const creatorImageModules = import.meta.glob(
+  '../assets/creators/*.{png,jpg,jpeg,webp,svg}',
+  { eager: true }
+);
+
+// map like { kamz: 'url', deadlox: 'url', ... }
+const creatorImages = Object.fromEntries(
+  Object.entries(creatorImageModules).map(([path, mod]) => {
+    const file = path.split('/').pop() || '';
+    const base = file.replace(/\.[^.]+$/, '').toLowerCase();
+    return [base, mod.default];
+  })
+);
+
+// helper to fetch by basename
+const img = (key) => creatorImages[(key || '').toLowerCase()] || '';
+
+
+// inline SVG placeholders (no network)
+const svgPlaceholder = (label) =>
+  `data:image/svg+xml;utf8,` +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#111"/>
+          <stop offset="100%" stop-color="#333"/>
+        </linearGradient>
+      </defs>
+      <rect width="1280" height="720" fill="url(#g)"/>
+      <text x="50%" y="50%" fill="#fff" font-family="Arial, Helvetica, sans-serif"
+            font-size="56" text-anchor="middle" dominant-baseline="middle">${label}</text>
+    </svg>`
+  );
+
+const SAMPLE_BEFORE = findAssetByBase('sample_before') || svgPlaceholder('Before');
+const SAMPLE_AFTER  = findAssetByBase('sample_after')  || svgPlaceholder('After');
+
 
 // ===================== Custom Hooks =====================
 const usePrevious = (value) => {
@@ -415,20 +467,19 @@ const Header = ({ isDark, setIsDark }) => {
                     onMouseLeave={() => setHovered(null)}
                   >
                     {workItems.map((item, idx) => (
-                      <a
-                        key={item.name}
-                        role="menuitem"
-                        tabIndex={0}
-                        href={item.href}
-                        className={`block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] ${idx === 0 ? "mt-0" : ""}`}
-                        style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--orange)"; e.currentTarget.style.color = "#fff"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--orange)"; }}
-                        onClick={() => setWorkOpen(false)}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.currentTarget.click(); }}
+                      <Link
+                      key={item.name}
+                      role="menuitem"
+                      tabIndex={0}
+                      to={item.href}
+                      className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--orange)"; e.currentTarget.style.color = "#fff"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--orange)"; }}
+                      onClick={() => setWorkOpen(false)}
                       >
                         {item.name}
-                      </a>
+                        </Link>
                     ))}
                   </motion.div>
                 )}
@@ -450,16 +501,17 @@ const Header = ({ isDark, setIsDark }) => {
               </motion.button>
             )}
 
-{/* NEW: Login button */}
-  <motion.a
-    href="/login"   // this opens your LoginPage.jsx route
-    className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+<motion.div className="hidden md:inline-flex">
+  <Link
+    to="/login"
+    className="items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
     style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-    whileHover={{ y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
-    whileTap={{ scale: 0.98 }}
   >
     Login
-  </motion.a>
+  </Link>
+</motion.div>
+
+
 
             <motion.button
               onClick={() => setIsDark(!isDark)}
@@ -861,7 +913,7 @@ const QuickQuoteBar = ({ onBook }) => {
 
 
 /* ===================== Hero (LCP-optimized headline/CTA, GPU-cheap stars, light-mode banding fix) ===================== */
-const HeroSection = () => {
+const HeroSection = ({ isDark }) => {
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia &&
@@ -1036,16 +1088,17 @@ const CreatorsWorkedWith = () => {
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const creators = [
-    { name: "Kamz Inkzone", subs: "171K", href: "https://youtube.com/@KamzInkzone", logo: "/assets/creators/kamz.png", niche: "Gaming" },
-    { name: "Deadlox Gaming", subs: "7K", href: "https://youtube.com/@DeadloxGaming", logo: "/assets/creators/deadlox.png", niche: "Gaming" },
-    { name: "Kundan Parashar", subs: "7K", href: "https://youtube.com/@KundanParashar", logo: "/assets/creators/kundan.png", niche: "Devotional" },
-    { name: "Aish is Live", subs: "13K", href: "https://youtube.com/@AishIsLive", logo: "/assets/creators/aish.png", niche: "Streaming" },
-    { name: "Gamer Mummy", subs: "14.7K", href: "https://youtube.com/@GamerMummy", logo: "/assets/creators/gamermummy.png", niche: "Gaming" },
-    { name: "Gamify Anchit", subs: "1.5K", href: "https://youtube.com/@GamifyAnchit", logo: "/assets/creators/anchit.png", niche: "Gaming" },
-    { name: "Maggie Live", subs: "22K", href: "https://youtube.com/@MaggieLive", logo: "/assets/creators/maggie.png", niche: "Lifestyle" },
-    { name: "Crown Ankit", subs: "3K", href: "https://youtube.com/@CrownAnkit", logo: "/assets/creators/ankit.png", niche: "Gaming" },
-    { name: "Manav Maggie Sukhija", subs: "50K", href: "https://youtube.com/@ManavMaggieSukhija", logo: "/assets/creators/manav.png", niche: "YouTuber" },
+    { name: "Kamz Inkzone", subs: "171K", href: "https://youtube.com/@KamzInkzone", logo: img('kamz'), niche: "Gaming" },
+    { name: "Deadlox Gaming", subs: "7K", href: "https://youtube.com/@DeadloxGaming", logo: img('deadlox'), niche: "Gaming" },
+    { name: "Kundan Parashar", subs: "7K", href: "https://youtube.com/@KundanParashar", logo: img('kundan'), niche: "Devotional" },
+    { name: "Aish is Live", subs: "13K", href: "https://youtube.com/@AishIsLive", logo: img('aish'), niche: "Streaming" },
+    { name: "Gamer Mummy", subs: "14.7K", href: "https://youtube.com/@GamerMummy", logo: img('gamermummy'), niche: "Gaming" },
+    { name: "Gamify Anchit", subs: "1.5K", href: "https://youtube.com/@GamifyAnchit", logo: img('anchit'), niche: "Gaming" },
+    { name: "Maggie Live", subs: "22K", href: "https://youtube.com/@MaggieLive", logo: img('maggie'), niche: "Lifestyle" },
+    { name: "Crown Ankit", subs: "3K", href: "https://youtube.com/@CrownAnkit", logo: img('ankit'), niche: "Gaming" },
+    { name: "Manav Maggie Sukhija", subs: "50K", href: "https://youtube.com/@ManavMaggieSukhija", logo: img('manav'), niche: "YouTuber" },
   ];
+
   const marquee = [...creators, ...creators];
 
   const Logo = ({ src, alt }) => {
@@ -1445,10 +1498,9 @@ const ProofSection = () => (
         Real thumbnails revamped for higher clarity, curiosity, and clicks.
       </p>
 
-      {/* Keep your sample images under /assets/ for best caching */}
       <BeforeAfter
-        before="/assets/sample_before.jpg"
-        after="/assets/sample_after.jpg"
+        before={SAMPLE_BEFORE}
+        after={SAMPLE_AFTER}
         label="Drag to compare (Before → After)"
         beforeAlt="Original thumbnail"
         afterAlt="Optimized thumbnail"
@@ -1458,6 +1510,8 @@ const ProofSection = () => (
     </div>
   </section>
 );
+
+
 
 /* ===================== Case Studies ===================== */
 const CaseStudies = () => {
@@ -2594,7 +2648,7 @@ return (
   <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
     <Header isDark={isDark} setIsDark={setIsDark} />
     <QuickQuoteBar onBook={() => setShowCalendly(true)} />
-    <HeroSection />
+    <HeroSection isDark={isDark} />
     <CreatorsWorkedWith />
     <ServicesSection />
     <CaseStudies />
@@ -2614,4 +2668,5 @@ return (
 );
 };
 
-export default ShinelStudiosHomepage;w
+export default ShinelStudiosHomepage;
+
