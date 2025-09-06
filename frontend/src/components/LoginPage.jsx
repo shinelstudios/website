@@ -376,82 +376,80 @@ const LoginPage = () => {
             Welcome Back
           </h1>
 
-          <form onSubmit={handleSubmit} noValidate>
-            {/* Email */}
-            <input
-              id="email"
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
-              style={{
-                background: "#243041",
-                color: "#EAF1FF",
-              }}
-            />
-            {errors.email && (
-              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-                <AlertCircle size={14} /> {errors.email}
-              </p>
-            )}
+          <form onSubmit={handleSubmit} noValidate autoComplete="off">
+  {/* Email */}
+  <input
+    id="email"
+    type="email"
+    placeholder="Email address"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    autoComplete="off"   // ⬅ stop browser autofill
+    className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
+    style={{ background: "#243041", color: "#EAF1FF" }}
+  />
+  {errors.email && (
+    <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
+      <AlertCircle size={14} /> {errors.email}
+    </p>
+  )}
 
-            {/* Password */}
-            <div className="relative mb-2">
-              <input
-                id="password"
-                type={showPwd ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg outline-none pr-12"
-                style={{
-                  background: "#243041",
-                  color: "#EAF1FF",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
-                aria-label={showPwd ? "Hide password" : "Show password"}
-                title={showPwd ? "Hide password" : "Show password"}
-              >
-                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-                <AlertCircle size={14} /> {errors.password}
-              </p>
-            )}
+  {/* Password */}
+  <div className="relative mb-2">
+    <input
+      id="password"
+      type={showPwd ? "text" : "password"}
+      placeholder="Password"
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      autoComplete="new-password" // ⬅ recommended for password field
+      className="w-full px-4 py-3 rounded-lg outline-none pr-12"
+      style={{ background: "#243041", color: "#EAF1FF" }}
+    />
+    <button
+      type="button"
+      onClick={() => setShowPwd((v) => !v)}
+      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
+      aria-label={showPwd ? "Hide password" : "Show password"}
+      title={showPwd ? "Hide password" : "Show password"}
+    >
+      {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
+  </div>
+  {errors.password && (
+    <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
+      <AlertCircle size={14} /> {errors.password}
+    </p>
+  )}
 
-            {/* Row: remember + forgot */}
-            <div className="flex items-center justify-between mb-4 text-sm">
-              <label className="flex items-center gap-2 select-none">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                />
-                Keep me signed in
-              </label>
-              <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
-                Forgot password?
-              </Link>
-            </div>
+  {/* Row: remember + forgot */}
+  <div className="flex items-center justify-between mb-4 text-sm">
+    <label className="flex items-center gap-2 select-none">
+      <input
+        type="checkbox"
+        checked={remember}
+        onChange={(e) => setRemember(e.target.checked)}
+        autoComplete="off" // ⬅ also disable here
+      />
+      Keep me signed in
+    </label>
+    <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
+      Forgot password?
+    </Link>
+  </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
-              style={{ background: "#E85002", color: "#fff" }}
-            >
-              {submitting && <Loader2 size={18} className="animate-spin" />}
-              {submitting ? "Signing in..." : "Login"}
-            </button>
-          </form>
+  {/* Submit */}
+  <button
+    type="submit"
+    disabled={submitting}
+    className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
+    style={{ background: "#E85002", color: "#fff" }}
+  >
+    {submitting && <Loader2 size={18} className="animate-spin" />}
+    {submitting ? "Signing in..." : "Login"}
+  </button>
+</form>
+
         </motion.div>
       </main>
 
