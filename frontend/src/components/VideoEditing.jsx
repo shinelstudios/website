@@ -6,6 +6,7 @@ import { Sun, Moon, Menu, X, ChevronDown, Play, Mail, Instagram, Linkedin, Twitt
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 import gamingVideos from "../data/gamingVideos.js"; // temporary dataset for examples
+// ✂️ removed: import { Helmet } from "react-helmet-async";
 
 /* ===================== Brand tokens ===================== */
 const BRAND = {
@@ -350,42 +351,58 @@ export default function VideoEditing() {
   }, []);
 
   return (
-    <div className={`min-h-screen ${isDark ? "dark" : ""}`}>
-      <Header isDark={isDark} setIsDark={setIsDark} />
+    <>
+      {/* React 19 native metadata hoisted into <head> */}
+      <title>Video Editing Services | Shinel Studios</title>
+      <meta
+        name="description"
+        content="High-impact edits, cinematic montages, trailers and shorts crafted for creators & brands. Optimized for YouTube, TikTok & Reels."
+      />
+      <meta property="og:title" content="Video Editing Services | Shinel Studios" />
+      <meta
+        property="og:description"
+        content="High-impact edits, cinematic montages, trailers and shorts crafted for creators & brands."
+      />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content="https://shinelstudios.in/video-editing" />
 
-      {/* Hero */}
-      <section className="pt-28 pb-10 text-center" style={{ background: "var(--hero-bg)" }}>
-        <div className="container mx-auto px-4">
-          <h1 className="text-4xl md:text-6xl font-extrabold font-['Poppins']" style={{ color: "var(--text)" }}>
-            Video <span style={{ color: "var(--orange)" }}>Editing</span>
-          </h1>
-          <p className="mt-4 text-lg md:text-xl max-w-3xl mx-auto" style={{ color: "var(--text-muted)" }}>
-            High-impact edits, cinematic montages, trailers and shorts crafted for creators & brands. Optimized for
-            YouTube, TikTok & Reels.
-          </p>
+      <div className={`min-h-screen ${isDark ? "dark" : ""}`}>
+        <Header isDark={isDark} setIsDark={setIsDark} />
 
-          {allTags.length > 0 && (
-            <div className="mt-6 flex flex-wrap gap-2 justify-center">
-              {allTags.map((t) => (
-                <Tag key={t}>{t}</Tag>
+        {/* Hero */}
+        <section className="pt-28 pb-10 text-center" style={{ background: "var(--hero-bg)" }}>
+          <div className="container mx-auto px-4">
+            <h1 className="text-4xl md:text-6xl font-extrabold font-['Poppins']" style={{ color: "var(--text)" }}>
+              Video <span style={{ color: "var(--orange)" }}>Editing</span>
+            </h1>
+            <p className="mt-4 text-lg md:text-xl max-w-3xl mx-auto" style={{ color: "var(--text-muted)" }}>
+              High-impact edits, cinematic montages, trailers and shorts crafted for creators & brands. Optimized for
+              YouTube, TikTok & Reels.
+            </p>
+
+            {allTags.length > 0 && (
+              <div className="mt-6 flex flex-wrap gap-2 justify-center">
+                {allTags.map((t) => (
+                  <Tag key={t}>{t}</Tag>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Grid */}
+        <section className="py-14" style={{ background: "var(--surface)" }}>
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {gamingVideos.map((v) => (
+                <VideoCard key={v.id} v={v} />
               ))}
             </div>
-          )}
-        </div>
-      </section>
-
-      {/* Grid */}
-      <section className="py-14" style={{ background: "var(--surface)" }}>
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {gamingVideos.map((v) => (
-              <VideoCard key={v.id} v={v} />
-            ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </>
   );
 }

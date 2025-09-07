@@ -1,181 +1,167 @@
+/* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
-  Sun, Moon, Menu, X, Play, Image, TrendingUp, FileText,
-  ChevronDown,           // ← add this
-  MessageCircle, Users, Eye, Target, Mail, Twitter, Instagram, Linkedin
-} from "lucide-react";
-import logoLight from "../assets/logo_light.png";
-import logoDark  from "../assets/logo_dark.png";
+  Sun, Moon, Menu, X, ChevronDown, Play, Image, TrendingUp, FileText,
+  MessageCircle, Users, Eye, Target, Mail, Twitter, Instagram, 
+  Linkedin, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, Star, MousePointer2, Timer} from "lucide-react";
 
+/**
+ * Centralized asset glob (Vite)
+ * - New syntax: { query: '?url', import: 'default' } replaces deprecated "as: 'url'"
+ * - Loads anything under /src/assets (creators, logos, proofs, etc.)
+ * - Access via findAssetByBase()
+ */
+const ALL_ASSETS = import.meta.glob(
+  "../assets/**/*.{png,jpg,jpeg,webp,svg}",
+  { eager: true, query: "?url", import: "default" }
+);
 
-/* --------- sample image resolver (handles missing files & any extension) --------- */
-const allAssetMods = import.meta.glob('../assets/**/*.{png,jpg,jpeg,webp,svg}', { eager: true });
-const findAssetByBase = (basename) => {
-  // returns first match whose file name starts with basename (case-insensitive)
-  const entries = Object.entries(allAssetMods);
-  for (const [p, mod] of entries) {
-    const file = p.split('/').pop()?.toLowerCase() || '';
-    if (file.startsWith(basename.toLowerCase())) return mod.default;
+/* ===================== Shared Helpers ===================== */
+
+/** Safe INR formatter (no decimals by default) */
+export const formatINR = (num, options = {}) => {
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+      ...options,
+    }).format(Number(num || 0));
+  } catch {
+    return `₹${num}`;
+  }
+};
+
+/** Find first asset whose basename contains key (case-insensitive) */
+export const findAssetByBase = (key, map = ALL_ASSETS) => {
+  if (!key) return null;
+  const search = String(key).toLowerCase();
+  for (const p in map) {
+    const file = p.split("/").pop() || "";
+    const base = file.replace(/\.(png|jpe?g|webp|svg)$/i, "").toLowerCase();
+    if (base.includes(search)) return map[p];
   }
   return null;
 };
-// creator logos (auto-import any .png/.jpg/.jpeg/.webp/.svg in src/assets/creators)
-const creatorImageModules = import.meta.glob(
-  '../assets/creators/*.{png,jpg,jpeg,webp,svg}',
-  { eager: true }
-);
-
-// map like { kamz: 'url', deadlox: 'url', ... }
-const creatorImages = Object.fromEntries(
-  Object.entries(creatorImageModules).map(([path, mod]) => {
-    const file = path.split('/').pop() || '';
-    const base = file.replace(/\.[^.]+$/, '').toLowerCase();
-    return [base, mod.default];
-  })
-);
-
-// helper to fetch by basename
-const img = (key) => creatorImages[(key || '').toLowerCase()] || '';
 
 
-// inline SVG placeholders (no network)
-const svgPlaceholder = (label) =>
-  `data:image/svg+xml;utf8,` +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
-      <defs>
-        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stop-color="#111"/>
-          <stop offset="100%" stop-color="#333"/>
-        </linearGradient>
-      </defs>
-      <rect width="1280" height="720" fill="url(#g)"/>
-      <text x="50%" y="50%" fill="#fff" font-family="Arial, Helvetica, sans-serif"
-            font-size="56" text-anchor="middle" dominant-baseline="middle">${label}</text>
-    </svg>`
-  );
-
-const SAMPLE_BEFORE = findAssetByBase('sample_before') || svgPlaceholder('Before');
-const SAMPLE_AFTER  = findAssetByBase('sample_after')  || svgPlaceholder('After');
-
-
-// ===================== Custom Hooks =====================
-const usePrevious = (value) => {
-  const ref = React.useRef(value);
-  React.useEffect(() => { ref.current = value; }, [value]);
-  return ref.current;
+/** Tiny inline SVG placeholder */
+export const svgPlaceholder = (label = "Image") => {
+  const safe = String(label).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+    `<stop offset='0%' stop-color='#FFF1E8'/><stop offset='100%' stop-color='#FFE4D6'/></linearGradient></defs>` +
+    `<rect fill='url(#g)' width='800' height='450'/>` +
+    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#E85002' font-family='Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial' font-size='28' font-weight='700'>${safe}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-// helper: Indian currency formatting
-const formatINR = (n) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
-
-// 🎬 Animation Variants
-const animations = {
-  fadeUp: {
-    hidden: { opacity: 0, y: 40 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
-  },
-  fadeDown: {
-    hidden: { opacity: 0, y: -40 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
-  },
-  scaleIn: {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: "easeOut" } }
-  },
-  staggerParent: {
-    visible: { transition: { staggerChildren: 0.15 } }
-  },
-  float: {
-    animate: { y: [0, -6, 0], transition: { duration: 3, repeat: Infinity, ease: "easeInOut" } }
-  },
+/** Lightweight analytics dispatcher (no-op safe) */
+export const track = (ev, detail = {}) => {
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
 };
 
-const BRAND = {
-  orange: '#E85002',
-  orangeLight: '#FFB48A',
+/* Motion variants (shared) */
+export const animations = {
+  fadeDown: { hidden:{opacity:0,y:-12}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
+  fadeUp:   { hidden:{opacity:0,y: 16}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
+  fadeIn:   { hidden:{opacity:0},       visible:{opacity:1,      transition:{duration:.35,ease:"easeOut"}} },
+  staggerParent: { hidden:{}, visible:{ transition:{ staggerChildren:.08 } } },
+  scaleIn: { hidden:{opacity:0,scale:.96,y:8}, visible:{opacity:1,scale:1,y:0,transition:{duration:.25,ease:"easeOut"}} },
+};
+
+// card hover polish for grids
+export const tiltHover = {
+  whileHover: { y: -3, rotateX: 0.6, rotateY: -0.6 },
+  transition: { type: "spring", stiffness: 240, damping: 18 }
+};
+
+
+/* Brand palette (read by sections for consistent styling) */
+export const BRAND = {
+  orange: "#E85002",
+  orangeLight: "#FFB48A",
   light: {
-    text: '#0D0D0D',
-    textMuted: 'rgba(13,13,13,0.7)',
-    surface: '#FFFFFF',
-    surfaceAlt: '#FFF9F6',
-    border: 'rgba(0,0,0,0.10)',
-    headerBg: 'rgba(255,255,255,0.85)',
-    heroBg: 'linear-gradient(180deg,#FFF6F2 0%,#FFE7DC 50%,#FFD7C4 100%)'
+    text: "#0D0D0D",
+    textMuted: "rgba(13,13,13,0.7)",
+    surface: "#FFFFFF",
+    surfaceAlt: "#FFF9F6",
+    border: "rgba(0,0,0,0.10)",
+    headerBg: "rgba(255,255,255,0.85)",
   },
   dark: {
-    text: '#FFFFFF',
-    textMuted: 'rgba(255,255,255,0.7)',
-    surface: '#0F0F0F',
-    surfaceAlt: '#0B0B0B',
-    border: 'rgba(255,255,255,0.12)',
-    headerBg: 'rgba(0,0,0,0.75)',
-    heroBg: 'linear-gradient(180deg,#000000 0%,#0E0E0E 50%,#1A1A1A 100%)'
-  }
+    text: "#FFFFFF",
+    textMuted: "rgba(255,255,255,0.7)",
+    surface: "#0F0F0F",
+    surfaceAlt: "#0B0B0B",
+    border: "rgba(255,255,255,0.12)",
+    headerBg: "rgba(0,0,0,0.75)",
+  },
 };
 
+/* Consistent CTA buttons */
+export const BrandButton = ({ href, onClick, className = "", children, ...rest }) => {
+  const Base = href ? motion.a : motion.button;
+  const baseProps = href ? { href } : { type: "button", onClick };
+  return (
+    <Base
+      {...baseProps}
+      {...rest}
+      className={`relative overflow-hidden rounded-full px-6 py-3 text-white font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] ${className}`}
+      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08)" }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <motion.span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3"
+        style={{
+          background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.28) 50%, rgba(255,255,255,0) 100%)",
+          filter: "blur(5px)",
+        }}
+        initial={{ x: "-120%" }}
+        animate={{ x: ["-120%", "120%"] }}
+        transition={{ repeat: Infinity, duration: 1.9, ease: "linear" }}
+      />
+      <span className="relative z-10">{children}</span>
+    </Base>
+  );
+};
 
-const ShinelStudiosHomepage = () => {
-  const reduceMotion = typeof window !== 'undefined'
-  && window.matchMedia
-  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const [isDark, setIsDark] = useState(true);
-  const [openFAQ, setOpenFAQ] = useState(null);
-  const [showCalendly, setShowCalendly] = useState(false);
+export const GhostButton = ({ href, onClick, className = "", children, ...rest }) => (
+  <motion.a
+    href={href}
+    onClick={onClick}
+    {...rest}
+    className={`rounded-full px-6 py-3 font-semibold text-center ${className}`}
+    style={{
+      color: "var(--text, #0b0b0b)",
+      border: "1px solid var(--border, rgba(0,0,0,.16))",
+      background: "var(--btn-ghost-bg, rgba(255,255,255,.75))",
+      boxShadow: "var(--btn-ghost-shadow, 0 4px 12px rgba(0,0,0,.06))",
+    }}
+    whileHover={{ y: -2 }}
+    whileTap={{ scale: 0.98 }}
+  >
+    {children}
+  </motion.a>
+);
 
-  // 4a) Load theme + UTM once on mount
-useEffect(() => {
-  const saved = localStorage.getItem('theme');
-  if (saved === 'dark' || saved === 'light') setIsDark(saved === 'dark');
+/* Resolve logos via asset glob (fallbacks if missing) */
+export const logoLight =
+  findAssetByBase("logo_light") || findAssetByBase("logo-light") || svgPlaceholder("Shinel Studios");
+export const logoDark  =
+  findAssetByBase("logo_dark")  || findAssetByBase("logo-dark")  || svgPlaceholder("Shinel Studios");
 
-  const params = new URLSearchParams(window.location.search);
-  const fields = ["utm_source","utm_medium","utm_campaign","utm_content","utm_term"];
-  const utm = fields.reduce((o,k)=>{ const v=params.get(k); if(v) o[k]=v; return o; },{});
-  if (Object.keys(utm).length) localStorage.setItem("utm", JSON.stringify(utm));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
-// 4b) Apply theme whenever isDark changes (and persist it)
-useEffect(() => {
-  const root = document.documentElement;
-  root.classList.toggle('dark', isDark);
-
-  const t = isDark ? BRAND.dark : BRAND.light;
-  // ✅ NEW: header nav colors
-  root.style.setProperty('--nav-link', t.text);
-  root.style.setProperty('--nav-hover', BRAND.orange);
-
-  root.style.setProperty('--text', t.text);
-  root.style.setProperty('--text-muted', t.textMuted);
-  root.style.setProperty('--surface', t.surface);
-  root.style.setProperty('--surface-alt', t.surfaceAlt);
-  root.style.setProperty('--border', t.border);
-  root.style.setProperty('--header-bg', t.headerBg);
-  root.style.setProperty('--hero-bg', t.heroBg);
-  root.style.setProperty('--orange', BRAND.orange);
-
-  const favicon = document.getElementById('favicon');
-  if (favicon) {
-    favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
-  }
-// ✅ Update <meta name="theme-color"> so mobile browsers change UI chrome
-const metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
-if (metaTheme) {
-  metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
-}
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-}, [isDark]);
-
-  const fadeIn = { initial: { opacity: 0, y: 30 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6 } };
-  const staggerContainer = { animate: { transition: { staggerChildren: 0.1 } } };
-  const float = { animate: { y: [0, -6, 0], transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' } } };
-  const tiltHover = { whileHover: { y: -8, rotateX: 2, rotateY: -2, transition: { type: 'spring', stiffness: 200, damping: 15 } } };
+export const SAMPLE_BEFORE = findAssetByBase("sample_before") || svgPlaceholder("Before");
+export const SAMPLE_AFTER  = findAssetByBase("sample_after")  || svgPlaceholder("After");
 
 /* ===================== Header (thinner) ===================== */
-const Header = ({ isDark, setIsDark }) => {
+const Header = ({ isDark, setIsDark /* onBook removed */ }) => {
   const [workOpen, setWorkOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -330,19 +316,18 @@ const Header = ({ isDark, setIsDark }) => {
     const isActive = active === label;
     return (
       <motion.a
-  href={`#${label.toLowerCase()}`}
-  className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-  aria-current={isActive ? "page" : undefined}
-  data-navlink
-  onMouseEnter={() => setHovered(label)}
-  onMouseLeave={() => setHovered(null)}
-  initial={false}
-  /* color now from CSS vars so theme swap is instant */
-  style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
-  whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-  transition={{ duration: 0.22 }}
->
-
+        href={`#${label.toLowerCase()}`}
+        className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+        aria-current={isActive ? "page" : undefined}
+        data-navlink
+        onMouseEnter={() => setHovered(label)}
+        onMouseLeave={() => setHovered(null)}
+        initial={false}
+        /* color now from CSS vars so theme swap is instant */
+        style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
+        whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+        transition={{ duration: 0.22 }}
+      >
         <span className="nav-ink" aria-hidden="true" />
         <span className="sr-only">{isActive ? "Current section: " : ""}</span>
         <span aria-hidden="true" className="nav-label">{label}</span>
@@ -395,27 +380,25 @@ const Header = ({ isDark, setIsDark }) => {
           }}
           aria-label="Primary"
         >
-          {/* Brand */}
           {/* Brand (match Login sizing) */}
-<a
-  href="#home"
-  className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
->
-  <div className="h-12 flex items-center overflow-visible">
-    <img
-      src={isDark ? logoLight : logoDark}
-      alt="Shinel Studios"
-      className="h-full w-auto object-contain block select-none"
-      style={{
-        transform: "scale(2.8)",   // same size as Login
-        transformOrigin: "left center",
-        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
-      }}
-      decoding="async"
-    />
-  </div>
-</a>
-
+          <a
+            href="#home"
+            className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+          >
+            <div className="h-12 flex items-center overflow-visible">
+              <img
+                src={isDark ? logoLight : logoDark}
+                alt="Shinel Studios"
+                className="h-full w-auto object-contain block select-none"
+                style={{
+                  transform: "scale(2.8)",
+                  transformOrigin: "left center",
+                  filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
+                }}
+                decoding="async"
+              />
+            </div>
+          </a>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-10 relative">
@@ -432,21 +415,20 @@ const Header = ({ isDark, setIsDark }) => {
               onMouseLeave={onWorkLeave}
             >
               <motion.button
-  type="button"
-  className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-  aria-expanded={workOpen}
-  aria-haspopup="menu"
-  aria-controls="our-work-menu"
-  onFocus={() => setHovered("Our Work")}
-  onBlur={() => setHovered(null)}
-  onClick={() => setWorkOpen((v) => !v)}
-  initial={false}
-  /* color now from CSS vars */
-  style={{ color: (hovered === "Our Work" || workOpen) ? "var(--nav-hover)" : "var(--nav-link)" }}
-  whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-  transition={{ duration: 0.22 }}
->
-
+                type="button"
+                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+                aria-expanded={workOpen}
+                aria-haspopup="menu"
+                aria-controls="our-work-menu"
+                onFocus={() => setHovered("Our Work")}
+                onBlur={() => setHovered(null)}
+                onClick={() => setWorkOpen((v) => !v)}
+                initial={false}
+                /* color now from CSS vars */
+                style={{ color: (hovered === "Our Work" || workOpen) ? "var(--nav-hover)" : "var(--nav-link)" }}
+                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+                transition={{ duration: 0.22 }}
+              >
                 <span className="nav-ink" aria-hidden="true" />
                 <span className="nav-label">Our Work</span>
                 <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
@@ -466,20 +448,20 @@ const Header = ({ isDark, setIsDark }) => {
                     onMouseEnter={() => setHovered("Our Work")}
                     onMouseLeave={() => setHovered(null)}
                   >
-                    {workItems.map((item, idx) => (
+                    {workItems.map((item) => (
                       <Link
-                      key={item.name}
-                      role="menuitem"
-                      tabIndex={0}
-                      to={item.href}
-                      className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--orange)"; e.currentTarget.style.color = "#fff"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--orange)"; }}
-                      onClick={() => setWorkOpen(false)}
+                        key={item.name}
+                        role="menuitem"
+                        tabIndex={0}
+                        to={item.href}
+                        className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--orange)"; e.currentTarget.style.color = "#fff"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--orange)"; }}
+                        onClick={() => setWorkOpen(false)}
                       >
                         {item.name}
-                        </Link>
+                      </Link>
                     ))}
                   </motion.div>
                 )}
@@ -487,31 +469,17 @@ const Header = ({ isDark, setIsDark }) => {
             </div>
           </div>
 
-          {/* Right actions (unchanged) */}
+          {/* Right actions (audit removed; Login slightly larger for balance) */}
           <div className="flex items-center gap-2 md:gap-3">
-            {!quickBarVisible && (
-              <motion.button
-                onClick={() => setShowCalendly(true)}
-                className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+            <motion.div className="hidden md:inline-flex">
+              <Link
+                to="/login"
+                className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                 style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-                whileHover={{ y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
-                whileTap={{ scale: 0.98 }}
               >
-                Book Free Audit
-              </motion.button>
-            )}
-
-<motion.div className="hidden md:inline-flex">
-  <Link
-    to="/login"
-    className="items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-  >
-    Login
-  </Link>
-</motion.div>
-
-
+                Login
+              </Link>
+            </motion.div>
 
             <motion.button
               onClick={() => setIsDark(!isDark)}
@@ -540,7 +508,7 @@ const Header = ({ isDark, setIsDark }) => {
           </div>
         </nav>
 
-        {/* Mobile menu (unchanged) */}
+        {/* Mobile menu */}
         <AnimatePresence>
           {isMenuOpen && (
             <motion.div
@@ -550,10 +518,109 @@ const Header = ({ isDark, setIsDark }) => {
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="md:hidden"
-              style={{ background: "var(--surface)", borderTop: "1px solid var(--border)", paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
-              role="dialog" aria-modal="true" aria-label="Main menu"
+              style={{
+                background: "var(--surface)",
+                borderTop: "1px solid var(--border)",
+                paddingBottom: "max(12px, env(safe-area-inset-bottom))"
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main menu"
             >
-              {/* ...unchanged contents... */}
+              <nav className="px-4 py-3">
+                {/* Main links */}
+                <motion.ul
+                  initial="hidden"
+                  animate="visible"
+                  className="flex flex-col gap-2"
+                >
+                  {[
+                    { label: "Home", href: "#home" },
+                    { label: "Services", href: "#services" },
+                    { label: "Testimonials", href: "#testimonials" },
+                    { label: "Contact", href: "#contact" },
+                  ].map((item, i) => (
+                    <motion.li
+                      key={item.label}
+                      variants={mobileItem}
+                      custom={i}
+                    >
+                      <a
+                        href={item.href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setIsMenuOpen(false);
+                          const el = document.querySelector(item.href);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className="block w-full rounded-xl px-4 py-3 text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{
+                          color: "var(--text)",
+                          background: "var(--surface-alt)",
+                          border: "1px solid var(--border)"
+                        }}
+                      >
+                        {item.label}
+                      </a>
+                    </motion.li>
+                  ))}
+                </motion.ul>
+
+                {/* Our Work shortcuts */}
+                <div className="mt-4">
+                  <div
+                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Our Work
+                  </div>
+                  <motion.div
+                    className="grid grid-cols-2 gap-2"
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {[
+                      { name: "Video Editing", to: "/video-editing" },
+                      { name: "Thumbnails", to: "/thumbnails" },
+                      { name: "Shorts", to: "/shorts" },
+                      { name: "GFX", to: "/gfx" },
+                    ].map((item, i) => (
+                      <motion.div key={item.name} variants={mobileItem} custom={i}>
+                        <Link
+                          to={item.to}
+                          onClick={() => setIsMenuOpen(false)}
+                          className="block rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                          style={{
+                            color: "var(--text)",
+                            background: "var(--surface-alt)",
+                            border: "1px solid var(--border)"
+                          }}
+                        >
+                          {item.name}
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                </div>
+
+                {/* CTAs (Audit removed; keep Login only) */}
+                <div className="mt-6 flex flex-col gap-2">
+                  <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
+                    <Link
+                      to="/login"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="block w-full rounded-full px-5 py-3 text-center font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{
+                        color: "var(--text)",
+                        background: "transparent",
+                        border: "1px solid var(--border)"
+                      }}
+                    >
+                      Login
+                    </Link>
+                  </motion.div>
+                </div>
+              </nav>
             </motion.div>
           )}
         </AnimatePresence>
@@ -704,24 +771,132 @@ const CalendlyModal = ({ open, onClose }) => {
   );
 };
 
-/* ===================== Trust Bar (ultra-thin + animated + auto-hide with QQB) ===================== */
+/* ===================== Trust Bar (appears after hero, marquee, pro icons) ===================== */
 const TrustBar = () => {
-  const [show, setShow] = React.useState(true);
+  const [show, setShow] = React.useState(false);
+  const [qqbHidden, setQqbHidden] = React.useState(true);
 
   // Respect reduced motion
   const reduceMotion =
     typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  // Hide when Quick Quote Bar is visible (listens to your existing qqb:visible event)
+  // Hide when your Quick Quote Bar is visible
   React.useEffect(() => {
-    const onToggle = (e) => setShow(!Boolean(e.detail?.visible));
-    // set initial (in case QQB already dispatched before mount)
-    setShow(true);
+    const onToggle = (e) => setQqbHidden(!Boolean(e.detail?.visible));
     document.addEventListener("qqb:visible", onToggle);
     return () => document.removeEventListener("qqb:visible", onToggle);
   }, []);
+
+  // Show only after we pass the hero (#home). Works on mobile/desktop.
+  React.useEffect(() => {
+    let raf = null;
+
+    const getHeaderH = () => {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--header-h");
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : 76;
+    };
+
+    const computeShow = () => {
+      const hero = document.getElementById("home");
+      const headerH = getHeaderH();
+      if (!hero) {
+        const y = window.scrollY || 0;
+        setShow(qqbHidden && y > 140);
+        return;
+      }
+      const heroBottom = hero.offsetTop + hero.offsetHeight;
+      const y = window.scrollY || 0;
+      const BUFFER = 6; // small hysteresis to avoid flicker
+      setShow(qqbHidden && y + headerH > heroBottom - BUFFER);
+    };
+
+    const onScrollOrResize = () => {
+      if (raf == null)
+        raf = requestAnimationFrame(() => {
+          raf = null;
+          computeShow();
+        });
+    };
+
+    computeShow();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [qqbHidden]);
+
+  // ---- Content (icons + short proof points) ----
+  const items = [
+    {
+      icon: Star,
+      text: (
+        <>
+          Rated <b>4.7/5</b> by creators
+        </>
+      ),
+      aria: "Rated 4.7 out of 5 by creators",
+    },
+    {
+      icon: Users,
+      text: (
+        <>
+          <b>20+ active</b> clients
+        </>
+      ),
+      aria: "More than 20 active clients",
+    },
+    {
+      icon: MousePointer2,
+      text: (
+        <>
+          Thumbnails deliver <b>+40% CTR</b>
+        </>
+      ),
+      aria: "Thumbnails deliver plus forty percent click-through rate",
+    },
+    {
+      icon: Timer,
+      text: (
+        <>
+          Edits drive <b>2× watch time</b>
+        </>
+      ),
+      aria: "Edits drive two times watch time",
+    },
+    {
+      icon: Eye,
+      text: (
+        <>
+          <b>7M+ views</b> driven
+        </>
+      ),
+      aria: "Over seven million views driven",
+    },
+    {
+      icon: TrendingUp,
+      text: (
+        <>
+          Shorts → <b>predictable growth</b>
+        </>
+      ),
+      aria: "Shorts lead to predictable growth",
+    },
+  ];
+
+  // Single item renderer
+  const RowItem = ({ Icon, children, aria }) => (
+    <span className="inline-flex items-center gap-2">
+      <Icon size={14} style={{ color: "var(--text)" }} aria-hidden="true" />
+      <span aria-label={aria} style={{ color: "var(--text)" }} className="align-middle">
+        {children}
+      </span>
+    </span>
+  );
 
   return (
     <AnimatePresence initial={false}>
@@ -739,50 +914,100 @@ const TrustBar = () => {
           exit={reduceMotion ? { opacity: 0 } : { y: -8, opacity: 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
-          <div className="container mx-auto px-3 py-1 flex items-center justify-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] md:text-xs leading-tight">
-            {/* Rating */}
-            <div className="flex items-center gap-1.5" style={{ color: "var(--text)" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span>
-                Rated <b className="mx-0.5">4.7/5</b> by creators
-              </span>
-            </div>
-
-            {/* Divider */}
-            <span
-              className="hidden md:inline"
-              style={{ color: "var(--text-muted)" }}
-              aria-hidden="true"
-            >
-              •
-            </span>
-
-            {/* Counters (collapse on small screens) */}
-            <div
-              className="hidden md:flex items-center gap-2"
-              style={{ color: "var(--text-muted)" }}
-            >
-              <span>
-                Trusted by <b style={{ color: "var(--text)" }}>20+</b> active clients
-              </span>
-              <span aria-hidden="true">•</span>
-              <span>
-                <b style={{ color: "var(--text)" }}>7M+</b> views generated
-              </span>
-            </div>
+          <div
+            className="overflow-hidden select-none"
+            style={{
+              WebkitMaskImage:
+                "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+              maskImage:
+                "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+            }}
+          >
+            {reduceMotion ? (
+              // Static line for reduced motion
+              <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm">
+                <div className="inline-flex items-center gap-6 md:gap-10">
+                  {items.map((it, i) => (
+                    <RowItem key={i} Icon={it.icon} aria={it.aria}>
+                      {it.text}
+                    </RowItem>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              // Smooth marquee
+              <div className="relative py-1.5">
+                <div className="marquee-row whitespace-nowrap will-change-transform">
+                  <span className="inline-flex items-center gap-6 md:gap-10 px-3 text-[11px] md:text-sm">
+                    {items.map((it, i) => (
+                      <React.Fragment key={`a-${i}`}>
+                        <RowItem Icon={it.icon} aria={it.aria}>
+                          {it.text}
+                        </RowItem>
+                        {/* fancy separator */}
+                        <span
+                          className="mx-1 md:mx-2 h-[6px] w-[6px] rounded-full inline-block"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 30% 30%, #fff 0%, #ffd9c7 45%, rgba(255,255,255,0) 70%)",
+                            boxShadow: "0 0 10px rgba(232,80,2,0.35)",
+                            opacity: 0.85,
+                          }}
+                          aria-hidden="true"
+                        />
+                      </React.Fragment>
+                    ))}
+                  </span>
+                  {/* duplicate for seamless loop */}
+                  <span className="inline-flex items-center gap-6 md:gap-10 px-3 text-[11px] md:text-sm">
+                    {items.map((it, i) => (
+                      <React.Fragment key={`b-${i}`}>
+                        <RowItem Icon={it.icon} aria={it.aria}>
+                          {it.text}
+                        </RowItem>
+                        <span
+                          className="mx-1 md:mx-2 h-[6px] w-[6px] rounded-full inline-block"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 30% 30%, #fff 0%, #ffd9c7 45%, rgba(255,255,255,0) 70%)",
+                            boxShadow: "0 0 10px rgba(232,80,2,0.35)",
+                            opacity: 0.85,
+                          }}
+                          aria-hidden="true"
+                        />
+                      </React.Fragment>
+                    ))}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+
+          <style>{`
+            .marquee-row {
+              display: inline-block;
+              min-width: 200%;
+              animation: ss-marquee 28s linear infinite;
+            }
+            /* Pause on hover (desktop) for readability */
+            @media (hover: hover) and (pointer: fine) {
+              .trustbar:hover .marquee-row { animation-play-state: paused; }
+            }
+            @keyframes ss-marquee {
+              0%   { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            /* Subtle speed-up on small screens to keep density comfortable */
+            @media (max-width: 480px) {
+              .marquee-row { animation-duration: 24s; }
+            }
+          `}</style>
         </motion.div>
       )}
     </AnimatePresence>
   );
 };
+
 
 
 /* ===================== Quick Quote Bar (compact + proximity hide near form + event listener) ===================== */
@@ -911,345 +1136,274 @@ const QuickQuoteBar = ({ onBook }) => {
 };
 
 
-
-/* ===================== Hero (LCP-optimized headline/CTA, GPU-cheap stars, light-mode banding fix) ===================== */
-const HeroSection = ({ isDark }) => {
+/* ===================== Hero (responsive, tone-aware, efficient) ===================== */
+const HeroSection = ({ isDark, onAudit }) => {
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Theme-aware star palette
-  const starPalette = isDark
-    ? ["#FFFFFF", "#FFEFC7", "#FFD37A"]
-    : ["#B95600", "#FFB84C", "#FFA11E"];
+  const handleAudit = () => {
+    try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "hero" } })); } catch {}
+    onAudit?.();
+  };
 
-  // DPR-aware count
-  const starCount = useMemo(() => {
-    const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-    const base = isDark ? 26 : 16; // slight trim for paint time
-    return reduceMotion ? 0 : Math.round(base * (0.8 + 0.2 * dpr));
-  }, [isDark, reduceMotion]);
+  const handleSeeWork = (e) => {
+    e.preventDefault();
+    try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "see_work", src: "hero" } })); } catch {}
+    const el = document.querySelector("#work");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
-  const stars = useMemo(() => {
+  /* ---------- Efficient, adaptive star field ---------- */
+  const fieldRef = React.useRef(null);
+
+  // Count adapts to width, theme & DPR; disabled if reduced motion
+  const stars = React.useMemo(() => {
     if (reduceMotion) return [];
-    return Array.from({ length: starCount }).map(() => ({
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      delay: Math.random() * 2.4,
-      size: Math.random() * 7 + 6,
-      color: starPalette[Math.floor(Math.random() * starPalette.length)],
-      spinDir: Math.random() > 0.5 ? 1 : -1,
-      scaleBase: 0.9 + Math.random() * 0.25,
-      speed: 1.6 + Math.random() * 1.6,
-    }));
-  }, [starCount, starPalette, reduceMotion]);
+    const w = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
 
-  const LightFlatBg = () => (
-    <svg aria-hidden="true" className="absolute inset-0 w-full h-full" viewBox="0 0 1920 1080" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="lg" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#FFF2E9" />
-          <stop offset="50%" stopColor="#FFE0CF" />
-          <stop offset="100%" stopColor="#FFD1BC" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="0" width="1920" height="1080" fill="url(#lg)" />
-    </svg>
-  );
+    // base by breakpoint
+    let base = w < 380 ? 0 : w < 640 ? 8 : w < 1024 ? 10 : 12;
+    // fewer in light
+    if (!isDark) base = Math.max(0, Math.round(base * 0.6));
+    // dampen on high DPR phones
+    base = Math.round(base / (dpr > 1.5 ? 1.25 : 1));
+
+    const out = [];
+    for (let i = 0; i < base; i++) {
+      out.push({
+        top: `${12 + ((i * 13 + 37) % 72)}%`,
+        left: `${6 + ((i * 23 + 37) % 88)}%`,
+        size: 9 + ((i * 3) % 5),
+        delay: (i * 0.35) % 2.2,
+        drift: i % 2 ? 6 : -6,
+        rot: (i * 37) % 360,
+        speed: 2.3 + ((i % 5) * 0.35), // varied twinkle duration
+      });
+    }
+    return out;
+  }, [reduceMotion, isDark]);
+
+  // Pause star animations when hero is off-screen (battery friendly)
+  React.useEffect(() => {
+    if (!fieldRef.current || !("IntersectionObserver" in window)) return;
+    const root = fieldRef.current;
+    const io = new IntersectionObserver(
+      ([entry]) => root.setAttribute("data-animate", entry.isIntersecting ? "1" : "0"),
+      { rootMargin: "-10% 0px -70% 0px", threshold: [0, 0.2] }
+    );
+    const section = root.closest("section");
+    if (section) io.observe(section);
+    return () => io.disconnect();
+  }, []);
+
+  const bgDark =
+    "radial-gradient(900px 500px at -10% -20%, rgba(232,80,2,.14), transparent 55%), radial-gradient(900px 500px at 110% -20%, rgba(232,80,2,.08), transparent 55%), linear-gradient(180deg,#0b0b0b,#101010 45%, #0e0e0e)";
+  const bgLight =
+    "linear-gradient(180deg,#fffdfb 0%,#fff8f2 55%, #fff3ea 100%), radial-gradient(750px 420px at 0% -10%, rgba(232,80,2,.06), transparent 60%), radial-gradient(750px 420px at 100% -10%, rgba(255,147,87,.05), transparent 60%)";
 
   return (
     <section
       id="home"
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: "var(--hero-bg)" }}
-      aria-label="Shinel Studios — Helping creators grow with Editing, Thumbnails, Shorts, and GFX"
+      className="relative overflow-hidden"
+      style={{
+        padding: "clamp(80px, 9vw, 132px) 0 clamp(40px, 6vw, 96px)",
+        background: isDark ? bgDark : bgLight,
+        contentVisibility: "auto",
+        containIntrinsicSize: "900px",
+      }}
+      aria-label="Shinel Studios introduction"
     >
-      {!isDark && <LightFlatBg />}
-
-      {/* Decorative Stars */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {stars.map((s, i) => (
-          <motion.svg
-            key={i}
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            width={s.size}
-            height={s.size}
-            className="absolute will-change-transform"
-            style={{
-              left: `${s.left}%`,
-              top: `${s.top}%`,
-              filter: isDark ? "drop-shadow(0 0 6px rgba(255,255,255,0.7)) drop-shadow(0 0 10px rgba(232,80,2,0.18))" : "none",
-              transformOrigin: "12px 10px",
-            }}
-            initial={{ scale: s.scaleBase, opacity: isDark ? 0.65 : 0.7, rotate: 0 }}
-            animate={{
-              scale: [s.scaleBase, s.scaleBase + 0.32, s.scaleBase],
-              opacity: [isDark ? 0.45 : 0.55, 1, isDark ? 0.45 : 0.55],
-              rotate: [0, s.spinDir * 180, s.spinDir * 360],
-            }}
-            transition={reduceMotion ? { duration: 0.01 } : { duration: s.speed + s.delay, repeat: Infinity, ease: "easeInOut", delay: s.delay }}
-          >
-            {!isDark && (
-              <defs>
-                <radialGradient id={`halo-${i}`} cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="rgba(255,232,188,0.7)" />
-                  <stop offset="60%" stopColor="rgba(255,204,128,0.32)" />
-                  <stop offset="100%" stopColor="rgba(255,204,128,0)" />
-                </radialGradient>
-              </defs>
-            )}
-            {!isDark && <circle cx="12" cy="10" r="7" fill={`url(#halo-${i})`} opacity="0.35" />}
-            <polygon
-              points="12,0 14,8 22,10 14,12 12,20 10,12 2,10 10,8"
-              fill={s.color}
-              stroke={isDark ? "rgba(255,255,255,0.55)" : "rgba(120,55,0,0.6)"}
-              strokeWidth="0.6"
+      {/* Star field (behind content) */}
+      {!reduceMotion && (
+        <div ref={fieldRef} className="ss-field pointer-events-none absolute inset-0 z-0" data-animate="1" aria-hidden="true">
+          {stars.map((s, i) => (
+            <span
+              key={i}
+              className={`ss-sparkle ${isDark ? "dark" : "light"}`}
+              style={{
+                top: s.top,
+                left: s.left,
+                ["--s"]: `${s.size}px`,
+                ["--delay"]: `${s.delay}s`,
+                ["--drift"]: `${s.drift}px`,
+                ["--rot"]: `${s.rot}deg`,
+                ["--spd"]: `${s.speed}s`,
+                opacity: isDark ? 0.9 : 0.7,
+              }}
             />
-            <circle cx="12" cy="10" r="1.1" fill={isDark ? "#FFFFFF" : "#FFFAF0"} />
-          </motion.svg>
-        ))}
-        {/* Subtle vignette */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: isDark
-              ? "radial-gradient(700px 420px at 50% 40%, rgba(0,0,0,0.06), rgba(0,0,0,0.03) 45%, transparent 70%)"
-              : "radial-gradient(900px 540px at 50% 40%, rgba(0,0,0,0.05), rgba(0,0,0,0.02) 45%, transparent 72%)",
-          }}
-        />
-      </div>
-
-      {/* Content */}
-      <div className="container mx-auto px-4 text-center relative z-10">
-        <motion.div variants={animations.staggerParent} initial="hidden" animate="visible" className="max-w-4xl mx-auto">
-          <motion.h1
-            variants={animations.fadeUp}
-            className="text-5xl md:text-7xl font-bold mb-6 font-['Poppins']"
-            style={{ color: "var(--text)" }}
-          >
-            Where Ideas{" "}
-            <motion.span
-              className="text-transparent bg-clip-text will-change-transform inline-block"
-              style={{ backgroundImage: `linear-gradient(90deg, var(--orange), #ff9357)` }}
-              animate={reduceMotion ? {} : { y: [0, -6, 0] }}
-              transition={reduceMotion ? { duration: 0.01 } : { duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            >
-              Shine
-            </motion.span>
-          </motion.h1>
-
-          <motion.p
-            variants={animations.fadeUp}
-            transition={{ delay: 0.12 }}
-            className="text-xl md:text-2xl mb-8 max-w-2xl mx-auto"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Shinel Studios — Helping creators grow with Editing • Thumbnails • Shorts • GFX
-          </motion.p>
-
-          <motion.div
-            variants={animations.fadeUp}
-            transition={{ delay: 0.24 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-          >
-            <motion.a
-              href="#services"
-              className="text-white px-8 py-4 rounded-lg font-medium text-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-              style={{ background: "var(--orange)" }}
-              whileHover={{ y: -2, boxShadow: "0 12px 28px rgba(232,80,2,0.35)" }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Explore Work
-            </motion.a>
-            <motion.a
-              href="#contact"
-              className="px-8 py-4 rounded-lg font-medium text-lg border-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-              style={{ borderColor: "var(--orange)", color: "var(--orange)" }}
-              whileHover={{ backgroundColor: "var(--orange)", color: "#fff", y: -2 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Start a Project
-            </motion.a>
-          </motion.div>
-        </motion.div>
-      </div>
-    </section>
-  );
-};
-
-
-/* ===================== Creators Worked With (skeletons, CLS-safe logos, marquee polish) ===================== */
-const CreatorsWorkedWith = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const creators = [
-    { name: "Kamz Inkzone", subs: "171K", href: "https://youtube.com/@KamzInkzone", logo: img('kamz'), niche: "Gaming" },
-    { name: "Deadlox Gaming", subs: "7K", href: "https://youtube.com/@DeadloxGaming", logo: img('deadlox'), niche: "Gaming" },
-    { name: "Kundan Parashar", subs: "7K", href: "https://youtube.com/@KundanParashar", logo: img('kundan'), niche: "Devotional" },
-    { name: "Aish is Live", subs: "13K", href: "https://youtube.com/@AishIsLive", logo: img('aish'), niche: "Streaming" },
-    { name: "Gamer Mummy", subs: "14.7K", href: "https://youtube.com/@GamerMummy", logo: img('gamermummy'), niche: "Gaming" },
-    { name: "Gamify Anchit", subs: "1.5K", href: "https://youtube.com/@GamifyAnchit", logo: img('anchit'), niche: "Gaming" },
-    { name: "Maggie Live", subs: "22K", href: "https://youtube.com/@MaggieLive", logo: img('maggie'), niche: "Lifestyle" },
-    { name: "Crown Ankit", subs: "3K", href: "https://youtube.com/@CrownAnkit", logo: img('ankit'), niche: "Gaming" },
-    { name: "Manav Maggie Sukhija", subs: "50K", href: "https://youtube.com/@ManavMaggieSukhija", logo: img('manav'), niche: "YouTuber" },
-  ];
-
-  const marquee = [...creators, ...creators];
-
-  const Logo = ({ src, alt }) => {
-    const [ok, setOk] = useState(false);
-    return (
-      <div
-        className="w-12 h-12 rounded-full shrink-0 overflow-hidden relative"
-        style={{ background: "rgba(0,0,0,0.06)", border: "1px solid var(--border)" }}
-        aria-hidden="true"
-      >
-        {!ok && <div className="absolute inset-0 animate-pulse" style={{ background: "rgba(0,0,0,0.06)" }} />}
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          width={48}
-          height={48}
-          className="w-full h-full object-cover"
-          onLoad={() => setOk(true)}
-          onError={() => setOk(true)}
-        />
-      </div>
-    );
-  };
-
-  const Card = ({ c, i }) => {
-    const initials = c.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-
-    const Wrapper = ({ children }) =>
-      c.href ? (
-        <a
-          href={c.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`${c.name} channel (opens in new tab)`}
-          className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded-2xl"
-        >
-          {children}
-        </a>
-      ) : <div>{children}</div>;
-
-    return (
-      <motion.div
-        key={`${c.name}-${i}`}
-        whileHover={{ y: -6, scale: 1.03 }}
-        className="min-w-[240px] sm:min-w-[260px] md:min-w-[300px] rounded-2xl overflow-hidden relative"
-        style={{
-          background: "linear-gradient(135deg, var(--surface), var(--surface-alt))",
-          border: "1px solid var(--border)",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
-        }}
-      >
-        <Wrapper>
-          <div className="p-6 flex items-center gap-4">
-            {c.logo ? <Logo src={c.logo} alt="" /> : (
-              <div className="w-12 h-12 rounded-full grid place-items-center" style={{ background: "rgba(0,0,0,0.06)", border: "1px solid var(--border)" }}>
-                <span className="text-sm font-bold" style={{ color: "var(--text)" }}>{initials}</span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <h3 className="text-lg md:text-xl font-semibold truncate" style={{ color: "var(--text)" }} title={c.name}>
-                {c.name}
-              </h3>
-              <div className="flex items-center gap-2 mt-1 text-xs md:text-sm">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full" style={{ background: "rgba(232,80,2,0.12)", color: "var(--orange)" }}>
-                  {c.subs}
-                </span>
-                {c.niche && (
-                  <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(0,0,0,0.06)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
-                    {c.niche}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </Wrapper>
-      </motion.div>
-    );
-  };
-
-  return (
-    <section style={{ background: "var(--surface)" }} className="py-16 md:py-20">
-      <div className="container mx-auto px-4">
-        <motion.h2
-          variants={animations.fadeDown}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          className="text-3xl md:text-5xl font-bold text-center mb-6 md:mb-12 font-['Poppins']"
-          style={{ color: "var(--text)" }}
-        >
-          Creators We Worked With
-        </motion.h2>
-
-        {/* Mobile: swipe carousel */}
-        <div className="md:hidden relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-8" style={{ background: "linear-gradient(to right, var(--surface), transparent)" }} />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8" style={{ background: "linear-gradient(to left, var(--surface), transparent)" }} />
-          <div
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4"
-            style={{ scrollPaddingInline: "1rem", WebkitOverflowScrolling: "touch" }}
-            role="list"
-            aria-label="Creators list (swipe horizontally)"
-          >
-            {creators.map((c, i) => (
-              <div key={i} className="snap-start">
-                <Card c={c} i={i} />
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
+      )}
 
-        {/* Desktop: marquee */}
-        {!reduceMotion ? (
-          <div className="hidden md:block marquee-viewport mask-fade-x">
-            <div className="marquee-hover-pause" style={{ "--marquee-duration": "40s" }}>
-              <div className="marquee-track gap-6">
-                {marquee.map((c, i) => (
-                  <Card key={`${c.name}-${i}`} c={c} i={i} />
-                ))}
-              </div>
+      <div className="container mx-auto px-4 relative z-[1]">
+        {/* Headline: perfect wrap on phones */}
+        <motion.h1
+          className="font-bold font-['Poppins'] tracking-tight hero-title"
+          style={{
+            color: isDark ? "#fff" : "#0b0b0b",
+            lineHeight: 1.06,
+            letterSpacing: "-.01em",
+            fontSize: "clamp(2rem, 6.6vw, 4.5rem)",
+            maxWidth: "28ch",
+          }}
+          initial={reduceMotion ? {} : { opacity: 0, y: 18 }}
+          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+        >
+          <span className="block md:inline">Packaging that boosts CTR.</span>{" "}
+          <span className="block md:inline">Edits that keep people watching.</span>
+        </motion.h1>
+
+        {/* Subhead */}
+        <motion.p
+          className="mt-3 sm:mt-4"
+          style={{
+            color: isDark ? "rgba(255,255,255,.80)" : "rgba(20,20,20,.75)",
+            fontSize: "clamp(1rem, 2.2vw, 1.25rem)",
+            maxWidth: "52ch",
+          }}
+          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
+          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.08 }}
+        >
+          We help creators win attention with thumb-stopping thumbnails, hook-first shorts, and clean long-form edits.
+        </motion.p>
+
+        {/* Proof strip (stacks on phones) */}
+        <motion.div
+          className="mt-5 sm:mt-6 rounded-2xl"
+          style={{
+            background: isDark ? "rgba(255,255,255,.06)" : "rgba(0,0,0,.045)",
+            border: `1px solid ${isDark ? "rgba(255,255,255,.12)" : "rgba(0,0,0,.08)"}`,
+            backdropFilter: "blur(6px)",
+          }}
+          initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.15 }}
+          aria-label="Social proof"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-0 px-4 py-3">
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
+              {/* star icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              </svg>
+              Rated <strong className="ml-1">4.7/5</strong>
+            </div>
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
+              {/* users icon */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M20 21v-2a4 4 0 0 0-3-3.87M12 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm6-1a3 3 0 1 0-6 0 3 3 0 0 0 6 0Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <strong>20+ active</strong> clients
+            </div>
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
+              {/* eye icon */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              <strong>7M+</strong> views
             </div>
           </div>
-        ) : (
-          <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 gap-6 mt-6" role="list">
-            {creators.map((c, i) => (
-              <Card key={`grid-${i}`} c={c} i={i} />
-            ))}
-          </div>
-        )}
+        </motion.div>
+
+        {/* CTAs */}
+        <div className="mt-6 sm:mt-7 flex flex-col sm:flex-row sm:items-center gap-3">
+          <motion.button
+            onClick={handleAudit}
+            className="w-full sm:w-auto rounded-full px-6 py-3 text-white font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+            style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08)" }}
+            whileHover={reduceMotion ? {} : { y: -2 }}
+            whileTap={reduceMotion ? {} : { scale: 0.98 }}
+            aria-label="Get Free Audit"
+          >
+            Get Free Audit
+          </motion.button>
+
+          <motion.a
+            href="#work"
+            onClick={handleSeeWork}
+            className="w-full sm:w-auto rounded-full px-6 py-3 font-semibold text-center"
+            style={{
+              color: isDark ? "#fff" : "#0b0b0b",
+              border: `1px solid ${isDark ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.16)"}`,
+              background: isDark ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.75)",
+              boxShadow: isDark ? "0 2px 10px rgba(0,0,0,.25)" : "0 4px 12px rgba(0,0,0,.06)",
+            }}
+            whileHover={reduceMotion ? {} : { y: -2 }}
+            whileTap={reduceMotion ? {} : { scale: 0.98 }}
+          >
+            See Work
+          </motion.a>
+        </div>
       </div>
 
+      {/* Styles: tone-aware sparkles + efficiency guards */}
       <style>{`
-        .marquee-viewport { position: relative; overflow: hidden; }
-        .mask-fade-x {
-          mask-image: linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%);
-          -webkit-mask-image: linear-gradient(to right, transparent 0, black 48px, black calc(100% - 48px), transparent 100%);
+        .hero-title { text-wrap: balance; }
+
+        .ss-field[data-animate="0"] .ss-sparkle { animation-play-state: paused !important; }
+
+        .ss-sparkle {
+          position: absolute;
+          width: var(--s, 12px);
+          height: var(--s, 12px);
+          transform: translate3d(0,0,0);
+          border-radius: 9999px;
+          will-change: transform, opacity, filter;
+          animation:
+            ss-twinkle var(--spd,2.6s) ease-in-out infinite var(--delay,0s),
+            ss-drift 7s ease-in-out infinite alternate var(--delay,0s);
         }
-        .marquee-track {
-          display: flex;
-          width: max-content;
-          will-change: transform;
-          animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
+
+        /* Dark: bright cross-flare, screen blend */
+        .ss-sparkle.dark {
+          background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,147,87,.95) 45%, rgba(255,147,87,0) 70%);
+          filter: drop-shadow(0 2px 12px rgba(232,80,2,.35));
+          mix-blend-mode: screen;
         }
-        @keyframes marquee-rtl { 0% { transform: translateX(0%);} 100% { transform: translateX(-50%);} }
-        @media (hover:hover) and (pointer:fine) {
-          .marquee-hover-pause:hover .marquee-track { animation-play-state: paused; }
+        .ss-sparkle.dark::before,
+        .ss-sparkle.dark::after {
+          content: ""; position: absolute; left: 50%; top: 50%;
+          width: calc(var(--s,12px) * 1.8); height: 2px; border-radius: 2px;
+          transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent); opacity: .85;
         }
+        .ss-sparkle.dark::after { transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .75; }
+
+        /* Light: soft amber glint, multiply blend (no harsh white) */
+        .ss-sparkle.light {
+          background: radial-gradient(circle, rgba(232,80,2,.55) 0%, rgba(232,80,2,.25) 38%, rgba(232,80,2,0) 68%);
+          filter: blur(.2px);
+          mix-blend-mode: multiply;
+        }
+        .ss-sparkle.light::before,
+        .ss-sparkle.light::after {
+          content: ""; position: absolute; left: 50%; top: 50%;
+          width: calc(var(--s,12px) * 1.4); height: 1px; border-radius: 2px;
+          transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+          background: linear-gradient(90deg, transparent, rgba(232,80,2,.45), transparent); opacity: .6;
+        }
+        .ss-sparkle.light::after { transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .5; }
+
+        @keyframes ss-twinkle {
+          0%   { opacity: 0; transform: translate3d(0,0,0) scale(.82); }
+          20%  { opacity: 1; }
+          50%  { transform: translate3d(var(--drift,6px), -4px, 0) scale(1); }
+          80%  { opacity: .95; }
+          100% { opacity: 0; transform: translate3d(0,0,0) scale(.82); }
+        }
+        @keyframes ss-drift {
+          0%   { filter: drop-shadow(0 0 0 rgba(232,80,2,0)); }
+          100% { filter: drop-shadow(0 3px 14px rgba(232,80,2,.25)); }
+        }
+
+        /* Respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
-          .marquee-track { animation: none !important; transform: none !important; }
+          .ss-sparkle { animation: none !important; opacity: .55; }
         }
       `}</style>
     </section>
@@ -1257,19 +1411,63 @@ const CreatorsWorkedWith = () => {
 };
 
 
+
   /* ===================== Services ===================== */
 const ServicesSection = () => {
   const services = [
-    { icon: <Play size={40} />, title: 'Video Editing', desc: 'Professional video editing and post-production services' },
-    { icon: <Image size={40} />, title: 'Thumbnail Design', desc: 'Eye-catching thumbnails that boost click-through rates' },
-    { icon: <TrendingUp size={40} />, title: 'SEO & Marketing', desc: 'Strategic marketing to grow your online presence' },
-    { icon: <FileText size={40} />, title: 'Content Strategy', desc: 'Comprehensive content planning and strategy' }
-  ];
+    {
+      icon: <Play size={40} />,
+      title: "Video Editing",
+      outcome: "Keep people watching 2× longer.",
+      proof: "Kamz Inkzone (172k): +38% avg view duration in 30 days",
+    },
+    {
+      icon: <Image size={40} />,
+      title: "Thumbnail Design",
+      outcome: "Get up to 40% more clicks.",
+      proof: "Aish: CTR 3.1% → 5.0% after 3 iterations",
+    },
+    {
+      icon: <Zap size={40} />,
+      title: "Shorts Production",
+      outcome: "Grow subs with algorithm-ready hooks.",
+      proof: "Manav: +9.4k subs from Shorts in Q2",
+    },
+    {
+      icon: <Wand2 size={40} />,
+      title: "GFX / Motion Graphics",
+      outcome: "Professional polish that sets you apart.",
+      proof: "GamerMummy: +22% session time with motion overlays",
+    },
+    {
+      icon: <PenTool size={40} />,
+      title: "Scripting & Hook Writing",
+      outcome: "Open strong with scroll-stopping hooks.",
+      proof: "Hook retention +18% in A/B tests (first 8s)",
+    },
+    {
+      icon: <Wand2 size={40} />,
+      title: "AI Repurposing",
+      outcome: "Turn 1 video into 10 assets (clips, reels, posts).",
+      proof: "10× output, auto-captions & resizing included",
+    },
+    {
+      icon: <Bot size={40} />,
+      title: "Workflow Automations",
+      outcome: "Auto-posting, captions, assets → less grunt work.",
+      proof: "Save 2–3 hours per upload cycle",
+    },
+    {
+      icon: <Megaphone size={40} />,
+      title: "SEO & Metadata",
+      outcome: "Rank for the right searches and suggested.",
+      proof: "+27% browse/search traffic after metadata revamp",
+    },
+  ]
 
   return (
-    <section id="services" className="py-20" style={{ background: 'var(--surface-alt)' }}>
+    <section id="services" className="py-20" style={{ background: "var(--surface-alt)" }}>
       <div className="container mx-auto px-4">
-        
         {/* Section Heading */}
         <motion.div
           variants={animations.fadeUp}
@@ -1278,11 +1476,14 @@ const ServicesSection = () => {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 font-['Poppins']" style={{ color: 'var(--text)' }}>
+          <h2
+            className="text-4xl md:text-5xl font-bold mb-4 font-['Poppins']"
+            style={{ color: "var(--text)" }}
+          >
             Our Services
           </h2>
-          <p className="text-xl max-w-2xl mx-auto" style={{ color: 'var(--text-muted)' }}>
-            We offer comprehensive creative solutions to elevate your brand
+          <p className="text-xl max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
+            Outcomes over deliverables — creative built to convert
           </p>
         </motion.div>
 
@@ -1300,20 +1501,33 @@ const ServicesSection = () => {
               variants={animations.scaleIn}
               {...tiltHover}
               className="p-8 rounded-2xl shadow-lg"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
             >
-              <div className="mb-4" style={{ color: 'var(--orange)' }}>{s.icon}</div>
-              <h3 className="text-xl font-bold mb-3 font-['Poppins']" style={{ color: 'var(--text)' }}>
+              <div className="mb-4" style={{ color: "var(--orange)" }}>
+                {s.icon}
+              </div>
+
+              <h3
+                className="text-xl font-bold mb-2 font-['Poppins']"
+                style={{ color: "var(--text)" }}
+              >
                 {s.title}
               </h3>
-              <p style={{ color: 'var(--text-muted)' }}>{s.desc}</p>
+
+              <p className="mb-3 font-medium" style={{ color: "var(--text)" }}>
+                {s.outcome}
+              </p>
+
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                {s.proof}
+              </p>
             </motion.div>
           ))}
         </motion.div>
       </div>
     </section>
-  );
-};
+  )
+}
 
 /* ===================== Before/After (keyboard + drag + a11y + lazy images) ===================== */
 const BeforeAfter = ({
@@ -1483,9 +1697,9 @@ const BeforeAfter = ({
   );
 };
 
-/* ===================== Proof Section (stable layout + clearer copy) ===================== */
+/* ===================== Proof Section (placed above Creators) ===================== */
 const ProofSection = () => (
-  <section className="py-16" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
+  <section id="work" className="py-16" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
     <div className="container mx-auto px-4 text-center">
       <h2
         id="proof-heading"
@@ -1498,6 +1712,7 @@ const ProofSection = () => (
         Real thumbnails revamped for higher clarity, curiosity, and clicks.
       </p>
 
+      {/* Your existing BeforeAfter slider (keep your current props) */}
       <BeforeAfter
         before={SAMPLE_BEFORE}
         after={SAMPLE_AFTER}
@@ -1507,39 +1722,217 @@ const ProofSection = () => (
         width={1280}
         height={720}
       />
+
+      {/* outcome-first caption */}
+      <div className="mt-4 text-sm md:text-base font-medium" style={{ color: "var(--text)" }}>
+        <span className="px-2 py-1 rounded-full text-white" style={{ background: "var(--orange)" }}>+62% CTR</span>{" "}
+        after packaging revamp (real campaign)
+      </div>
     </div>
   </section>
 );
 
+/* ===================== Creators Worked With (premium single row) ===================== */
+const CreatorsWorkedWith = ({ isDark }) => {
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  const LOGOS = import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", { eager: true, query: "?url", import: "default" });
+  const SUBS  = (typeof window !== "undefined" && window.SS_SUBS) || {};
 
-/* ===================== Case Studies ===================== */
-const CaseStudies = () => {
-  const items = [
-    { brand:'Kamz Inkzone', result:'+62% CTR', detail:'+41% avg view duration in 6 weeks', thumb:'', link:'#' },
-    { brand:'Gamer Mummy',  result:'+48% retention', detail:'Shorts pipeline + packaging', thumb:'', link:'#' },
-    { brand:'Aish is Live', result:'2.1x revenue', detail:'Clips → shorts → offers', thumb:'', link:'#' },
-  ];
+  const creators = [
+    { name: "Kamz Inkzone", key: "kamz" },
+    { name: "Deadlox Gaming", key: "deadlox" },
+    { name: "Kundan Parashar", key: "kundan" },
+    { name: "Aish is Live", key: "aish" },
+    { name: "Gamer Mummy", key: "gamermummy" },
+    { name: "Gamify Anchit", key: "anchit" },
+    { name: "Maggie Live", key: "maggie" },
+    { name: "Crown Ankit", key: "ankit" },
+    { name: "Manav Maggie Sukhija", key: "manav" },
+  ].map((c) => {
+    const url = findAssetByBase(c.key, LOGOS);
+    return url ? { ...c, url, subs: SUBS[c.key] } : null;
+  }).filter(Boolean);
+
+  if (!creators.length) return null;
+  const loop = [...creators, ...creators];
+
+  const fmt = (n) => {
+    if (n == null) return null;
+    if (n >= 1_000_000) return `${(n/1_000_000).toFixed(n%1_000_000?1:0)}M`;
+    if (n >= 1_000) return `${(n/1_000).toFixed(n%1_000?1:0)}K`;
+    return `${n}`;
+  };
+
   return (
-    <section className="py-20" style={{background:'var(--surface)'}}>
+    <section className="relative py-14" style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4">
-        <h2 className="text-4xl md:text-5xl font-bold text-center mb-10 font-['Poppins']" style={{color:'var(--text)'}}>Recent Wins</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {items.map((it,i)=>(
-            <motion.a key={i} href={it.link} whileHover={{y:-6}} className="rounded-2xl p-6 border"
-              style={{background:'var(--surface-alt)', borderColor:'var(--border)'}}>
-              <div className="text-sm mb-2" style={{color:'var(--text-muted)'}}>Client</div>
-              <div className="text-xl font-semibold" style={{color:'var(--text)'}}>{it.brand}</div>
-              <div className="mt-4 text-3xl font-bold" style={{color:'var(--orange)'}}>{it.result}</div>
-              <div className="mt-2" style={{color:'var(--text-muted)'}}>{it.detail}</div>
-              <div className="mt-4 text-sm underline" style={{color:'var(--text)'}}>View breakdown →</div>
-            </motion.a>
-          ))}
+        <div className="text-center mb-6">
+          <h2 className="text-sm md:text-base tracking-[0.14em] font-medium uppercase" style={{ color: "var(--text-muted)" }}>
+            Trusted by creators across <span style={{ color: "var(--text)" }}>Gaming</span>, <span style={{ color: "var(--text)" }}>Lifestyle</span>, <span style={{ color: "var(--text)" }}>Devotional</span>
+          </h2>
+        </div>
+
+        <div className="relative overflow-hidden">
+          {/* side fades */}
+          <div className="pointer-events-none absolute left-0 top-0 h-full w-16"
+               style={{ background: `linear-gradient(90deg, ${isDark?"rgba(0,0,0,.85)":"rgba(255,249,246,.96)"} 0%, transparent 100%)` }} />
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-16"
+               style={{ background: `linear-gradient(270deg, ${isDark?"rgba(0,0,0,.85)":"rgba(255,249,246,.96)"} 0%, transparent 100%)` }} />
+
+          <ul className={`flex items-center gap-3 whitespace-nowrap will-change-transform ${reduceMotion ? "" : "animate-[marq_28s_linear_infinite]"}`}>
+            {loop.map((c, i) => (
+              <li key={`${c.key}-${i}`} className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5"
+                  style={{ background: "var(--surface-alt)", borderColor: "var(--border)", boxShadow: "0 6px 14px rgba(0,0,0,.08)" }}>
+                <span className="relative w-12 h-12 rounded-full overflow-hidden">
+                  <img src={c.url} alt={`${c.name} logo`} className="w-full h-full object-cover"
+                       style={{ filter: "grayscale(.2) saturate(.95) contrast(1.04)" }} loading="lazy" />
+                  <span className="absolute inset-0 rounded-full" style={{
+                    boxShadow: "inset 0 0 0 1.5px rgba(232,80,2,.45), 0 2px 10px rgba(232,80,2,.18)" }} aria-hidden="true" />
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{c.name}</span>
+                  {fmt(c.subs) && (
+                    <span className="text-xs px-2 py-1 rounded-full border" style={{ color: "var(--text)", borderColor: "var(--border)" }}>
+                      {fmt(c.subs)} <span style={{ opacity: .7 }}>subs</span>
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
+
+      {/* local keyframes */}
+      <style>{`
+        @keyframes marq { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) { ul[class*="animate-"] { animation: none !important; } }
+      `}</style>
     </section>
   );
 };
+
+
+/* ===================== Case Studies (metric-first) ===================== */
+const CaseStudies = () => {
+  const MEDIA = import.meta.glob("../assets/case_studies/*.{png,jpg,jpeg,webp,avif,mp4,webm}", { eager: true, query: "?url", import: "default" });
+  const [open, setOpen] = useState(null); // index
+
+  const items = [
+    {
+      metric: "+62% CTR",
+      period: "in 6 weeks",
+      title: "Packaging revamp for Gaming creator",
+      keys: { hook: "cs1_hook", edit: "cs1_edit", thumb: "cs1_thumb" },
+    },
+    {
+      metric: "+38% retention",
+      period: "in 4 weeks",
+      title: "Hook-first shorts strategy",
+      keys: { hook: "cs2_hook", edit: "cs2_edit", thumb: "cs2_thumb" },
+    },
+    {
+      metric: "3.1x views",
+      period: "in 8 weeks",
+      title: "Title/Thumb alignment & cadence",
+      keys: { hook: "cs3_hook", edit: "cs3_edit", thumb: "cs3_thumb" },
+    },
+  ].map((it) => {
+    const hook = findAssetByBase(it.keys.hook, MEDIA);
+    const edit = findAssetByBase(it.keys.edit, MEDIA);
+    const thumb = findAssetByBase(it.keys.thumb, MEDIA);
+    return { ...it, media: { hook, edit, thumb } };
+  });
+
+  return (
+    <section id="work" className="py-20" style={{ background: "var(--surface)" }}>
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>Recent Wins</h2>
+          <p className="text-sm md:text-base mt-2" style={{ color: "var(--text-muted)" }}>Outcome first. Tap to see the breakdown.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {items.map((it, i) => (
+            <motion.article
+              key={i}
+              className="rounded-2xl border overflow-hidden"
+              style={{ background: "var(--surface-alt)", borderColor: "var(--border)", boxShadow: "0 10px 24px rgba(0,0,0,.08)" }}
+              whileHover={{ y: -6 }}
+              onClick={() => setOpen(i)}
+            >
+              <div className="aspect-[16/9] relative">
+                {it.media.thumb ? (
+                  <img src={it.media.thumb} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(120deg,#222,#333)" }} />
+                )}
+                <div className="absolute top-3 left-3 rounded-full text-xs font-semibold px-3 py-1"
+                     style={{ background: "rgba(0,0,0,.55)", color: "#fff", border: "1px solid rgba(255,255,255,.15)" }}>
+                  {it.metric} <span style={{ opacity:.75 }}>({it.period})</span>
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="font-semibold" style={{ color: "var(--text)" }}>{it.title}</div>
+                <div className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Hook • Edit • Thumbnail</div>
+              </div>
+            </motion.article>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {open != null && (
+          <motion.div
+            className="fixed inset-0 z-50 grid place-items-center p-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ background: "rgba(0,0,0,.55)" }}
+            onClick={() => setOpen(null)}
+          >
+            <motion.div
+              className="w-full max-w-3xl rounded-2xl overflow-hidden border"
+              initial={{ scale: .96, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: .96, y: 10 }}
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b" style={{ borderColor: "var(--border)" }}>
+                <div className="text-lg font-semibold" style={{ color: "var(--text)" }}>{items[open].title}</div>
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>{items[open].metric} — {items[open].period}</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+                {["hook","edit","thumb"].map((k) => {
+                  const src = items[open].media[k];
+                  return (
+                    <div key={k} className="aspect-[4/3] relative border-r md:last:border-r-0"
+                         style={{ borderColor: "var(--border)" }}>
+                      {src ? (
+                        <img src={src} alt={k} className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
+                        <div className="absolute inset-0" style={{ background: "linear-gradient(120deg,#222,#333)" }} />
+                      )}
+                      <div className="absolute bottom-2 left-2 text-xs px-2 py-1 rounded"
+                           style={{ background: "rgba(0,0,0,.5)", color:"#fff", border:"1px solid rgba(255,255,255,.12)" }}>
+                        {k}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="p-4 text-right">
+                <button className="px-4 py-2 rounded-xl font-semibold"
+                        style={{ color: "var(--text)", border:"1px solid var(--border)", background:"var(--surface-alt)" }}
+                        onClick={() => setOpen(null)}>Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+};
+
 
 /* ===================== Process Section ===================== */
 const ProcessSection = () => {
@@ -1586,276 +1979,316 @@ const ProcessSection = () => {
   );
 };
 
-/* ===================== Testimonials WALL (GPU-friendly, reduced-motion aware, cleaner DOM) ===================== */
-const TestimonialsWall = () => {
+/* ===================== Testimonials (Video + Analytics) ===================== */
+const TestimonialsSection = ({ isDark }) => {
   const reduceMotion =
     typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
 
-  const testimonials = [
-    { name: 'Kamz Inkzone', tag: 'YouTuber', text: 'Our brand videos got a professional uplift, engagement went crazy!' },
-    { name: 'Deadlox Gaming', tag: 'Gamer', text: 'Editing & thumbnails gave me better CTR & retention 🔥' },
-    { name: 'Kundan Parashar', tag: 'Devotional Creator', text: 'They handled devotional content with respect & quality 🙏' },
-    { name: 'Aish is Live', tag: 'Streamer', text: 'Livestream clips turned into viral shorts 🚀' },
-    { name: 'Gamer Mummy', tag: 'Gaming Creator', text: 'Editing consistency + branding helped scale fast.' },
-    { name: 'Gamify Anchit', tag: 'Gamer', text: 'Loved the creative storytelling & editing finesse.' },
-    { name: 'Maggie Live', tag: 'Lifestyle Creator', text: 'Packaging & thumbnails boosted CTR instantly.' },
-    { name: 'Crown Ankit', tag: 'Gaming Creator', text: 'The edits really brought out my personality 💯' },
-    { name: 'Manav Maggie Sukhija', tag: 'YouTuber', text: 'High quality, fast turnaround, professional team.' },
-  ];
+  // ---- DATA -----------------------------------------------------------------
+  // Put your local assets under /src/assets/testimonials/*
+  // For analytics cards, use screenshots exported from YT Studio (CTR / AVD / views).
+  const TESTIMONIALS = [
+    {
+      type: "video",
+      name: "Kamz Inkzone",
+      tag: "Gaming • 172K",
+      avatarKey: "kamz", // if you use your img(key) helper elsewhere
+      video: "/assets/testimonials/kamz-45s.mp4",
+      poster: "/assets/testimonials/kamz-thumb.jpg",
+      quote:
+        "These edits + motion graphics made my content feel premium. Retention lifted immediately.",
+      metrics: [{ label: "Avg View Dur.", value: "+38%" }],
+    },
+    {
+      type: "analytics",
+      name: "Aish is Live",
+      tag: "Streamer • 13K",
+      avatarKey: "aish",
+      image: "/assets/testimonials/aish-ctr.png",
+      alt: "YouTube Studio CTR uplift graph for Aish is Live",
+      quote:
+        "Thumbnail iterations increased CTR consistently over three uploads.",
+      metrics: [{ label: "CTR", value: "3.1% → 5.0%" }],
+      cta: { label: "See case", href: "/work/aish" },
+    },
+    {
+      type: "video",
+      name: "Gamer Mummy",
+      tag: "Gaming • 14.8K",
+      avatarKey: "gamermummy",
+      video: "/assets/testimonials/gamermummy-35s.mp4",
+      poster: "/assets/testimonials/gamermummy-thumb.jpg",
+      quote: "The brand kit + overlays improved watch time and comments.",
+      metrics: [{ label: "Session Time", value: "+22%" }],
+    },
+    {
+      type: "analytics",
+      name: "Manav Sukhija",
+      tag: "Creator • 49.6K",
+      avatarKey: "manav",
+      image: "/assets/testimonials/manav-shorts.png",
+      alt: "Shorts growth from YouTube Studio for Manav",
+      quote: "Hook-first shorts strategy drove predictable growth.",
+      metrics: [{ label: "Subs from Shorts", value: "+9.4k" }],
+      cta: { label: "See case", href: "/work/manav" },
+    },
+  ]
 
-  // Stable shuffle (seedless but deterministic per mount)
-  const shuffled = useMemo(() => {
-    const arr = [...testimonials];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = (i * 9301 + 49297) % 233280 % (i + 1);
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }, []);
+  // Optional: your existing img(key) helper; fallback to null if not found
+  const getAvatar = (key) => (typeof img === "function" ? img(key) : null)
 
-  // Divide into 3 almost-equal columns
-  const colSize = Math.ceil(shuffled.length / 3);
-  const columns = [shuffled.slice(0, colSize), shuffled.slice(colSize, colSize * 2), shuffled.slice(colSize * 2)];
+  // ---- MODAL STATE ----------------------------------------------------------
+  const [openVideo, setOpenVideo] = React.useState(null) // stores the selected item or null
 
-  const Card = ({ item, i }) => {
-    const initials = item.name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  // ---- CARD COMPONENTS ------------------------------------------------------
+  const MetricPill = ({ label, value }) => (
+    <span
+      className="inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border"
+      style={{
+        color: "var(--text)",
+        borderColor: "var(--border)",
+        background: "color-mix(in oklab, var(--orange) 8%, transparent)",
+      }}
+      aria-label={`${label}: ${value}`}
+    >
+      <BarChart3 size={14} /> <strong>{label}</strong> {value}
+    </span>
+  )
+
+  const HeaderRow = ({ name, tag, avatarKey }) => {
+    const avatar = getAvatar(avatarKey)
+    const initials = name
+      .split(" ")
+      .map((s) => s[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase()
+
     return (
-      <motion.li
-        className="w-full"
-        initial={{ opacity: 0, y: 18 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
-        transition={{ duration: 0.45, delay: (i % 6) * 0.06 }}
-      >
-        <motion.div
-          className="p-6 rounded-2xl border"
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-          animate={reduceMotion ? {} : { y: [0, -6, 0] }}
-          transition={reduceMotion ? {} : { duration: 6 + (i % 5), repeat: Infinity, ease: "easeInOut" }}
-          whileHover={reduceMotion ? {} : { scale: 1.03 }}
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
-              style={{ background: 'var(--orange)' }}
-              aria-hidden="true"
-            >
-              {initials}
-            </div>
-            <div>
-              <div className="font-semibold" style={{ color: 'var(--text)' }}>{item.name}</div>
-              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>{item.tag}</div>
-            </div>
+      <div className="flex items-center gap-3 mb-3">
+        {avatar ? (
+          <img
+            src={avatar}
+            alt=""
+            className="w-10 h-10 rounded-full object-cover ring-2"
+            style={{ ringColor: "var(--orange)" }}
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
+            style={{ background: "var(--orange)" }}
+            aria-hidden="true"
+          >
+            {initials}
           </div>
-          <p style={{ color: 'var(--text-muted)' }}>{item.text}</p>
-        </motion.div>
-      </motion.li>
-    );
-  };
-
-  return (
-    <section id="testimonials" className="relative py-24" style={{ background: 'var(--surface-alt)' }}>
-      <div className="container mx-auto px-4 relative">
-        {/* Heading */}
-        <motion.div
-          variants={animations.fadeDown}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <h2 className="text-4xl md:text-5xl font-bold font-['Poppins']" style={{ color: 'var(--text)' }}>
-            What Clients Say
-          </h2>
-          <p className="text-lg md:text-xl mt-3" style={{ color: 'var(--text-muted)' }}>
-            Real feedback from creators and brands we work with
-          </p>
-        </motion.div>
-
-        {/* Scrolling Wall */}
-        <div className="relative pt-12">
-          <div className="ss-viewport relative">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 ss-wall">
-              {columns.map((col, ci) => (
-                <ul
-                  key={ci}
-                  className={`ss-col ${ci === 0 ? "slow" : ci === 1 ? "medium" : "fast"}`}
-                  aria-label={`Testimonials column ${ci + 1}`}
-                >
-                  {/* Duplicate once for seamless loop */}
-                  {[...col, ...col].map((it, i) => <Card key={`${ci}-${i}`} item={it} i={i} />)}
-                </ul>
-              ))}
-            </div>
-
-            {/* Gradient edges */}
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-12"
-              style={{ background: `linear-gradient(to bottom, ${isDark ? '#0B0B0B' : '#FFF9F6'} 0%, transparent 100%)` }}
-              aria-hidden="true"
-            />
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-10"
-              style={{ background: `linear-gradient(to top, ${isDark ? '#0B0B0B' : '#FFF9F6'} 0%, transparent 100%)` }}
-              aria-hidden="true"
-            />
+        )}
+        <div>
+          <div className="font-semibold" style={{ color: "var(--text)" }}>
+            {name}
+          </div>
+          <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+            {tag}
           </div>
         </div>
       </div>
+    )
+  }
 
-      <style>{`
-        .ss-viewport {
-          height: 600px;
-          overflow: hidden;
-          mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 40px), transparent 100%);
-          -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 40px, black calc(100% - 40px), transparent 100%);
-        }
-        .ss-wall .ss-col {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          will-change: transform;
-          animation-iteration-count: infinite;
-          animation-timing-function: linear;
-        }
-        /* Speeds tuned for readability; shorter loops reduce battery drain */
-        .ss-col.slow   { animation-name: colUp;   animation-duration: 38s; }
-        .ss-col.medium { animation-name: colDown; animation-duration: 30s; }
-        .ss-col.fast   { animation-name: colUp;   animation-duration: 24s; }
-
-        /* Pause on hover for desktop only (no jank on touch) */
-        @media (hover: hover) and (pointer: fine) {
-          .ss-viewport:hover .ss-col { animation-play-state: paused; }
-        }
-
-        @keyframes colUp   { 0% {transform:translateY(0)} 100% {transform:translateY(-50%)} }
-        @keyframes colDown { 0% {transform:translateY(-50%)} 100% {transform:translateY(0)} }
-
-        /* Respect reduced motion */
-        @media (prefers-reduced-motion: reduce) {
-          .ss-col { animation: none !important; transform: none !important; }
-        }
-      `}</style>
-    </section>
-  );
-};
-
-/* ===================== Stats (count-up + reduced-motion safe + a11y) ===================== */
-const StatCard = ({ icon, target, prefix = "", suffix = "", label, isDark, revealDelay = 0, reduceMotion }) => {
-  const [visible, setVisible] = React.useState(false);
-  const ref = React.useRef(null);
-  // visibility observer
-  React.useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setVisible(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: "-20% 0px -20% 0px", threshold: 0.2 }
-    );
-    if (ref.current) io.observe(ref.current);
-    return () => io.disconnect();
-  }, []);
-
-  // count-up
-  const [val, setVal] = React.useState(reduceMotion ? target : 0);
-  React.useEffect(() => {
-    if (!visible) return;
-    if (reduceMotion) { setVal(target); return; }
-    const start = performance.now();
-    const duration = 1100 + revealDelay; // slight stagger
-    let raf;
-    const tick = (t) => {
-      const p = Math.min(1, (t - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 2); // easeOutQuad
-      setVal(Math.round(eased * target));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [visible, target, reduceMotion, revealDelay]);
-
-  return (
-    <motion.div
-      ref={ref}
-      variants={animations.fadeUp}
-      className="text-center p-8 backdrop-blur-lg rounded-2xl"
-      style={{
-        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
-        border: "1px solid var(--border)",
-      }}
-      whileHover={reduceMotion ? {} : { y: -6, boxShadow: "0 10px 24px rgba(0,0,0,0.15)" }}
-      role="group"
-      aria-label={`${label}: ${prefix}${target}${suffix}`}
+  const VideoCard = ({ item, i }) => (
+    <motion.article
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
+      transition={{ duration: 0.45, delay: (i % 6) * 0.05 }}
+      className="rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl focus-within:shadow-xl transition-all"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
-      <div className="mb-4 flex justify-center" style={{ color: "var(--orange)" }} aria-hidden="true">
-        {icon}
-      </div>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        className="text-4xl font-bold mb-2 font-['Poppins']"
-        style={{ color: "var(--text)" }}
-        aria-live="polite"
+      <button
+        type="button"
+        onClick={() => setOpenVideo(item)}
+        className="relative w-full aspect-video group"
+        aria-label={`Play testimonial from ${item.name}`}
       >
-        {prefix}{val}{suffix}
-      </motion.div>
-      <div style={{ color: "var(--text-muted)" }}>{label}</div>
-    </motion.div>
-  );
-};
+        <img
+          src={item.poster}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 backdrop-blur-md shadow group-hover:scale-105 transition">
+            <Play size={16} className="text-black" />
+            <span className="text-sm font-semibold text-black">Play</span>
+          </div>
+        </div>
+      </button>
 
-const StatsSection = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const stats = [
-    { icon: <Users size={40} />, number: 20, suffix: "+", label: "Active Clients" },
-    { icon: <Eye size={40} />, number: 38, prefix: "+", suffix: "%", label: "Avg CTR lift (30 days)" },
-    { icon: <Target size={40} />, number: 27, prefix: "+", suffix: "%", label: "Avg watch time lift" },
-    { icon: <MessageCircle size={40} />, number: 2, prefix: "<", suffix: "h", label: "Avg response time" },
-  ];
-
-  return (
-    <section className="py-20" style={{ background: isDark ? "#000" : "#fff" }} aria-labelledby="stats-heading">
-      <div className="container mx-auto px-4">
-        <h2 id="stats-heading" className="sr-only">Key performance stats</h2>
-
-        <motion.div
-          variants={animations.staggerParent}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
-        >
-          {stats.map((st, i) => (
-            <StatCard
-              key={st.label}
-              icon={st.icon}
-              target={st.number}
-              prefix={st.prefix}
-              suffix={st.suffix}
-              label={st.label}
-              isDark={isDark}
-              revealDelay={i * 150}
-              reduceMotion={reduceMotion}
-            />
+      <div className="p-5">
+        <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} />
+        <p className="mb-3" style={{ color: "var(--text-muted)" }}>
+          <Quote className="inline mr-2 -mt-1" size={16} />
+          {item.quote}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {item.metrics?.map((m, idx) => (
+            <MetricPill key={idx} {...m} />
           ))}
-        </motion.div>
+        </div>
       </div>
+    </motion.article>
+  )
+
+  const AnalyticsCard = ({ item, i }) => (
+    <motion.article
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
+      transition={{ duration: 0.45, delay: (i % 6) * 0.05 }}
+      className="rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl transition-all"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <div className="relative w-full aspect-[16/10] bg-black">
+        <img
+          src={item.image}
+          alt={item.alt}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+        />
+        <div className="absolute top-2 left-2">
+          {item.metrics?.slice(0, 2).map((m, idx) => (
+            <MetricPill key={idx} {...m} />
+          ))}
+        </div>
+      </div>
+
+      <div className="p-5">
+        <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} />
+        <p className="mb-3" style={{ color: "var(--text-muted)" }}>
+          <Quote className="inline mr-2 -mt-1" size={16} />
+          {item.quote}
+        </p>
+
+        {item.cta && (
+          <a
+            href={item.cta.href}
+            className="inline-flex items-center gap-2 text-sm font-semibold"
+            style={{ color: "var(--orange)" }}
+          >
+            {item.cta.label} <ExternalLink size={14} />
+          </a>
+        )}
+      </div>
+    </motion.article>
+  )
+
+  // ---- RENDER ----------------------------------------------------------------
+  return (
+    <section id="testimonials" className="py-24" style={{ background: "var(--surface-alt)" }}>
+      <div className="container mx-auto px-4">
+        {/* Heading */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-14"
+        >
+          <h2 className="text-4xl md:text-5xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
+            Proof it works
+          </h2>
+          <p className="text-lg md:text-xl mt-3" style={{ color: "var(--text-muted)" }}>
+            Quick 30–45s reels from creators, plus real screenshots from YouTube Studio
+          </p>
+        </motion.div>
+
+        {/* Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {TESTIMONIALS.map((t, i) =>
+            t.type === "video" ? (
+              <VideoCard key={i} item={t} i={i} />
+            ) : (
+              <AnalyticsCard key={i} item={t} i={i} />
+            )
+          )}
+        </div>
+      </div>
+
+      {/* ---- Modal Player (for video items) ---- */}
+      {openVideo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Testimonial from ${openVideo.name}`}
+        >
+          <div
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+            onClick={() => setOpenVideo(null)}
+          />
+          <div
+            className="relative w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl"
+            style={{ background: isDark ? "#0F0F0F" : "#FFFFFF", border: "1px solid var(--border)" }}
+          >
+            <button
+              className="absolute top-3 right-3 p-2 rounded-lg"
+              style={{ background: "rgba(0,0,0,0.45)" }}
+              aria-label="Close video"
+              onClick={() => setOpenVideo(null)}
+            >
+              <X size={18} color="#fff" />
+            </button>
+
+            <div className="relative w-full aspect-video">
+              {reduceMotion ? (
+                // If user prefers reduced motion, don’t autoplay
+                <video
+                  src={openVideo.video}
+                  poster={openVideo.poster}
+                  controls
+                  className="absolute inset-0 w-full h-full"
+                />
+              ) : (
+                <video
+                  src={openVideo.video}
+                  poster={openVideo.poster}
+                  className="absolute inset-0 w-full h-full"
+                  autoPlay
+                  muted
+                  playsInline
+                  controls
+                />
+              )}
+            </div>
+
+            <div className="p-5">
+              <HeaderRow
+                name={openVideo.name}
+                tag={openVideo.tag}
+                avatarKey={openVideo.avatarKey}
+              />
+              <div className="flex flex-wrap gap-2">
+                {openVideo.metrics?.map((m, idx) => (
+                  <MetricPill key={idx} {...m} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
-  );
-};
+  )
+}
+
+
 
   /* ===================== FAQ ===================== */
-  const FAQSection = () => {
+const FAQSection = () => {
+  // NEW: local state for which item is open (null = none)
+  const [openFAQ, setOpenFAQ] = React.useState(null);
+
   const faqs = [
     { question: 'What services does Shinel Studios offer?', answer: 'We specialize in video editing, thumbnail design, SEO & marketing, and comprehensive content strategy to help creators and brands shine online.' },
     { question: 'How long does a typical project take?', answer: 'Simple thumbnails can be delivered within 24–48 hours, while comprehensive video projects may take 1–2 weeks depending on scope.' },
@@ -1863,15 +2296,19 @@ const StatsSection = () => {
     { question: "What's included in content strategy?", answer: 'Market research, competitor analysis, content planning, posting schedules, and performance optimization recommendations.' },
     { question: 'How do you ensure quality?', answer: 'Multi-stage QA with client reviews and revisions until you’re fully satisfied.' },
   ];
+
+  // NEW: simple toggle handler
+  const toggleFAQ = (idx) => setOpenFAQ((cur) => (cur === idx ? null : idx));
+
   return (
     <section className="py-20" style={{ background: 'var(--surface)' }}>
       <div className="container mx-auto px-4 max-w-4xl">
         <motion.div
-        variants={animations.fadeUp}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        className="text-center mb-16"
+          variants={animations.fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-4 font-['Poppins']" style={{ color: 'var(--text)' }}>
             Frequently Asked Questions
@@ -1883,182 +2320,302 @@ const StatsSection = () => {
 
         {/* FAQ Items */}
         <div className="space-y-4">
-          {faqs.map((f, i) => (
-            <motion.div
-            key={i}
-            variants={animations.fadeUp}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
-            className="rounded-lg overflow-hidden"
-            style={{ border: '1px solid var(--border)' }}
-            >
-              <button
-                onClick={() => setOpenFAQ(openFAQ === i ? null : i)}
-                className="w-full p-6 text-left flex items-center justify-between"
-                style={{ background: 'var(--surface-alt)', color: 'var(--text)' }}
+          {faqs.map((f, i) => {
+            const open = openFAQ === i;
+            return (
+              <motion.div
+                key={i}
+                variants={animations.fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                transition={{ duration: 0.25 }}
+                className="rounded-lg overflow-hidden"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface-alt)' }}
               >
-                <span className="font-medium">{f.question}</span>
-                <ChevronDown
-                  size={20}
-                  className={`transition-transform ${openFAQ === i ? 'rotate-180' : ''}`}
-                  style={{ color: 'var(--text-muted)' }}
-                />
-              </button>
-              <AnimatePresence>
-                {openFAQ === i && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0, y: i % 2 === 0 ? 16 : -16 }}
-                    animate={{ height: 'auto', opacity: 1, y: 0 }}
-                    exit={{ height: 0, opacity: 0, y: i % 2 === 0 ? 16 : -16 }}
-                    transition={{ duration: 0.35 }}
+                <button
+                  type="button"
+                  onClick={() => toggleFAQ(i)}
+                  aria-expanded={open}
+                  aria-controls={`faq-panel-${i}`}
+                  className="w-full flex items-center justify-between gap-4 p-5 text-left"
+                  style={{ color: 'var(--text)' }}
+                >
+                  <span className="font-semibold">{f.question}</span>
+                  {/* simple icon without extra imports */}
+                  <span
+                    aria-hidden="true"
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full border`}
+                    style={{
+                      borderColor: 'var(--border)',
+                      background: open ? 'var(--orange)' : 'transparent',
+                      color: open ? '#fff' : 'var(--text-muted)',
+                      transition: 'transform .2s ease',
+                      transform: open ? 'rotate(45deg)' : 'none'
+                    }}
                   >
-                    <div className="p-6" style={{ background: 'var(--surface)' }}>
-                      <p style={{ color: 'var(--text-muted)' }}>{f.answer}</p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </div>
-      </div>
+                    +
+                  </span>
+                </button>
 
-      {/* WhatsApp CTA */}
-      <div className="text-center mt-12">
-        <a
-          href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 px-8 py-4 bg-[var(--orange)] text-white rounded-full font-semibold shadow-md hover:shadow-lg hover:scale-[1.03] transition-all w-fit mx-auto"
-        >
-          <MessageCircle size={22} className="text-white" />
-          Still have questions? Chat with us on <span className="font-bold">WhatsApp</span>
-        </a>
+                <div
+                  id={`faq-panel-${i}`}
+                  hidden={!open}
+                  className="px-5 pb-5 -mt-2"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {f.answer}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
 };
 
-/* ===================== Pricing (clear hierarchy, premium hover, accessible labels) ===================== */
-const Pricing = () => {
+
+/* ===================== Inline Lead Capture ===================== */
+const InlineLeadCapture = ({ onOpenCalendly }) => {
+  const [channel, setChannel] = useState("");
+  const [contact, setContact] = useState("");
+  const [err, setErr] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setErr("");
+
+    const clean = (s) => s.trim();
+    const ch = clean(channel);
+    const ct = clean(contact);
+    if (!ch || !ct) { setErr("Please add your channel link and a contact."); return; }
+
+    track("lead_submit", { src: "inline_form" });
+
+    // Prefer your existing Calendly modal
+    const note = `Channel: ${ch}\nContact: ${ct}`;
+    window.__SS_PREFILL__ = { note }; // app can read this if desired
+
+    if (typeof onOpenCalendly === "function") {
+      onOpenCalendly(); // e.g., setShowCalendly(true)
+    } else {
+      // safe fallback: open public Calendly (replace with your link)
+      const url = new URL("https://calendly.com/shinelstudios/free-audit");
+      url.searchParams.set("utm_source", "homepage");
+      url.searchParams.set("utm_medium", "inline_form");
+      url.searchParams.set("utm_campaign", "lead_capture");
+      window.open(url.toString(), "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <section aria-labelledby="leadcap-heading" className="py-12" style={{ background: "var(--surface)" }}>
+      <div className="container mx-auto px-4">
+        <h2 id="leadcap-heading" className="text-2xl md:text-3xl font-bold font-['Poppins'] mb-4" style={{ color: "var(--text)" }}>
+          Get a free 15-min channel audit
+        </h2>
+        <p className="text-sm md:text-base mb-5" style={{ color: "var(--text-muted)" }}>
+          Quick form. We’ll review your packaging, CTR, and retention opportunities.
+        </p>
+
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_auto] gap-3">
+          <input
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            type="url"
+            inputMode="url"
+            placeholder="YouTube channel URL"
+            aria-label="YouTube channel URL"
+            className="rounded-xl px-4 py-3 border"
+            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text)" }}
+          />
+          <input
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            type="text"
+            placeholder="WhatsApp or email"
+            aria-label="WhatsApp or email"
+            className="rounded-xl px-4 py-3 border"
+            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text)" }}
+          />
+          <button
+            type="submit"
+            className="rounded-xl px-6 py-3 font-semibold text-white"
+            style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 24px rgba(232,80,2,.35)" }}
+            aria-label="Submit for free audit"
+          >
+            Get Free Audit
+          </button>
+        </form>
+
+        {err && <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{err}</div>}
+      </div>
+    </section>
+  );
+};
+
+
+/* ===================== Pricing (conversion-focused) ===================== */
+const Pricing = ({ onOpenCalendly }) => {
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const tiers = [
+    {
+      name: "7-Day Trial",
+      priceInr: 499,
+      tag: "Low-risk start",
+      trial: true,
+      bullet: ["1 Thumbnail", "1 Short edit (≤50s)", "Mini SEO checklist"],
+      note: "Upgrade anytime — trial fee adjusts in first package",
+      cta: "Start Trial",
+      key: "trial",
+    },
     {
       name: "Starter",
       priceInr: 3999,
-      bullet: ["1 thumbnail", "1 video edit (up to 8 min)", "Basic SEO setup"],
-      cta: "Request Starter",
       tag: "Entry Plan",
+      bullet: ["3 Thumbnails", "2 Video edits (≤8 min each)", "Basic SEO setup"],
+      cta: "Choose Starter",
+      key: "starter",
     },
     {
       name: "Shorts Pack",
-      priceInr: 6000,
-      featured: true,
-      bullet: ["30 shorts", "Optimized for YT Shorts feed", "Hook-first scripting support"],
-      cta: "Book Shorts Pack",
+      priceInr: 5999,
       tag: "Most Popular",
+      featured: true,
+      bullet: ["30 Shorts optimized for YT Shorts feed", "Hook-first scripting support", "Metadata assist (titles + tags)", "Custom short thumbnail", "Free “Subscribe” animation"],
+      cta: "Book Shorts Pack",
+      key: "shorts",
     },
     {
       name: "Creator Essentials",
       priceInr: 9999,
-      bullet: ["Thumbnails + edits combo", "Light brand kit & packaging", "Monthly growth check-in"],
-      cta: "Book Essentials",
       tag: "Best Value",
+      bullet: ["10 Thumbnails", "4 Long-form edits (≤10 min each)", "15 Shorts", "Light brand kit & packaging", "Monthly growth check-in", "Free “Subscribe” animation"],
+      cta: "Book Essentials",
+      key: "essentials",
     },
   ];
 
+  const [intent, setIntent] = useState("growth"); // growth, consistency, polish
+  const highlight = (key) => {
+    if (intent === "growth" && key === "shorts") return true;
+    if (intent === "consistency" && key === "starter") return true;
+    if (intent === "polish" && key === "essentials") return true;
+    return false;
+  };
+
   return (
-    <section className="py-20" style={{ background: "var(--surface)" }} aria-labelledby="pricing-heading">
+    <section id="pricing" className="py-20 relative overflow-hidden" style={{ background: "var(--surface)" }} aria-labelledby="pricing-heading">
+      {/* soft corners */}
+      {!reduceMotion && (
+        <>
+          <motion.div aria-hidden className="pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full"
+            style={{ background: "radial-gradient(closest-side, rgba(232,80,2,.18), rgba(232,80,2,0) 70%)", filter: "blur(10px)" }}
+            initial={{ opacity: 0.28 }} animate={{ opacity: [0.16,0.28,0.2] }} transition={{ duration: 6, repeat: Infinity }} />
+          <motion.div aria-hidden className="pointer-events-none absolute -bottom-40 -right-40 w-[520px] h-[520px] rounded-full"
+            style={{ background: "radial-gradient(closest-side, rgba(255,147,87,.18), rgba(255,147,87,0) 70%)", filter: "blur(12px)" }}
+            initial={{ opacity: 0.28 }} animate={{ opacity: [0.16,0.28,0.2] }} transition={{ duration: 6.5, repeat: Infinity, delay: .4 }} />
+        </>
+      )}
+
       <div className="container mx-auto px-4">
-        <h2
-          id="pricing-heading"
-          className="text-4xl md:text-5xl font-bold text-center mb-10 font-['Poppins']"
-          style={{ color: "var(--text)" }}
-        >
-          Simple Packages
-        </h2>
+        <div className="text-center mb-8">
+          <h2 id="pricing-heading" className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
+            Simple, Proven Packages
+          </h2>
+          <p className="mt-2 text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
+            Pick what you need now—upgrade anytime as you see results.
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {tiers.map((t, i) => (
-            <motion.article
-              key={i}
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-              viewport={{ once: true }}
-              whileHover={{ y: -6 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className={`group relative rounded-2xl p-6 border overflow-hidden ${t.featured ? "ring-2 ring-[var(--orange)]/35" : ""}`}
-              style={{ background: "var(--surface-alt)", borderColor: "var(--border)", boxShadow: "0 10px 24px rgba(0,0,0,0.08)" }}
-              aria-label={`${t.name} plan, starting ${formatINR(t.priceInr)}`}
-            >
-              {/* animated backlight */}
-              <motion.div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-10 -z-10 opacity-0 group-hover:opacity-100 blur-2xl"
-                style={{
-                  background:
-                    "radial-gradient(600px 200px at 50% -20%, rgba(232,80,2,0.18), transparent 60%), radial-gradient(400px 240px at 80% 120%, rgba(255,147,87,0.18), transparent 70%)",
-                }}
-                animate={{ opacity: [0.08, 0.16, 0.1, 0.16, 0.08] }}
-                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-              />
-
-              {/* badge */}
-              <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-                {t.tag || "\u00A0"}
-              </div>
-
-              <h3 className="text-xl font-semibold" style={{ color: "var(--text)" }}>
-                {t.name}
-              </h3>
-
-              <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Starting at
-              </div>
-
-              <div className="text-4xl font-bold mt-1 font-['Poppins']" style={{ color: "var(--text)" }}>
-                {formatINR(t.priceInr)}
-              </div>
-
-              <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
-                {t.bullet.map((b, bi) => (
-                  <li key={bi} className="flex items-start gap-2">
-                    <span aria-hidden="true">•</span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => setShowCalendly(true)}
-                className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
-                aria-label={t.cta}
-              >
-                {t.cta}
-              </button>
-            </motion.article>
+        {/* intent nudges */}
+        <div className="mx-auto mb-8 flex w-full max-w-[660px] items-center justify-center gap-2">
+          {[
+            { k: "growth", label: "Growth" },
+            { k: "consistency", label: "Consistency" },
+            { k: "polish", label: "Polish" },
+          ].map((opt) => (
+            <button key={opt.k}
+              onClick={() => setIntent(opt.k)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold border ${intent===opt.k ? "shadow" : ""}`}
+              style={{ color: "var(--text)", borderColor: "var(--border)", background: intent===opt.k ? "rgba(232,80,2,.14)" : "var(--surface-alt)" }}>
+              I want: {opt.label}
+            </button>
           ))}
         </div>
 
-        {/* Custom quote */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {tiers.map((t, i) => {
+            const isFeatured = t.featured || highlight(t.key);
+            return (
+              <motion.article
+                key={t.name}
+                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true }}
+                whileHover={{ y: -8 }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+                className={`group relative rounded-2xl p-6 border overflow-hidden ${isFeatured ? "ring-2 ring-[var(--orange)]/45" : ""}`}
+                style={{
+                  background: "var(--surface-alt)",
+                  borderColor: "var(--border)",
+                  boxShadow: isFeatured
+                    ? "0 18px 48px rgba(232,80,2,0.25), 0 8px 24px rgba(0,0,0,0.25)"
+                    : "0 10px 24px rgba(0,0,0,0.10)",
+                }}
+                aria-label={`${t.name} plan, starting ${formatINR(t.priceInr)}`}
+              >
+                <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{t.tag || "\u00A0"}</div>
+                <h3 className="text-xl font-semibold" style={{ color: "var(--text)" }}>{t.name}</h3>
+                <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{t.trial ? "One-time" : "Starting at"}</div>
+                <div className="text-4xl font-bold mt-1 font-['Poppins']" style={{ color: "var(--text)" }}>{formatINR(t.priceInr)}</div>
+
+                <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
+                  {t.bullet.map((b, bi) => (
+                    <li key={bi} className="flex items-start gap-2">
+                      <span aria-hidden="true">•</span><span>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => { track("plan_click", { plan: t.key }); onOpenCalendly?.(); }}
+                  className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  style={{
+                    background: isFeatured ? "linear-gradient(90deg, var(--orange), #ff9357)" : "linear-gradient(90deg, #ff9357, var(--orange))",
+                    boxShadow: isFeatured ? "0 18px 36px rgba(232,80,2,0.35)" : "0 12px 26px rgba(232,80,2,0.25)",
+                  }}
+                  aria-label={t.cta}
+                >
+                  {t.cta}
+                </button>
+
+                {t.trial && (
+                  <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    Trial fee adjusted in first package
+                  </div>
+                )}
+              </motion.article>
+            );
+          })}
+        </div>
+
+        {/* reassurance */}
         <div className="text-center mt-8">
-          <button
-            onClick={() => setShowCalendly(true)}
-            className="inline-flex items-center rounded-full px-6 py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-            style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 24px rgba(232,80,2,0.35)" }}
-          >
-            Need something else? Get a Custom Quote
-          </button>
-          <div className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            GST not applicable
-          </div>
+          <p className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
+            100% satisfaction promise — if you don’t love the first delivery, we’ll revise it or refund the trial.
+          </p>
         </div>
       </div>
     </section>
   );
 };
+
+
+
 
 /* ===================== Quick Lead Form (labels + creative placeholders) ===================== */
 
@@ -2368,6 +2925,19 @@ const QuickLeadForm = () => {
   );
 };
 
+/* ===================== Sticky Mobile CTA ===================== */
+const StickyCTA = ({ onAudit }) => (
+  <div className="fixed bottom-3 inset-x-3 z-40 md:hidden">
+    <button
+      onClick={() => { track("cta_click_audit", { src: "sticky" }); onAudit?.(); }}
+      className="w-full rounded-full py-3 px-5 text-white font-semibold shadow-lg"
+      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+      aria-label="Get Free Audit"
+    >
+      Get Free Audit — Free 15-min
+    </button>
+  </div>
+);
 
 /* ===================== Contact ===================== */
 const ContactCTA = () => (
@@ -2419,31 +2989,99 @@ const ContactCTA = () => (
   </section>
 );
 
-/* ===================== Sticky Mobile CTA ===================== */
-const StickyMobileCTA = () => (
-  <div className="md:hidden fixed bottom-3 left-0 right-0 z-40 px-3">
+/* ===================== Sticky Mobile CTA (safe-area, keyboard-aware) ===================== */
+const StickyMobileCTA = ({ onAudit }) => {
+  const [hidden, setHidden] = React.useState(false);
+
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+
+    const handleVV = () => {
+      if (!vv) return;
+      const keyboardLikely = window.innerHeight - vv.height > 140;
+      setHidden(keyboardLikely);
+    };
+
+    const hide = () => setHidden(true);
+    const show = () => setHidden(false);
+
+    vv?.addEventListener("resize", handleVV);
+    vv?.addEventListener("scroll", handleVV);
+    window.addEventListener("focusin", handleVV);
+    window.addEventListener("focusout", handleVV);
+    window.addEventListener("ss:hideMobileCTA", hide);
+    window.addEventListener("ss:showMobileCTA", show);
+    window.addEventListener("calendly:open", hide);
+    window.addEventListener("calendly:close", show);
+
+    return () => {
+      vv?.removeEventListener("resize", handleVV);
+      vv?.removeEventListener("scroll", handleVV);
+      window.removeEventListener("focusin", handleVV);
+      window.removeEventListener("focusout", handleVV);
+      window.removeEventListener("ss:hideMobileCTA", hide);
+      window.removeEventListener("ss:showMobileCTA", show);
+      window.removeEventListener("calendly:open", hide);
+      window.removeEventListener("calendly:close", show);
+    };
+  }, []);
+
+  if (hidden) return null;
+
+  return (
     <div
-      className="flex gap-2 rounded-2xl p-2 shadow-xl"
-      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      className="md:hidden fixed left-0 right-0 z-40 px-3"
+      style={{ bottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}
+      role="region"
+      aria-label="Quick contact options"
     >
-      <a
-        href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
-        target="_blank" rel="noreferrer"
-        className="flex-1 text-center rounded-xl py-3 font-semibold text-white"
-        style={{ background: 'linear-gradient(90deg, var(--orange), #ff9357)' }}
+      <div
+        className="flex gap-2 rounded-2xl p-2 shadow-xl header-blur"
+        style={{ border: "1px solid var(--border)" }}
       >
-        WhatsApp
-      </a>
-      <a
-        href="#contact"
-        className="flex-1 text-center rounded-xl py-3 font-semibold"
-        style={{ border: '2px solid var(--orange)', color: 'var(--orange)' }}
-      >
-        Get Quote
-      </a>
+        <a
+          href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-brand flex-1 text-center"
+          onClick={() => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("analytics", {
+                  detail: { ev: "cta_click_whatsapp", src: "sticky" },
+                })
+              );
+            } catch {}
+          }}
+          aria-label="Chat on WhatsApp"
+        >
+          WhatsApp
+        </a>
+
+        <a
+          href="#contact"
+          className="btn-ghost flex-1 text-center"
+          style={{ borderColor: "var(--orange)", color: "var(--orange)" }}
+          onClick={(e) => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("analytics", {
+                  detail: { ev: "cta_click_quote", src: "sticky" },
+                })
+              );
+            } catch {}
+            // To open Calendly instead of scrolling:
+            // e.preventDefault(); onAudit?.();
+          }}
+          aria-label="Get a quick quote"
+        >
+          Get Quote
+        </a>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
 
 /* ===================== Footer (bigger zoomed logo + animations) ===================== */
 const Footer = () => (
@@ -2643,30 +3281,75 @@ const SeoSchema = () => {
   return null;
 };
 
-/* ===================== App Wrapper ===================== */
-return (
-  <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
-    <Header isDark={isDark} setIsDark={setIsDark} />
-    <QuickQuoteBar onBook={() => setShowCalendly(true)} />
-    <HeroSection isDark={isDark} />
-    <CreatorsWorkedWith />
-    <ServicesSection />
-    <CaseStudies />
-    <ProofSection />
-    <ProcessSection />
-    <TestimonialsWall />
-    <StatsSection />
-    <FAQSection />
-    <Pricing />
-    <QuickLeadForm />
-    <ContactCTA />
-    <Footer />
-    <StickyMobileCTA />
-    <SeoSchema />
-    <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
-  </div>
-);
-};
+/* ===================== Page Component (wrapper + section order) ===================== */
+function ShinelStudiosHomepage() {
+  const [isDark, setIsDark] = React.useState(() =>
+  document.documentElement.classList.contains('dark'));
+  const [showCalendly, setShowCalendly] = React.useState(false);
 
+  // Analytics + mobile text-sizing stability (NOW inside a component)
+  React.useEffect(() => {
+  const root = document.documentElement;
+  root.classList.toggle('dark', isDark);
+  try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch {}
+
+  // keep the browser UI color in sync (nice polish)
+  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+  if (meta) meta.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
+
+  const fav = document.getElementById('favicon');
+  if (fav) fav.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
+}, [isDark]);
+
+
+  return (
+    <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
+      {/* 1) Navigation */}
+      <Header isDark={isDark} setIsDark={setIsDark} onClick={() => { setIsMenuOpen(false); onBook?.(); }} />
+
+      {/* 2) Hero (has proof pill + main CTA) */}
+      <HeroSection isDark={isDark} onAudit={() => setShowCalendly(true)} />
+
+      {/* 3) Subtle top hook */}
+      <QuickQuoteBar onBook={() => setShowCalendly(true)} />
+
+      {/* 4) Before/After proof */}
+      <ProofSection />
+
+      {/* 5) Logos (single premium row) */}
+      <CreatorsWorkedWith isDark={isDark} />
+
+      {/* 6) Outcomes then services */}
+      <CaseStudies />
+      <ServicesSection />
+
+      {/* 7) Testimonials wall */}
+      <TestimonialsSection isDark={isDark} />
+
+
+      {/* 8) Inline lead capture just before pricing */}
+      <QuickLeadForm />
+
+      {/* 9) Pricing */}
+      <Pricing />
+
+      {/* 10) Objections + process */}
+      <FAQSection />
+      <ProcessSection />
+
+      {/* 11) Final CTA + footer */}
+      <ContactCTA />
+      <Footer />
+
+      {/* Utilities */}
+      <StickyMobileCTA />
+      <SeoSchema />
+      <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
+    </div>
+  );
+}
+
+/* ==== keep this at the very end of the file, at top level (NOT inside any block) ==== */
 export default ShinelStudiosHomepage;
+
 

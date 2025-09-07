@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="format-detection" content="telephone=no,address=no,email=no" />
+    <meta http-equiv="x-dns-prefetch-control" content="on" />
+
+    <!-- DNS Prefetch (pairs with preconnects) -->
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://calendly.com">
 
     <!-- Preconnects (perf) -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,12 +22,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 
     <!-- Favicons -->
-    <!-- System-driven fallbacks -->
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
-    <!-- Apple touch -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <!-- Fallback that JS will overwrite on theme toggle -->
     <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
@@ -35,39 +40,42 @@
     <meta name="mobile-web-app-capable" content="yes">
 
     <!-- SEO -->
-    <title>Shinel Studios | Video Editing &amp; YouTube Growth Agency</title>
-    <meta name="description" content="Shinel Studios helps creators grow with Video Editing, Thumbnails, Shorts & GFX. Trusted by 20+ creators with 100M+ views." />
+    <title>Shinel Studios</title>
+    <meta name="description" content="Shinel Studios official site" />
     <meta name="keywords" content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://www.shinelstudios.in/" />
+    <link rel="canonical" href="https://shinelstudios.in/" />
     <!-- Hreflang (expand if you add locales) -->
-    <link rel="alternate" href="https://www.shinelstudios.in/" hreflang="en-IN" />
-    <link rel="alternate" href="https://www.shinelstudios.in/" hreflang="x-default" />
+    <link rel="alternate" href="https://shinelstudios.in/" hreflang="en-IN" />
+    <link rel="alternate" href="https://shinelstudios.in/" hreflang="x-default" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta property="og:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta property="og:url" content="https://www.shinelstudios.in/" />
+    <meta property="og:url" content="https://shinelstudios.in/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Shinel Studios" />
-    <meta property="og:image" content="https://www.shinelstudios.in/og-image.png" />
+    <meta property="og:image" content="https://shinelstudios.in/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Shinel Studios — Video Editing & YouTube Growth" />
+    <meta property="og:locale" content="en_IN" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta name="twitter:image" content="https://www.shinelstudios.in/og-image.png" />
+    <meta name="twitter:image" content="https://shinelstudios.in/og-image.png" />
+    <!-- <meta name="twitter:site" content="@shinelstudios" /> -->
 
-    <!-- Schema Markup -->
+    <!-- Schema Markup: Organization -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "Shinel Studios",
-      "url": "https://www.shinelstudios.in",
-      "logo": "https://www.shinelstudios.in/logo.png",
+      "url": "https://shinelstudios.in",
+      "logo": "https://shinelstudios.in/logo.png",
       "contactPoint": [{
         "@type": "ContactPoint",
         "contactType": "customer service",
@@ -84,20 +92,55 @@
     }
     </script>
 
+    <!-- Schema Markup: Product/Offer (Shorts Pack & Creator Essentials) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Product",
+          "name": "Shorts Pack",
+          "brand": { "@type": "Brand", "name": "Shinel Studios" },
+          "url": "https://shinelstudios.in/#pricing",
+          "description": "30 Shorts optimized for YouTube Shorts feed with hook-first scripting and metadata assist.",
+          "offers": {
+            "@type": "Offer",
+            "priceCurrency": "INR",
+            "price": "5999",
+            "availability": "https://schema.org/InStock",
+            "url": "https://shinelstudios.in/#pricing"
+          }
+        },
+        {
+          "@type": "Product",
+          "name": "Creator Essentials",
+          "brand": { "@type": "Brand", "name": "Shinel Studios" },
+          "url": "https://shinelstudios.in/#pricing",
+          "description": "10 thumbnails, 4 long-form edits (≤10 min each), 15 shorts, light brand kit and monthly growth check-in.",
+          "offers": {
+            "@type": "Offer",
+            "priceCurrency": "INR",
+            "price": "9999",
+            "availability": "https://schema.org/InStock",
+            "url": "https://shinelstudios.in/#pricing"
+          }
+        }
+      ]
+    }
+    </script>
+
     <!-- Staging safety: uncomment to avoid indexing on previews -->
     <!-- <meta name="robots" content="noindex,nofollow"> -->
   </head>
-    <body>
+  <body>
     <script>
       // --- Prepaint theme bootstrap (no dependencies) ---
       (function () {
         try {
           var isDark =
             (localStorage.getItem('theme') === 'dark') ||
-            (
-              !localStorage.getItem('theme') &&
-              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-            );
+            (!localStorage.getItem('theme') &&
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
           var root = document.documentElement;
           root.classList.toggle('dark', !!isDark);
@@ -118,9 +161,49 @@
           }
         } catch (e) { /* no-op */ }
       })();
+
+      // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
+      (function () {
+        try {
+          var setVH = function () {
+            var vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', vh + 'px');
+          };
+          setVH();
+          window.addEventListener('resize', setVH, { passive: true });
+        } catch (e) { /* no-op */ }
+      })();
     </script>
 
+    <noscript>
+      <strong>Shinel Studios</strong> requires JavaScript for the best experience.
+      Please enable it to view our work, pricing and booking.
+    </noscript>
+
     <div id="root"></div>
+
+    <!-- Global subscriber counts used by CreatorsWorkedWith.
+         Add ONLY the creators you want to show counts for.
+         Use exact integers (no commas). Example: deadlox: 850000 -->
+    <script>
+      window.SS_SUBS = {
+        deadlox: 7000,
+        kundan: 7000,
+        aish: 13000,
+        gamermummy: 14800,
+        anchit: 1400,
+        maggie: 21280,
+        ankit: 2600,
+        kamz: 172000,
+        manav: 49600
+      };
+    </script>
+
+    <!-- Optional: Preload a critical above-the-fold image for faster LCP -->
+    <!--
+    <link rel="preload" as="image" href="/path/to/critical.webp" imagesrcset="/path/to/critical.webp" fetchpriority="high">
+    -->
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

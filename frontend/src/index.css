@@ -1,57 +1,166 @@
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* -------- Creators marquee utilities (perf + a11y) -------- */
-@layer utilities {
-  /* Directions */
-  @keyframes marquee-rtl { /* leftward (0% -> -50%) */
-    0%   { transform: translate3d(0,0,0); }
-    100% { transform: translate3d(-50%,0,0); }
+/* ===================== Base (theme vars, defaults, a11y) ===================== */
+@layer base {
+  /* Brand variables (light & dark) */
+  :root{
+    --orange:#E85002;
+
+    --text:#0D0D0D;
+    --text-muted:rgba(13,13,13,.70);
+
+    --surface:#FFFFFF;
+    --surface-alt:#FFF9F6;
+    --border:rgba(0,0,0,.10);
+
+    --header-bg:rgba(255,255,255,.85);
+    --nav-link:rgba(13,13,13,.72);
+    --nav-hover:#E85002;
+
+    /* Layout tokens */
+    --header-h: 72px;               /* used by scroll-padding */
+    --radius-xl: 16px;
+    --shadow-soft: 0 8px 24px rgba(0,0,0,.10);
   }
-  @keyframes marquee-ltr { /* rightward (-50% -> 0%) */
-    0%   { transform: translate3d(-50%,0,0); }
-    100% { transform: translate3d(0,0,0); }
+  .dark{
+    --text:#FFFFFF;
+    --text-muted:rgba(255,255,255,.72);
+
+    --surface:#0F0F0F;
+    --surface-alt:#0B0B0B;
+    --border:rgba(255,255,255,.12);
+
+    --header-bg:rgba(0,0,0,.75);
+    --nav-link:rgba(255,255,255,.72);
+    --nav-hover:#FFB48A;
+
+    --shadow-soft: 0 8px 24px rgba(0,0,0,.30);
   }
 
-  /* Viewport (clips overflow) */
-  .marquee-viewport {
-    @apply relative overflow-hidden;
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+  body{background:var(--surface);color:var(--text);}
+
+  /* Smooth scrolling; reserve space for sticky header */
+  :root{scroll-behavior:smooth;scroll-padding-top:calc(var(--header-h) + 8px);}
+
+  /* Typography polish */
+  p,h1,h2,h3{text-wrap:balance;}
+  img,svg,video,canvas{display:block;max-width:100%;height:auto;}
+
+  /* Better focus for keyboard users */
+  :focus-visible{outline:2px solid var(--orange);outline-offset:2px;}
+  @media (prefers-contrast: more){
+    :focus-visible{outline-width:3px;}
   }
 
-  /* Optional soft edge fade (uses mask so it works on dark/light) */
-  .mask-fade-x {
-    -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
-            mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+  /* Large screens: slightly wider than Tailwind’s default container */
+  @media (min-width:1440px){.container{max-width:1180px}}
+  @media (min-width:1680px){.container{max-width:1280px}}
+
+  /* Reduced motion: calm everything */
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
+    html{scroll-behavior:auto;}
+  }
+}
+
+/* ===================== Components (buttons, header, chips) ===================== */
+@layer components{
+  /* Frosted sticky header surface */
+  .header-blur{
+    background:var(--header-bg);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+            backdrop-filter:saturate(140%) blur(10px);
+    box-shadow:var(--shadow-soft);
   }
 
-  /* Track (the long row you animate) */
-  .marquee-track {
-    display: inline-flex;
-    width: max-content;           /* wider than viewport */
-    will-change: transform;       /* GPU hint */
+  /* Brand button (use on all CTAs for consistent motion) */
+  .btn-brand{
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold text-white
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
+    background:linear-gradient(90deg,var(--orange),#ff9357);
+    box-shadow:0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08);
+    transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+    will-change:transform, box-shadow;
+  }
+  .btn-brand:hover{ transform:translateY(-2px); }
+  .btn-brand:active{ transform:translateY(0); box-shadow:0 6px 16px rgba(232,80,2,.30); }
+
+  /* Outline/ghost button that adapts to theme */
+  .btn-ghost{
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
+    color:var(--text);
+    background:color-mix(in oklab, var(--surface) 92%, transparent);
+    border:1px solid var(--border);
+    box-shadow:0 4px 12px rgba(0,0,0,.06);
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .btn-ghost:hover{ transform:translateY(-2px); border-color:color-mix(in oklab, var(--orange) 35%, var(--border)); }
+
+  /* Soft chip (labels, stat badges) */
+  .chip-soft{
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm;
+    border:1px solid var(--border);
+    background:color-mix(in oklab, var(--surface) 92%, transparent);
+    color:var(--text-muted);
   }
 
-  /* Animations (duration customizable via CSS var) */
-  .animate-marquee-rtl {
-    animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
+  /* Icon-only button size */
+  .icon-btn{
+    @apply inline-flex items-center justify-center rounded-xl w-10 h-10
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
   }
-  .animate-marquee-ltr {
-    animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
+}
+
+/* ===================== Utilities (scrollbars, targets, marquee) ===================== */
+@layer utilities{
+  /* Optional helper: use directly in markup (don’t @apply this inside other classes) */
+  .ring-focus{
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
   }
 
-  /* Pause on hover for pointer devices only */
-  @media (hover:hover) and (pointer:fine) {
-    .marquee-hover-pause:hover .marquee-track { animation-play-state: paused; }
+  /* Hide horizontal/vertical scrollbars where needed */
+  .no-scrollbar{ scrollbar-width:none; }
+  .no-scrollbar::-webkit-scrollbar{ display:none; }
+
+  /* Minimum comfortable tap targets */
+  .touch-target{ min-height:44px; min-width:44px; }
+
+  /* Optional soft edge fade (works on dark/light with mask) */
+  .mask-fade-x{
+    -webkit-mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
+            mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
+  }
+
+  /* -------- Creators marquee utilities (perf + a11y) -------- */
+  @keyframes marquee-rtl{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-50%,0,0)}}
+  @keyframes marquee-ltr{0%{transform:translate3d(-50%,0,0)}100%{transform:translate3d(0,0,0)}}
+
+  .marquee-viewport{ @apply relative overflow-hidden; }
+  .marquee-track{
+    display:inline-flex;
+    width:max-content;              /* wider than viewport */
+    will-change:transform;          /* GPU hint */
+  }
+  .animate-marquee-rtl{ animation: marquee-rtl var(--marquee-duration,40s) linear infinite; }
+  .animate-marquee-ltr{ animation: marquee-ltr var(--marquee-duration,40s) linear infinite; }
+
+  /* Pause marquee on hover for pointer devices only */
+  @media (hover:hover) and (pointer:fine){
+    .marquee-hover-pause:hover .marquee-track{ animation-play-state:paused; }
   }
 
   /* Respect reduced motion */
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce){
     .animate-marquee-rtl,
-    .animate-marquee-ltr {
-      animation-duration: 1ms !important;
-      animation-iteration-count: 1 !important;
-      transform: none !important;
+    .animate-marquee-ltr{
+      animation-duration:1ms!important;
+      animation-iteration-count:1!important;
+      transform:none!important;
     }
   }
 }

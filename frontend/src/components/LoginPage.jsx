@@ -4,12 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Menu, X, ChevronDown, Eye, EyeOff, Loader2, AlertCircle, Mail,
-  Instagram, Twitter, Linkedin
+  Instagram, Twitter, Linkedin, Shield, Lock, Users
 } from "lucide-react";
 
 import logoLight from "../assets/logo_light.png";
 
-/* ───────────────────────────────── Header (matches homepage) ───────────────────────────────── */
+/* ───────────────────────────────── Header (matches homepage; no login button here) ───────────────────────────────── */
 const Header = () => {
   const [workOpen, setWorkOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -39,50 +39,36 @@ const Header = () => {
 
   return (
     <header
-      className="fixed top-0 inset-x-0 z-50 backdrop-blur-lg"
-      style={{
-        background: "rgba(0,0,0,.85)",
-        borderBottom: "1px solid rgba(255,255,255,.12)",
-      }}
+      className="fixed top-0 inset-x-0 z-40 backdrop-blur-lg"
+      style={{ background: "rgba(0,0,0,.85)", borderBottom: "1px solid rgba(255,255,255,.12)" }}
     >
-      {/* thin accent line */}
-      <div
-        aria-hidden
-        className="absolute left-0 top-0 h-[1px] w-full"
-        style={{ background: "linear-gradient(90deg,#E85002,#ff9357)" }}
-      />
-
+      <div aria-hidden className="absolute left-0 top-0 h-[1px] w-full" style={{ background: "linear-gradient(90deg,#E85002,#ff9357)" }} />
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
         <Link to="/" className="flex items-center gap-3">
           <div className="h-12 flex items-center overflow-visible">
             <img
               src={logoLight}
               alt="Shinel Studios"
               className="h-full w-auto object-contain select-none"
-              style={{
-                transform: "scale(2.8)",
-                transformOrigin: "left center",
-                filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))",
-              }}
+              style={{ transform: "scale(2.8)", transformOrigin: "left center", filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))" }}
+              decoding="async"
             />
           </div>
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-7">
-          <Link to="/#home" className="nav-link">Home</Link>
-          <Link to="/#services" className="nav-link">Services</Link>
-          <Link to="/#testimonials" className="nav-link">Testimonials</Link>
-          <Link to="/#contact" className="nav-link">Contact</Link>
+          <a href="/#home" className="nav-link">Home</a>
+          <a href="/#services" className="nav-link">Services</a>
+          <a href="/#testimonials" className="nav-link">Testimonials</a>
+          <a href="/#contact" className="nav-link">Contact</a>
 
-          {/* Our Work dropdown */}
           <div className="relative" ref={workRef}>
             <button
               onClick={() => setWorkOpen((v) => !v)}
               className="inline-flex items-center gap-1 nav-link"
               aria-expanded={workOpen}
               aria-controls="work-menu"
+              type="button"
             >
               Our Work
               <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
@@ -120,16 +106,8 @@ const Header = () => {
           </div>
         </nav>
 
-        {/* Right actions */}
         <div className="flex items-center gap-3">
-          <Link
-            to="/#contact"
-            className="hidden md:block text-white px-5 py-2 rounded-lg font-medium"
-            style={{ background: "linear-gradient(90deg, #E85002, #ff9357)" }}
-          >
-            Book Free Audit
-          </Link>
-
+          {/* Intentionally no Login button here; you navigate to /login from your main header */}
           <button className="md:hidden p-2 text-white" aria-label="Menu" onClick={() => setMobileOpen(true)}>
             <Menu size={22} />
           </button>
@@ -160,10 +138,10 @@ const Header = () => {
               </div>
 
               <nav className="space-y-2 text-white">
-                <Link to="/#home" className="block px-2 py-2">Home</Link>
-                <Link to="/#services" className="block px-2 py-2">Services</Link>
-                <Link to="/#testimonials" className="block px-2 py-2">Testimonials</Link>
-                <Link to="/#contact" className="block px-2 py-2">Contact</Link>
+                <a href="/#home" className="block px-2 py-2">Home</a>
+                <a href="/#services" className="block px-2 py-2">Services</a>
+                <a href="/#testimonials" className="block px-2 py-2">Testimonials</a>
+                <a href="/#contact" className="block px-2 py-2">Contact</a>
                 <Link to="/video-editing" className="block px-2 py-2">Our Work</Link>
               </nav>
             </motion.div>
@@ -171,22 +149,15 @@ const Header = () => {
         )}
       </AnimatePresence>
 
-      {/* Nav hover style: text → orange only (no background) */}
       <style>{`
-        .nav-link, .work-item {
-          color: #fff;
-          transition: color .15s ease;
-        }
-        .nav-link:hover,
-        .work-item:hover {
-          color: #E85002;
-        }
+        .nav-link, .work-item { color: #fff; transition: color .15s ease; }
+        .nav-link:hover, .work-item:hover { color: #E85002; }
       `}</style>
     </header>
   );
 };
 
-/* ───────────────────────────────── Footer (exactly your homepage footer) ───────────────────────────────── */
+/* ───────────────────────────────── Footer (same as homepage) ───────────────────────────────── */
 const animations = {
   staggerParent: { visible: { transition: { staggerChildren: 0.15 } } },
   fadeUp: { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.6 } } },
@@ -203,8 +174,6 @@ const Footer = () => (
   >
     <div className="container mx-auto px-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-
-        {/* Column 1 - Logo + Socials */}
         <motion.div variants={animations.fadeUp}>
           <div className="flex items-center gap-3 mb-4">
             <motion.img
@@ -215,10 +184,7 @@ const Footer = () => (
               animate={{ scale: 1.4, opacity: 1 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
               whileHover={{ scale: 1.5 }}
-              style={{
-                transformOrigin: "left center",
-                filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.45))",
-              }}
+              style={{ transformOrigin: "left center", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.45))" }}
             />
           </div>
           <p className="mb-6" style={{ color: "rgba(255,255,255,0.7)" }}>
@@ -246,25 +212,23 @@ const Footer = () => (
           </div>
         </motion.div>
 
-        {/* Column 2 - Links */}
         <motion.div variants={animations.fadeUp}>
           <h3 className="text-xl font-bold mb-6 font-['Poppins']">Quick Links</h3>
           <ul className="space-y-3">
             {["Home", "Services", "Testimonials", "Contact"].map((t) => (
               <li key={t}>
-                <Link
-                  to={`/#${t.toLowerCase()}`}
+                <a
+                  href={`/#${t.toLowerCase()}`}
                   className="transition-colors hover:text-[var(--orange)]"
                   style={{ color: "rgba(255,255,255,0.7)" }}
                 >
                   {t}
-                </Link>
+                </a>
               </li>
             ))}
           </ul>
         </motion.div>
 
-        {/* Column 3 - Newsletter */}
         <motion.div variants={animations.fadeUp}>
           <h3 className="text-xl font-bold mb-6 font-['Poppins']">Stay Updated</h3>
           <p className="mb-4" style={{ color: "rgba(255,255,255,0.7)" }}>
@@ -275,11 +239,7 @@ const Footer = () => (
               type="email"
               placeholder="Enter your email"
               className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "#fff",
-              }}
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff" }}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
@@ -296,7 +256,6 @@ const Footer = () => (
         </motion.div>
       </div>
 
-      {/* Footer Bottom */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -311,9 +270,12 @@ const Footer = () => (
   </motion.footer>
 );
 
-/* ───────────────────────────────── Login Page ───────────────────────────────── */
+/* ───────────────────────────────── Login Modal Page ───────────────────────────────── */
 const LoginPage = () => {
   const navigate = useNavigate();
+
+  // Modal open state to allow exit animation before leaving route
+  const [open, setOpen] = useState(true);
 
   // form state
   const [email, setEmail] = useState("");
@@ -324,6 +286,28 @@ const LoginPage = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  const firstFieldRef = useRef(null);
+
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+  }, []);
+
+  // close handler (Esc / X / backdrop)
+  const closeModal = () => {
+    setOpen(false);
+    setTimeout(() => {
+      // go back if possible, else home
+      if (window.history?.state && window.history.state.idx > 0) navigate(-1);
+      else navigate("/");
+    }, 220);
+  };
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") closeModal(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const validate = () => {
     const next = {};
@@ -337,13 +321,13 @@ const LoginPage = () => {
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length) return;
-    setSubmitting(true);
 
-    // Fake async auth
+    setSubmitting(true);
     setTimeout(() => {
       setSubmitting(false);
       if (remember) localStorage.setItem("rememberMe", "1");
-      navigate("/");
+      // Successful auth -> close modal
+      closeModal();
     }, 900);
   };
 
@@ -351,107 +335,206 @@ const LoginPage = () => {
     <>
       <Header />
 
-      <main
-        className="min-h-screen flex items-center justify-center px-4 pt-24 pb-14"
-        style={{
-          background:
-            "radial-gradient(800px 400px at 15% -10%, rgba(232,80,2,.16), transparent 55%), radial-gradient(900px 450px at 95% -8%, rgba(232,80,2,.10), transparent 60%), linear-gradient(180deg,#0B0B0B,#121212 40%, #0F0F0F)",
-          color: "#fff",
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 6 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="w-full max-w-lg p-8 rounded-2xl shadow-xl"
-          style={{
-            background: "#0F0F0F",
-            border: "2.5px solid #E85002",
-            boxShadow:
-              "0 0 0 3px rgba(232,80,2,.18), 0 14px 48px rgba(232,80,2,.12), 0 22px 70px rgba(0,0,0,.45)",
-          }}
-        >
-          <h1 className="text-center text-2xl md:text-[26px] font-semibold mb-6">
-            Welcome Back
-          </h1>
-
-          <form onSubmit={handleSubmit} noValidate autoComplete="off">
-            {/* Email */}
-            <input
-              id="email"
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="off"
-              className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
-              style={{ background: "#243041", color: "#EAF1FF" }}
+      {/* Dimmed background + modal (stays inside /login route) */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            key="overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-[80px] pb-10"
+            style={{
+              background: "rgba(0,0,0,.55)",
+              backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Shinel Studios Login"
+            onMouseDown={(e) => {
+              // close if clicked outside the card
+              const card = document.getElementById("login-card");
+              if (card && !card.contains(e.target)) closeModal();
+            }}
+          >
+            {/* Subtle corner glows behind card */}
+            <motion.div
+              aria-hidden
+              initial={{ opacity: 0.18 }} animate={{ opacity: [0.12, 0.22, 0.16] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="pointer-events-none absolute -top-20 -left-24 w-[420px] h-[420px] rounded-full"
+              style={{ background: "radial-gradient(closest-side, rgba(232,80,2,.22), rgba(232,80,2,0) 70%)", filter: "blur(10px)" }}
             />
-            {errors.email && (
-              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-                <AlertCircle size={14} /> {errors.email}
-              </p>
-            )}
+            <motion.div
+              aria-hidden
+              initial={{ opacity: 0.18 }} animate={{ opacity: [0.12, 0.22, 0.16] }}
+              transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+              className="pointer-events-none absolute -bottom-24 -right-24 w-[480px] h-[480px] rounded-full"
+              style={{ background: "radial-gradient(closest-side, rgba(255,147,87,.22), rgba(255,147,87,0) 70%)", filter: "blur(12px)" }}
+            />
 
-            {/* Password */}
-            <div className="relative mb-2">
-              <input
-                id="password"
-                type={showPwd ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                className="w-full px-4 py-3 rounded-lg outline-none pr-12"
-                style={{ background: "#243041", color: "#EAF1FF" }}
-              />
+            {/* Modal card */}
+            <motion.div
+              key="modal"
+              id="login-card"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="relative w-full max-w-lg p-7 sm:p-8 rounded-2xl shadow-2xl"
+              style={{
+                background: "#0F0F0F",
+                border: "2.5px solid #E85002",
+                boxShadow:
+                  "0 0 0 3px rgba(232,80,2,.18), 0 14px 48px rgba(232,80,2,.12), 0 22px 70px rgba(0,0,0,.55)",
+                color: "#fff",
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
               <button
                 type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
-                aria-label={showPwd ? "Hide password" : "Show password"}
-                title={showPwd ? "Hide password" : "Show password"}
+                onClick={closeModal}
+                className="absolute top-3 right-3 p-2 rounded-lg hover:bg-white/5 text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
+                aria-label="Close login"
+                title="Close"
               >
-                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                <X size={20} />
               </button>
-            </div>
-            {errors.password && (
-              <p className="mb-3 text-sm flex items-center gap-1 text-red-400">
-                <AlertCircle size={14} /> {errors.password}
+
+              {/* Private badge */}
+              <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full"
+                  style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.12)" }}
+                >
+                  <Shield size={14} /> Private Access
+                </span>
+                <span className="text-white/50 flex items-center gap-1">
+                  <Lock size={14} /> Partners & Team Only
+                </span>
+              </div>
+
+              <h1 className="text-[22px] sm:text-[26px] font-semibold">Welcome Back</h1>
+              <p className="mt-1 mb-5 text-white/70 text-sm sm:text-[15px] flex items-center gap-1.5">
+                <Users size={16} /> Use your invite email to sign in. Unauthorized access is disabled.
               </p>
-            )}
 
-            {/* Row: remember + forgot */}
-            <div className="flex items-center justify-between mb-4 text-sm">
-              <label className="flex items-center gap-2 select-none">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  autoComplete="off"
-                />
-                Keep me signed in
-              </label>
-              <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
-                Forgot password?
-              </Link>
-            </div>
+              <form onSubmit={handleSubmit} noValidate autoComplete="off">
+                {/* Email */}
+                <div className="mb-2">
+                  <label htmlFor="email" className="sr-only">Email</label>
+                  <input
+                    ref={firstFieldRef}
+                    id="email"
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="off"
+                    className="w-full px-4 py-3 rounded-lg outline-none"
+                    style={{
+                      background: "#243041",
+                      color: "#EAF1FF",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.1)",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
+                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.1)")}
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-sm flex items-center gap-1 text-red-400">
+                      <AlertCircle size={14} /> {errors.email}
+                    </p>
+                  )}
+                </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
-              style={{ background: "#E85002", color: "#fff" }}
-            >
-              {submitting && <Loader2 size={18} className="animate-spin" />}
-              {submitting ? "Signing in..." : "Login"}
-            </button>
-          </form>
+                {/* Password */}
+                <div className="relative mb-2">
+                  <label htmlFor="password" className="sr-only">Password</label>
+                  <input
+                    id="password"
+                    type={showPwd ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="w-full px-4 py-3 rounded-lg outline-none pr-12"
+                    style={{
+                      background: "#243041",
+                      color: "#EAF1FF",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.1)",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
+                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.1)")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/80"
+                    aria-label={showPwd ? "Hide password" : "Show password"}
+                    title={showPwd ? "Hide password" : "Show password"}
+                  >
+                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                  {errors.password && (
+                    <p className="mt-1 text-sm flex items-center gap-1 text-red-400">
+                      <AlertCircle size={14} /> {errors.password}
+                    </p>
+                  )}
+                </div>
 
-        </motion.div>
-      </main>
+                {/* Row: remember + forgot */}
+                <div className="flex items-center justify-between mb-4 text-sm">
+                  <label className="flex items-center gap-2 select-none">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      autoComplete="off"
+                    />
+                    Keep me signed in
+                  </label>
+                  <Link to="/forgot-password" className="underline" style={{ color: "#ff9357" }}>
+                    Forgot password?
+                  </Link>
+                </div>
 
+                {/* Submit */}
+                <motion.button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70"
+                  style={{ background: "#E85002", color: "#fff" }}
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {submitting && <Loader2 size={18} className="animate-spin" />}
+                  {submitting ? "Signing in..." : "Login"}
+                </motion.button>
+              </form>
+
+              {/* Small footer links */}
+              <div className="mt-4 flex items-center justify-between text-[12px] text-white/55">
+                <span>Need access? <a href="/#contact" className="underline text-white/80">Contact us</a></span>
+                <div className="flex items-center gap-3">
+                  <a href="https://www.instagram.com/shinel.studios/?hl=en" target="_blank" rel="noreferrer" aria-label="Instagram" className="hover:text-white/90">
+                    <Instagram size={16} />
+                  </a>
+                  <a href="https://linktr.ee/ShinelStudios" target="_blank" rel="noreferrer" aria-label="Linktree" className="hover:text-white/90">
+                    <Twitter size={16} />
+                  </a>
+                  <a href="https://www.linkedin.com/company/shinel-studios/posts/?feedView=all" target="_blank" rel="noreferrer" aria-label="LinkedIn" className="hover:text-white/90">
+                    <Linkedin size={16} />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Keep the rest of the page (hero etc.) visible underneath; footer below */}
       <Footer />
     </>
   );
