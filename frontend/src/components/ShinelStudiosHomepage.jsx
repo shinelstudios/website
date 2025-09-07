@@ -39,7 +39,8 @@ export const findAssetByBase = (key, map = ALL_ASSETS) => {
   if (!key) return null;
   const search = String(key).toLowerCase();
   for (const p in map) {
-    const file = p.split("/").pop() || "";
+    const url = map[p];
+    if (typeof url !== "string") continue;const file = p.split("/").pop() || "";
     const base = file.replace(/\.(png|jpe?g|webp|svg)$/i, "").toLowerCase();
     if (base.includes(search)) return map[p];
   }
@@ -363,7 +364,7 @@ const Header = ({ isDark, setIsDark /* onBook removed */ }) => {
           className="absolute left-0 top-0 h-[1px] origin-left"
           style={{
             width: "100%",
-            transform: `scaleX(${progress / 100})`,
+            transform: `scaleX(${Math.max(0, Math.min(1, progress / 100)).toFixed(4)})`,
             background: "linear-gradient(90deg, var(--orange), #ff9357)",
             transition: reduceMotion ? "none" : "transform .08s linear",
           }}
@@ -1165,6 +1166,7 @@ const HeroSection = ({ isDark, onAudit }) => {
     const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
 
     // base by breakpoint
+    if (w < 340) return []; // ultra-small devices: skip completely
     let base = w < 380 ? 0 : w < 640 ? 8 : w < 1024 ? 10 : 12;
     // fewer in light
     if (!isDark) base = Math.max(0, Math.round(base * 0.6));
@@ -1699,7 +1701,7 @@ const BeforeAfter = ({
 
 /* ===================== Proof Section (placed above Creators) ===================== */
 const ProofSection = () => (
-  <section id="work" className="py-16" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
+  <section id="proof" className="py-16" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
     <div className="container mx-auto px-4 text-center">
       <h2
         id="proof-heading"
@@ -2186,7 +2188,8 @@ const TestimonialsSection = ({ isDark }) => {
 
   // ---- RENDER ----------------------------------------------------------------
   return (
-    <section id="testimonials" className="py-24" style={{ background: "var(--surface-alt)" }}>
+    <section id="testimonials" className="py-24"
+    style={{ background: "var(--surface-alt)", contentVisibility: "auto", containIntrinsicSize: "900px" }}>
       <div className="container mx-auto px-4">
         {/* Heading */}
         <motion.div
@@ -2746,7 +2749,7 @@ const QuickLeadForm = () => {
                     : "linear-gradient(90deg,#e11d48,#f97316)",
                 boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
               }}
-              role="status"
+              role="status" aria-live="polite"
             >
               {toast.text}
             </motion.div>
@@ -3305,7 +3308,7 @@ function ShinelStudiosHomepage() {
   return (
     <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
       {/* 1) Navigation */}
-      <Header isDark={isDark} setIsDark={setIsDark} onClick={() => { setIsMenuOpen(false); onBook?.(); }} />
+      <Header isDark={isDark} setIsDark={setIsDark} />
 
       {/* 2) Hero (has proof pill + main CTA) */}
       <HeroSection isDark={isDark} onAudit={() => setShowCalendly(true)} />
@@ -3331,7 +3334,7 @@ function ShinelStudiosHomepage() {
       <QuickLeadForm />
 
       {/* 9) Pricing */}
-      <Pricing />
+      <Pricing onOpenCalendly={() => setShowCalendly(true)} />
 
       {/* 10) Objections + process */}
       <FAQSection />
