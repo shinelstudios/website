@@ -1,48 +1,78 @@
 // src/components/SiteFooter.jsx
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Facebook, Twitter, Instagram, Linkedin, Mail } from "lucide-react";
 import logoLight from "../assets/logo_light.png";
 
-/**
- * Reusable footer that matches the site's brand variables.
- * Use <SiteFooter compact /> on auth pages for tighter spacing.
- */
+/** tiny event tracker (safe no-op if listener absent) */
+const track = (ev, detail = {}) => {
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
+};
+
 const SiteFooter = ({ compact = false }) => {
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const onSubscribe = (e) => {
+  const linkMuted = { color: "var(--footer-muted, rgba(255,255,255,0.7))" };
+
+  const SOCIALS = [
+    { label: "Instagram", href: "https://www.instagram.com/shinel.studios/", Icon: Instagram },
+    { label: "LinkedIn",  href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin },
+    { label: "Facebook",  href: "https://www.facebook.com/", Icon: Facebook },
+    { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter },
+  ];
+
+  const onSubscribe = async (e) => {
     e.preventDefault();
-    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    setMsg(ok ? "Thanks for subscribing ✨" : "Please enter a valid email");
-    if (ok) setEmail("");
+    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((email || "").trim());
+    if (!ok) { setMsg("Please enter a valid email"); return; }
+    setBusy(true); setMsg("");
+    try {
+      track("cta_click_subscribe", { src: "footer", email });
+      const endpoint = import.meta?.env?.VITE_NEWSLETTER_ENDPOINT;
+      if (endpoint) {
+        await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, source: "footer" }),
+        });
+      } else {
+        const to = "hello@shinelstudiosofficial.com";
+        const subject = "Newsletter Subscribe";
+        const body = `Please subscribe me to updates.\nEmail: ${email}\nSource: footer`;
+        window.open(
+          `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+          "_blank"
+        );
+      }
+      setMsg("Thanks for subscribing ✨"); setEmail("");
+    } catch {
+      setMsg("Could not subscribe right now. Please try again.");
+    } finally { setBusy(false); }
   };
 
-  const linkStyle = { color: "rgba(255,255,255,0.7)" };
-
   return (
-    <footer style={{ background: "#000", color: "var(--text, #fff)" }}>
+    <footer
+      role="contentinfo"
+      style={{ background: "var(--footer-bg, #000)", color: "var(--footer-text, #fff)" }}
+    >
       {/* thin glowing accent line */}
       <div
         aria-hidden
         className="w-full"
         style={{
           height: 2,
-          background:
-            "linear-gradient(90deg, transparent, var(--orange, #E85002), transparent)",
+          background: "linear-gradient(90deg, transparent, var(--orange, #E85002), transparent)",
           opacity: 0.9,
         }}
       />
 
-      <div
-        className={`container mx-auto px-4 ${
-          compact ? "pt-10" : "pt-16"
-        } ${compact ? "pb-10" : "pb-16"}`}
-      >
+      <div className={`container mx-auto px-4 ${compact ? "pt-10 pb-10" : "pt-16 pb-16"}`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-3">
               <img
                 src={logoLight}
                 alt="Shinel Studios"
@@ -50,72 +80,54 @@ const SiteFooter = ({ compact = false }) => {
                 style={{ filter: "drop-shadow(0 2px 8px rgba(232,80,2,.25))" }}
               />
             </div>
-            <p className="mb-6" style={linkStyle}>
-              We help creators & brands shine through unforgettable visuals and
-              smart strategy.
+            <p className="mb-2" style={linkMuted}>
+              We help creators & brands shine through unforgettable visuals and smart strategy.
+            </p>
+            <p className="mb-6 font-medium" style={{ color: "var(--footer-text, #fff)", opacity: 0.9 }}>
+              <em>Where Ideas Shine</em>
             </p>
 
             <div className="flex gap-4">
-              <a href="#" aria-label="Facebook" title="Facebook">
-                <Facebook
-                  size={22}
-                  style={linkStyle}
-                  className="transition-opacity hover:opacity-100 opacity-70"
-                />
-              </a>
-              <a href="#" aria-label="Twitter" title="Twitter / X">
-                <Twitter
-                  size={22}
-                  style={linkStyle}
-                  className="transition-opacity hover:opacity-100 opacity-70"
-                />
-              </a>
-              <a href="#" aria-label="Instagram" title="Instagram">
-                <Instagram
-                  size={22}
-                  style={linkStyle}
-                  className="transition-opacity hover:opacity-100 opacity-70"
-                />
-              </a>
-              <a href="#" aria-label="LinkedIn" title="LinkedIn">
-                <Linkedin
-                  size={22}
-                  style={linkStyle}
-                  className="transition-opacity hover:opacity-100 opacity-70"
-                />
-              </a>
+              {SOCIALS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  aria-label={label}
+                  title={label}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => track("cta_click_social", { src: "footer", label })}
+                >
+                  <Icon size={22} style={linkMuted} className="transition-opacity hover:opacity-100 opacity-70" />
+                </a>
+              ))}
             </div>
           </div>
 
           {/* Quick Links */}
-          <div>
+          <nav aria-label="Footer">
             <h3 className="text-lg font-bold mb-5">Quick Links</h3>
             <ul className="space-y-3">
-              {["Home", "Services", "Testimonials", "Contact"].map((t) => (
+              {[
+                { t: "Home", href: "/#home" },
+                { t: "Services", href: "/#services" },
+                { t: "Testimonials", href: "/#testimonials" },
+                { t: "Contact", href: "/#contact" },
+              ].map(({ t, href }) => (
                 <li key={t}>
-                  <a
-                    href={`/#${t.toLowerCase()}`}
-                    className="hover:underline"
-                    style={linkStyle}
-                  >
-                    {t}
-                  </a>
+                  <a href={href} className="hover:underline" style={linkMuted}>{t}</a>
                 </li>
               ))}
             </ul>
-          </div>
+          </nav>
 
           {/* Updates */}
           <div>
             <h3 className="text-lg font-bold mb-5">Stay Updated</h3>
-            <p className="mb-4" style={linkStyle}>
-              Get the latest tips and updates from our team.
-            </p>
+            <p className="mb-4" style={linkMuted}>Get the latest tips and updates from our team.</p>
 
-            <form className="flex gap-2" onSubmit={onSubscribe}>
-              <label className="sr-only" htmlFor="newsletter-email">
-                Email
-              </label>
+            <form className="flex gap-2" onSubmit={onSubscribe} noValidate>
+              <label className="sr-only" htmlFor="newsletter-email">Email</label>
               <input
                 id="newsletter-email"
                 type="email"
@@ -124,14 +136,16 @@ const SiteFooter = ({ compact = false }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
                 style={{
-                  background: "rgba(255,255,255,0.06)",
+                  background: "var(--footer-input-bg, rgba(255,255,255,0.06))",
                   border: "1px solid rgba(255,255,255,0.12)",
-                  color: "#fff",
+                  color: "var(--footer-text, #fff)",
                 }}
+                autoComplete="email"
               />
               <button
                 type="submit"
-                className="px-5 py-3 rounded-lg text-white"
+                disabled={busy}
+                className="px-5 py-3 rounded-lg text-white disabled:opacity-70"
                 style={{ background: "var(--orange, #E85002)" }}
                 aria-label="Subscribe"
                 title="Subscribe"
@@ -140,30 +154,54 @@ const SiteFooter = ({ compact = false }) => {
               </button>
             </form>
 
-            {!!msg && (
-              <div
-                className="mt-2 text-sm"
-                style={{ color: "rgba(255,255,255,0.75)" }}
-                role="status"
-              >
+            {msg && (
+              <div className="mt-2 text-sm" style={{ color: "rgba(255,255,255,0.75)" }} role="status" aria-live="polite">
                 {msg}
               </div>
             )}
+
+            <p className="mt-2 text-xs" style={linkMuted}>No spam. Unsubscribe anytime.</p>
           </div>
         </div>
 
-        {/* Single-line legal bar */}
+        {/* Legal bar: center copyright, right-aligned Privacy/Terms */}
         <div
-          className="mt-10 pt-6 text-center"
-          style={{
-            borderTop: "1px solid rgba(255,255,255,0.1)",
-            color: "rgba(255,255,255,0.6)",
-          }}
+          className="mt-10 pt-6"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
         >
-          <p>
-            &copy; {new Date().getFullYear()} Shinel Studios™ · All rights
-            reserved · Trademark application filed
-          </p>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-y-2">
+            {/* left spacer (desktop) */}
+            <div className="hidden md:block" />
+
+            {/* centered copyright */}
+            <p className="text-center">
+              &copy; {new Date().getFullYear()} Shinel Studios™ · All rights reserved · Where Ideas Shine
+            </p>
+
+            {/* right-corner legal links (stack centered on mobile) */}
+            <nav
+              aria-label="Legal"
+              className="flex justify-center md:justify-end items-center gap-6"
+            >
+              <Link
+                to="/privacy"
+                className="hover:underline"
+                style={linkMuted}
+                onClick={() => track("cta_click_legal", { page: "privacy" })}
+              >
+                Privacy
+              </Link>
+              <span aria-hidden style={{ opacity: 0.5 }}>•</span>
+              <Link
+                to="/terms"
+                className="hover:underline"
+                style={linkMuted}
+                onClick={() => track("cta_click_legal", { page: "terms" })}
+              >
+                Terms
+              </Link>
+            </nav>
+          </div>
         </div>
       </div>
     </footer>

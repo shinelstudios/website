@@ -45,6 +45,64 @@ function ScrollToHash() {
   return null;
 }
 
+/* Simple legal page (Privacy/Terms). Replace with your own page later if you like. */
+function LegalPage({ kind = "privacy" }) {
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  const isPrivacy = kind === "privacy";
+  const title = isPrivacy ? "Privacy Policy" : "Terms of Service";
+  const updated = "Last updated: Sep 2025";
+
+  const text = {
+    privacy: [
+      "We only collect information you provide (like your name, email, and links you share).",
+      "We use this data to reply, provide quotes, and improve our services. No spam.",
+      "You can request deletion or export of your data at any time by emailing hello@shinelstudiosofficial.com.",
+      "We use basic analytics and advertising pixels to understand traffic and measure results.",
+    ],
+    terms: [
+      "By using our website and services, you agree to these terms.",
+      "All content and deliverables are provided under the agreed scope; revisions are outlined per package.",
+      "You retain rights to your original assets; we retain rights to our templates and internal tools.",
+      "Payments, refunds, and timelines follow the package notes and written agreements.",
+    ],
+  };
+
+  return (
+    <section style={{ background: "var(--surface)" }}>
+      <div className="container mx-auto px-4 py-14 max-w-3xl">
+        <h1
+          className="text-3xl md:text-4xl font-bold font-['Poppins']"
+          style={{ color: "var(--text)" }}
+        >
+          {title}
+        </h1>
+        <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+          {updated}
+        </div>
+
+        <div className="mt-6 space-y-4" style={{ color: "var(--text)" }}>
+          {(isPrivacy ? text.privacy : text.terms).map((p, i) => (
+            <p key={i}>{p}</p>
+          ))}
+        </div>
+
+        <div className="mt-8 rounded-xl p-4" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Questions? Email{" "}
+            <a href="mailto:hello@shinelstudiosofficial.com" style={{ color: "var(--orange)" }}>
+              hello@shinelstudiosofficial.com
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* Layout with global header/footer and site-wide theme toggle */
 function Layout() {
   const [isDark, setIsDark] = React.useState(() => {
@@ -52,7 +110,6 @@ function Layout() {
       const saved = localStorage.getItem("theme");
       if (saved) return saved === "dark";
     } catch {}
-    // Prepaint script may have set .dark already; otherwise fall back to system
     if (document.documentElement.classList.contains("dark")) return true;
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
@@ -110,6 +167,11 @@ export default function App() {
         <Route path="/thumbnails" element={<Thumbnails />} />
         <Route path="/shorts" element={<Shorts />} />
         <Route path="/login" element={<LoginPage />} />
+
+        {/* NEW: legal pages used by footer links */}
+        <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+        <Route path="/terms" element={<LegalPage kind="terms" />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

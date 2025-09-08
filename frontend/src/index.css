@@ -9,6 +9,12 @@
   :root{
     --orange:#E85002;
 
+    /* -------- FOOTER tokens (keeps footer dark on both themes) -------- */
+    --footer-bg:#0d0d0d;                    /* dark footer even on light theme */
+    --footer-text:#fff;
+    --footer-muted:rgba(255,255,255,.7);
+    --footer-input-bg:rgba(255,255,255,.06);
+
     /* light tokens */
     --text:#0D0D0D;
     --text-muted:rgba(13,13,13,.70);
@@ -33,6 +39,12 @@
   }
 
   .dark{
+    /* -------- FOOTER tokens (slightly deeper in dark) -------- */
+    --footer-bg:#000;
+    --footer-text:#fff;
+    --footer-muted:rgba(255,255,255,.72);
+    --footer-input-bg:rgba(255,255,255,.08);
+
     /* dark tokens */
     --text:#FFFFFF;
     --text-muted:rgba(255,255,255,.72);
