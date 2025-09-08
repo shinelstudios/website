@@ -1,408 +1,679 @@
 // src/components/SiteHeader.jsx
-import React, { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Menu, X, ChevronDown, Sun, Moon } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sun, Moon, Menu, X, ChevronDown } from "lucide-react";
+
 import logoLight from "../assets/logo_light.png";
+import logoDark from "../assets/logo_dark.png";
 
-const cats = [
-  { name: "Video Editing", sub: ["Gaming", "Vlogging", "Documentary"] },
-  { name: "GFX", sub: [] }, // direct link to /gfx
-  { name: "Thumbnails", sub: [] },
-  { name: "Shorts", sub: ["Gaming", "IRL", "Motion Graphics"] },
-];
+const animations = {
+  fadeDown: {
+    hidden: { opacity: 0, y: -12 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.35, ease: "easeOut" },
+    },
+  },
+};
 
-/**
- * SiteHeader
- * Props:
- * - isDark?: boolean
- * - setIsDark?: (v:boolean)=>void
- * If provided, shows a Sun/Moon button that toggles theme (same as homepage).
- */
-const SiteHeader = ({ isDark, setIsDark }) => {
-  const { pathname } = useLocation();
+// --- simple auth lookup (adapt keys to your app) ---
+function getAuthState() {
+  try {
+    return Boolean(
+      localStorage.getItem("authToken") ||
+        localStorage.getItem("user") ||
+        localStorage.getItem("loggedIn")
+    );
+  } catch {
+    return false;
+  }
+}
 
-  // desktop dropdown
+// --- favicon swapper ---
+function setFaviconForTheme(isDark) {
+  try {
+    const light = document.querySelector(
+      'link[rel="icon"][data-theme="light"]'
+    );
+    const dark = document.querySelector('link[rel="icon"][data-theme="dark"]');
+    if (light && dark) {
+      light.disabled = !!isDark;
+      dark.disabled = !isDark;
+    }
+    const link =
+      document.getElementById("favicon") ||
+      document.querySelector('link[rel="icon"]:not([data-theme])');
+    if (link)
+      link.href = isDark
+        ? "/favicon-dark-32x32.png"
+        : "/favicon-light-32x32.png";
+  } catch {}
+}
+
+const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
   const [workOpen, setWorkOpen] = useState(false);
-  const [openCat, setOpenCat] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [hovered, setHovered] = useState(null);
+  const [active, setActive] = useState("Home");
+  const [progress, setProgress] = useState(0);
+  const [isAuthed, setIsAuthed] = useState(
+    typeof isAuthedProp === "boolean" ? isAuthedProp : getAuthState()
+  );
+
+  const headerRef = useRef(null);
+  const menuPanelRef = useRef(null);
   const workRef = useRef(null);
+  const [headerH, setHeaderH] = useState(76);
 
-  // mobile
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileOpenIdx, setMobileOpenIdx] = useState(null);
-
-  // close dropdown on outside-click & Esc
+  // keep favicons in sync with current theme
   useEffect(() => {
-    const closeAll = () => {
-      setWorkOpen(false);
-      setOpenCat(null);
+    setFaviconForTheme(isDark);
+  }, [isDark]);
+
+  // auth change listeners (other tabs / app events)
+  useEffect(() => {
+    const onStorage = () => setIsAuthed(getAuthState());
+    const onAuthEvent = () => setIsAuthed(getAuthState());
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("auth:changed", onAuthEvent);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("auth:changed", onAuthEvent);
     };
-    const onDoc = (e) => {
+  }, []);
+
+  const sections = useMemo(
+    () => ["Home", "Services", "Testimonials", "Contact"],
+    []
+  );
+  const workItems = useMemo(
+    () => [
+      { name: "Video Editing", href: "/video-editing" },
+      { name: "GFX", href: "/gfx" },
+      { name: "Thumbnails", href: "/thumbnails" },
+      { name: "Shorts", href: "/shorts" },
+    ],
+    []
+  );
+
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  // scroll progress + shadow
+  const lastAnimFrame = useRef(null);
+  useEffect(() => {
+    const tick = () => {
+      const y = window.scrollY || 0;
+      setScrolled(y > 8);
+      const doc = document.documentElement;
+      const h = Math.max(1, doc.scrollHeight - window.innerHeight);
+      setProgress(Math.min(100, (y / h) * 100));
+      lastAnimFrame.current = null;
+    };
+    const onScroll = () => {
+      if (lastAnimFrame.current == null)
+        lastAnimFrame.current = requestAnimationFrame(tick);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    tick();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (lastAnimFrame.current) cancelAnimationFrame(lastAnimFrame.current);
+    };
+  }, []);
+
+  // observe header height so <main> offset stays correct
+  useEffect(() => {
+    if (!headerRef.current || !("ResizeObserver" in window)) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = Math.round(entries[0].contentRect.height) || 76;
+      setHeaderH(h);
+      const root = document.documentElement;
+      root.style.setProperty("--header-h", `${h}px`);
+      root.style.setProperty("scroll-padding-top", `${h + 8}px`);
+    });
+    ro.observe(headerRef.current);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--header-offset",
+      `${headerH}px`
+    );
+  }, [headerH]);
+
+  // section highlight (homepage)
+  useEffect(() => {
+    const ids = sections.map((s) => s.toLowerCase());
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) {
+          const id = visible.target.id || "";
+          const match = sections.find((s) => s.toLowerCase() === id);
+          if (match) setActive(match);
+        }
+      },
+      { rootMargin: "-45% 0px -50% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) io.observe(el);
+    });
+    const onHash = () => {
+      const hash = (location.hash || "#home").replace("#", "");
+      const match = sections.find((s) => s.toLowerCase() === hash);
+      if (match) setActive(match);
+    };
+    window.addEventListener("hashchange", onHash);
+    onHash();
+    return () => {
+      io.disconnect();
+      window.removeEventListener("hashchange", onHash);
+    };
+  }, [sections]);
+
+  // close dropdown on outside / ESC
+  useEffect(() => {
+    const onDocDown = (e) => {
       if (!workOpen) return;
-      if (workRef.current && !workRef.current.contains(e.target)) closeAll();
+      if (workRef.current && !workRef.current.contains(e.target))
+        setWorkOpen(false);
     };
-    const onEsc = (e) => e.key === "Escape" && closeAll();
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("touchstart", onDoc, { passive: true });
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        setWorkOpen(false);
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("touchstart", onDocDown, { passive: true });
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("touchstart", onDoc);
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("touchstart", onDocDown);
       document.removeEventListener("keydown", onEsc);
     };
   }, [workOpen]);
 
-  const NavLink = ({ href, children }) => (
-    <a href={href} className="hover:opacity-80">
-      {children}
-    </a>
-  );
+  // lock body scroll for mobile menu
+  useEffect(() => {
+    const lock = (v) => {
+      document.documentElement.style.overflow = v ? "hidden" : "";
+      document.body.style.overscrollBehavior = v ? "contain" : "";
+    };
+    lock(isMenuOpen);
+    if (isMenuOpen && menuPanelRef.current) {
+      const first = menuPanelRef.current.querySelector(
+        'a,button,[tabindex]:not([tabindex="-1"])'
+      );
+      first?.focus?.();
+    }
+    return () => lock(false);
+  }, [isMenuOpen]);
+
+  // ===== NavLink: works from ANY page (routes to / or /#hash) =====
+  const NavLink = ({ label, to, active }) => {
+    const isActive = active === label;
+    return (
+      <Link
+        to={to}
+        className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+        aria-current={isActive ? "page" : undefined}
+        data-navlink
+        onMouseEnter={() => setHovered(label)}
+        onMouseLeave={() => setHovered(null)}
+        style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
+      >
+        <span className="nav-ink" aria-hidden="true" />
+        <span className="sr-only">{isActive ? "Current section: " : ""}</span>
+        <span aria-hidden="true" className="nav-label">
+          {label}
+        </span>
+      </Link>
+    );
+  };
+
+  const logoSrc = isDark ? logoLight : logoDark;
 
   return (
-    <header
-      className="fixed top-0 inset-x-0 z-50 backdrop-blur-lg"
-      style={{
-        background: "var(--header-bg, rgba(0,0,0,.65))",
-        borderBottom: "1px solid var(--border, rgba(255,255,255,.12))",
-      }}
-    >
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo (visually bigger, header size unchanged) */}
-        <Link to="/" className="flex items-center gap-3">
-          <div className="h-12 flex items-center overflow-visible">
-            <img
-              src={logoLight}
-              alt="Shinel Studios"
-              className="h-full w-auto object-contain select-none"
-              style={{
-                transform: "scale(2.8)",
-                transformOrigin: "left center",
-                filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))",
-              }}
-            />
-          </div>
-        </Link>
+    <motion.div className="fixed top-0 w-full z-50">
+      <motion.header
+        ref={headerRef}
+        variants={animations.fadeDown}
+        initial="hidden"
+        animate="visible"
+        role="banner"
+        style={{
+          background: "var(--header-bg)",
+          paddingTop: "max(0px, env(safe-area-inset-top))",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          borderBottom: "0",
+          boxShadow: scrolled ? "0 6px 18px rgba(0,0,0,0.16)" : "none",
+          transition: "box-shadow .25s ease",
+          overflow: "visible", // make room for TrustBar
+        }}
+      >
+        {/* progress */}
+        <div
+          className="absolute left-0 top-0 h-[1px] origin-left"
+          style={{
+            width: "100%",
+            transform: `scaleX(${Math.max(0, Math.min(1, progress / 100)).toFixed(4)})`,
+            background: "linear-gradient(90deg, var(--orange), #ff9357)",
+            transition: reduceMotion ? "none" : "transform .08s linear",
+          }}
+          aria-hidden="true"
+        />
 
-        {/* Desktop Nav */}
+        {/* nav row */}
         <nav
-          className="hidden md:flex items-center gap-7"
-          style={{ color: "var(--text, #fff)" }}
+          className="container mx-auto px-4 flex items-center justify-between"
+          style={{
+            paddingTop: scrolled ? "4px" : "8px",
+            paddingBottom: scrolled ? "4px" : "8px",
+            transition: "padding .2s ease",
+            position: "relative",
+            zIndex: 3, // ensure nav & dropdown sit above TrustBar
+          }}
+          aria-label="Primary"
         >
-          <NavLink href="/#home">Home</NavLink>
-
-          {/* Our Work dropdown */}
-          <div className="relative" ref={workRef}>
-            <button
-              onClick={() => setWorkOpen((v) => !v)}
-              className="inline-flex items-center gap-1 hover:opacity-80"
-              aria-expanded={workOpen}
-              aria-controls="work-menu"
-            >
-              Our Work
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${workOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {workOpen && (
-              <div
-                id="work-menu"
-                className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
+          <Link
+            to="/"
+            className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+          >
+            <div className="h-12 flex items-center overflow-visible">
+              <img
+                src={logoSrc}
+                alt="Shinel Studios"
+                className="h-full w-auto object-contain block select-none"
                 style={{
-                  background: "var(--surface, #0F0F0F)",
-                  border: "1px solid var(--border, rgba(255,255,255,.12))",
+                  transform: "scale(2.8)",
+                  transformOrigin: "left center",
+                  filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
                 }}
-                onMouseLeave={() => {
-                  setWorkOpen(false);
-                  setOpenCat(null);
+                decoding="async"
+              />
+            </div>
+          </Link>
+
+          {/* desktop links */}
+          <div className="hidden md:flex items-center gap-10 relative">
+            <NavLink label="Home" to="/" active={active} />
+            <NavLink label="Services" to="/#services" active={active} />
+            <NavLink label="Testimonials" to="/#testimonials" active={active} />
+            <NavLink label="Contact" to="/#contact" active={active} />
+
+            {/* Our Work dropdown */}
+            <div className="relative" ref={workRef}>
+              <motion.button
+                type="button"
+                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+                aria-expanded={workOpen}
+                aria-haspopup="menu"
+                aria-controls="our-work-menu"
+                onClick={() => setWorkOpen((v) => !v)}
+                initial={false}
+                style={{
+                  color:
+                    hovered === "Our Work" || workOpen
+                      ? "var(--nav-hover)"
+                      : "var(--nav-link)",
                 }}
+                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+                transition={{ duration: 0.22 }}
               >
-                {cats.map((cat, idx) => (
-                  <div
-                    key={cat.name}
-                    className="border-b last:border-none"
-                    style={{ borderColor: "var(--border, rgba(255,255,255,.12))" }}
+                <span className="nav-ink" aria-hidden="true" />
+                <span className="nav-label">Our Work</span>
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${
+                    workOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </motion.button>
+
+              <AnimatePresence>
+                {workOpen && (
+                  <motion.div
+                    id="our-work-menu"
+                    role="menu"
+                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      zIndex: 4, // panel itself above everything in header
+                    }}
                   >
-                    {/* Direct GFX link (visible orange, white on hover) */}
-                    {cat.name === "GFX" && cat.sub.length === 0 ? (
-                      <a
-                        href="/gfx"
-                        className="block w-full px-4 py-3 text-left font-semibold"
-                        style={{ color: "var(--orange,#E85002)" }}
+                    {workItems.map((item) => (
+                      <Link
+                        key={item.name}
+                        role="menuitem"
+                        tabIndex={0}
+                        to={item.href}
+                        className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{
+                          color: "var(--orange)",
+                          transition: "color .15s, background-color .15s",
+                        }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--orange,#E85002)";
+                          e.currentTarget.style.background = "var(--orange)";
                           e.currentTarget.style.color = "#fff";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--orange,#E85002)";
+                          e.currentTarget.style.color = "var(--orange)";
                         }}
-                        onClick={() => {
-                          setWorkOpen(false);
-                          setOpenCat(null);
-                        }}
+                        onClick={() => setWorkOpen(false)}
                       >
-                        GFX
-                      </a>
-                    ) : (
-                      <>
-                        <button
-                          className="w-full flex items-center justify-between px-4 py-3 text-left"
-                          style={{ color: "var(--text, #fff)" }}
-                          onClick={() => setOpenCat(openCat === idx ? null : idx)}
-                        >
-                          <span className="font-semibold text-[var(--orange,#E85002)]">
-                            {cat.name}
-                          </span>
-                          {cat.sub.length > 0 && (
-                            <ChevronDown
-                              size={16}
-                              className={`transition-transform ${
-                                openCat === idx ? "rotate-180" : ""
-                              }`}
-                              style={{ color: "var(--text-muted, rgba(255,255,255,.7))" }}
-                            />
-                          )}
-                        </button>
-
-                        {openCat === idx && cat.sub.length > 0 && (
-                          <div style={{ background: "var(--surface-alt, #0B0B0B)" }}>
-                            {cat.sub.map((s) => (
-                              <a
-                                key={s}
-                                href={
-                                  s === "Gaming"
-                                    ? "/gaming"
-                                    : s === "GFX"
-                                    ? "/gfx"
-                                    : `/#${s.toLowerCase().replace(/\s+/g, "-")}`
-                                }
-                                className="block px-6 py-2 text-sm"
-                                style={{
-                                  color:
-                                    s === "GFX" ? "var(--orange,#E85002)" : "var(--text,#fff)",
-                                  fontWeight: s === "GFX" ? 600 : "normal",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "var(--orange,#E85002)";
-                                  e.currentTarget.style.color = "#fff";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "transparent";
-                                  e.currentTarget.style.color =
-                                    s === "GFX"
-                                      ? "var(--orange,#E85002)"
-                                      : "var(--text,#fff)";
-                                }}
-                                onClick={() => {
-                                  setWorkOpen(false);
-                                  setOpenCat(null);
-                                }}
-                              >
-                                {s}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                        {item.name}
+                      </Link>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
-          <NavLink href="/#services">Services</NavLink>
-          <NavLink href="/#testimonials">Testimonials</NavLink>
-          <NavLink href="/#contact">Contact</NavLink>
-        </nav>
-
-        {/* Right actions */}
-        <div className="flex items-center gap-3">
-          {/* Theme toggle (only if props provided) */}
-          {typeof isDark === "boolean" && typeof setIsDark === "function" && (
-            <button
-              onClick={() => setIsDark((v) => !v)}
-              className="p-2 rounded-lg hover:opacity-90"
-              style={{
-                background: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.06)",
-                color: "var(--text, #fff)",
-              }}
-              aria-label="Toggle theme"
-              title="Toggle theme"
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-          )}
-
-          {pathname === "/login" ? (
-            <Link
-              to="/register"
-              className="hidden md:block text-white px-5 py-2 rounded-lg font-medium"
-              style={{ background: "var(--orange, #E85002)" }}
-            >
-              Register
-            </Link>
-          ) : (
-            <Link
-              to="/login"
-              className="hidden md:block text-white px-5 py-2 rounded-lg font-medium"
-              style={{ background: "var(--orange, #E85002)" }}
-            >
-              Login
-            </Link>
-          )}
-
-          <button
-            className="md:hidden p-2"
-            style={{ color: "var(--text, #fff)" }}
-            aria-label="Menu"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu size={22} />
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile sheet */}
-      {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-[60]"
-          style={{ background: "rgba(0,0,0,.6)" }}
-          onClick={() => setMobileOpen(false)}
-        >
-          <div
-            className="absolute right-0 top-0 h-full w-[80vw] max-w-xs p-4"
-            style={{ background: "var(--surface, #0F0F0F)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <img src={logoLight} alt="Shinel Studios" className="h-9 w-auto" />
-              <button
-                className="p-2"
-                style={{ color: "var(--text, #fff)" }}
-                onClick={() => setMobileOpen(false)}
-                aria-label="Close"
+          {/* right actions */}
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* Login buttons when not authed */}
+            {!isAuthed && (
+              <Link
+                to="/login"
+                className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                style={{
+                  background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                }}
               >
-                <X size={22} />
-              </button>
-            </div>
-
-            <nav className="space-y-2" style={{ color: "var(--text, #fff)" }}>
-              <a href="/#home" className="block px-2 py-2" onClick={() => setMobileOpen(false)}>
-                Home
-              </a>
-
-              {/* Our Work accordion */}
-              <div
-                className="rounded-lg overflow-hidden"
-                style={{ border: "1px solid var(--border, rgba(255,255,255,.12))" }}
-              >
-                {cats.map((cat, idx) => (
-                  <div
-                    key={cat.name}
-                    className="border-b last:border-none"
-                    style={{ borderColor: "var(--border, rgba(255,255,255,.12))" }}
-                  >
-                    {/* Direct GFX link on mobile */}
-                    {cat.name === "GFX" && cat.sub.length === 0 ? (
-                      <a
-                        href="/gfx"
-                        className="block px-3 py-3 text-left font-semibold"
-                        style={{ color: "var(--orange,#E85002)" }}
-                        onClick={() => setMobileOpen(false)}
-                      >
-                        GFX
-                      </a>
-                    ) : (
-                      <>
-                        <button
-                          className="w-full flex items-center justify-between px-3 py-3 text-left"
-                          onClick={() =>
-                            setMobileOpenIdx(mobileOpenIdx === idx ? null : idx)
-                          }
-                          style={{ color: "var(--orange, #E85002)" }}
-                        >
-                          <span>{cat.name}</span>
-                          {cat.sub.length > 0 && (
-                            <ChevronDown
-                              size={16}
-                              className={`transition-transform ${
-                                mobileOpenIdx === idx ? "rotate-180" : ""
-                              }`}
-                            />
-                          )}
-                        </button>
-
-                        {mobileOpenIdx === idx && cat.sub.length > 0 && (
-                          <div>
-                            {cat.sub.map((s) => (
-                              <a
-                                key={s}
-                                href={
-                                  s === "Gaming"
-                                    ? "/gaming"
-                                    : s === "GFX"
-                                    ? "/gfx"
-                                    : `/#${s.toLowerCase().replace(/\s+/g, "-")}`
-                                }
-                                className="block px-6 py-2 text-sm"
-                                style={{
-                                  color:
-                                    s === "GFX" ? "var(--orange,#E85002)" : "var(--text,#fff)",
-                                  fontWeight: s === "GFX" ? 600 : "normal",
-                                }}
-                                onClick={() => setMobileOpen(false)}
-                              >
-                                {s}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <a href="/#services" className="block px-2 py-2" onClick={() => setMobileOpen(false)}>
-                Services
-              </a>
-              <a href="/#testimonials" className="block px-2 py-2" onClick={() => setMobileOpen(false)}>
-                Testimonials
-              </a>
-              <a href="/#contact" className="block px-2 py-2" onClick={() => setMobileOpen(false)}>
-                Contact
-              </a>
-            </nav>
-
-            <div className="mt-4">
-              {pathname === "/login" ? (
-                <Link
-                  to="/register"
-                  className="block text-center text-white px-5 py-3 rounded-lg font-medium"
-                  style={{ background: "var(--orange, #E85002)" }}
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Register
-                </Link>
-              ) : (
+                Login
+              </Link>
+            )}
+            {!isAuthed && (
+              <motion.div className="hidden md:inline-flex">
                 <Link
                   to="/login"
-                  className="block text-center text-white px-5 py-3 rounded-lg font-medium"
-                  style={{ background: "var(--orange, #E85002)" }}
-                  onClick={() => setMobileOpen(false)}
+                  className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  style={{
+                    background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                  }}
                 >
                   Login
                 </Link>
-              )}
-            </div>
+              </motion.div>
+            )}
+
+            {/* theme toggle */}
+            {typeof isDark === "boolean" && typeof setIsDark === "function" && (
+              <motion.button
+                onClick={() => setIsDark((v) => !v)}
+                className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                style={{
+                  background: isDark
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(0,0,0,0.06)",
+                  color: "var(--text)",
+                }}
+                aria-label="Toggle theme"
+                aria-pressed={isDark}
+                whileTap={{ rotate: 180, scale: 0.9 }}
+                transition={{ duration: 0.4 }}
+                title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+              >
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
+              </motion.button>
+            )}
+
+            {/* mobile menu */}
+            <motion.button
+              onClick={() => setIsMenuOpen((s) => !s)}
+              className="md:hidden p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+              style={{ color: "var(--text)" }}
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMenuOpen}
+              aria-controls="mobile-menu"
+              whileTap={{ scale: 0.95 }}
+            >
+              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </motion.button>
+          </div>
+        </nav>
+
+        {/* mobile menu */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              id="mobile-menu"
+              ref={menuPanelRef}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="md:hidden"
+              style={{
+                background: "var(--surface)",
+                borderTop: "1px solid var(--border)",
+                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+                position: "relative",
+                zIndex: 3, // ensure panel is above TrustBar
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main menu"
+            >
+              <nav className="px-4 py-3">
+                <ul className="flex flex-col gap-2">
+                  {[
+                    { label: "Home", to: "/" },
+                    { label: "Services", to: "/#services" },
+                    { label: "Testimonials", to: "/#testimonials" },
+                    { label: "Contact", to: "/#contact" },
+                  ].map((item) => (
+                    <li key={item.label}>
+                      <Link
+                        to={item.to}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="block w-full rounded-xl px-4 py-3 text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{
+                          color: "var(--text)",
+                          background: "var(--surface-alt)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-4">
+                  <div
+                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Our Work
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { name: "Video Editing", to: "/video-editing" },
+                      { name: "Thumbnails", to: "/thumbnails" },
+                      { name: "Shorts", to: "/shorts" },
+                      { name: "GFX", to: "/gfx" },
+                    ].map((item) => (
+                      <Link
+                        key={item.name}
+                        to={item.to}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="block rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{
+                          color: "var(--text)",
+                          background: "var(--surface-alt)",
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        {item.name}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {!isAuthed && (
+                  <div className="mt-6 flex flex-col gap-2">
+                    <Link
+                      to="/login"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="block w-full rounded-full px-5 py-3 text-center font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{
+                        color: "var(--text)",
+                        background: "transparent",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      Login
+                    </Link>
+                  </div>
+                )}
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* TrustBar — sits below nav in stacking order */}
+        <TrustBar />
+      </motion.header>
+    </motion.div>
+  );
+};
+
+// --- TrustBar: always visible with right-to-left marquee ---
+const TrustBar = () => {
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  // ✏️ Edit this list any time
+  const lines = [
+    "Rated 4.7/5 by creators",
+    "20+ active clients across niches",
+    "Thumbnails delivering +40% CTR",
+    "Edits driving 2× watch time",
+    "7M+ views driven for clients",
+    "Shorts → predictable growth engine",
+    "48–72 hr standard turnaround",
+    "Hook-first scripts, data-backed metadata",
+    "End-to-end: Long-form, Shorts, Thumbnails, GFX",
+    "Brand kits & channel audits included",
+    "Monetization-safe packaging (no “yellow dollar”)",
+    "Dedicated PM & weekly checkpoints",
+  ];
+
+  if (reduceMotion) {
+    return (
+      <div
+        className="w-full"
+        style={{
+          background: "var(--header-bg)",
+          boxShadow: "inset 0 1px 0 var(--border)",
+          position: "relative",
+          zIndex: 2,
+        }}
+        role="region"
+        aria-label="Trust indicators"
+      >
+        <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm select-none">
+          <div
+            className="inline-flex items-center gap-6 md:gap-10"
+            style={{ color: "var(--text)" }}
+          >
+            {lines.map((t, i) => (
+              <span key={i}>{t}</span>
+            ))}
           </div>
         </div>
-      )}
-    </header>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="w-full trustbar"
+      style={{
+        background: "var(--header-bg)",
+        boxShadow: "inset 0 1px 0 var(--border)",
+        position: "relative",
+        zIndex: 2, // below nav (z-index 3) & dropdown (4)
+      }}
+      role="region"
+      aria-label="Trust indicators"
+    >
+      <div
+        className="overflow-hidden select-none"
+        style={{
+          WebkitMaskImage:
+            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+          maskImage:
+            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+        }}
+      >
+        <div className="marquee-track">
+          <div className="marquee-row">
+            {lines.map((t, i) => (
+              <span key={`a-${i}`} className="marquee-item">
+                {t}
+              </span>
+            ))}
+          </div>
+          <div className="marquee-row" aria-hidden="true">
+            {lines.map((t, i) => (
+              <span key={`b-${i}`} className="marquee-item">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        .trustbar { --marquee-speed: 26s; }
+        .marquee-track { display: flex; width: max-content; }
+        .marquee-row {
+          display: inline-flex;
+          align-items: center;
+          gap: 2rem;
+          padding: 0.4rem 0;
+          animation: ss-marquee var(--marquee-speed) linear infinite;
+          will-change: transform;
+        }
+        @keyframes ss-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .trustbar:hover .marquee-row { animation-play-state: paused; }
+        .marquee-item {
+          font-size: 11px;
+          line-height: 1;
+          white-space: nowrap;
+          color: var(--text);
+          display: inline-flex;
+          align-items: center;
+          gap: .5rem;
+        }
+        @media (min-width: 768px) { .marquee-item { font-size: 0.875rem; } }
+        @media (max-width: 420px) { .trustbar { --marquee-speed: 22s; } }
+      `}</style>
+    </div>
   );
 };
 

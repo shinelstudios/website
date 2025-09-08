@@ -9,4 +9,5 @@ Disallow: /src/
 Disallow: /vite.config.js
 
 # Sitemap location (tell Google where your sitemap is)
-Sitemap: https://www.shinelstudios.com/sitemap.xml
+Sitemap: https://www.shinelstudios.in/sitemap.xml
+

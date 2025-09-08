@@ -15,22 +15,29 @@
     <!-- Preconnects (perf) -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <!-- Calendly iframe host -->
-    <link rel="preconnect" href="https://calendly.com">
+    <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
 
     <!-- Fonts (optional: remove if you self-host Poppins) -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 
     <!-- Favicons -->
+    <!-- 1) System-controlled (fallback when JS is disabled) -->
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <!-- Fallback that JS will overwrite on theme toggle -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png"  media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  media="(prefers-color-scheme: dark)">
+
+    <!-- 2) JS-controlled (for live theme toggles) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" data-theme="light">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  data-theme="dark">
+
+    <!-- 3) Single tag we also update as a universal fallback -->
     <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
 
-    <!-- Theme colors (system). Your JS also updates a plain theme-color meta at runtime. -->
+    <!-- Apple touch icon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+    <!-- Theme colors (system). JS also sets the plain theme-color at runtime. -->
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
 
@@ -155,6 +162,14 @@
           metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
 
           // Swap favicon immediately
+          // (1) toggle data-theme icons if present
+          var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
+          var darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
+          if (lightIcon && darkIcon) {
+            lightIcon.disabled = !!isDark;
+            darkIcon.disabled  = !isDark;
+          }
+          // (2) always update the single fallback tag too
           var favicon = document.getElementById('favicon');
           if (favicon) {
             favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
@@ -182,9 +197,7 @@
 
     <div id="root"></div>
 
-    <!-- Global subscriber counts used by CreatorsWorkedWith.
-         Add ONLY the creators you want to show counts for.
-         Use exact integers (no commas). Example: deadlox: 850000 -->
+    <!-- Global subscriber counts used by CreatorsWorkedWith. -->
     <script>
       window.SS_SUBS = {
         deadlox: 7000,
@@ -198,11 +211,6 @@
         manav: 49600
       };
     </script>
-
-    <!-- Optional: Preload a critical above-the-fold image for faster LCP -->
-    <!--
-    <link rel="preload" as="image" href="/path/to/critical.webp" imagesrcset="/path/to/critical.webp" fetchpriority="high">
-    -->
 
     <script type="module" src="/src/main.jsx"></script>
   </body>

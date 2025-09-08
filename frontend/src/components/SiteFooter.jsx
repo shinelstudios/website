@@ -34,7 +34,11 @@ const SiteFooter = ({ compact = false }) => {
         }}
       />
 
-      <div className={`container mx-auto px-4 ${compact ? "pt-10" : "pt-16"} ${compact ? "pb-10" : "pb-16"}`}>
+      <div
+        className={`container mx-auto px-4 ${
+          compact ? "pt-10" : "pt-16"
+        } ${compact ? "pb-10" : "pb-16"}`}
+      >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Brand */}
           <div>
@@ -53,16 +57,32 @@ const SiteFooter = ({ compact = false }) => {
 
             <div className="flex gap-4">
               <a href="#" aria-label="Facebook" title="Facebook">
-                <Facebook size={22} style={linkStyle} className="transition-opacity hover:opacity-100 opacity-70" />
+                <Facebook
+                  size={22}
+                  style={linkStyle}
+                  className="transition-opacity hover:opacity-100 opacity-70"
+                />
               </a>
               <a href="#" aria-label="Twitter" title="Twitter / X">
-                <Twitter size={22} style={linkStyle} className="transition-opacity hover:opacity-100 opacity-70" />
+                <Twitter
+                  size={22}
+                  style={linkStyle}
+                  className="transition-opacity hover:opacity-100 opacity-70"
+                />
               </a>
               <a href="#" aria-label="Instagram" title="Instagram">
-                <Instagram size={22} style={linkStyle} className="transition-opacity hover:opacity-100 opacity-70" />
+                <Instagram
+                  size={22}
+                  style={linkStyle}
+                  className="transition-opacity hover:opacity-100 opacity-70"
+                />
               </a>
               <a href="#" aria-label="LinkedIn" title="LinkedIn">
-                <Linkedin size={22} style={linkStyle} className="transition-opacity hover:opacity-100 opacity-70" />
+                <Linkedin
+                  size={22}
+                  style={linkStyle}
+                  className="transition-opacity hover:opacity-100 opacity-70"
+                />
               </a>
             </div>
           </div>
@@ -132,6 +152,7 @@ const SiteFooter = ({ compact = false }) => {
           </div>
         </div>
 
+        {/* Single-line legal bar */}
         <div
           className="mt-10 pt-6 text-center"
           style={{
@@ -139,7 +160,10 @@ const SiteFooter = ({ compact = false }) => {
             color: "rgba(255,255,255,0.6)",
           }}
         >
-          <p>&copy; {new Date().getFullYear()} Shinel Studios. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} Shinel Studios™ · All rights
+            reserved · Trademark application filed
+          </p>
         </div>
       </div>
     </footer>

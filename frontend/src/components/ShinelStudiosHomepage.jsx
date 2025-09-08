@@ -1,11 +1,12 @@
 /* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
 import {
-  Sun, Moon, Menu, X, ChevronDown, Play, Image, TrendingUp, FileText,
-  MessageCircle, Users, Eye, Target, Mail, Twitter, Instagram, 
-  Linkedin, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, Star, MousePointer2, Timer} from "lucide-react";
+  X, Play, Image, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink
+} from "lucide-react";
+
+import RoiCalculator from "./RoiCalculator";
+import ExitIntentModal from "./ExitIntentModal";
 
 /**
  * Centralized asset glob (Vite)
@@ -47,7 +48,6 @@ export const findAssetByBase = (key, map = ALL_ASSETS) => {
   return null;
 };
 
-
 /** Tiny inline SVG placeholder */
 export const svgPlaceholder = (label = "Image") => {
   const safe = String(label).replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -81,586 +81,9 @@ export const tiltHover = {
   transition: { type: "spring", stiffness: 240, damping: 18 }
 };
 
-
-/* Brand palette (read by sections for consistent styling) */
-export const BRAND = {
-  orange: "#E85002",
-  orangeLight: "#FFB48A",
-  light: {
-    text: "#0D0D0D",
-    textMuted: "rgba(13,13,13,0.7)",
-    surface: "#FFFFFF",
-    surfaceAlt: "#FFF9F6",
-    border: "rgba(0,0,0,0.10)",
-    headerBg: "rgba(255,255,255,0.85)",
-  },
-  dark: {
-    text: "#FFFFFF",
-    textMuted: "rgba(255,255,255,0.7)",
-    surface: "#0F0F0F",
-    surfaceAlt: "#0B0B0B",
-    border: "rgba(255,255,255,0.12)",
-    headerBg: "rgba(0,0,0,0.75)",
-  },
-};
-
-/* Consistent CTA buttons */
-export const BrandButton = ({ href, onClick, className = "", children, ...rest }) => {
-  const Base = href ? motion.a : motion.button;
-  const baseProps = href ? { href } : { type: "button", onClick };
-  return (
-    <Base
-      {...baseProps}
-      {...rest}
-      className={`relative overflow-hidden rounded-full px-6 py-3 text-white font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] ${className}`}
-      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08)" }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-    >
-      <motion.span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3"
-        style={{
-          background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.28) 50%, rgba(255,255,255,0) 100%)",
-          filter: "blur(5px)",
-        }}
-        initial={{ x: "-120%" }}
-        animate={{ x: ["-120%", "120%"] }}
-        transition={{ repeat: Infinity, duration: 1.9, ease: "linear" }}
-      />
-      <span className="relative z-10">{children}</span>
-    </Base>
-  );
-};
-
-export const GhostButton = ({ href, onClick, className = "", children, ...rest }) => (
-  <motion.a
-    href={href}
-    onClick={onClick}
-    {...rest}
-    className={`rounded-full px-6 py-3 font-semibold text-center ${className}`}
-    style={{
-      color: "var(--text, #0b0b0b)",
-      border: "1px solid var(--border, rgba(0,0,0,.16))",
-      background: "var(--btn-ghost-bg, rgba(255,255,255,.75))",
-      boxShadow: "var(--btn-ghost-shadow, 0 4px 12px rgba(0,0,0,.06))",
-    }}
-    whileHover={{ y: -2 }}
-    whileTap={{ scale: 0.98 }}
-  >
-    {children}
-  </motion.a>
-);
-
-/* Resolve logos via asset glob (fallbacks if missing) */
-export const logoLight =
-  findAssetByBase("logo_light") || findAssetByBase("logo-light") || svgPlaceholder("Shinel Studios");
-export const logoDark  =
-  findAssetByBase("logo_dark")  || findAssetByBase("logo-dark")  || svgPlaceholder("Shinel Studios");
-
+/* Resolve sample images via asset glob (fallbacks if missing) */
 export const SAMPLE_BEFORE = findAssetByBase("sample_before") || svgPlaceholder("Before");
 export const SAMPLE_AFTER  = findAssetByBase("sample_after")  || svgPlaceholder("After");
-
-/* ===================== Header (thinner) ===================== */
-const Header = ({ isDark, setIsDark /* onBook removed */ }) => {
-  const [workOpen, setWorkOpen] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [hovered, setHovered] = useState(null);
-  const [active, setActive] = useState("Home");
-  const [progress, setProgress] = useState(0);
-  const [quickBarVisible, setQuickBarVisible] = useState(false);
-
-  // Measure + IO
-  const headerRef = useRef(null);
-  const menuPanelRef = useRef(null);
-  const workRef = useRef(null);
-  /* ↓ default fallback height slightly smaller (was 92) */
-  const [headerH, setHeaderH] = useState(76);
-
-  // RAF scroll/throttle
-  const lastAnimFrame = useRef(null);
-
-  const sections = useMemo(() => ["Home", "Services", "Testimonials", "Contact"], []);
-  const workItems = useMemo(
-    () => [
-      { name: "Video Editing", href: "/video-editing" },
-      { name: "GFX", href: "/gfx" },
-      { name: "Thumbnails", href: "/thumbnails" },
-      { name: "Shorts", href: "/shorts" },
-    ],
-    []
-  );
-
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  /* ---------- scroll/progress + pin logic ---------- */
-  useEffect(() => {
-    const TOL = 6;
-    const tick = () => {
-      const y = window.scrollY || 0;
-      setScrolled(y > 8);
-
-      const doc = document.documentElement;
-      const h = Math.max(1, doc.scrollHeight - window.innerHeight);
-      setProgress(Math.min(100, (y / h) * 100));
-
-      lastAnimFrame.current = null;
-    };
-    const onScroll = () => { if (lastAnimFrame.current == null) lastAnimFrame.current = requestAnimationFrame(tick); };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    tick();
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (lastAnimFrame.current) cancelAnimationFrame(lastAnimFrame.current);
-    };
-  }, []);
-
-  /* ---------- header size → CSS vars for offsets ---------- */
-  useEffect(() => {
-    if (!headerRef.current || !("ResizeObserver" in window)) return;
-    const ro = new ResizeObserver((entries) => {
-      const h = Math.round(entries[0].contentRect.height) || 76; // was 92
-      setHeaderH(h);
-      const root = document.documentElement;
-      root.style.setProperty("--header-h", `${h}px`);
-      root.style.setProperty("scroll-padding-top", `${h + 8}px`);
-    });
-    ro.observe(headerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty("--header-offset", `${headerH}px`);
-  }, [headerH]);
-
-  /* ---------- section tracking (IO + hash) ---------- */
-  useEffect(() => {
-    const ids = sections.map((s) => s.toLowerCase());
-    const io = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) {
-          const id = visible.target.id || "";
-          const match = sections.find((s) => s.toLowerCase() === id);
-          if (match) setActive(match);
-        }
-      },
-      { rootMargin: "-45% 0px -50% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] }
-    );
-    ids.forEach((id) => { const el = document.getElementById(id); if (el) io.observe(el); });
-    const onHash = () => {
-      const hash = (location.hash || "#home").replace("#", "");
-      const match = sections.find((s) => s.toLowerCase() === hash);
-      if (match) setActive(match);
-    };
-    window.addEventListener("hashchange", onHash);
-    onHash();
-    return () => { io.disconnect(); window.removeEventListener("hashchange", onHash); };
-  }, [sections]);
-
-  /* ---------- QuickQuoteBar sync ---------- */
-  useEffect(() => {
-    const handler = (e) => setQuickBarVisible(Boolean(e.detail?.visible));
-    document.addEventListener("qqb:visible", handler);
-    return () => document.removeEventListener("qqb:visible", handler);
-  }, []);
-
-  /* ---------- Our Work dropdown: hover intent + outside ---------- */
-  const hoverTimer = useRef(null);
-  const onWorkEnter = () => { clearTimeout(hoverTimer.current); hoverTimer.current = setTimeout(() => setWorkOpen(true), 80); setHovered("Our Work"); };
-  const onWorkLeave = () => {
-    clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => { setHovered(null); setWorkOpen(false); }, 120);
-  };
-  useEffect(() => {
-    const onDocDown = (e) => { if (!workOpen) return; if (workRef.current && !workRef.current.contains(e.target)) setWorkOpen(false); };
-    const onEsc = (e) => { if (e.key === "Escape") { setWorkOpen(false); setIsMenuOpen(false); } };
-    document.addEventListener("mousedown", onDocDown);
-    document.addEventListener("touchstart", onDocDown, { passive: true });
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDocDown);
-      document.removeEventListener("touchstart", onDocDown);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [workOpen]);
-
-  /* ---------- Mobile menu lock + focus ---------- */
-  useEffect(() => {
-    const lock = (v) => {
-      document.documentElement.style.overflow = v ? "hidden" : "";
-      document.body.style.overscrollBehavior = v ? "contain" : "";
-    };
-    lock(isMenuOpen);
-    if (isMenuOpen && menuPanelRef.current) {
-      const first = menuPanelRef.current.querySelector('a,button,[tabindex]:not([tabindex="-1"])');
-      first?.focus?.();
-    }
-    return () => lock(false);
-  }, [isMenuOpen]);
-
-  // Mobile reveal items
-  const mobileItem = {
-    hidden: { opacity: 0, y: 10 },
-    visible: (i) => ({ opacity: 1, y: 0, transition: { delay: 0.045 * i, duration: 0.18, ease: "easeOut" } }),
-  };
-
-  const NavLink = ({ label, active }) => {
-    const isActive = active === label;
-    return (
-      <motion.a
-        href={`#${label.toLowerCase()}`}
-        className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-        aria-current={isActive ? "page" : undefined}
-        data-navlink
-        onMouseEnter={() => setHovered(label)}
-        onMouseLeave={() => setHovered(null)}
-        initial={false}
-        /* color now from CSS vars so theme swap is instant */
-        style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
-        whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-        transition={{ duration: 0.22 }}
-      >
-        <span className="nav-ink" aria-hidden="true" />
-        <span className="sr-only">{isActive ? "Current section: " : ""}</span>
-        <span aria-hidden="true" className="nav-label">{label}</span>
-      </motion.a>
-    );
-  };
-
-  return (
-    <motion.div className="fixed top-0 w-full z-50">
-      <motion.header
-        ref={headerRef}
-        variants={animations.fadeDown}
-        initial="hidden"
-        animate="visible"
-        role="banner"
-        style={{
-          background: "var(--header-bg)",
-          paddingTop: "max(0px, env(safe-area-inset-top))",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          borderBottom: "0",
-          boxShadow: scrolled ? "0 6px 18px rgba(0,0,0,0.16)" : "none",
-          transition: "box-shadow .25s ease",
-        }}
-      >
-        {/* Skip link */}
-        <a href="#services" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-[100] bg-[var(--orange)] text-white px-3 py-2 rounded">
-          Skip to content
-        </a>
-
-        {/* Top progress (height thinner: was 1.5px) */}
-        <div
-          className="absolute left-0 top-0 h-[1px] origin-left"
-          style={{
-            width: "100%",
-            transform: `scaleX(${Math.max(0, Math.min(1, progress / 100)).toFixed(4)})`,
-            background: "linear-gradient(90deg, var(--orange), #ff9357)",
-            transition: reduceMotion ? "none" : "transform .08s linear",
-          }}
-          aria-hidden="true"
-        />
-
-        <nav
-          className="container mx-auto px-4 flex items-center justify-between"
-          /* tighter vertical padding: was 10/6 */
-          style={{
-            paddingTop: scrolled ? "4px" : "8px",
-            paddingBottom: scrolled ? "4px" : "8px",
-            transition: "padding .2s ease"
-          }}
-          aria-label="Primary"
-        >
-          {/* Brand (match Login sizing) */}
-          <a
-            href="#home"
-            className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-          >
-            <div className="h-12 flex items-center overflow-visible">
-              <img
-                src={isDark ? logoLight : logoDark}
-                alt="Shinel Studios"
-                className="h-full w-auto object-contain block select-none"
-                style={{
-                  transform: "scale(2.8)",
-                  transformOrigin: "left center",
-                  filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
-                }}
-                decoding="async"
-              />
-            </div>
-          </a>
-
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-10 relative">
-            <NavLink label="Home" active={active} />
-            {sections.filter((s) => s !== "Home").map((s) => (
-              <NavLink key={s} label={s} active={active} />
-            ))}
-
-            {/* Our Work dropdown */}
-            <div
-              className="relative"
-              ref={workRef}
-              onMouseEnter={onWorkEnter}
-              onMouseLeave={onWorkLeave}
-            >
-              <motion.button
-                type="button"
-                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-                aria-expanded={workOpen}
-                aria-haspopup="menu"
-                aria-controls="our-work-menu"
-                onFocus={() => setHovered("Our Work")}
-                onBlur={() => setHovered(null)}
-                onClick={() => setWorkOpen((v) => !v)}
-                initial={false}
-                /* color now from CSS vars */
-                style={{ color: (hovered === "Our Work" || workOpen) ? "var(--nav-hover)" : "var(--nav-link)" }}
-                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-                transition={{ duration: 0.22 }}
-              >
-                <span className="nav-ink" aria-hidden="true" />
-                <span className="nav-label">Our Work</span>
-                <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
-              </motion.button>
-
-              <AnimatePresence>
-                {workOpen && (
-                  <motion.div
-                    id="our-work-menu"
-                    role="menu"
-                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
-                    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-                    onMouseEnter={() => setHovered("Our Work")}
-                    onMouseLeave={() => setHovered(null)}
-                  >
-                    {workItems.map((item) => (
-                      <Link
-                        key={item.name}
-                        role="menuitem"
-                        tabIndex={0}
-                        to={item.href}
-                        className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{ color: "var(--orange)", transition: "color .15s, background-color .15s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--orange)"; e.currentTarget.style.color = "#fff"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--orange)"; }}
-                        onClick={() => setWorkOpen(false)}
-                      >
-                        {item.name}
-                      </Link>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Right actions (audit removed; Login slightly larger for balance) */}
-          <div className="flex items-center gap-2 md:gap-3">
-            <motion.div className="hidden md:inline-flex">
-              <Link
-                to="/login"
-                className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-              >
-                Login
-              </Link>
-            </motion.div>
-
-            <motion.button
-              onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-              style={{ background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)", color: "var(--text)" }}
-              aria-label="Toggle theme"
-              aria-pressed={isDark}
-              whileTap={{ rotate: 180, scale: 0.9 }}
-              transition={{ duration: 0.4 }}
-              title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-            >
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </motion.button>
-
-            <motion.button
-              onClick={() => setIsMenuOpen((s) => !s)}
-              className="md:hidden p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-              style={{ color: "var(--text)" }}
-              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={isMenuOpen}
-              aria-controls="mobile-menu"
-              whileTap={{ scale: 0.95 }}
-            >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </motion.button>
-          </div>
-        </nav>
-
-        {/* Mobile menu */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div
-              id="mobile-menu"
-              ref={menuPanelRef}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden"
-              style={{
-                background: "var(--surface)",
-                borderTop: "1px solid var(--border)",
-                paddingBottom: "max(12px, env(safe-area-inset-bottom))"
-              }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Main menu"
-            >
-              <nav className="px-4 py-3">
-                {/* Main links */}
-                <motion.ul
-                  initial="hidden"
-                  animate="visible"
-                  className="flex flex-col gap-2"
-                >
-                  {[
-                    { label: "Home", href: "#home" },
-                    { label: "Services", href: "#services" },
-                    { label: "Testimonials", href: "#testimonials" },
-                    { label: "Contact", href: "#contact" },
-                  ].map((item, i) => (
-                    <motion.li
-                      key={item.label}
-                      variants={mobileItem}
-                      custom={i}
-                    >
-                      <a
-                        href={item.href}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setIsMenuOpen(false);
-                          const el = document.querySelector(item.href);
-                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }}
-                        className="block w-full rounded-xl px-4 py-3 text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)"
-                        }}
-                      >
-                        {item.label}
-                      </a>
-                    </motion.li>
-                  ))}
-                </motion.ul>
-
-                {/* Our Work shortcuts */}
-                <div className="mt-4">
-                  <div
-                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Our Work
-                  </div>
-                  <motion.div
-                    className="grid grid-cols-2 gap-2"
-                    initial="hidden"
-                    animate="visible"
-                  >
-                    {[
-                      { name: "Video Editing", to: "/video-editing" },
-                      { name: "Thumbnails", to: "/thumbnails" },
-                      { name: "Shorts", to: "/shorts" },
-                      { name: "GFX", to: "/gfx" },
-                    ].map((item, i) => (
-                      <motion.div key={item.name} variants={mobileItem} custom={i}>
-                        <Link
-                          to={item.to}
-                          onClick={() => setIsMenuOpen(false)}
-                          className="block rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                          style={{
-                            color: "var(--text)",
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)"
-                          }}
-                        >
-                          {item.name}
-                        </Link>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                </div>
-
-                {/* CTAs (Audit removed; keep Login only) */}
-                <div className="mt-6 flex flex-col gap-2">
-                  <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
-                    <Link
-                      to="/login"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block w-full rounded-full px-5 py-3 text-center font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        color: "var(--text)",
-                        background: "transparent",
-                        border: "1px solid var(--border)"
-                      }}
-                    >
-                      Login
-                    </Link>
-                  </motion.div>
-                </div>
-              </nav>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Trust/Rating bar (unchanged) */}
-        <TrustBar />
-
-        <style>{`
-  /* Keep any decorative ::after off */
-  header[role="banner"] nav a::after,
-  header[role="banner"] nav [data-navlink]::after { content: none !important; display: none !important; }
-
-  /* Ensure text inherits from CSS vars set by theme */
-  header[role="banner"] nav .nav-label { color: inherit !important; }
-
-  /* Default link color from theme */
-  header[role="banner"] nav [data-navlink],
-  header[role="banner"] nav button[aria-controls="our-work-menu"] {
-    color: var(--nav-link) !important;
-  }
-
-  /* Active/hover state = brand orange */
-  header[role="banner"] nav [data-navlink]:hover,
-  header[role="banner"] nav [data-navlink][aria-current="page"],
-  header[role="banner"] nav button[aria-controls="our-work-menu"]:hover,
-  header[role="banner"] nav button[aria-controls="our-work-menu"][aria-expanded="true"] {
-    color: var(--nav-hover) !important;
-  }
-
-  /* Remove stray borders from the header stack */
-  header[role="banner"] *,
-  header[role="banner"] { border-bottom-width: 0 !important; }
-  header[role="banner"] .trustbar { border-top: 0 !important; }
-`}</style>
-
-      </motion.header>
-    </motion.div>
-  );
-};
 
 /* ===================== Calendly Modal (focus-trap, ARIA polish, safer sandbox) ===================== */
 
@@ -772,245 +195,6 @@ const CalendlyModal = ({ open, onClose }) => {
   );
 };
 
-/* ===================== Trust Bar (appears after hero, marquee, pro icons) ===================== */
-const TrustBar = () => {
-  const [show, setShow] = React.useState(false);
-  const [qqbHidden, setQqbHidden] = React.useState(true);
-
-  // Respect reduced motion
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-  // Hide when your Quick Quote Bar is visible
-  React.useEffect(() => {
-    const onToggle = (e) => setQqbHidden(!Boolean(e.detail?.visible));
-    document.addEventListener("qqb:visible", onToggle);
-    return () => document.removeEventListener("qqb:visible", onToggle);
-  }, []);
-
-  // Show only after we pass the hero (#home). Works on mobile/desktop.
-  React.useEffect(() => {
-    let raf = null;
-
-    const getHeaderH = () => {
-      const v = getComputedStyle(document.documentElement).getPropertyValue("--header-h");
-      const n = parseInt(v, 10);
-      return Number.isFinite(n) ? n : 76;
-    };
-
-    const computeShow = () => {
-      const hero = document.getElementById("home");
-      const headerH = getHeaderH();
-      if (!hero) {
-        const y = window.scrollY || 0;
-        setShow(qqbHidden && y > 140);
-        return;
-      }
-      const heroBottom = hero.offsetTop + hero.offsetHeight;
-      const y = window.scrollY || 0;
-      const BUFFER = 6; // small hysteresis to avoid flicker
-      setShow(qqbHidden && y + headerH > heroBottom - BUFFER);
-    };
-
-    const onScrollOrResize = () => {
-      if (raf == null)
-        raf = requestAnimationFrame(() => {
-          raf = null;
-          computeShow();
-        });
-    };
-
-    computeShow();
-    window.addEventListener("scroll", onScrollOrResize, { passive: true });
-    window.addEventListener("resize", onScrollOrResize);
-    return () => {
-      window.removeEventListener("scroll", onScrollOrResize);
-      window.removeEventListener("resize", onScrollOrResize);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [qqbHidden]);
-
-  // ---- Content (icons + short proof points) ----
-  const items = [
-    {
-      icon: Star,
-      text: (
-        <>
-          Rated <b>4.7/5</b> by creators
-        </>
-      ),
-      aria: "Rated 4.7 out of 5 by creators",
-    },
-    {
-      icon: Users,
-      text: (
-        <>
-          <b>20+ active</b> clients
-        </>
-      ),
-      aria: "More than 20 active clients",
-    },
-    {
-      icon: MousePointer2,
-      text: (
-        <>
-          Thumbnails deliver <b>+40% CTR</b>
-        </>
-      ),
-      aria: "Thumbnails deliver plus forty percent click-through rate",
-    },
-    {
-      icon: Timer,
-      text: (
-        <>
-          Edits drive <b>2× watch time</b>
-        </>
-      ),
-      aria: "Edits drive two times watch time",
-    },
-    {
-      icon: Eye,
-      text: (
-        <>
-          <b>7M+ views</b> driven
-        </>
-      ),
-      aria: "Over seven million views driven",
-    },
-    {
-      icon: TrendingUp,
-      text: (
-        <>
-          Shorts → <b>predictable growth</b>
-        </>
-      ),
-      aria: "Shorts lead to predictable growth",
-    },
-  ];
-
-  // Single item renderer
-  const RowItem = ({ Icon, children, aria }) => (
-    <span className="inline-flex items-center gap-2">
-      <Icon size={14} style={{ color: "var(--text)" }} aria-hidden="true" />
-      <span aria-label={aria} style={{ color: "var(--text)" }} className="align-middle">
-        {children}
-      </span>
-    </span>
-  );
-
-  return (
-    <AnimatePresence initial={false}>
-      {show && (
-        <motion.div
-          className="w-full trustbar"
-          style={{
-            background: "var(--header-bg)",
-            boxShadow: "inset 0 1px 0 var(--border)",
-          }}
-          role="region"
-          aria-label="Trust indicators"
-          initial={reduceMotion ? false : { y: -8, opacity: 0 }}
-          animate={reduceMotion ? { opacity: 1 } : { y: 0, opacity: 1 }}
-          exit={reduceMotion ? { opacity: 0 } : { y: -8, opacity: 0 }}
-          transition={{ duration: 0.22, ease: "easeOut" }}
-        >
-          <div
-            className="overflow-hidden select-none"
-            style={{
-              WebkitMaskImage:
-                "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-              maskImage:
-                "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-            }}
-          >
-            {reduceMotion ? (
-              // Static line for reduced motion
-              <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm">
-                <div className="inline-flex items-center gap-6 md:gap-10">
-                  {items.map((it, i) => (
-                    <RowItem key={i} Icon={it.icon} aria={it.aria}>
-                      {it.text}
-                    </RowItem>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // Smooth marquee
-              <div className="relative py-1.5">
-                <div className="marquee-row whitespace-nowrap will-change-transform">
-                  <span className="inline-flex items-center gap-6 md:gap-10 px-3 text-[11px] md:text-sm">
-                    {items.map((it, i) => (
-                      <React.Fragment key={`a-${i}`}>
-                        <RowItem Icon={it.icon} aria={it.aria}>
-                          {it.text}
-                        </RowItem>
-                        {/* fancy separator */}
-                        <span
-                          className="mx-1 md:mx-2 h-[6px] w-[6px] rounded-full inline-block"
-                          style={{
-                            background:
-                              "radial-gradient(circle at 30% 30%, #fff 0%, #ffd9c7 45%, rgba(255,255,255,0) 70%)",
-                            boxShadow: "0 0 10px rgba(232,80,2,0.35)",
-                            opacity: 0.85,
-                          }}
-                          aria-hidden="true"
-                        />
-                      </React.Fragment>
-                    ))}
-                  </span>
-                  {/* duplicate for seamless loop */}
-                  <span className="inline-flex items-center gap-6 md:gap-10 px-3 text-[11px] md:text-sm">
-                    {items.map((it, i) => (
-                      <React.Fragment key={`b-${i}`}>
-                        <RowItem Icon={it.icon} aria={it.aria}>
-                          {it.text}
-                        </RowItem>
-                        <span
-                          className="mx-1 md:mx-2 h-[6px] w-[6px] rounded-full inline-block"
-                          style={{
-                            background:
-                              "radial-gradient(circle at 30% 30%, #fff 0%, #ffd9c7 45%, rgba(255,255,255,0) 70%)",
-                            boxShadow: "0 0 10px rgba(232,80,2,0.35)",
-                            opacity: 0.85,
-                          }}
-                          aria-hidden="true"
-                        />
-                      </React.Fragment>
-                    ))}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <style>{`
-            .marquee-row {
-              display: inline-block;
-              min-width: 200%;
-              animation: ss-marquee 28s linear infinite;
-            }
-            /* Pause on hover (desktop) for readability */
-            @media (hover: hover) and (pointer: fine) {
-              .trustbar:hover .marquee-row { animation-play-state: paused; }
-            }
-            @keyframes ss-marquee {
-              0%   { transform: translateX(0); }
-              100% { transform: translateX(-50%); }
-            }
-            /* Subtle speed-up on small screens to keep density comfortable */
-            @media (max-width: 480px) {
-              .marquee-row { animation-duration: 24s; }
-            }
-          `}</style>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
-
-
 /* ===================== Quick Quote Bar (compact + proximity hide near form + event listener) ===================== */
 const QuickQuoteBar = ({ onBook }) => {
   const [showBase, setShowBase] = React.useState(false);   // base “scrolled enough” rule
@@ -1020,7 +204,6 @@ const QuickQuoteBar = ({ onBook }) => {
   // (NEW) Hide when the lead form broadcasts visibility
   React.useEffect(() => {
     const onLead = (e) => {
-      // if the form is visible, force-hide the bar (mirrors your snippet)
       setForcedHidden(Boolean(e?.detail?.visible));
     };
     document.addEventListener("leadform:visible", onLead);
@@ -1050,7 +233,6 @@ const QuickQuoteBar = ({ onBook }) => {
       const el = target();
       if (!el) return setNearForm(false);
       const rect = el.getBoundingClientRect();
-      // if the form’s top is within ~220px of the viewport top, hide the QQB
       setNearForm(rect.top < 220 && rect.bottom > 0);
     };
     check();
@@ -1145,13 +327,17 @@ const HeroSection = ({ isDark, onAudit }) => {
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const handleAudit = () => {
-    try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "hero" } })); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "hero" } }));
+    } catch {}
     onAudit?.();
   };
 
   const handleSeeWork = (e) => {
     e.preventDefault();
-    try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "see_work", src: "hero" } })); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "see_work", src: "hero" } }));
+    } catch {}
     const el = document.querySelector("#work");
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1159,18 +345,14 @@ const HeroSection = ({ isDark, onAudit }) => {
   /* ---------- Efficient, adaptive star field ---------- */
   const fieldRef = React.useRef(null);
 
-  // Count adapts to width, theme & DPR; disabled if reduced motion
+  // Count adapts to width & DPR; disabled if reduced motion
   const stars = React.useMemo(() => {
     if (reduceMotion) return [];
     const w = typeof window !== "undefined" ? window.innerWidth : 1280;
     const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
 
-    // base by breakpoint
-    if (w < 340) return []; // ultra-small devices: skip completely
+    if (w < 340) return [];
     let base = w < 380 ? 0 : w < 640 ? 8 : w < 1024 ? 10 : 12;
-    // fewer in light
-    if (!isDark) base = Math.max(0, Math.round(base * 0.6));
-    // dampen on high DPR phones
     base = Math.round(base / (dpr > 1.5 ? 1.25 : 1));
 
     const out = [];
@@ -1182,13 +364,13 @@ const HeroSection = ({ isDark, onAudit }) => {
         delay: (i * 0.35) % 2.2,
         drift: i % 2 ? 6 : -6,
         rot: (i * 37) % 360,
-        speed: 2.3 + ((i % 5) * 0.35), // varied twinkle duration
+        speed: 2.3 + ((i % 5) * 0.35),
       });
     }
     return out;
-  }, [reduceMotion, isDark]);
+  }, [reduceMotion]);
 
-  // Pause star animations when hero is off-screen (battery friendly)
+  // Pause star animations when hero is off-screen
   React.useEffect(() => {
     if (!fieldRef.current || !("IntersectionObserver" in window)) return;
     const root = fieldRef.current;
@@ -1201,18 +383,13 @@ const HeroSection = ({ isDark, onAudit }) => {
     return () => io.disconnect();
   }, []);
 
-  const bgDark =
-    "radial-gradient(900px 500px at -10% -20%, rgba(232,80,2,.14), transparent 55%), radial-gradient(900px 500px at 110% -20%, rgba(232,80,2,.08), transparent 55%), linear-gradient(180deg,#0b0b0b,#101010 45%, #0e0e0e)";
-  const bgLight =
-    "linear-gradient(180deg,#fffdfb 0%,#fff8f2 55%, #fff3ea 100%), radial-gradient(750px 420px at 0% -10%, rgba(232,80,2,.06), transparent 60%), radial-gradient(750px 420px at 100% -10%, rgba(255,147,87,.05), transparent 60%)";
-
   return (
     <section
       id="home"
-      className="relative overflow-hidden"
+      className="relative overflow-hidden bg-hero"
       style={{
         padding: "clamp(80px, 9vw, 132px) 0 clamp(40px, 6vw, 96px)",
-        background: isDark ? bgDark : bgLight,
+        background: "var(--hero-bg)",
         contentVisibility: "auto",
         containIntrinsicSize: "900px",
       }}
@@ -1224,7 +401,7 @@ const HeroSection = ({ isDark, onAudit }) => {
           {stars.map((s, i) => (
             <span
               key={i}
-              className={`ss-sparkle ${isDark ? "dark" : "light"}`}
+              className="ss-sparkle"
               style={{
                 top: s.top,
                 left: s.left,
@@ -1233,7 +410,7 @@ const HeroSection = ({ isDark, onAudit }) => {
                 ["--drift"]: `${s.drift}px`,
                 ["--rot"]: `${s.rot}deg`,
                 ["--spd"]: `${s.speed}s`,
-                opacity: isDark ? 0.9 : 0.7,
+                opacity: 0.88,
               }}
             />
           ))}
@@ -1241,11 +418,11 @@ const HeroSection = ({ isDark, onAudit }) => {
       )}
 
       <div className="container mx-auto px-4 relative z-[1]">
-        {/* Headline: perfect wrap on phones */}
+        {/* Headline */}
         <motion.h1
           className="font-bold font-['Poppins'] tracking-tight hero-title"
           style={{
-            color: isDark ? "#fff" : "#0b0b0b",
+            color: "var(--text)",
             lineHeight: 1.06,
             letterSpacing: "-.01em",
             fontSize: "clamp(2rem, 6.6vw, 4.5rem)",
@@ -1263,7 +440,7 @@ const HeroSection = ({ isDark, onAudit }) => {
         <motion.p
           className="mt-3 sm:mt-4"
           style={{
-            color: isDark ? "rgba(255,255,255,.80)" : "rgba(20,20,20,.75)",
+            color: "var(--text-muted)",
             fontSize: "clamp(1rem, 2.2vw, 1.25rem)",
             maxWidth: "52ch",
           }}
@@ -1274,12 +451,12 @@ const HeroSection = ({ isDark, onAudit }) => {
           We help creators win attention with thumb-stopping thumbnails, hook-first shorts, and clean long-form edits.
         </motion.p>
 
-        {/* Proof strip (stacks on phones) */}
+        {/* Proof strip */}
         <motion.div
           className="mt-5 sm:mt-6 rounded-2xl"
           style={{
-            background: isDark ? "rgba(255,255,255,.06)" : "rgba(0,0,0,.045)",
-            border: `1px solid ${isDark ? "rgba(255,255,255,.12)" : "rgba(0,0,0,.08)"}`,
+            background: "color-mix(in oklab, var(--surface) 92%, transparent)",
+            border: "1px solid var(--border)",
             backdropFilter: "blur(6px)",
           }}
           initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
@@ -1288,22 +465,19 @@ const HeroSection = ({ isDark, onAudit }) => {
           aria-label="Social proof"
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-0 px-4 py-3">
-            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
-              {/* star icon */}
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: "var(--text)" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
               </svg>
               Rated <strong className="ml-1">4.7/5</strong>
             </div>
-            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
-              {/* users icon */}
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: "var(--text)" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M20 21v-2a4 4 0 0 0-3-3.87M12 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm6-1a3 3 0 1 0-6 0 3 3 0 0 0 6 0Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
               <strong>20+ active</strong> clients
             </div>
-            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: isDark ? "rgba(255,255,255,.92)" : "#1a1a1a" }}>
-              {/* eye icon */}
+            <div className="flex items-center justify-start sm:justify-center gap-2 text-sm" style={{ color: "var(--text)" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5"/>
               </svg>
@@ -1330,10 +504,10 @@ const HeroSection = ({ isDark, onAudit }) => {
             onClick={handleSeeWork}
             className="w-full sm:w-auto rounded-full px-6 py-3 font-semibold text-center"
             style={{
-              color: isDark ? "#fff" : "#0b0b0b",
-              border: `1px solid ${isDark ? "rgba(255,255,255,.22)" : "rgba(0,0,0,.16)"}`,
-              background: isDark ? "rgba(255,255,255,.03)" : "rgba(255,255,255,.75)",
-              boxShadow: isDark ? "0 2px 10px rgba(0,0,0,.25)" : "0 4px 12px rgba(0,0,0,.06)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              background: "var(--surface-alt)",
+              boxShadow: "0 4px 12px rgba(0,0,0,.06)",
             }}
             whileHover={reduceMotion ? {} : { y: -2 }}
             whileTap={reduceMotion ? {} : { scale: 0.98 }}
@@ -1343,7 +517,7 @@ const HeroSection = ({ isDark, onAudit }) => {
         </div>
       </div>
 
-      {/* Styles: tone-aware sparkles + efficiency guards */}
+      {/* Styles: base sparkle anim only (theme handled in index.css) */}
       <style>{`
         .hero-title { text-wrap: balance; }
 
@@ -1361,36 +535,6 @@ const HeroSection = ({ isDark, onAudit }) => {
             ss-drift 7s ease-in-out infinite alternate var(--delay,0s);
         }
 
-        /* Dark: bright cross-flare, screen blend */
-        .ss-sparkle.dark {
-          background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,147,87,.95) 45%, rgba(255,147,87,0) 70%);
-          filter: drop-shadow(0 2px 12px rgba(232,80,2,.35));
-          mix-blend-mode: screen;
-        }
-        .ss-sparkle.dark::before,
-        .ss-sparkle.dark::after {
-          content: ""; position: absolute; left: 50%; top: 50%;
-          width: calc(var(--s,12px) * 1.8); height: 2px; border-radius: 2px;
-          transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent); opacity: .85;
-        }
-        .ss-sparkle.dark::after { transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .75; }
-
-        /* Light: soft amber glint, multiply blend (no harsh white) */
-        .ss-sparkle.light {
-          background: radial-gradient(circle, rgba(232,80,2,.55) 0%, rgba(232,80,2,.25) 38%, rgba(232,80,2,0) 68%);
-          filter: blur(.2px);
-          mix-blend-mode: multiply;
-        }
-        .ss-sparkle.light::before,
-        .ss-sparkle.light::after {
-          content: ""; position: absolute; left: 50%; top: 50%;
-          width: calc(var(--s,12px) * 1.4); height: 1px; border-radius: 2px;
-          transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-          background: linear-gradient(90deg, transparent, rgba(232,80,2,.45), transparent); opacity: .6;
-        }
-        .ss-sparkle.light::after { transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .5; }
-
         @keyframes ss-twinkle {
           0%   { opacity: 0; transform: translate3d(0,0,0) scale(.82); }
           20%  { opacity: 1; }
@@ -1403,7 +547,6 @@ const HeroSection = ({ isDark, onAudit }) => {
           100% { filter: drop-shadow(0 3px 14px rgba(232,80,2,.25)); }
         }
 
-        /* Respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
           .ss-sparkle { animation: none !important; opacity: .55; }
         }
@@ -1411,8 +554,6 @@ const HeroSection = ({ isDark, onAudit }) => {
     </section>
   );
 };
-
-
 
   /* ===================== Services ===================== */
 const ServicesSection = () => {
@@ -1714,7 +855,6 @@ const ProofSection = () => (
         Real thumbnails revamped for higher clarity, curiosity, and clicks.
       </p>
 
-      {/* Your existing BeforeAfter slider (keep your current props) */}
       <BeforeAfter
         before={SAMPLE_BEFORE}
         after={SAMPLE_AFTER}
@@ -1725,7 +865,6 @@ const ProofSection = () => (
         height={720}
       />
 
-      {/* outcome-first caption */}
       <div className="mt-4 text-sm md:text-base font-medium" style={{ color: "var(--text)" }}>
         <span className="px-2 py-1 rounded-full text-white" style={{ background: "var(--orange)" }}>+62% CTR</span>{" "}
         after packaging revamp (real campaign)
@@ -1807,7 +946,6 @@ const CreatorsWorkedWith = ({ isDark }) => {
         </div>
       </div>
 
-      {/* local keyframes */}
       <style>{`
         @keyframes marq { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         @media (prefers-reduced-motion: reduce) { ul[class*="animate-"] { animation: none !important; } }
@@ -1988,14 +1126,12 @@ const TestimonialsSection = ({ isDark }) => {
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
 
   // ---- DATA -----------------------------------------------------------------
-  // Put your local assets under /src/assets/testimonials/*
-  // For analytics cards, use screenshots exported from YT Studio (CTR / AVD / views).
   const TESTIMONIALS = [
     {
       type: "video",
       name: "Kamz Inkzone",
       tag: "Gaming • 172K",
-      avatarKey: "kamz", // if you use your img(key) helper elsewhere
+      avatarKey: "kamz",
       video: "/assets/testimonials/kamz-45s.mp4",
       poster: "/assets/testimonials/kamz-thumb.jpg",
       quote:
@@ -2246,7 +1382,6 @@ const TestimonialsSection = ({ isDark }) => {
 
             <div className="relative w-full aspect-video">
               {reduceMotion ? (
-                // If user prefers reduced motion, don’t autoplay
                 <video
                   src={openVideo.video}
                   poster={openVideo.poster}
@@ -2289,7 +1424,6 @@ const TestimonialsSection = ({ isDark }) => {
 
   /* ===================== FAQ ===================== */
 const FAQSection = () => {
-  // NEW: local state for which item is open (null = none)
   const [openFAQ, setOpenFAQ] = React.useState(null);
 
   const faqs = [
@@ -2300,7 +1434,6 @@ const FAQSection = () => {
     { question: 'How do you ensure quality?', answer: 'Multi-stage QA with client reviews and revisions until you’re fully satisfied.' },
   ];
 
-  // NEW: simple toggle handler
   const toggleFAQ = (idx) => setOpenFAQ((cur) => (cur === idx ? null : idx));
 
   return (
@@ -2345,7 +1478,6 @@ const FAQSection = () => {
                   style={{ color: 'var(--text)' }}
                 >
                   <span className="font-semibold">{f.question}</span>
-                  {/* simple icon without extra imports */}
                   <span
                     aria-hidden="true"
                     className={`inline-flex h-6 w-6 items-center justify-center rounded-full border`}
@@ -2373,86 +1505,6 @@ const FAQSection = () => {
             );
           })}
         </div>
-      </div>
-    </section>
-  );
-};
-
-
-/* ===================== Inline Lead Capture ===================== */
-const InlineLeadCapture = ({ onOpenCalendly }) => {
-  const [channel, setChannel] = useState("");
-  const [contact, setContact] = useState("");
-  const [err, setErr] = useState("");
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setErr("");
-
-    const clean = (s) => s.trim();
-    const ch = clean(channel);
-    const ct = clean(contact);
-    if (!ch || !ct) { setErr("Please add your channel link and a contact."); return; }
-
-    track("lead_submit", { src: "inline_form" });
-
-    // Prefer your existing Calendly modal
-    const note = `Channel: ${ch}\nContact: ${ct}`;
-    window.__SS_PREFILL__ = { note }; // app can read this if desired
-
-    if (typeof onOpenCalendly === "function") {
-      onOpenCalendly(); // e.g., setShowCalendly(true)
-    } else {
-      // safe fallback: open public Calendly (replace with your link)
-      const url = new URL("https://calendly.com/shinelstudios/free-audit");
-      url.searchParams.set("utm_source", "homepage");
-      url.searchParams.set("utm_medium", "inline_form");
-      url.searchParams.set("utm_campaign", "lead_capture");
-      window.open(url.toString(), "_blank", "noopener,noreferrer");
-    }
-  };
-
-  return (
-    <section aria-labelledby="leadcap-heading" className="py-12" style={{ background: "var(--surface)" }}>
-      <div className="container mx-auto px-4">
-        <h2 id="leadcap-heading" className="text-2xl md:text-3xl font-bold font-['Poppins'] mb-4" style={{ color: "var(--text)" }}>
-          Get a free 15-min channel audit
-        </h2>
-        <p className="text-sm md:text-base mb-5" style={{ color: "var(--text-muted)" }}>
-          Quick form. We’ll review your packaging, CTR, and retention opportunities.
-        </p>
-
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_auto] gap-3">
-          <input
-            value={channel}
-            onChange={(e) => setChannel(e.target.value)}
-            type="url"
-            inputMode="url"
-            placeholder="YouTube channel URL"
-            aria-label="YouTube channel URL"
-            className="rounded-xl px-4 py-3 border"
-            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text)" }}
-          />
-          <input
-            value={contact}
-            onChange={(e) => setContact(e.target.value)}
-            type="text"
-            placeholder="WhatsApp or email"
-            aria-label="WhatsApp or email"
-            className="rounded-xl px-4 py-3 border"
-            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text)" }}
-          />
-          <button
-            type="submit"
-            className="rounded-xl px-6 py-3 font-semibold text-white"
-            style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 24px rgba(232,80,2,.35)" }}
-            aria-label="Submit for free audit"
-          >
-            Get Free Audit
-          </button>
-        </form>
-
-        {err && <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{err}</div>}
       </div>
     </section>
   );
@@ -2714,7 +1766,6 @@ const QuickLeadForm = () => {
     if (!el || !("IntersectionObserver" in window)) return;
     const io = new IntersectionObserver(
       (entries) => {
-        // visible when we’re approaching the section; tune rootMargin to taste
         const v = entries.some((e) => e.isIntersecting && e.intersectionRatio > 0.08);
         document.dispatchEvent(new CustomEvent("leadform:visible", { detail: { visible: v } }));
       },
@@ -2928,20 +1979,6 @@ const QuickLeadForm = () => {
   );
 };
 
-/* ===================== Sticky Mobile CTA ===================== */
-const StickyCTA = ({ onAudit }) => (
-  <div className="fixed bottom-3 inset-x-3 z-40 md:hidden">
-    <button
-      onClick={() => { track("cta_click_audit", { src: "sticky" }); onAudit?.(); }}
-      className="w-full rounded-full py-3 px-5 text-white font-semibold shadow-lg"
-      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-      aria-label="Get Free Audit"
-    >
-      Get Free Audit — Free 15-min
-    </button>
-  </div>
-);
-
 /* ===================== Contact ===================== */
 const ContactCTA = () => (
   <section
@@ -3086,126 +2123,6 @@ const StickyMobileCTA = ({ onAudit }) => {
 };
 
 
-/* ===================== Footer (bigger zoomed logo + animations) ===================== */
-const Footer = () => (
-  <motion.footer
-    initial="hidden"
-    whileInView="visible"
-    viewport={{ once: true }}
-    variants={animations.staggerParent}
-    className="py-16"
-    style={{ background: '#000', color: '#fff' }}
-  >
-    <div className="container mx-auto px-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-        
-        {/* Column 1 - Logo + Socials */}
-        <motion.div variants={animations.fadeUp}>
-          <div className="flex items-center gap-3 mb-4">
-            <motion.img
-              src={logoLight}
-              alt="Shinel Studios"
-              className="h-20 w-auto object-contain select-none"
-              initial={{ scale: 1.2, opacity: 0 }}
-              animate={{ scale: 1.4, opacity: 1 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              whileHover={{ scale: 1.5 }}
-              style={{
-                transformOrigin: 'left center',
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.45))',
-              }}
-            />
-          </div>
-          <p className="mb-6" style={{ color: 'rgba(255,255,255,0.7)' }}>
-            We're a creative media agency dedicated to helping creators and brands shine through unforgettable visuals and strategic content.
-          </p>
-          <div className="flex gap-4">
-            {[
-              { icon: <Instagram size={28} />, href: "https://www.instagram.com/shinel.studios/?hl=en", label: "Instagram" },
-              { icon: <Twitter size={28} />,   href: "https://linktr.ee/ShinelStudios",               label: "Linktree"  },
-              { icon: <Linkedin size={28} />,  href: "https://www.linkedin.com/company/shinel-studios/posts/?feedView=all", label: "LinkedIn" }
-            ].map((s, i) => (
-            <motion.a
-            key={i}
-            href={s.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={s.label}
-            whileHover={{ scale: 1.2, y: -2 }}
-            whileTap={{ scale: 0.95 }}
-            style={{ color: 'rgba(255,255,255,0.8)' }}
-            >
-              {s.icon}
-              </motion.a>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Column 2 - Links */}
-        <motion.div variants={animations.fadeUp}>
-          <h3 className="text-xl font-bold mb-6 font-['Poppins']">Quick Links</h3>
-          <ul className="space-y-3">
-            {['Home','Services','Testimonials','Contact'].map((t) => (
-              <li key={t}>
-                <a
-                  href={`#${t.toLowerCase()}`}
-                  className="transition-colors hover:text-[var(--orange)]"
-                  style={{ color: 'rgba(255,255,255,0.7)' }}
-                >
-                  {t}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-
-        {/* Column 3 - Newsletter */}
-        <motion.div variants={animations.fadeUp}>
-          <h3 className="text-xl font-bold mb-6 font-['Poppins']">Stay Updated</h3>
-          <p className="mb-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
-            Subscribe to get the latest tips and updates from our team.
-          </p>
-          <div className="flex gap-2">
-            <motion.input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: '#fff',
-              }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            />
-            <motion.button
-              className="px-6 py-3 rounded-lg text-white"
-              style={{ background: 'var(--orange)' }}
-              whileHover={{ scale: 1.05, boxShadow: '0px 8px 18px rgba(232,80,2,0.4)' }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Mail size={20} />
-            </motion.button>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Footer Bottom */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="mt-12 pt-8 text-center"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}
-      >
-        <p>© 2025 Shinel Studios™ — Where Ideas Shine. All rights reserved.</p>
-      </motion.div>
-    </div>
-  </motion.footer>
-);
-
 /* ===================== SEO Schema (Organization + WebSite + Service + FAQPage) ===================== */
 const SeoSchema = () => {
   useEffect(() => {
@@ -3284,75 +2201,62 @@ const SeoSchema = () => {
   return null;
 };
 
-/* ===================== Page Component (wrapper + section order) ===================== */
+/* ===================== Page Component (conversion-first order) ===================== */
 function ShinelStudiosHomepage() {
-  const [isDark, setIsDark] = React.useState(() =>
-  document.documentElement.classList.contains('dark'));
+  const isDark = document.documentElement.classList.contains("dark");
   const [showCalendly, setShowCalendly] = React.useState(false);
 
-  // Analytics + mobile text-sizing stability (NOW inside a component)
-  React.useEffect(() => {
-  const root = document.documentElement;
-  root.classList.toggle('dark', isDark);
-  try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch {}
-
-  // keep the browser UI color in sync (nice polish)
-  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
-
-  const fav = document.getElementById('favicon');
-  if (fav) fav.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
-}, [isDark]);
-
-
   return (
-    <div className={`min-h-screen ${isDark ? 'dark' : ''} overflow-x-hidden`}>
-      {/* 1) Navigation */}
-      <Header isDark={isDark} setIsDark={setIsDark} />
+    <div className="min-h-screen overflow-x-hidden">
+      {/* SEO first so bots see it immediately */}
+      <SeoSchema />
 
-      {/* 2) Hero (has proof pill + main CTA) */}
+      {/* 1) Hero (core pitch + primary CTA) */}
       <HeroSection isDark={isDark} onAudit={() => setShowCalendly(true)} />
 
-      {/* 3) Subtle top hook */}
+      {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
       <QuickQuoteBar onBook={() => setShowCalendly(true)} />
 
-      {/* 4) Before/After proof */}
-      <ProofSection />
-
-      {/* 5) Logos (single premium row) */}
+      {/* 3) Social proof (logos) */}
       <CreatorsWorkedWith isDark={isDark} />
 
-      {/* 6) Outcomes then services */}
-      <CaseStudies />
+      {/* 4) Proof (Before/After CTR lift) */}
+      <ProofSection />
+
+      {/* 5) Services (clear value props) */}
       <ServicesSection />
 
-      {/* 7) Testimonials wall */}
+      {/* 6) Case studies (wins) */}
+      <CaseStudies />
+
+      {/* 7) Testimonials (human proof + analytics) */}
       <TestimonialsSection isDark={isDark} />
 
-
-      {/* 8) Inline lead capture just before pricing */}
-      <QuickLeadForm />
-
-      {/* 9) Pricing */}
+      {/* 8) Pricing (intent toggles + Calendly CTA) */}
       <Pricing onOpenCalendly={() => setShowCalendly(true)} />
 
-      {/* 10) Objections + process */}
+      {/* 8.5) ROI / CTR Lift Calculator (lead magnet → micro-commitment) */}
+      <RoiCalculator onBook={() => setShowCalendly(true)} />
+
+      {/* 9) Single lead capture (no duplicate forms) */}
+      <QuickLeadForm />
+
+      {/* 10) FAQ (objection handling) */}
       <FAQSection />
+
+      {/* 11) Process (how it works) */}
       <ProcessSection />
 
-      {/* 11) Final CTA + footer */}
+      {/* 12) Final CTA (secondary contact paths) */}
       <ContactCTA />
-      <Footer />
 
-      {/* Utilities */}
-      <StickyMobileCTA />
-      <SeoSchema />
+      {/* Utilities / overlays */}
+      <StickyMobileCTA onAudit={() => setShowCalendly(true)} />
       <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
+      <ExitIntentModal pdfUrl="/lead/thumbnail-checklist.pdf" />
     </div>
   );
 }
 
-/* ==== keep this at the very end of the file, at top level (NOT inside any block) ==== */
 export default ShinelStudiosHomepage;
-
 

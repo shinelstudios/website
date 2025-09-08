@@ -9,35 +9,81 @@
   :root{
     --orange:#E85002;
 
+    /* light tokens */
     --text:#0D0D0D;
     --text-muted:rgba(13,13,13,.70);
-
     --surface:#FFFFFF;
     --surface-alt:#FFF9F6;
     --border:rgba(0,0,0,.10);
-
     --header-bg:rgba(255,255,255,.85);
+
+    /* LIGHT hero background (multi-layer, richer) */
+    --hero-bg:
+      linear-gradient(180deg,#fffdfb 0%,#fff8f2 55%, #fff3ea 100%),
+      radial-gradient(750px 420px at 0% -10%, rgba(232,80,2,.06), transparent 60%),
+      radial-gradient(750px 420px at 100% -10%, rgba(255,147,87,.05), transparent 60%);
+
     --nav-link:rgba(13,13,13,.72);
-    --nav-hover:#E85002;
+    --nav-hover:var(--orange);
 
     /* Layout tokens */
-    --header-h: 72px;               /* used by scroll-padding */
-    --radius-xl: 16px;
-    --shadow-soft: 0 8px 24px rgba(0,0,0,.10);
+    --header-h:72px;                /* updated dynamically by header via ResizeObserver */
+    --radius-xl:16px;
+    --shadow-soft:0 8px 24px rgba(0,0,0,.10);
   }
+
   .dark{
+    /* dark tokens */
     --text:#FFFFFF;
     --text-muted:rgba(255,255,255,.72);
-
     --surface:#0F0F0F;
     --surface-alt:#0B0B0B;
     --border:rgba(255,255,255,.12);
-
     --header-bg:rgba(0,0,0,.75);
+
+    /* DARK hero background (multi-layer, richer) */
+    --hero-bg:
+      radial-gradient(900px 500px at -10% -20%, rgba(232,80,2,.14), transparent 55%),
+      radial-gradient(900px 500px at 110% -20%, rgba(232,80,2,.08), transparent 55%),
+      linear-gradient(180deg,#0b0b0b,#101010 45%, #0e0e0e);
+
     --nav-link:rgba(255,255,255,.72);
     --nav-hover:#FFB48A;
 
-    --shadow-soft: 0 8px 24px rgba(0,0,0,.30);
+    --shadow-soft:0 8px 24px rgba(0,0,0,.30);
+  }
+
+  /* Sparkles theme (driven by .dark on <html>) */
+  :root:not(.dark) .ss-sparkle {
+    background: radial-gradient(circle, rgba(232,80,2,.55) 0%, rgba(232,80,2,.25) 38%, rgba(232,80,2,0) 68%);
+    filter: blur(.2px);
+    mix-blend-mode: multiply;
+  }
+  :root:not(.dark) .ss-sparkle::before,
+  :root:not(.dark) .ss-sparkle::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: calc(var(--s,12px) * 1.4); height: 1px; border-radius: 2px;
+    transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+    background: linear-gradient(90deg, transparent, rgba(232,80,2,.45), transparent); opacity: .6;
+  }
+  :root:not(.dark) .ss-sparkle::after {
+    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .5;
+  }
+
+  :root.dark .ss-sparkle {
+    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,147,87,.95) 45%, rgba(255,147,87,0) 70%);
+    filter: drop-shadow(0 2px 12px rgba(232,80,2,.35));
+    mix-blend-mode: screen;
+  }
+  :root.dark .ss-sparkle::before,
+  :root.dark .ss-sparkle::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: calc(var(--s,12px) * 1.8); height: 2px; border-radius: 2px;
+    transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent); opacity: .85;
+  }
+  :root.dark .ss-sparkle::after {
+    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .75;
   }
 
   html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
@@ -56,9 +102,12 @@
     :focus-visible{outline-width:3px;}
   }
 
-  /* Large screens: slightly wider than Tailwind’s default container */
+  /* Slightly wider container than Tailwind’s default */
   @media (min-width:1440px){.container{max-width:1180px}}
   @media (min-width:1680px){.container{max-width:1280px}}
+
+  /* Gentle theme transitions (auto-disabled in reduced motion) */
+  *{transition:color .15s linear, background-color .15s linear, border-color .15s linear;}
 
   /* Reduced motion: calm everything */
   @media (prefers-reduced-motion: reduce){
@@ -77,7 +126,7 @@
     box-shadow:var(--shadow-soft);
   }
 
-  /* Brand button (use on all CTAs for consistent motion) */
+  /* Brand button (use on all CTAs) */
   .btn-brand{
     @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold text-white
            focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
@@ -118,43 +167,40 @@
 
 /* ===================== Utilities (scrollbars, targets, marquee) ===================== */
 @layer utilities{
-  /* Optional helper: use directly in markup (don’t @apply this inside other classes) */
   .ring-focus{
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
   }
 
-  /* Hide horizontal/vertical scrollbars where needed */
   .no-scrollbar{ scrollbar-width:none; }
   .no-scrollbar::-webkit-scrollbar{ display:none; }
 
-  /* Minimum comfortable tap targets */
   .touch-target{ min-height:44px; min-width:44px; }
 
-  /* Optional soft edge fade (works on dark/light with mask) */
+  /* Quick helper to apply the hero background */
+  .bg-hero{ background: var(--hero-bg); }
+
   .mask-fade-x{
     -webkit-mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
             mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
   }
 
-  /* -------- Creators marquee utilities (perf + a11y) -------- */
+  /* -------- Marquee utilities (perf + a11y) -------- */
   @keyframes marquee-rtl{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-50%,0,0)}}
   @keyframes marquee-ltr{0%{transform:translate3d(-50%,0,0)}100%{transform:translate3d(0,0,0)}}
 
   .marquee-viewport{ @apply relative overflow-hidden; }
   .marquee-track{
     display:inline-flex;
-    width:max-content;              /* wider than viewport */
-    will-change:transform;          /* GPU hint */
+    width:max-content;
+    will-change:transform;
   }
   .animate-marquee-rtl{ animation: marquee-rtl var(--marquee-duration,40s) linear infinite; }
   .animate-marquee-ltr{ animation: marquee-ltr var(--marquee-duration,40s) linear infinite; }
 
-  /* Pause marquee on hover for pointer devices only */
   @media (hover:hover) and (pointer:fine){
     .marquee-hover-pause:hover .marquee-track{ animation-play-state:paused; }
   }
 
-  /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce){
     .animate-marquee-rtl,
     .animate-marquee-ltr{
