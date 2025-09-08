@@ -8,10 +8,10 @@ const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || "").trim
 /**
  * ExitIntentModal
  * Props:
- *  - pdfUrl: string (required)  -> e.g. "/lead/thumbnail-checklist.pdf"
- *  - onSubmit?: (email) => Promise<void> | void   (optional custom handler)
+ *  - pdfUrl: string (required)
+ *  - onSubmit?: (email) => Promise<void> | void
  *  - cooldownDays?: number (default 7)
- *  - armAfterMs?: number (default 15000)  // wait before arming exit listener
+ *  - armAfterMs?: number (default 15000)
  */
 export default function ExitIntentModal({
   pdfUrl,
@@ -24,43 +24,62 @@ export default function ExitIntentModal({
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false); // success state
+  const [done, setDone] = useState(false);
   const emailRef = useRef(null);
 
   // LS keys
   const LS_KEY_LAST = "ei:lastSeen";
-  const LS_KEY_OPT  = "ei:optedOut"; // set when user dismisses or after success
+  const LS_KEY_OPT  = "ei:optedOut";           // persistent opt-out
+  const SS_SUPPRESS = "ei:suppress:session";   // session-only guard (this visit)
 
   const desktop = useMemo(() => {
     if (typeof window === "undefined") return true;
     return window.innerWidth >= 1024; // desktop-only
   }, []);
 
-  // Respect cooldown + wait before arming
+  const isSuppressedNow = () => {
+    try {
+      if (sessionStorage.getItem(SS_SUPPRESS) === "1") return true;
+      if (localStorage.getItem(LS_KEY_OPT) === "1") return true;
+      const last = Number(localStorage.getItem(LS_KEY_LAST) || 0);
+      const cool = cooldownDays * 24 * 60 * 60 * 1000;
+      if (last && Date.now() - last < cool) return true;
+    } catch {}
+    return false;
+  };
+
+  // Respect cooldown/optout + wait before arming
   useEffect(() => {
     if (!desktop) return;
-
-    const now = Date.now();
-    try {
-      const last = Number(localStorage.getItem(LS_KEY_LAST) || 0);
-      const optedOut = localStorage.getItem(LS_KEY_OPT) === "1";
-      const cool = cooldownDays * 24 * 60 * 60 * 1000;
-      if (optedOut || (last && now - last < cool)) return; // suppress
-    } catch {}
-
+    if (isSuppressedNow()) return;
     const t = setTimeout(() => setArmed(true), armAfterMs);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desktop, cooldownDays, armAfterMs]);
 
-  // Don’t open while other overlays are active (Calendly or lead form)
+  // Keep tabs in sync (if user opts out in another tab)
   useEffect(() => {
-    if (!armed) return;
+    const onStorage = (e) => {
+      if (!e) return;
+      if (e.key === LS_KEY_OPT && e.newValue === "1") {
+        setOpen(false);
+        setArmed(false);
+        try { sessionStorage.setItem(SS_SUPPRESS, "1"); } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Attach exit-intent only when armed and not suppressed
+  useEffect(() => {
+    if (!armed || isSuppressedNow()) return;
 
     let blocked = false;
     const setBlocked = (v) => (blocked = v);
     const calOpen = () => setBlocked(true);
     const calClose = () => setBlocked(false);
-    const leadVis = (e) => setBlocked(Boolean(e?.detail?.visible));
+    const leadVis  = (e) => setBlocked(Boolean(e?.detail?.visible));
 
     window.addEventListener("calendly:open", calOpen);
     window.addEventListener("calendly:close", calClose);
@@ -68,10 +87,14 @@ export default function ExitIntentModal({
 
     const onOut = (e) => {
       if (blocked || open) return;
+      // Re-check suppression every time (close may have set it)
+      if (isSuppressedNow()) return;
+
       // Robust "leaving to tab bar" detection
       const toTopEdge = (e.clientY <= 0) || (e.relatedTarget === null && e.clientY < 10);
       if (toTopEdge) openModal();
     };
+
     document.addEventListener("mouseout", onOut);
 
     return () => {
@@ -83,7 +106,7 @@ export default function ExitIntentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [armed, open]);
 
-  // Close on Esc (also opts out)
+  // Close on Esc (also suppress)
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") close(); };
@@ -97,11 +120,13 @@ export default function ExitIntentModal({
     setTimeout(() => emailRef.current?.focus(), 50);
   };
 
-  // >>> opt-out on ANY close by default <<<
+  // Close and suppress (session + optional persistent)
   const close = (optOut = true) => {
     setOpen(false);
+    setArmed(false); // <— disarm immediately so it won't re-open this visit
     try {
-      if (optOut) localStorage.setItem(LS_KEY_OPT, "1");
+      sessionStorage.setItem(SS_SUPPRESS, "1"); // never show again this session
+      if (optOut) localStorage.setItem(LS_KEY_OPT, "1"); // never show again persistently
     } catch {}
   };
 
@@ -119,7 +144,6 @@ export default function ExitIntentModal({
       if (onSubmit) {
         await onSubmit(val);
       } else {
-        // Default: POST to optional endpoint, else mailto
         const endpoint = import.meta?.env?.VITE_LEAD_ENDPOINT;
         if (endpoint) {
           await fetch(endpoint, {
@@ -135,7 +159,10 @@ export default function ExitIntentModal({
         }
       }
       setDone(true);
-      try { localStorage.setItem(LS_KEY_OPT, "1"); } catch {}
+      try {
+        localStorage.setItem(LS_KEY_OPT, "1");   // persist opt-in/opt-out
+        sessionStorage.setItem(SS_SUPPRESS, "1"); // and suppress this session
+      } catch {}
     } catch {
       setError("Could not submit right now. Please try again.");
     } finally {
@@ -144,6 +171,7 @@ export default function ExitIntentModal({
   };
 
   if (!desktop) return null;
+  if (isSuppressedNow()) return null; // hard guard against any render race
 
   return (
     <AnimatePresence>
@@ -167,7 +195,7 @@ export default function ExitIntentModal({
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
               <b style={{ color: "var(--text)" }}>Grab the thumbnail checklist (PDF)</b>
               <button
-                onClick={() => close()}  // X closes & opts out
+                onClick={() => close()}  // X closes & suppresses
                 className="p-1 rounded hover:bg-black/5"
                 aria-label="Close"
                 style={{ color: "var(--text)" }}
@@ -216,7 +244,7 @@ export default function ExitIntentModal({
                     <span>No spam. 1-click unsubscribe.</span>
                     <button
                       type="button"
-                      onClick={() => close(true)}  // “No thanks” opts out
+                      onClick={() => close(true)}  // “No thanks” suppresses
                       className="underline opacity-80 hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -253,7 +281,7 @@ function SuccessState({ pdfUrl, onClose }) {
         </a>
         <button
           className="rounded-xl py-3 font-semibold"
-          onClick={onClose}          // Close & opt out
+          onClick={onClose}
           style={{ color: "var(--text)", border: "1px solid var(--border)", background: "var(--surface-alt)" }}
         >
           Close
