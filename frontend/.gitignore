@@ -7,18 +7,43 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+.pnpm-debug.log
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+.cache/
+
+# Local env files
 *.local
+.env
+.env.*.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare / Wrangler
+.wrangler/
+worker/.wrangler/
+worker/dist/
+worker/node_modules/
+worker/.dev.vars
+
+# OS specific
+Thumbs.db
+
+# Optional: lock files (if you use only one, remove the others)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
