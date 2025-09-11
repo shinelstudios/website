@@ -11,6 +11,8 @@ import GFX from "./components/GFX.jsx";
 import Thumbnails from "./components/Thumbnails.jsx";
 import Shorts from "./components/Shorts.jsx";
 import LoginPage from "./components/LoginPage.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import AIStudioPage from "./components/AIStudioPage.jsx";
 
 /* Scroll to hash targets (e.g., /#services) with header offset */
 function ScrollToHash() {
@@ -89,7 +91,10 @@ function LegalPage({ kind = "privacy" }) {
           ))}
         </div>
 
-        <div className="mt-8 rounded-xl p-4" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
+        <div
+          className="mt-8 rounded-xl p-4"
+          style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+        >
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Questions? Email{" "}
             <a href="mailto:hello@shinelstudiosofficial.com" style={{ color: "var(--orange)" }}>
@@ -117,7 +122,9 @@ function Layout() {
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
-      try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
+      try {
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+      } catch {}
 
       // Update plain theme-color (mobile address bar)
       let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
@@ -130,13 +137,14 @@ function Layout() {
 
       // Swap favicons if present
       const lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
-      const darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
+      const darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
       if (lightIcon && darkIcon) {
         lightIcon.disabled = !!isDark;
-        darkIcon.disabled  = !isDark;
+        darkIcon.disabled = !isDark;
       }
       const fallback = document.getElementById("favicon");
-      if (fallback) fallback.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
+      if (fallback)
+        fallback.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
     });
   }, [isDark]);
 
@@ -167,6 +175,16 @@ export default function App() {
         <Route path="/thumbnails" element={<Thumbnails />} />
         <Route path="/shorts" element={<Shorts />} />
         <Route path="/login" element={<LoginPage />} />
+
+        {/* 🔒 Protected AI Studio */}
+        <Route
+          path="/studio"
+          element={
+            <ProtectedRoute>
+              <AIStudioPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* NEW: legal pages used by footer links */}
         <Route path="/privacy" element={<LegalPage kind="privacy" />} />

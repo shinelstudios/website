@@ -18,50 +18,43 @@ const animations = {
   },
 };
 
-// --- simple auth lookup (adapt keys to your app) ---
+// --- auth lookup (reads JWT token + stored email) ---
 function getAuthState() {
   try {
-    return Boolean(
-      localStorage.getItem("authToken") ||
-        localStorage.getItem("user") ||
-        localStorage.getItem("loggedIn")
-    );
+    const token = localStorage.getItem("token");
+    const email = localStorage.getItem("userEmail");
+    return token ? { isAuthed: true, email: email || null } : { isAuthed: false, email: null };
   } catch {
-    return false;
+    return { isAuthed: false, email: null };
   }
 }
 
 // --- favicon swapper ---
 function setFaviconForTheme(isDark) {
   try {
-    const light = document.querySelector(
-      'link[rel="icon"][data-theme="light"]'
-    );
-    const dark = document.querySelector('link[rel="icon"][data-theme="dark"]');
+    const light = document.querySelector('link[rel="icon"][data-theme="light"]');
+    const dark  = document.querySelector('link[rel="icon"][data-theme="dark"]');
     if (light && dark) {
       light.disabled = !!isDark;
-      dark.disabled = !isDark;
+      dark.disabled  = !isDark;
     }
     const link =
       document.getElementById("favicon") ||
       document.querySelector('link[rel="icon"]:not([data-theme])');
-    if (link)
-      link.href = isDark
-        ? "/favicon-dark-32x32.png"
-        : "/favicon-light-32x32.png";
+    if (link) link.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
   } catch {}
 }
 
-const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
+const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
   const [workOpen, setWorkOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hovered, setHovered] = useState(null);
   const [active, setActive] = useState("Home");
   const [progress, setProgress] = useState(0);
-  const [isAuthed, setIsAuthed] = useState(
-    typeof isAuthedProp === "boolean" ? isAuthedProp : getAuthState()
-  );
+
+  // ✅ store full auth object { isAuthed, email }
+  const [auth, setAuth] = useState(getAuthState());
 
   const headerRef = useRef(null);
   const menuPanelRef = useRef(null);
@@ -69,26 +62,20 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
   const [headerH, setHeaderH] = useState(76);
 
   // keep favicons in sync with current theme
-  useEffect(() => {
-    setFaviconForTheme(isDark);
-  }, [isDark]);
+  useEffect(() => { setFaviconForTheme(isDark); }, [isDark]);
 
   // auth change listeners (other tabs / app events)
   useEffect(() => {
-    const onStorage = () => setIsAuthed(getAuthState());
-    const onAuthEvent = () => setIsAuthed(getAuthState());
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("auth:changed", onAuthEvent);
+    const update = () => setAuth(getAuthState());
+    window.addEventListener("storage", update);
+    window.addEventListener("auth:changed", update);
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("auth:changed", onAuthEvent);
+      window.removeEventListener("storage", update);
+      window.removeEventListener("auth:changed", update);
     };
   }, []);
 
-  const sections = useMemo(
-    () => ["Home", "Services", "Testimonials", "Contact"],
-    []
-  );
+  const sections = useMemo(() => ["Home", "Services", "Testimonials", "Contact"], []);
   const workItems = useMemo(
     () => [
       { name: "Video Editing", href: "/video-editing" },
@@ -115,8 +102,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
       lastAnimFrame.current = null;
     };
     const onScroll = () => {
-      if (lastAnimFrame.current == null)
-        lastAnimFrame.current = requestAnimationFrame(tick);
+      if (lastAnimFrame.current == null) lastAnimFrame.current = requestAnimationFrame(tick);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
@@ -142,10 +128,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
     return () => ro.disconnect();
   }, []);
   useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--header-offset",
-      `${headerH}px`
-    );
+    document.documentElement.style.setProperty("--header-offset", `${headerH}px`);
   }, [headerH]);
 
   // section highlight (homepage)
@@ -185,8 +168,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
   useEffect(() => {
     const onDocDown = (e) => {
       if (!workOpen) return;
-      if (workRef.current && !workRef.current.contains(e.target))
-        setWorkOpen(false);
+      if (workRef.current && !workRef.current.contains(e.target)) setWorkOpen(false);
     };
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -212,9 +194,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
     };
     lock(isMenuOpen);
     if (isMenuOpen && menuPanelRef.current) {
-      const first = menuPanelRef.current.querySelector(
-        'a,button,[tabindex]:not([tabindex="-1"])'
-      );
+      const first = menuPanelRef.current.querySelector('a,button,[tabindex]:not([tabindex="-1"])');
       first?.focus?.();
     }
     return () => lock(false);
@@ -324,22 +304,14 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
                 onClick={() => setWorkOpen((v) => !v)}
                 initial={false}
                 style={{
-                  color:
-                    hovered === "Our Work" || workOpen
-                      ? "var(--nav-hover)"
-                      : "var(--nav-link)",
+                  color: hovered === "Our Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)",
                 }}
                 whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
                 transition={{ duration: 0.22 }}
               >
                 <span className="nav-ink" aria-hidden="true" />
                 <span className="nav-label">Our Work</span>
-                <ChevronDown
-                  size={16}
-                  className={`transition-transform ${
-                    workOpen ? "rotate-180" : ""
-                  }`}
-                />
+                <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
               </motion.button>
 
               <AnimatePresence>
@@ -390,30 +362,41 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
 
           {/* right actions */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Login buttons when not authed */}
-            {!isAuthed && (
-              <Link
-                to="/login"
-                className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{
-                  background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                }}
-              >
-                Login
-              </Link>
-            )}
-            {!isAuthed && (
-              <motion.div className="hidden md:inline-flex">
+            {/* ✅ when authed: show email + logout */}
+            {auth.isAuthed ? (
+              <div className="hidden md:flex items-center gap-3 text-sm" style={{ color: "var(--text)" }}>
+                <span className="font-semibold">{auth.email || "Signed in"}</span>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("userEmail");
+                    window.dispatchEvent(new Event("auth:changed"));
+                  }}
+                  className="underline text-xs"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Login buttons when NOT authed */}
                 <Link
                   to="/login"
-                  className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                  style={{
-                    background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                  }}
+                  className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
                 >
                   Login
                 </Link>
-              </motion.div>
+                <motion.div className="hidden md:inline-flex">
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  >
+                    Login
+                  </Link>
+                </motion.div>
+              </>
             )}
 
             {/* theme toggle */}
@@ -422,9 +405,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
                 onClick={() => setIsDark((v) => !v)}
                 className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                 style={{
-                  background: isDark
-                    ? "rgba(255,255,255,0.1)"
-                    : "rgba(0,0,0,0.06)",
+                  background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
                   color: "var(--text)",
                 }}
                 aria-label="Toggle theme"
@@ -529,7 +510,8 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
                   </div>
                 </div>
 
-                {!isAuthed && (
+                {/* Hide Login button when authed */}
+                {!auth.isAuthed && (
                   <div className="mt-6 flex flex-col gap-2">
                     <Link
                       to="/login"
@@ -543,6 +525,24 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: isAuthedProp }) => {
                     >
                       Login
                     </Link>
+                  </div>
+                )}
+
+                {/* If authed on mobile, show small email + logout */}
+                {auth.isAuthed && (
+                  <div className="mt-6 flex items-center justify-between px-1 text-sm" style={{ color: "var(--text)" }}>
+                    <span className="truncate max-w-[60%]">{auth.email || "Signed in"}</span>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("userEmail");
+                        window.dispatchEvent(new Event("auth:changed"));
+                        setIsMenuOpen(false);
+                      }}
+                      className="underline text-xs"
+                    >
+                      Logout
+                    </button>
                   </div>
                 )}
               </nav>
@@ -563,7 +563,6 @@ const TrustBar = () => {
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  // ✏️ Edit this list any time
   const lines = [
     "Rated 4.7/5 by creators",
     "20+ active clients across niches",
@@ -593,10 +592,7 @@ const TrustBar = () => {
         aria-label="Trust indicators"
       >
         <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm select-none">
-          <div
-            className="inline-flex items-center gap-6 md:gap-10"
-            style={{ color: "var(--text)" }}
-          >
+          <div className="inline-flex items-center gap-6 md:gap-10" style={{ color: "var(--text)" }}>
             {lines.map((t, i) => (
               <span key={i}>{t}</span>
             ))}
@@ -621,10 +617,8 @@ const TrustBar = () => {
       <div
         className="overflow-hidden select-none"
         style={{
-          WebkitMaskImage:
-            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-          maskImage:
-            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+          WebkitMaskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+          maskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
         }}
       >
         <div className="marquee-track">
