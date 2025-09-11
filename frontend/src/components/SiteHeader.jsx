@@ -41,13 +41,12 @@ function getAuthState() {
     const exp = typeof payload.exp === "number" ? payload.exp : null;
     const now = Math.floor(Date.now() / 1000);
     if (exp && exp <= now) {
-      // expired → clear
       localStorage.removeItem("token");
       return { isAuthed: false, email: null, role: null, exp: null };
     }
 
     const email = (payload.email || emailLS || "").trim() || null;
-    const role = (payload.role || null);
+    const role = payload.role || null;
     return { isAuthed: true, email, role, exp };
   } catch {
     return { isAuthed: false, email: null, role: null, exp: null };
@@ -58,19 +57,22 @@ function getAuthState() {
 function setFaviconForTheme(isDark) {
   try {
     const light = document.querySelector('link[rel="icon"][data-theme="light"]');
-    const dark  = document.querySelector('link[rel="icon"][data-theme="dark"]');
+    const dark = document.querySelector('link[rel="icon"][data-theme="dark"]');
     if (light && dark) {
       light.disabled = !!isDark;
-      dark.disabled  = !isDark;
+      dark.disabled = !isDark;
     }
     const link =
       document.getElementById("favicon") ||
       document.querySelector('link[rel="icon"]:not([data-theme])');
-    if (link) link.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
+    if (link)
+      link.href = isDark
+        ? "/favicon-dark-32x32.png"
+        : "/favicon-light-32x32.png";
   } catch {}
 }
 
-const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
+const SiteHeader = ({ isDark, setIsDark }) => {
   const [workOpen, setWorkOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -78,7 +80,6 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
   const [active, setActive] = useState("Home");
   const [progress, setProgress] = useState(0);
 
-  // ✅ store full auth object { isAuthed, email, role, exp }
   const [auth, setAuth] = useState(getAuthState());
 
   const headerRef = useRef(null);
@@ -86,10 +87,10 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
   const workRef = useRef(null);
   const [headerH, setHeaderH] = useState(76);
 
-  // keep favicons in sync with current theme
-  useEffect(() => { setFaviconForTheme(isDark); }, [isDark]);
+  useEffect(() => {
+    setFaviconForTheme(isDark);
+  }, [isDark]);
 
-  // auth change listeners (other tabs / app events)
   useEffect(() => {
     const update = () => setAuth(getAuthState());
     window.addEventListener("storage", update);
@@ -100,7 +101,6 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     };
   }, []);
 
-  // proactively clear if token expires while user keeps page open
   useEffect(() => {
     if (!auth.isAuthed || !auth.exp) return;
     const now = Math.floor(Date.now() / 1000);
@@ -112,7 +112,10 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     return () => clearTimeout(t);
   }, [auth.isAuthed, auth.exp]);
 
-  const sections = useMemo(() => ["Home", "Services", "Testimonials", "Contact"], []);
+  const sections = useMemo(
+    () => ["Home", "Services", "Testimonials", "Contact"],
+    []
+  );
   const workItems = useMemo(
     () => [
       { name: "Video Editing", href: "/video-editing" },
@@ -127,7 +130,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  // scroll progress + shadow
+  // scroll progress
   const lastAnimFrame = useRef(null);
   useEffect(() => {
     const tick = () => {
@@ -139,7 +142,8 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
       lastAnimFrame.current = null;
     };
     const onScroll = () => {
-      if (lastAnimFrame.current == null) lastAnimFrame.current = requestAnimationFrame(tick);
+      if (lastAnimFrame.current == null)
+        lastAnimFrame.current = requestAnimationFrame(tick);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
@@ -151,7 +155,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     };
   }, []);
 
-  // observe header height so <main> offset stays correct
+  // header height
   useEffect(() => {
     if (!headerRef.current || !("ResizeObserver" in window)) return;
     const ro = new ResizeObserver((entries) => {
@@ -168,7 +172,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     document.documentElement.style.setProperty("--header-offset", `${headerH}px`);
   }, [headerH]);
 
-  // section highlight (homepage)
+  // section highlight
   useEffect(() => {
     const ids = sections.map((s) => s.toLowerCase());
     const io = new IntersectionObserver(
@@ -201,11 +205,12 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     };
   }, [sections]);
 
-  // close dropdown on outside / ESC
+  // close dropdown on outside / ESC (fixed double click by using pointerdown)
   useEffect(() => {
     const onDocDown = (e) => {
       if (!workOpen) return;
-      if (workRef.current && !workRef.current.contains(e.target)) setWorkOpen(false);
+      if (workRef.current && !workRef.current.contains(e.target))
+        setWorkOpen(false);
     };
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -213,17 +218,15 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
         setIsMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", onDocDown);
-    document.addEventListener("touchstart", onDocDown, { passive: true });
+    document.addEventListener("pointerdown", onDocDown);
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.removeEventListener("mousedown", onDocDown);
-      document.removeEventListener("touchstart", onDocDown);
+      document.removeEventListener("pointerdown", onDocDown);
       document.removeEventListener("keydown", onEsc);
     };
   }, [workOpen]);
 
-  // lock body scroll for mobile menu
+  // lock body scroll
   useEffect(() => {
     const lock = (v) => {
       document.documentElement.style.overflow = v ? "hidden" : "";
@@ -231,37 +234,39 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
     };
     lock(isMenuOpen);
     if (isMenuOpen && menuPanelRef.current) {
-      const first = menuPanelRef.current.querySelector('a,button,[tabindex]:not([tabindex="-1"])');
+      const first = menuPanelRef.current.querySelector(
+        'a,button,[tabindex]:not([tabindex="-1"])'
+      );
       first?.focus?.();
     }
     return () => lock(false);
   }, [isMenuOpen]);
 
-  // ===== NavLink: works from ANY page (routes to / or /#hash) =====
   const NavLink = ({ label, to, active }) => {
     const isActive = active === label;
     return (
-      <Link
-        to={to}
-        className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-        aria-current={isActive ? "page" : undefined}
-        data-navlink
-        onMouseEnter={() => setHovered(label)}
-        onMouseLeave={() => setHovered(null)}
-        style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
-      >
-        <span className="nav-ink" aria-hidden="true" />
-        <span className="sr-only">{isActive ? "Current section: " : ""}</span>
-        <span aria-hidden="true" className="nav-label">
-          {label}
-        </span>
-      </Link>
+      <motion.div whileHover={{ y: -1 }} transition={{ duration: 0.15 }}>
+        <Link
+          to={to}
+          className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+          aria-current={isActive ? "page" : undefined}
+          onMouseEnter={() => setHovered(label)}
+          onMouseLeave={() => setHovered(null)}
+          style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
+        >
+          <span
+            className="absolute left-0 -bottom-1 h-0.5 bg-[var(--orange)] transition-all duration-200"
+            style={{
+              width: isActive || hovered === label ? "100%" : "0%",
+            }}
+          />
+          <span>{label}</span>
+        </Link>
+      </motion.div>
     );
   };
 
   const logoSrc = isDark ? logoLight : logoDark;
-
-  // avatar initial from email
   const avatarInitial = (auth.email || "?").trim().charAt(0).toUpperCase();
 
   return (
@@ -280,15 +285,18 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
           borderBottom: "0",
           boxShadow: scrolled ? "0 6px 18px rgba(0,0,0,0.16)" : "none",
           transition: "box-shadow .25s ease",
-          overflow: "visible", // make room for TrustBar
+          overflow: "visible",
         }}
       >
-        {/* progress */}
+        {/* progress bar */}
         <div
           className="absolute left-0 top-0 h-[1px] origin-left"
           style={{
             width: "100%",
-            transform: `scaleX(${Math.max(0, Math.min(1, progress / 100)).toFixed(4)})`,
+            transform: `scaleX(${Math.max(
+              0,
+              Math.min(1, progress / 100)
+            ).toFixed(4)})`,
             background: "linear-gradient(90deg, var(--orange), #ff9357)",
             transition: reduceMotion ? "none" : "transform .08s linear",
           }}
@@ -303,16 +311,17 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
             paddingBottom: scrolled ? "4px" : "8px",
             transition: "padding .2s ease",
             position: "relative",
-            zIndex: 3, // ensure nav & dropdown sit above TrustBar
+            zIndex: 3,
           }}
           aria-label="Primary"
         >
+          {/* logo */}
           <Link
             to="/"
             className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
           >
             <div className="h-12 flex items-center overflow-visible">
-              <img
+              <motion.img
                 src={logoSrc}
                 alt="Shinel Studios"
                 className="h-full w-auto object-contain block select-none"
@@ -322,6 +331,9 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                   filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
                 }}
                 decoding="async"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
               />
             </div>
           </Link>
@@ -333,7 +345,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
             <NavLink label="Testimonials" to="/#testimonials" active={active} />
             <NavLink label="Contact" to="/#contact" active={active} />
 
-            {/* Our Work dropdown */}
+            {/* dropdown */}
             <div className="relative" ref={workRef}>
               <motion.button
                 type="button"
@@ -344,14 +356,23 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                 onClick={() => setWorkOpen((v) => !v)}
                 initial={false}
                 style={{
-                  color: hovered === "Our Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)",
+                  color:
+                    hovered === "Our Work" || workOpen
+                      ? "var(--nav-hover)"
+                      : "var(--nav-link)",
                 }}
-                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
+                whileHover={
+                  reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }
+                }
                 transition={{ duration: 0.22 }}
               >
-                <span className="nav-ink" aria-hidden="true" />
                 <span className="nav-label">Our Work</span>
-                <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${
+                    workOpen ? "rotate-180" : ""
+                  }`}
+                />
               </motion.button>
 
               <AnimatePresence>
@@ -367,7 +388,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                     style={{
                       background: "var(--surface)",
                       border: "1px solid var(--border)",
-                      zIndex: 4, // panel itself above everything in header
+                      zIndex: 4,
                     }}
                   >
                     {workItems.map((item) => (
@@ -379,7 +400,8 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                         className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                         style={{
                           color: "var(--orange)",
-                          transition: "color .15s, background-color .15s",
+                          transition:
+                            "color .15s, background-color .15s",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = "var(--orange)";
@@ -402,35 +424,47 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
 
           {/* right actions */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* when authed: show Studio link + email pill + logout */}
             {auth.isAuthed ? (
               <>
                 <Link
                   to="/studio"
                   className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                  style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  style={{
+                    background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                  }}
                 >
                   Studio
                 </Link>
                 <div
                   className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full"
-                  style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-                  title={auth.role ? `Role: ${auth.role}` : undefined}
+                  style={{
+                    background: "var(--surface-alt)",
+                    border: "1px solid var(--border)",
+                  }}
                 >
                   <div
                     aria-hidden
                     className="h-6 w-6 rounded-full grid place-items-center text-[11px] font-bold"
-                    style={{ background: "var(--orange)", color: "#fff" }}
+                    style={{
+                      background: "var(--orange)",
+                      color: "#fff",
+                    }}
                   >
                     {avatarInitial || "?"}
                   </div>
-                  <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     {auth.email || "Signed in"}
                   </span>
                   {auth.role && (
                     <span
                       className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
-                      style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                      style={{
+                        background: "var(--border)",
+                        color: "var(--text-muted)",
+                      }}
                     >
                       {auth.role}
                     </span>
@@ -450,11 +484,12 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
               </>
             ) : (
               <>
-                {/* Login buttons when NOT authed */}
                 <Link
                   to="/login"
                   className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                  style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  style={{
+                    background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                  }}
                 >
                   Login
                 </Link>
@@ -462,7 +497,9 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                   <Link
                     to="/login"
                     className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                    style={{
+                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                    }}
                   >
                     Login
                   </Link>
@@ -471,25 +508,27 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
             )}
 
             {/* theme toggle */}
-            {typeof isDark === "boolean" && typeof setIsDark === "function" && (
-              <motion.button
-                onClick={() => setIsDark((v) => !v)}
-                className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{
-                  background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
-                  color: "var(--text)",
-                }}
-                aria-label="Toggle theme"
-                aria-pressed={isDark}
-                whileTap={{ rotate: 180, scale: 0.9 }}
-                transition={{ duration: 0.4 }}
-                title={isDark ? "Switch to light theme" : "Switch to dark theme"}
-              >
-                {isDark ? <Sun size={20} /> : <Moon size={20} />}
-              </motion.button>
-            )}
+            {typeof isDark === "boolean" &&
+              typeof setIsDark === "function" && (
+                <motion.button
+                  onClick={() => setIsDark((v) => !v)}
+                  className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  style={{
+                    background: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.06)",
+                    color: "var(--text)",
+                  }}
+                  aria-label="Toggle theme"
+                  aria-pressed={isDark}
+                  whileTap={{ rotate: 180, scale: 0.9 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  {isDark ? <Sun size={20} /> : <Moon size={20} />}
+                </motion.button>
+              )}
 
-            {/* mobile menu */}
+            {/* mobile menu toggle */}
             <motion.button
               onClick={() => setIsMenuOpen((s) => !s)}
               className="md:hidden p-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
@@ -582,7 +621,6 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                   </div>
                 </div>
 
-                {/* If not authed, show login; otherwise show compact identity + logout */}
                 {!auth.isAuthed ? (
                   <div className="mt-6 flex flex-col gap-2">
                     <Link
@@ -611,11 +649,16 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                       >
                         {avatarInitial || "?"}
                       </div>
-                      <span className="truncate max-w-[60%]">{auth.email || "Signed in"}</span>
+                      <span className="truncate max-w-[60%]">
+                        {auth.email || "Signed in"}
+                      </span>
                       {auth.role && (
                         <span
                           className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
-                          style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                          style={{
+                            background: "var(--border)",
+                            color: "var(--text-muted)",
+                          }}
                         >
                           {auth.role}
                         </span>
@@ -639,14 +682,13 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
           )}
         </AnimatePresence>
 
-        {/* TrustBar — sits below nav in stacking order */}
         <TrustBar />
       </motion.header>
     </motion.div>
   );
 };
 
-// --- TrustBar: always visible with right-to-left marquee ---
+// --- TrustBar ---
 const TrustBar = () => {
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -677,11 +719,12 @@ const TrustBar = () => {
           position: "relative",
           zIndex: 2,
         }}
-        role="region"
-        aria-label="Trust indicators"
       >
         <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm select-none">
-          <div className="inline-flex items-center gap-6 md:gap-10" style={{ color: "var(--text)" }}>
+          <div
+            className="inline-flex items-center gap-6 md:gap-10"
+            style={{ color: "var(--text)" }}
+          >
             {lines.map((t, i) => (
               <span key={i}>{t}</span>
             ))}
@@ -698,16 +741,16 @@ const TrustBar = () => {
         background: "var(--header-bg)",
         boxShadow: "inset 0 1px 0 var(--border)",
         position: "relative",
-        zIndex: 2, // below nav (z-index 3) & dropdown (4)
+        zIndex: 2,
       }}
-      role="region"
-      aria-label="Trust indicators"
     >
       <div
         className="overflow-hidden select-none"
         style={{
-          WebkitMaskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-          maskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+          WebkitMaskImage:
+            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
+          maskImage:
+            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
         }}
       >
         <div className="marquee-track">

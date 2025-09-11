@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
+import LoadingScreen from "./components/LoadingScreen.jsx"; // 🔄 brand splash while lazy chunks load
 
 // Lazy-load heavier pages for better initial performance
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
@@ -194,7 +195,8 @@ function Logout() {
 
 export default function App() {
   return (
-    <React.Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+    // 🔥 Use branded loader while lazy chunks are fetched & rendered
+    <React.Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<ShinelStudiosHomepage />} />
