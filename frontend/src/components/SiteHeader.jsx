@@ -18,14 +18,39 @@ const animations = {
   },
 };
 
+// --- tiny jwt parser (no crypto) to read { email, role, exp } ---
+function parseJwt(token) {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decodeURIComponent(escape(json)));
+  } catch {
+    return null;
+  }
+}
+
 // --- auth lookup (reads JWT token + stored email) ---
 function getAuthState() {
   try {
     const token = localStorage.getItem("token");
-    const email = localStorage.getItem("userEmail");
-    return token ? { isAuthed: true, email: email || null } : { isAuthed: false, email: null };
+    const emailLS = localStorage.getItem("userEmail");
+    if (!token) return { isAuthed: false, email: null, role: null, exp: null };
+
+    const payload = parseJwt(token) || {};
+    const exp = typeof payload.exp === "number" ? payload.exp : null;
+    const now = Math.floor(Date.now() / 1000);
+    if (exp && exp <= now) {
+      // expired → clear
+      localStorage.removeItem("token");
+      return { isAuthed: false, email: null, role: null, exp: null };
+    }
+
+    const email = (payload.email || emailLS || "").trim() || null;
+    const role = (payload.role || null);
+    return { isAuthed: true, email, role, exp };
   } catch {
-    return { isAuthed: false, email: null };
+    return { isAuthed: false, email: null, role: null, exp: null };
   }
 }
 
@@ -53,7 +78,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
   const [active, setActive] = useState("Home");
   const [progress, setProgress] = useState(0);
 
-  // ✅ store full auth object { isAuthed, email }
+  // ✅ store full auth object { isAuthed, email, role, exp }
   const [auth, setAuth] = useState(getAuthState());
 
   const headerRef = useRef(null);
@@ -74,6 +99,18 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
       window.removeEventListener("auth:changed", update);
     };
   }, []);
+
+  // proactively clear if token expires while user keeps page open
+  useEffect(() => {
+    if (!auth.isAuthed || !auth.exp) return;
+    const now = Math.floor(Date.now() / 1000);
+    const ms = Math.max(0, (auth.exp - now) * 1000 + 1000);
+    const t = setTimeout(() => {
+      localStorage.removeItem("token");
+      window.dispatchEvent(new Event("auth:changed"));
+    }, ms);
+    return () => clearTimeout(t);
+  }, [auth.isAuthed, auth.exp]);
 
   const sections = useMemo(() => ["Home", "Services", "Testimonials", "Contact"], []);
   const workItems = useMemo(
@@ -224,6 +261,9 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
 
   const logoSrc = isDark ? logoLight : logoDark;
 
+  // avatar initial from email
+  const avatarInitial = (auth.email || "?").trim().charAt(0).toUpperCase();
+
   return (
     <motion.div className="fixed top-0 w-full z-50">
       <motion.header
@@ -362,21 +402,52 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
 
           {/* right actions */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* ✅ when authed: show email + logout */}
+            {/* when authed: show Studio link + email pill + logout */}
             {auth.isAuthed ? (
-              <div className="hidden md:flex items-center gap-3 text-sm" style={{ color: "var(--text)" }}>
-                <span className="font-semibold">{auth.email || "Signed in"}</span>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem("token");
-                    localStorage.removeItem("userEmail");
-                    window.dispatchEvent(new Event("auth:changed"));
-                  }}
-                  className="underline text-xs"
+              <>
+                <Link
+                  to="/studio"
+                  className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
                 >
-                  Logout
-                </button>
-              </div>
+                  Studio
+                </Link>
+                <div
+                  className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full"
+                  style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                  title={auth.role ? `Role: ${auth.role}` : undefined}
+                >
+                  <div
+                    aria-hidden
+                    className="h-6 w-6 rounded-full grid place-items-center text-[11px] font-bold"
+                    style={{ background: "var(--orange)", color: "#fff" }}
+                  >
+                    {avatarInitial || "?"}
+                  </div>
+                  <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                    {auth.email || "Signed in"}
+                  </span>
+                  {auth.role && (
+                    <span
+                      className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+                      style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                    >
+                      {auth.role}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem("token");
+                      localStorage.removeItem("userEmail");
+                      window.dispatchEvent(new Event("auth:changed"));
+                    }}
+                    className="ml-2 underline text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Logout
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 {/* Login buttons when NOT authed */}
@@ -448,7 +519,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                 borderTop: "1px solid var(--border)",
                 paddingBottom: "max(12px, env(safe-area-inset-bottom))",
                 position: "relative",
-                zIndex: 3, // ensure panel is above TrustBar
+                zIndex: 3,
               }}
               role="dialog"
               aria-modal="true"
@@ -461,6 +532,7 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                     { label: "Services", to: "/#services" },
                     { label: "Testimonials", to: "/#testimonials" },
                     { label: "Contact", to: "/#contact" },
+                    ...(auth.isAuthed ? [{ label: "Studio", to: "/studio" }] : []),
                   ].map((item) => (
                     <li key={item.label}>
                       <Link
@@ -510,8 +582,8 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                   </div>
                 </div>
 
-                {/* Hide Login button when authed */}
-                {!auth.isAuthed && (
+                {/* If not authed, show login; otherwise show compact identity + logout */}
+                {!auth.isAuthed ? (
                   <div className="mt-6 flex flex-col gap-2">
                     <Link
                       to="/login"
@@ -526,12 +598,29 @@ const SiteHeader = ({ isDark, setIsDark, isAuthenticated: _isAuthedProp }) => {
                       Login
                     </Link>
                   </div>
-                )}
-
-                {/* If authed on mobile, show small email + logout */}
-                {auth.isAuthed && (
-                  <div className="mt-6 flex items-center justify-between px-1 text-sm" style={{ color: "var(--text)" }}>
-                    <span className="truncate max-w-[60%]">{auth.email || "Signed in"}</span>
+                ) : (
+                  <div
+                    className="mt-6 flex items-center justify-between px-1 text-sm"
+                    style={{ color: "var(--text)" }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        aria-hidden
+                        className="h-6 w-6 rounded-full grid place-items-center text-[11px] font-bold"
+                        style={{ background: "var(--orange)", color: "#fff" }}
+                      >
+                        {avatarInitial || "?"}
+                      </div>
+                      <span className="truncate max-w-[60%]">{auth.email || "Signed in"}</span>
+                      {auth.role && (
+                        <span
+                          className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
+                          style={{ background: "var(--border)", color: "var(--text-muted)" }}
+                        >
+                          {auth.role}
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={() => {
                         localStorage.removeItem("token");

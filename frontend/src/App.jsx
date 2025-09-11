@@ -5,14 +5,15 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 
-import ShinelStudiosHomepage from "./components/ShinelStudiosHomepage.jsx";
-import VideoEditing from "./components/VideoEditing.jsx";
-import GFX from "./components/GFX.jsx";
-import Thumbnails from "./components/Thumbnails.jsx";
-import Shorts from "./components/Shorts.jsx";
-import LoginPage from "./components/LoginPage.jsx";
-import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import AIStudioPage from "./components/AIStudioPage.jsx";
+// Lazy-load heavier pages for better initial performance
+const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
+const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
+const GFX = React.lazy(() => import("./components/GFX.jsx"));
+const Thumbnails = React.lazy(() => import("./components/Thumbnails.jsx"));
+const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
+const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
+const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
+const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
 
 /* Scroll to hash targets (e.g., /#services) with header offset */
 function ScrollToHash() {
@@ -165,33 +166,72 @@ function Layout() {
   );
 }
 
+/* If already logged in, skip /login and go to /studio */
+function RedirectIfAuthed({ children }) {
+  const isAuthed = React.useMemo(() => {
+    try {
+      return Boolean(localStorage.getItem("token"));
+    } catch {
+      return false;
+    }
+  }, []);
+  return isAuthed ? <Navigate to="/studio" replace /> : children;
+}
+
+/* Simple /logout route: clears token and bounces home */
+function Logout() {
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("rememberMe");
+    } catch {}
+    // notify header
+    window.dispatchEvent(new Event("auth:changed"));
+  }, []);
+  return <Navigate to="/" replace />;
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<ShinelStudiosHomepage />} />
-        <Route path="/video-editing" element={<VideoEditing />} />
-        <Route path="/gfx" element={<GFX />} />
-        <Route path="/thumbnails" element={<Thumbnails />} />
-        <Route path="/shorts" element={<Shorts />} />
-        <Route path="/login" element={<LoginPage />} />
+    <React.Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<ShinelStudiosHomepage />} />
+          <Route path="/video-editing" element={<VideoEditing />} />
+          <Route path="/gfx" element={<GFX />} />
+          <Route path="/thumbnails" element={<Thumbnails />} />
+          <Route path="/shorts" element={<Shorts />} />
 
-        {/* 🔒 Protected AI Studio */}
-        <Route
-          path="/studio"
-          element={
-            <ProtectedRoute>
-              <AIStudioPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/login"
+            element={
+              <RedirectIfAuthed>
+                <LoginPage />
+              </RedirectIfAuthed>
+            }
+          />
 
-        {/* NEW: legal pages used by footer links */}
-        <Route path="/privacy" element={<LegalPage kind="privacy" />} />
-        <Route path="/terms" element={<LegalPage kind="terms" />} />
+          {/* 🔒 Protected AI Studio */}
+          <Route
+            path="/studio"
+            element={
+              <ProtectedRoute>
+                <AIStudioPage />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+          {/* Convenience logout route */}
+          <Route path="/logout" element={<Logout />} />
+
+          {/* NEW: legal pages used by footer links */}
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </React.Suspense>
   );
 }

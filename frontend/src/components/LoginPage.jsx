@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Menu, X, ChevronDown, Eye, EyeOff, Loader2, AlertCircle,
+  Menu, X, ChevronDown, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft,
 } from "lucide-react";
 
 import logoLight from "../assets/logo_light.png";
@@ -54,7 +54,7 @@ const Header = () => {
               alt="Shinel Studios"
               className="h-full w-auto object-contain select-none"
               style={{
-                transform: "scale(2.8)",
+                transform: "scale(2.2)",
                 transformOrigin: "left center",
                 filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))",
               }}
@@ -85,10 +85,9 @@ const Header = () => {
               {workOpen && (
                 <motion.div
                   id="work-menu"
-                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  initial={{ opacity: 0, scale: 0.98, y: 6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.18 } }}
+                  exit={{ opacity: 0, scale: 0.98, y: 6, transition: { duration: 0.15 } }}
                   className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
                   style={{ background: "#0F0F0F", border: "1px solid rgba(255,255,255,.12)" }}
                 >
@@ -127,6 +126,18 @@ const Header = () => {
   );
 };
 
+/* ───────────────────────────── Motion Variants (CPU-friendly) ───────────────────────────── */
+const overlayFade = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.18, ease: "easeOut" } },
+  exit: { opacity: 0, transition: { duration: 0.15 } },
+};
+const cardPop = {
+  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.22, ease: "easeOut" } },
+  exit: { opacity: 0, y: 12, scale: 0.985, transition: { duration: 0.18, ease: "easeIn" } },
+};
+
 /* ───────────────────────────── Login Page ───────────────────────────── */
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -135,18 +146,46 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [showPwd, setShowPwd] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   const firstFieldRef = useRef(null);
+  const pwdRef = useRef(null);
+  const cardRef = useRef(null);
+  const peekTimer = useRef(null);
+
   useEffect(() => { firstFieldRef.current?.focus(); }, []);
 
+  // Close on ESC
+  useEffect(() => {
+    const onEsc = (e) => { if (e.key === "Escape") closeModal(); };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, []);
+
+  // CapsLock indicator
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.getModifierState && e.getModifierState("CapsLock")) setCapsOn(true);
+      else setCapsOn(false);
+    };
+    const el = pwdRef.current;
+    el?.addEventListener("keyup", onKey);
+    el?.addEventListener("keydown", onKey);
+    return () => {
+      el?.removeEventListener("keyup", onKey);
+      el?.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  // Close helper (back or X or overlay click)
   const closeModal = () => {
     setOpen(false);
     setTimeout(() => {
       if (window.history?.state && window.history.state.idx > 0) navigate(-1);
       else navigate("/");
-    }, 220);
+    }, 180);
   };
 
   const validate = () => {
@@ -156,21 +195,32 @@ const LoginPage = () => {
     return next;
   };
 
+  // Simple network timeout wrapper
+  const fetchWithTimeout = (url, opts, ms = 12000) =>
+    new Promise((resolve, reject) => {
+      const id = setTimeout(() => reject(new Error("Network timeout")), ms);
+      fetch(url, opts).then(
+        (res) => { clearTimeout(id); resolve(res); },
+        (err) => { clearTimeout(id); reject(err); }
+      );
+    });
+
   // ✅ Backend login
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+      const res = await fetchWithTimeout(`${import.meta.env.VITE_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Login failed");
 
       // Save auth info
@@ -185,10 +235,24 @@ const LoginPage = () => {
       // Redirect
       navigate("/studio");
     } catch (err) {
-      setErrors({ general: err.message || "Login failed" });
+      const msg = (err?.message || "").toLowerCase().includes("timeout")
+        ? "Request timed out. Please check your connection and try again."
+        : (err?.message || "Login failed");
+      setErrors({ general: msg });
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Press-and-hold password peek
+  const startPeek = () => {
+    setShowPwd(true);
+    clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setShowPwd(false), 1500);
+  };
+  const stopPeek = () => {
+    clearTimeout(peekTimer.current);
+    setShowPwd(false);
   };
 
   return (
@@ -197,76 +261,193 @@ const LoginPage = () => {
 
       <AnimatePresence>
         {open && (
-          <motion.div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            variants={overlayFade}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            style={{
+              background: "linear-gradient(180deg, rgba(0,0,0,0.60), rgba(0,0,0,0.60))",
+              backdropFilter: "blur(3px)",
+            }}
+            onMouseDown={(e) => {
+              // click outside to close
+              if (cardRef.current && !cardRef.current.contains(e.target)) closeModal();
+            }}
+          >
             <motion.div
               key="modal"
               id="login-card"
-              initial={{ opacity: 0, y: 16, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative w-full max-w-lg p-7 sm:p-8 rounded-2xl shadow-2xl"
-              style={{ background: "#0F0F0F", border: "2.5px solid #E85002", color: "#fff" }}
+              ref={cardRef}
+              className="relative w-full max-w-md p-6 sm:p-7 rounded-2xl"
+              variants={cardPop}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              aria-modal="true"
+              role="dialog"
+              aria-labelledby="login-title"
+              aria-describedby="login-desc"
+              style={{
+                background: "linear-gradient(180deg, #101010 0%, #0F0F0F 100%)",
+                border: "1.5px solid rgba(232,80,2,0.8)",
+                boxShadow: "0 10px 28px rgba(0,0,0,.45)",
+                color: "#fff",
+              }}
             >
-              <h1 className="text-[22px] sm:text-[26px] font-semibold mb-4">Welcome Back</h1>
+              {/* Top row: back + close */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="p-2 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
+                  aria-label="Go back"
+                  title="Go back"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="p-2 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
+                  aria-label="Close login"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
-              <form onSubmit={handleSubmit} noValidate>
-                <input
-                  ref={firstFieldRef}
-                  id="email"
-                  type="email"
-                  placeholder="Email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full mb-2 px-4 py-3 rounded-lg outline-none"
-                  style={{ background: "#243041", color: "#EAF1FF" }}
-                />
-                {errors.email && (
-                  <p className="text-sm text-red-400 flex items-center gap-1">
-                    <AlertCircle size={14} /> {errors.email}
-                  </p>
-                )}
+              {/* Title & disclaimer */}
+              <h1 id="login-title" className="text-[22px] sm:text-[26px] font-semibold">
+                Welcome Back
+              </h1>
+              <p id="login-desc" className="mt-1 mb-5 text-white/70 text-xs sm:text-sm leading-relaxed">
+                Sign in with your invite email. <strong>Access is restricted</strong> — for{" "}
+                <strong>SHINEL STUDIOS clients</strong> or <strong>team members</strong> only.
+              </p>
 
+              <form onSubmit={handleSubmit} noValidate aria-busy={submitting}>
+                {/* Email */}
+                <div className="mb-2">
+                  <input
+                    ref={firstFieldRef}
+                    id="email"
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={submitting}
+                    autoComplete="username"
+                    className="w-full px-4 py-3 rounded-lg outline-none"
+                    style={{
+                      background: "#243041",
+                      color: "#EAF1FF",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.12)",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
+                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.12)")}
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
+                      <AlertCircle size={14} /> {errors.email}
+                    </p>
+                  )}
+                </div>
+
+                {/* Password */}
                 <div className="relative mb-2">
                   <input
+                    ref={pwdRef}
                     id="password"
                     type={showPwd ? "text" : "password"}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={submitting}
+                    autoComplete="current-password"
                     className="w-full px-4 py-3 rounded-lg outline-none pr-12"
-                    style={{ background: "#243041", color: "#EAF1FF" }}
+                    style={{
+                      background: "#243041",
+                      color: "#EAF1FF",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.12)",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
+                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.12)")}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    onMouseDown={startPeek}
+                    onMouseUp={stopPeek}
+                    onMouseLeave={stopPeek}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/80"
+                    aria-label={showPwd ? "Hide password" : "Show password"}
+                    title={showPwd ? "Hide password" : "Show password"}
+                    tabIndex={-1}
                   >
                     {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+
+                {capsOn && (
+                  <p className="mt-1 text-xs text-yellow-300">
+                    Caps Lock is on.
+                  </p>
+                )}
+
                 {errors.password && (
-                  <p className="text-sm text-red-400 flex items-center gap-1">
+                  <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
                     <AlertCircle size={14} /> {errors.password}
                   </p>
                 )}
 
+                {/* General error */}
                 {errors.general && (
-                  <p className="text-sm text-red-400 flex items-center gap-1">
+                  <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
                     <AlertCircle size={14} /> {errors.general}
                   </p>
                 )}
 
+                {/* Stay signed in (kept functional) */}
+                <label className="mt-3 mb-4 flex items-center gap-2 select-none text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    disabled={submitting}
+                  />
+                  Keep me signed in
+                </label>
+
+                {/* Submit */}
                 <motion.button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
                   style={{ background: "#E85002", color: "#fff" }}
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   {submitting && <Loader2 size={18} className="animate-spin" />}
                   {submitting ? "Signing in..." : "Login"}
                 </motion.button>
               </form>
+
+              {/* Tiny footer row */}
+              <div className="mt-4 flex items-center justify-between text-[12px] text-white/60">
+                <span>
+                  Need access?{" "}
+                  <a href="/#contact" className="underline text-white/80">
+                    Contact us
+                  </a>
+                </span>
+                <div className="flex items-center gap-3">
+                  <Link to="/privacy" className="hover:text-white/90">Privacy</Link>
+                  <span aria-hidden>•</span>
+                  <Link to="/terms" className="hover:text-white/90">Terms</Link>
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         )}

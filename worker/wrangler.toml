@@ -1,0 +1,25 @@
+name = "shinel-auth"
+main = "worker.js"
+compatibility_date = "2025-09-11"
+
+# If you will call this Worker from the browser and want the cookie refresh flow,
+# keep it on workers.dev or add a custom route below.
+# Uncomment to bind to a custom subdomain/route:
+# routes = [
+#   { pattern = "api.shinelstudios.in", custom_domain = true }
+# ]
+
+[vars]
+# Exactly the sites that will call your API (no trailing slashes)
+ALLOWED_ORIGINS = "https://shinelstudios.in,https://www.shinelstudios.in,http://localhost:5173"
+
+# You will set these as SECRETS, not vars:
+# wrangler secret put JWT_SECRET
+# wrangler secret put USERS_JSON
+
+# KV for rate limits + audit log (required by worker.js)
+[[kv_namespaces]]
+binding = "SHINEL_AUDIT"
+# Replace with your actual namespace IDs after `wrangler kv:namespace create SHINEL_AUDIT`
+id = "<YOUR_KV_NAMESPACE_ID>"
+# (optional) preview_id = "<YOUR_KV_NAMESPACE_PREVIEW_ID>"
