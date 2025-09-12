@@ -328,7 +328,9 @@ const HeroSection = ({ isDark, onAudit }) => {
 
   const handleAudit = () => {
     try {
-      window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "hero" } }));
+      window.dispatchEvent(
+        new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "hero" } })
+      );
     } catch {}
     onAudit?.();
   };
@@ -383,6 +385,15 @@ const HeroSection = ({ isDark, onAudit }) => {
     return () => io.disconnect();
   }, []);
 
+  const chips = [
+    "AI Thumbnails",
+    "Auto Transcriptions",
+    "Script Drafts",
+    "Voice Generation (opt-in)",
+    "Consent-First Face Swap",
+    "Style-Matched Transitions",
+  ];
+
   return (
     <section
       id="home"
@@ -397,7 +408,12 @@ const HeroSection = ({ isDark, onAudit }) => {
     >
       {/* Star field (behind content) */}
       {!reduceMotion && (
-        <div ref={fieldRef} className="ss-field pointer-events-none absolute inset-0 z-0" data-animate="1" aria-hidden="true">
+        <div
+          ref={fieldRef}
+          className="ss-field pointer-events-none absolute inset-0 z-0"
+          data-animate="1"
+          aria-hidden="true"
+        >
           {stars.map((s, i) => (
             <span
               key={i}
@@ -432,8 +448,19 @@ const HeroSection = ({ isDark, onAudit }) => {
           animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
         >
-          <span className="block md:inline">Packaging that boosts CTR.</span>{" "}
-          <span className="block md:inline">Edits that keep people watching.</span>
+          <span
+            className="block md:inline"
+            style={{
+              backgroundImage: "linear-gradient(90deg, var(--orange), #ffb36f)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+            }}
+          >
+            AI-first
+          </span>{" "}
+          packaging that boosts CTR.{" "}
+          <span className="block md:inline">Smart edits that keep people watching.</span>
         </motion.h1>
 
         {/* Subhead */}
@@ -448,8 +475,41 @@ const HeroSection = ({ isDark, onAudit }) => {
           animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.08 }}
         >
-          We help creators win attention with thumb-stopping thumbnails, hook-first shorts, and clean long-form edits.
+          Thumbnails, transitions, face-safe swaps, transcripts, script drafts, and voice
+          pickups — accelerated by AI, finished by editors.
         </motion.p>
+
+        {/* AI capability chips */}
+        <motion.div
+          className="mt-4 sm:mt-5 flex flex-wrap items-center gap-2"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0, y: 8 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              transition: { staggerChildren: 0.06, duration: 0.25 },
+            },
+          }}
+          aria-label="AI capabilities"
+        >
+          {chips.map((t) => (
+            <motion.span
+              key={t}
+              variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
+              className="text-xs md:text-sm px-3 py-1.5 rounded-full"
+              style={{
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+                background: "color-mix(in oklab, var(--surface) 88%, transparent)",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              {t}
+            </motion.span>
+          ))}
+        </motion.div>
 
         {/* Proof strip */}
         <motion.div
@@ -490,13 +550,26 @@ const HeroSection = ({ isDark, onAudit }) => {
         <div className="mt-6 sm:mt-7 flex flex-col sm:flex-row sm:items-center gap-3">
           <motion.button
             onClick={handleAudit}
-            className="w-full sm:w-auto rounded-full px-6 py-3 text-white font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-            style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", boxShadow: "0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08)" }}
+            className="relative overflow-hidden w-full sm:w-auto rounded-full px-6 py-3 text-white font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+            style={{
+              background: "linear-gradient(90deg, var(--orange), #ff9357)",
+              boxShadow: "0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08)",
+            }}
             whileHover={reduceMotion ? {} : { y: -2 }}
             whileTap={reduceMotion ? {} : { scale: 0.98 }}
-            aria-label="Get Free Audit"
+            aria-label="Get Free AI Audit"
           >
-            Get Free Audit
+            {/* subtle shimmer */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 animate-[ss-shimmer_1.8s_linear_infinite]"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.30) 50%, rgba(255,255,255,0) 100%)",
+                filter: "blur(6px)",
+              }}
+            />
+            Get Free AI Audit
           </motion.button>
 
           <motion.a
@@ -515,9 +588,14 @@ const HeroSection = ({ isDark, onAudit }) => {
             See Work
           </motion.a>
         </div>
+
+        {/* Policy note */}
+        <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+          Face-swap & voice generation are offered only with creator consent and platform-policy compliance.
+        </p>
       </div>
 
-      {/* Styles: base sparkle anim only (theme handled in index.css) */}
+      {/* Styles: sparkle + shimmer (theme handled in index.css) */}
       <style>{`
         .hero-title { text-wrap: balance; }
 
@@ -547,6 +625,11 @@ const HeroSection = ({ isDark, onAudit }) => {
           100% { filter: drop-shadow(0 3px 14px rgba(232,80,2,.25)); }
         }
 
+        @keyframes ss-shimmer {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(220%); }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .ss-sparkle { animation: none !important; opacity: .55; }
         }
@@ -555,58 +638,59 @@ const HeroSection = ({ isDark, onAudit }) => {
   );
 };
 
+
   /* ===================== Services ===================== */
 const ServicesSection = () => {
   const services = [
     {
-      icon: <Play size={40} />,
-      title: "Video Editing",
-      outcome: "Keep people watching 2× longer.",
-      proof: "Kamz Inkzone (172k): +38% avg view duration in 30 days",
+      icon: <Image size={40} />,
+      title: "AI Thumbnail Design",
+      outcome: "Boost CTR with concept & layout exploration.",
+      proof: "Multivariate iterations • A/B-ready exports",
     },
     {
-      icon: <Image size={40} />,
-      title: "Thumbnail Design",
-      outcome: "Get up to 40% more clicks.",
-      proof: "Aish: CTR 3.1% → 5.0% after 3 iterations",
+      icon: <Play size={40} />,
+      title: "Retention-Led Editing",
+      outcome: "Style-matched transitions and pacing that hold attention.",
+      proof: "Kamz Inkzone (172k): +38% avg view duration in 30 days",
     },
     {
       icon: <Zap size={40} />,
       title: "Shorts Production",
-      outcome: "Grow subs with algorithm-ready hooks.",
+      outcome: "Hook-first highlights, auto-captions, meme timing.",
       proof: "Manav: +9.4k subs from Shorts in Q2",
     },
     {
       icon: <Wand2 size={40} />,
-      title: "GFX / Motion Graphics",
-      outcome: "Professional polish that sets you apart.",
-      proof: "GamerMummy: +22% session time with motion overlays",
+      title: "Transcriptions & Captions",
+      outcome: "Auto transcripts with clean, on-brand subtitles.",
+      proof: "Faster edits • Better accessibility • Higher retention",
     },
     {
       icon: <PenTool size={40} />,
-      title: "Scripting & Hook Writing",
-      outcome: "Open strong with scroll-stopping hooks.",
+      title: "Script Drafts & Research",
+      outcome: "AI outlines + beat sheets → human punch-up.",
       proof: "Hook retention +18% in A/B tests (first 8s)",
     },
     {
       icon: <Wand2 size={40} />,
-      title: "AI Repurposing",
-      outcome: "Turn 1 video into 10 assets (clips, reels, posts).",
-      proof: "10× output, auto-captions & resizing included",
-    },
-    {
-      icon: <Bot size={40} />,
-      title: "Workflow Automations",
-      outcome: "Auto-posting, captions, assets → less grunt work.",
-      proof: "Save 2–3 hours per upload cycle",
+      title: "Face-Safe Swap & Cleanup",
+      outcome: "Consent-first face replacement & object removal.",
+      proof: "Creator-approved only • Review-gated workflow",
     },
     {
       icon: <Megaphone size={40} />,
-      title: "SEO & Metadata",
-      outcome: "Rank for the right searches and suggested.",
+      title: "Voice Generation / Cleanup",
+      outcome: "Natural voice pickups, noise cleanup, alt takes.",
+      proof: "Consent-first cloning • Platform-policy compliant",
+    },
+    {
+      icon: <Bot size={40} />,
+      title: "Workflow Automations & SEO",
+      outcome: "Auto-posting, asset handoff, titles, tags, descriptions.",
       proof: "+27% browse/search traffic after metadata revamp",
     },
-  ]
+  ];
 
   return (
     <section id="services" className="py-20" style={{ background: "var(--surface-alt)" }}>
@@ -619,14 +703,18 @@ const ServicesSection = () => {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-3"
+               style={{ color: "var(--orange)", border: "1px solid var(--border)", background: "rgba(232,80,2,0.08)" }}>
+            AI-first
+          </div>
           <h2
-            className="text-4xl md:text-5xl font-bold mb-4 font-['Poppins']"
+            className="text-4xl md:text-5xl font-bold mb-3 font-['Poppins']"
             style={{ color: "var(--text)" }}
           >
             Our Services
           </h2>
           <p className="text-xl max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
-            Outcomes over deliverables — creative built to convert
+            Human editors × AI systems — outcomes over deliverables, built to convert
           </p>
         </motion.div>
 
@@ -667,10 +755,15 @@ const ServicesSection = () => {
             </motion.div>
           ))}
         </motion.div>
+
+        {/* Consent / policy note */}
+        <p className="text-xs mt-6 text-center" style={{ color: "var(--text-muted)" }}>
+          Face-swap and voice generation are available only with creator consent and in line with platform policies.
+        </p>
       </div>
     </section>
-  )
-}
+  );
+};
 
 /* ===================== Before/After (keyboard + drag + a11y + lazy images) ===================== */
 const BeforeAfter = ({
@@ -1074,26 +1167,62 @@ const CaseStudies = () => {
 };
 
 
-/* ===================== Process Section ===================== */
+/* ===================== Process Section (AI-first) ===================== */
 const ProcessSection = () => {
   const steps = [
-    { n: 1, title: "Discovery Call (15–20 min)", desc: "Goals, niche, roadblocks, assets. Quick audit if needed." },
-    { n: 2, title: "Pilot Sprint (7–10 days)", desc: "2–3 edited videos + thumbnails/shorts to prove ROI fast." },
-    { n: 3, title: "Scale & Systemize", desc: "Monthly calendar, brand kit, iteration loop for retention/CTR." },
+    {
+      n: 1,
+      title: "Discovery Call (15–20 min)",
+      desc:
+        "Rapid channel audit, goals, constraints, and assets. We align on north-star metrics (CTR, Retention, Subs/Upload) and success criteria.",
+    },
+    {
+      n: 2,
+      title: "AI Setup & Guardrails (1–2 days)",
+      desc:
+        "Brand kit, motion/pacing presets, auto-transcriptions, metadata assistant, and thumbnail ideation loops. Consent-first voice/face features with review gates.",
+    },
+    {
+      n: 3,
+      title: "Pilot Sprint (7–10 days)",
+      desc:
+        "2–3 edited videos + thumbnails/shorts. Hook testing, clean cuts, captioning. Structured A/B for title/thumbnail. 48–72 hr standard turnaround.",
+    },
+    {
+      n: 4,
+      title: "Measure → Systemize",
+      desc:
+        "CTR/retention dashboard, weekly iteration loop, and workflow automations (handoff, posts, assets). Scale what wins; sunset what doesn’t.",
+    },
   ];
+
   return (
-    <section className="py-20" style={{ background: 'var(--surface)' }}>
+    <section className="py-20" style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-bold font-['Poppins']" style={{ color: 'var(--text)' }}>
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-3"
+            style={{
+              color: "var(--orange)",
+              border: "1px solid var(--border)",
+              background: "rgba(232,80,2,0.08)",
+            }}
+          >
+            AI-first Workflow
+          </div>
+          <h2
+            className="text-4xl md:text-5xl font-bold font-['Poppins']"
+            style={{ color: "var(--text)" }}
+          >
             How We Work
           </h2>
-          <p className="text-lg mt-3" style={{ color: 'var(--text-muted)' }}>
-            A simple path to results (no fluff, just outcomes).
+          <p className="text-lg mt-3" style={{ color: "var(--text-muted)" }}>
+            A simple path to results — human craft × AI speed, no fluff.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {steps.map(s => (
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {steps.map((s) => (
             <motion.div
               key={s.n}
               initial={{ opacity: 0, y: 20 }}
@@ -1101,29 +1230,41 @@ const ProcessSection = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.4 }}
               className="p-6 rounded-2xl"
-              style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}
+              style={{
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+              }}
             >
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center font-bold mb-4"
-                style={{ background: 'var(--orange)', color: '#fff' }}
+                style={{ background: "var(--orange)", color: "#fff" }}
               >
                 {s.n}
               </div>
-              <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text)' }}>{s.title}</h3>
-              <p style={{ color: 'var(--text-muted)' }}>{s.desc}</p>
+              <h3
+                className="text-xl font-semibold mb-2"
+                style={{ color: "var(--text)" }}
+              >
+                {s.title}
+              </h3>
+              <p style={{ color: "var(--text-muted)" }}>{s.desc}</p>
             </motion.div>
           ))}
         </div>
+
+        <p className="text-xs text-center mt-6" style={{ color: "var(--text-muted)" }}>
+          Voice generation and face-swap are available only with creator consent and in line with platform policies.
+        </p>
       </div>
     </section>
   );
 };
 
-/* ===================== Testimonials (Video + Analytics) ===================== */
+/* ===================== Testimonials (Video + Analytics, AI-first) ===================== */
 const TestimonialsSection = ({ isDark }) => {
   const reduceMotion =
     typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
   // ---- DATA -----------------------------------------------------------------
   const TESTIMONIALS = [
@@ -1137,6 +1278,7 @@ const TestimonialsSection = ({ isDark }) => {
       quote:
         "These edits + motion graphics made my content feel premium. Retention lifted immediately.",
       metrics: [{ label: "Avg View Dur.", value: "+38%" }],
+      ai: ["AI captions", "Motion presets"],
     },
     {
       type: "analytics",
@@ -1149,6 +1291,7 @@ const TestimonialsSection = ({ isDark }) => {
         "Thumbnail iterations increased CTR consistently over three uploads.",
       metrics: [{ label: "CTR", value: "3.1% → 5.0%" }],
       cta: { label: "See case", href: "/work/aish" },
+      ai: ["Thumb ideation (AI)", "Title scoring"],
     },
     {
       type: "video",
@@ -1159,6 +1302,7 @@ const TestimonialsSection = ({ isDark }) => {
       poster: "/assets/testimonials/gamermummy-thumb.jpg",
       quote: "The brand kit + overlays improved watch time and comments.",
       metrics: [{ label: "Session Time", value: "+22%" }],
+      ai: ["Style-matched GFX", "Auto transcript"],
     },
     {
       type: "analytics",
@@ -1170,16 +1314,39 @@ const TestimonialsSection = ({ isDark }) => {
       quote: "Hook-first shorts strategy drove predictable growth.",
       metrics: [{ label: "Subs from Shorts", value: "+9.4k" }],
       cta: { label: "See case", href: "/work/manav" },
+      ai: ["Hook scoring", "Auto captions"],
     },
-  ]
+  ];
 
   // Optional: your existing img(key) helper; fallback to null if not found
-  const getAvatar = (key) => (typeof img === "function" ? img(key) : null)
+  const getAvatar = (key) => (typeof img === "function" ? img(key) : null);
 
-  // ---- MODAL STATE ----------------------------------------------------------
-  const [openVideo, setOpenVideo] = React.useState(null) // stores the selected item or null
+  // ---- UI STATE -------------------------------------------------------------
+  const [openVideo, setOpenVideo] = React.useState(null); // stores the selected item or null
+  const [tab, setTab] = React.useState("all"); // all | video | analytics
 
-  // ---- CARD COMPONENTS ------------------------------------------------------
+  const items = React.useMemo(
+    () =>
+      tab === "all" ? TESTIMONIALS : TESTIMONIALS.filter((t) => t.type === tab),
+    [tab]
+  );
+
+  // ---- SMALL UI PARTS -------------------------------------------------------
+  const AIPill = ({ children }) => (
+    <span
+      className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border"
+      style={{
+        color: "var(--text)",
+        borderColor: "var(--border)",
+        background: "rgba(232,80,2,0.08)",
+      }}
+    >
+      {/* Using Wand2 if available; falls back to a small dot */}
+      {typeof Wand2 === "function" ? <Wand2 size={12} /> : <span>•</span>}
+      {children}
+    </span>
+  );
+
   const MetricPill = ({ label, value }) => (
     <span
       className="inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border"
@@ -1192,16 +1359,16 @@ const TestimonialsSection = ({ isDark }) => {
     >
       <BarChart3 size={14} /> <strong>{label}</strong> {value}
     </span>
-  )
+  );
 
   const HeaderRow = ({ name, tag, avatarKey }) => {
-    const avatar = getAvatar(avatarKey)
+    const avatar = getAvatar(avatarKey);
     const initials = name
       .split(" ")
       .map((s) => s[0])
       .slice(0, 2)
       .join("")
-      .toUpperCase()
+      .toUpperCase();
 
     return (
       <div className="flex items-center gap-3 mb-3">
@@ -1231,8 +1398,8 @@ const TestimonialsSection = ({ isDark }) => {
           </div>
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   const VideoCard = ({ item, i }) => (
     <motion.article
@@ -1275,9 +1442,17 @@ const TestimonialsSection = ({ isDark }) => {
             <MetricPill key={idx} {...m} />
           ))}
         </div>
+
+        {Array.isArray(item.ai) && item.ai.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {item.ai.slice(0, 3).map((t, idx) => (
+              <AIPill key={idx}>{t}</AIPill>
+            ))}
+          </div>
+        )}
       </div>
     </motion.article>
-  )
+  );
 
   const AnalyticsCard = ({ item, i }) => (
     <motion.article
@@ -1318,33 +1493,92 @@ const TestimonialsSection = ({ isDark }) => {
             {item.cta.label} <ExternalLink size={14} />
           </a>
         )}
+
+        {Array.isArray(item.ai) && item.ai.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {item.ai.slice(0, 3).map((t, idx) => (
+              <AIPill key={idx}>{t}</AIPill>
+            ))}
+          </div>
+        )}
       </div>
     </motion.article>
-  )
+  );
 
   // ---- RENDER ----------------------------------------------------------------
   return (
-    <section id="testimonials" className="py-24"
-    style={{ background: "var(--surface-alt)", contentVisibility: "auto", containIntrinsicSize: "900px" }}>
+    <section
+      id="testimonials"
+      className="py-24"
+      style={{
+        background: "var(--surface-alt)",
+        contentVisibility: "auto",
+        containIntrinsicSize: "900px",
+      }}
+    >
       <div className="container mx-auto px-4">
         {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="text-center mb-6"
         >
-          <h2 className="text-4xl md:text-5xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mb-3"
+            style={{
+              color: "var(--orange)",
+              border: "1px solid var(--border)",
+              background: "rgba(232,80,2,0.08)",
+            }}
+          >
+            AI-assisted, human-directed results
+          </div>
+
+          <h2
+            className="text-4xl md:text-5xl font-bold font-['Poppins']"
+            style={{ color: "var(--text)" }}
+          >
             Proof it works
           </h2>
-          <p className="text-lg md:text-xl mt-3" style={{ color: "var(--text-muted)" }}>
-            Quick 30–45s reels from creators, plus real screenshots from YouTube Studio
+          <p
+            className="text-lg md:text-xl mt-3"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Quick 30–45s reels from creators, plus real screenshots from YouTube
+            Studio
           </p>
         </motion.div>
 
+        {/* Tabs */}
+        <div className="flex items-center justify-center gap-2 mb-10">
+          {[
+            { k: "all", label: "All" },
+            { k: "video", label: "Videos" },
+            { k: "analytics", label: "Analytics" },
+          ].map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setTab(t.k)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold border ${
+                tab === t.k ? "shadow" : ""
+              }`}
+              style={{
+                color: "var(--text)",
+                borderColor: "var(--border)",
+                background:
+                  tab === t.k ? "rgba(232,80,2,0.14)" : "var(--surface)",
+              }}
+              aria-pressed={tab === t.k}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {TESTIMONIALS.map((t, i) =>
+          {items.map((t, i) =>
             t.type === "video" ? (
               <VideoCard key={i} item={t} i={i} />
             ) : (
@@ -1369,7 +1603,10 @@ const TestimonialsSection = ({ isDark }) => {
           />
           <div
             className="relative w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl"
-            style={{ background: isDark ? "#0F0F0F" : "#FFFFFF", border: "1px solid var(--border)" }}
+            style={{
+              background: isDark ? "#0F0F0F" : "#FFFFFF",
+              border: "1px solid var(--border)",
+            }}
           >
             <button
               className="absolute top-3 right-3 p-2 rounded-lg"
@@ -1412,15 +1649,30 @@ const TestimonialsSection = ({ isDark }) => {
                   <MetricPill key={idx} {...m} />
                 ))}
               </div>
+
+              {Array.isArray(openVideo.ai) && openVideo.ai.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {openVideo.ai.slice(0, 4).map((t, idx) => (
+                    <AIPill key={idx}>{t}</AIPill>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      <p
+        className="text-center text-xs mt-8"
+        style={{ color: "var(--text-muted)" }}
+        aria-live="polite"
+      >
+        AI features (voice/face) are used only with creator consent and in line
+        with platform policies.
+      </p>
     </section>
-  )
-}
-
-
+  );
+};
 
   /* ===================== FAQ ===================== */
 const FAQSection = () => {
