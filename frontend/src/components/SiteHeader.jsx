@@ -317,27 +317,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         >
           {/* logo */}
           <Link
-            to="/"
-            className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+          to="/"
+          className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
           >
+            {/* keep container slim */}
             <div className="h-12 flex items-center overflow-visible">
               <motion.img
-                src={logoSrc}
-                alt="Shinel Studios"
-                className="h-full w-auto object-contain block select-none"
-                style={{
-                  transform: "scale(2.8)",
-                  transformOrigin: "left center",
-                  filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
-                }}
-                decoding="async"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
+              src={logoSrc}
+              alt="Shinel Studios"
+              className="h-auto w-36 sm:w-44 object-contain block select-none"
+              style={{
+                filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))",
+              }}
+              decoding="async"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
               />
-            </div>
-          </Link>
-
+              </div>
+              </Link>
           {/* desktop links */}
           <div className="hidden md:flex items-center gap-10 relative">
             <NavLink label="Home" to="/" active={active} />
