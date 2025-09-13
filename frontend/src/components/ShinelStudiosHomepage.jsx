@@ -2,11 +2,13 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Play, Image, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink
+  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink
 } from "lucide-react";
 
 import RoiCalculator from "./RoiCalculator";
 import ExitIntentModal from "./ExitIntentModal";
+import { MessageCircle, FileText, ChevronUp } from "lucide-react"
+import QuickQuoteBar from "./QuickQuoteBar";
 
 /**
  * Centralized asset glob (Vite)
@@ -41,7 +43,8 @@ export const findAssetByBase = (key, map = ALL_ASSETS) => {
   const search = String(key).toLowerCase();
   for (const p in map) {
     const url = map[p];
-    if (typeof url !== "string") continue;const file = p.split("/").pop() || "";
+    if (typeof url !== "string") continue;
+    const file = p.split("/").pop() || "";
     const base = file.replace(/\.(png|jpe?g|webp|svg)$/i, "").toLowerCase();
     if (base.includes(search)) return map[p];
   }
@@ -194,130 +197,6 @@ const CalendlyModal = ({ open, onClose }) => {
     </motion.div>
   );
 };
-
-/* ===================== Quick Quote Bar (compact + proximity hide near form + event listener) ===================== */
-const QuickQuoteBar = ({ onBook }) => {
-  const [showBase, setShowBase] = React.useState(false);   // base “scrolled enough” rule
-  const [nearForm, setNearForm] = React.useState(false);   // hide when approaching lead form
-  const [forcedHidden, setForcedHidden] = React.useState(false); // hide via leadform:visible event
-
-  // (NEW) Hide when the lead form broadcasts visibility
-  React.useEffect(() => {
-    const onLead = (e) => {
-      setForcedHidden(Boolean(e?.detail?.visible));
-    };
-    document.addEventListener("leadform:visible", onLead);
-    return () => document.removeEventListener("leadform:visible", onLead);
-  }, []);
-
-  // show after 20% scroll
-  React.useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || 0;
-      const h = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      setShowBase(h > 0 && y / h > 0.2);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, []);
-
-  // hide when we're close to the lead form (both down and up directions)
-  React.useEffect(() => {
-    const target = () => document.getElementById("leadform") || document.getElementById("leadform-section");
-    const check = () => {
-      const el = target();
-      if (!el) return setNearForm(false);
-      const rect = el.getBoundingClientRect();
-      setNearForm(rect.top < 220 && rect.bottom > 0);
-    };
-    check();
-    window.addEventListener("scroll", check, { passive: true });
-    window.addEventListener("resize", check);
-    return () => {
-      window.removeEventListener("scroll", check);
-      window.removeEventListener("resize", check);
-    };
-  }, []);
-
-  const visible = showBase && !nearForm && !forcedHidden;
-
-  // broadcast visibility so Header/TrustBar can react
-  React.useEffect(() => {
-    document.dispatchEvent(new CustomEvent("qqb:visible", { detail: { visible } }));
-    return () =>
-      document.dispatchEvent(new CustomEvent("qqb:visible", { detail: { visible: false } }));
-  }, [visible]);
-
-  if (!visible) return null;
-
-  return (
-    <motion.div
-      initial={{ y: -40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: -40, opacity: 0 }}
-      className="hidden md:block fixed left-0 right-0 z-40"
-      style={{ top: "calc(var(--header-offset, var(--header-h, 92px)) + 10px)" }}
-    >
-      <div className="container mx-auto px-4">
-        <motion.div
-          className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-2"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            boxShadow: "0 8px 18px rgba(0,0,0,0.12)",
-          }}
-          initial={{ filter: "saturate(0.96)" }}
-          animate={{ filter: "saturate(1)" }}
-          transition={{ duration: 0.2 }}
-        >
-          <span className="text-sm" style={{ color: "var(--text)" }}>
-            🚀 Get a <b>free content audit</b> in 24 hours.
-          </span>
-
-          <div className="flex items-center gap-2">
-            <motion.button
-              onClick={() => onBook?.()}
-              className="rounded-lg px-4 h-[36px] text-sm font-semibold text-white relative overflow-hidden"
-              style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <motion.span
-                aria-hidden="true"
-                initial={false}
-                animate={{ x: ["-120%", "120%"] }}
-                transition={{ repeat: Infinity, duration: 1.8, ease: "linear" }}
-                className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3"
-                style={{
-                  background:
-                    "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.30) 50%, rgba(255,255,255,0) 100%)",
-                  filter: "blur(5px)",
-                }}
-              />
-              Get Free Audit
-            </motion.button>
-
-            <motion.a
-              href="#contact"
-              className="rounded-lg px-4 h-[36px] grid place-items-center text-sm font-semibold"
-              style={{ border: "2px solid var(--orange)", color: "var(--orange)" }}
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Get Quote
-            </motion.a>
-          </div>
-        </motion.div>
-      </div>
-    </motion.div>
-  );
-};
-
 
 /* ===================== Hero (responsive, tone-aware, efficient) ===================== */
 const HeroSection = ({ isDark, onAudit }) => {
@@ -639,11 +518,11 @@ const HeroSection = ({ isDark, onAudit }) => {
 };
 
 
-  /* ===================== Services ===================== */
+/* ===================== Services ===================== */
 const ServicesSection = () => {
   const services = [
     {
-      icon: <Image size={40} />,
+      icon: <IconImage size={40} />,
       title: "AI Thumbnail Design",
       outcome: "Boost CTR with concept & layout exploration.",
       proof: "Multivariate iterations • A/B-ready exports",
@@ -1318,8 +1197,8 @@ const TestimonialsSection = ({ isDark }) => {
     },
   ];
 
-  // Optional: your existing img(key) helper; fallback to null if not found
-  const getAvatar = (key) => (typeof img === "function" ? img(key) : null);
+  // avatar helper via asset glob
+  const getAvatar = (key) => findAssetByBase(key);
 
   // ---- UI STATE -------------------------------------------------------------
   const [openVideo, setOpenVideo] = React.useState(null); // stores the selected item or null
@@ -1341,8 +1220,7 @@ const TestimonialsSection = ({ isDark }) => {
         background: "rgba(232,80,2,0.08)",
       }}
     >
-      {/* Using Wand2 if available; falls back to a small dot */}
-      {typeof Wand2 === "function" ? <Wand2 size={12} /> : <span>•</span>}
+      <Wand2 size={12} />
       {children}
     </span>
   );
@@ -1560,14 +1438,11 @@ const TestimonialsSection = ({ isDark }) => {
             <button
               key={t.k}
               onClick={() => setTab(t.k)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold border ${
-                tab === t.k ? "shadow" : ""
-              }`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold border ${tab === t.k ? "shadow" : ""}`}
               style={{
                 color: "var(--text)",
                 borderColor: "var(--border)",
-                background:
-                  tab === t.k ? "rgba(232,80,2,0.14)" : "var(--surface)",
+                background: tab === t.k ? "rgba(232,80,2,0.14)" : "var(--surface)",
               }}
               aria-pressed={tab === t.k}
             >
@@ -1674,7 +1549,7 @@ const TestimonialsSection = ({ isDark }) => {
   );
 };
 
-  /* ===================== FAQ ===================== */
+/* ===================== FAQ ===================== */
 const FAQSection = () => {
   const [openFAQ, setOpenFAQ] = React.useState(null);
 
@@ -1762,170 +1637,836 @@ const FAQSection = () => {
   );
 };
 
-
-/* ===================== Pricing (conversion-focused) ===================== */
+/* ===================== Pricing (final, mobile carousel + high-converting polish) ===================== */
 const Pricing = ({ onOpenCalendly }) => {
-  const reduceMotion = typeof window !== "undefined" && window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  const tiers = [
+  const isTouch =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(hover: none)").matches;
+
+  // Detect mobile viewport (≤ 640px) for carousel mode
+  const [isMobile, setIsMobile] = React.useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
+  );
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 640px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  /* ---------- Tabs ---------- */
+  const CATS = [
     {
-      name: "7-Day Trial",
-      priceInr: 499,
-      tag: "Low-risk start",
-      trial: true,
-      bullet: ["1 Thumbnail", "1 Short edit (≤50s)", "Mini SEO checklist"],
-      note: "Upgrade anytime — trial fee adjusts in first package",
-      cta: "Start Trial",
-      key: "trial",
+      k: "gaming",
+      label: "Gaming",
+      headline: "Level up your channel, not just your KD",
+      sub: "Hook-first edits, cracked thumbnails, and highlight engines built for any title.",
     },
     {
-      name: "Starter",
-      priceInr: 3999,
-      tag: "Entry Plan",
-      bullet: ["3 Thumbnails", "2 Video edits (≤8 min each)", "Basic SEO setup"],
-      cta: "Choose Starter",
-      key: "starter",
+      k: "vlog",
+      label: "Vlogs",
+      headline: "Turn everyday moments into bingeable stories",
+      sub: "Cleaner cuts, clearer hooks, and packaging that earns the click.",
     },
     {
-      name: "Shorts Pack",
-      priceInr: 5999,
-      tag: "Most Popular",
-      featured: true,
-      bullet: ["30 Shorts optimized for YT Shorts feed", "Hook-first scripting support", "Metadata assist (titles + tags)", "Custom short thumbnail", "Free “Subscribe” animation"],
-      cta: "Book Shorts Pack",
-      key: "shorts",
+      k: "talking",
+      label: "Talking Heads & Motion Graphics",
+      headline: "Ship long-form, spin a clips flywheel",
+      sub: "Studio-grade edits, transcripts, and steady clips for discovery.",
     },
     {
-      name: "Creator Essentials",
-      priceInr: 9999,
-      tag: "Best Value",
-      bullet: ["10 Thumbnails", "4 Long-form edits (≤10 min each)", "15 Shorts", "Light brand kit & packaging", "Monthly growth check-in", "Free “Subscribe” animation"],
-      cta: "Book Essentials",
-      key: "essentials",
+      k: "others",
+      label: "Others",
+      headline: "Custom mix for brands & niches",
+      sub: "Tell us your format and goals — we’ll tailor a plan.",
     },
   ];
+  const [cat, setCat] = React.useState("gaming");
 
-  const [intent, setIntent] = useState("growth"); // growth, consistency, polish
-  const highlight = (key) => {
-    if (intent === "growth" && key === "shorts") return true;
-    if (intent === "consistency" && key === "starter") return true;
-    if (intent === "polish" && key === "essentials") return true;
-    return false;
+  /* ---------- INTERNAL rate card (not rendered) ---------- */
+  const RATE_CARD = {
+    gaming: { thumb: 170, short: 200, longPerMin: 200 },
+    vlog: { longPerMin: 200, longPerMinCine: 250, thumb: 170, short: 200 },
+    talking: { editPerMin: 180, clip: 220, thumb: 170 }, // podcasts merged here
+  };
+
+  const estimatePlan = (catKey, spec = {}) => {
+    const r = RATE_CARD[catKey] || {};
+    let total = 0;
+
+    if (catKey === "gaming") {
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+      total += (spec.shorts || 0) * (r.short || 0);
+      total += (spec.longMins || 0) * (r.longPerMin || 0);
+    } else if (catKey === "vlog") {
+      const cine = Math.min(spec.longMins || 0, spec.cineMins || 0);
+      const normal = Math.max(0, (spec.longMins || 0) - cine);
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+      total += (spec.shorts || 0) * (r.short || 0);
+      total += cine * (r.longPerMinCine || r.longPerMin || 0);
+      total += normal * (r.longPerMin || 0);
+    } else if (catKey === "talking") {
+      total += (spec.episodeMins || 0) * (r.editPerMin || 0);
+      total += (spec.clips || 0) * (r.clip || 0);
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+    }
+    return Math.round(total || 0);
+  };
+
+  /* ---------- Plans (public prices) ---------- */
+  const PLANS = {
+    gaming: [
+      {
+        name: "Starter — Warm-Up",
+        tag: "Kickoff + mini audit",
+        key: "starter",
+        cta: "Start Warm-Up",
+        priceInr: 599, // one-time
+        billing: "one-time",
+        bullets: [
+          "1 Thumbnail (AI-assisted + human polish)",
+          "1 Short (≤50s) with kinetic captions & sound design",
+          "Mini channel audit (hooks, metadata, packaging)",
+        ],
+        includes: [
+          "A/B-ready: 2 thumbnail comps (color & text style)",
+          "Custom short thumbnail",
+          "Turnaround: 48–72h",
+        ],
+        spec: { thumbs: 1, shorts: 1, longMins: 0 },
+      },
+      {
+        name: "Clutch Highlights",
+        tag: "Predictable Shorts growth",
+        key: "highlights",
+        cta: "Book Highlights",
+        priceInr: 6999, // monthly
+        billing: "monthly",
+        bullets: [
+          "30 Gaming Shorts (feed-optimized)",
+          "30 custom short thumbnails",
+          "Subscribe/Follow animation (YT/IG/TikTok)",
+        ],
+        includes: [
+          "Meme timing • emoji accents • SFX",
+          "5 AI-made transitions/hooks",
+          "Captions + title suggestions",
+        ],
+        spec: { shorts: 30, thumbs: 4, longMins: 0 },
+      },
+      {
+        name: "Rank Up",
+        tag: "Thumbnails + long-form rhythm",
+        key: "rankup",
+        cta: "Book Rank Up",
+        priceInr: 5499, // monthly
+        billing: "monthly",
+        bullets: [
+          "2 Long-form edits (≤8 min each)",
+          "2 Thumbnails (A/B-ready) + 5 Live thumbnails",
+          "Titles, tags & descriptions (full SEO for these videos)",
+        ],
+        includes: [
+          "Intros/outros • memes • sound design • captions",
+          "Transitions • zooms • subscribe animations",
+          "AI transitions & custom templates where needed",
+        ],
+        spec: { thumbs: 7, shorts: 0, longMins: 16 },
+      },
+      {
+        name: "Pro League",
+        tag: "End-to-end growth engine",
+        key: "pro",
+        cta: "Book Pro League",
+        priceInr: 13499, // monthly
+        billing: "monthly",
+        bullets: [
+          "4 Long-form edits (≤8 min each)",
+          "4 Video thumbnails A/B + 6 Live thumbnails",
+          "20 Shorts",
+        ],
+        includes: [
+          "All Rank Up inclusions + free SEO for live streams",
+          "Access to Shinel SEO Tools",
+          "SLA: 48–72h, priority queueing",
+        ],
+        spec: { thumbs: 10, shorts: 20, longMins: 32 },
+      },
+    ],
+    vlog: [
+      {
+        name: "Starter — Spark",
+        tag: "Kickoff + mini audit",
+        key: "starter",
+        cta: "Start Spark",
+        priceInr: 699, // one-time
+        billing: "one-time",
+        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)", "Mini audit (storyline & packaging)"],
+        includes: ["AI hook help for openers", "Color & audio cleanup on the short", "Basic SEO checklist"],
+        spec: { thumbs: 1, shorts: 1, longMins: 0, cineMins: 0 },
+      },
+      {
+        name: "Daily Driver",
+        tag: "Reliable cadence",
+        key: "driver",
+        cta: "Book Daily Driver",
+        priceInr: 9999, // monthly
+        billing: "monthly",
+        bullets: ["3 Vlog edits (≤8 min each)", "3 Thumbnails", "9 Reels/Shorts (platform-ready)"],
+        includes: [
+          "Color grading • captions where needed",
+          "Intro/Outro for videos",
+          "AI short thumbnails • AI opening beat/transition",
+        ],
+        spec: { longMins: 24, cineMins: 0, thumbs: 3, shorts: 9 },
+      },
+      {
+        name: "Storyteller",
+        tag: "Narrative & cinematic polish",
+        key: "story",
+        cta: "Book Storyteller",
+        priceInr: 7499, // monthly
+        billing: "monthly",
+        bullets: ["2 Cinematic vlogs (≤8 min)", "2 Thumbnails", "6 Reels/Shorts"],
+        includes: [
+          "Music curation & SFX",
+          "Cinematic LUT pass + stabilization",
+          "Color grading • captions • AI opener/transition",
+        ],
+        spec: { longMins: 16, cineMins: 16, thumbs: 2, shorts: 6 },
+      },
+      {
+        name: "Creator Suite",
+        tag: "Scale up everything",
+        key: "suite",
+        cta: "Book Creator Suite",
+        priceInr: 17999, // monthly
+        billing: "monthly",
+        bullets: [
+          "4 Vlog edits (≤8 min) + 2 Cinematic vlogs (≤8 min)",
+          "6 Thumbnails (A/B-ready)",
+          "15 Reels/Shorts + brand-kit starter",
+        ],
+        includes: ["Title/Thumb concept board", "AI thumbnail credits", "Early access to Shinel AI tools"],
+        spec: { longMins: 48, cineMins: 16, thumbs: 6, shorts: 15 },
+      },
+    ],
+    talking: [
+      {
+        name: "Starter — On Air",
+        tag: "One-time",
+        key: "starter",
+        cta: "Start On Air",
+        priceInr: 999, // one-time
+        billing: "one-time",
+        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)"],
+        includes: [
+          "Motion-graphics lower-third & speaker ID",
+          "Kinetic captions on the short",
+          "Basic SEO checklist • 48–72h SLA",
+        ],
+        spec: { episodeMins: 0, clips: 1, thumbs: 1 },
+      },
+      {
+        name: "Studio",
+        tag: "Long-form + clips flywheel",
+        key: "studio",
+        cta: "Book Studio",
+        priceInr: 13999, // monthly
+        billing: "monthly",
+        bullets: ["2 Full videos (≤8 min) edited", "12 Clips (30–60s) • 2 Thumbnails", "Show notes + timestamps"],
+        includes: [
+          "Transcription & filler-word removal pass",
+          "Noise cleanup preset • light motion graphics",
+          "72h SLA",
+        ],
+        spec: { episodeMins: 16, clips: 12, thumbs: 2 },
+      },
+      {
+        name: "Clips Engine",
+        tag: "High-volume discovery",
+        key: "clips",
+        cta: "Book Clips Engine",
+        priceInr: 14999, // monthly
+        billing: "monthly",
+        bullets: ["30 Clips (30–60s) from long recordings", "Square/vertical exports", "30 clip covers"],
+        includes: [
+          "Multi-cam auto-framing",
+          "Kinetic captions • subscribe/follow animations",
+          "Topic tags & title suggestions",
+        ],
+        spec: { episodeMins: 0, clips: 30, thumbs: 4 },
+      },
+      {
+        name: "Network",
+        tag: "Scale your show",
+        key: "network",
+        cta: "Book Network",
+        priceInr: 24999, // monthly
+        billing: "monthly",
+        bullets: ["4 Videos (≤8 min) • 20 Clips", "4 Thumbnails", "Chapters + blog draft"],
+        includes: ["Template pack (FFX/MOGRT)", "Brand kit & style guide", "Access to Shinel SEO tools"],
+        spec: { episodeMins: 32, clips: 20, thumbs: 4 },
+      },
+    ],
+    others: [
+      {
+        name: "Explainer Sprint",
+        tag: "Business • Product • SaaS",
+        key: "explainer",
+        cta: "Plan an Explainer",
+        priceInr: null, // quote
+        billing: "quote",
+        bullets: [
+          "30–60s product explainer or ad",
+          "Script assist + storyboard frames",
+          "On-brand motion graphics",
+        ],
+        includes: [
+          "Voiceover guidance (or provided VO)",
+          "Two styleboards to choose from",
+          "Square/vertical exports + captions",
+        ],
+        spec: {},
+      },
+      {
+        name: "Custom Builder",
+        tag: "Strategy-first",
+        key: "custom",
+        cta: "Build My Plan",
+        priceInr: null, // quote only
+        billing: "quote",
+        bullets: [
+          "Mix editing • thumbnails • shorts • motion graphics",
+          "Ideal for brands, explainers, tutorials & more",
+          "We’ll scope to your cadence and KPIs",
+        ],
+        includes: ["Free 15-min audit call", "Roadmap & sample concepts before you commit", "Tailored SLA & handoff"],
+        spec: {},
+      },
+    ],
+  };
+
+  // "Most Popular" mapping per category
+  const POPULAR = {
+    gaming: "highlights",
+    vlog: "driver",
+    talking: "clips",
+    others: "explainer",
+  };
+
+  const plans = PLANS[cat];
+  const [openIdx, setOpenIdx] = React.useState(null);
+
+  const handleCTA = (plan) => {
+    const estimate = estimatePlan(cat, plan.spec || {});
+    try {
+      track("pricing_estimate", { category: cat, plan: plan.key, estimate });
+      track("plan_click", { category: cat, plan: plan.key, billing: plan.billing });
+    } catch {}
+    onOpenCalendly?.();
+  };
+
+  const PriceBadge = ({ priceInr, billing }) => {
+    if (priceInr == null) {
+      return (
+        <span
+          className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full border"
+          style={{ color: "var(--orange)", borderColor: "var(--orange)" }}
+        >
+          Get Quote
+        </span>
+      );
+    }
+    return (
+      <span
+        className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full"
+        style={{ background: "rgba(232,80,2,.12)", color: "var(--orange)" }}
+      >
+        {formatINR(priceInr)} {billing === "monthly" ? "/mo" : ""}
+      </span>
+    );
+  };
+
+  /* ---------- Mobile carousel logic ---------- */
+  const railRef = React.useRef(null);
+  const [idx, setIdx] = React.useState(0);
+
+  const scrollToIndex = (i) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const clamped = Math.max(0, Math.min(i, plans.length - 1));
+    const child = rail.children[clamped];
+    if (!child) return;
+    child.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
+    setIdx(clamped);
+  };
+
+  const onPrev = () => scrollToIndex(idx - 1);
+  const onNext = () => scrollToIndex(idx + 1);
+
+  // Update active index on user scroll (mobile)
+  React.useEffect(() => {
+    if (!isMobile || !railRef.current) return;
+    const rail = railRef.current;
+    let t = null;
+    const onScroll = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const { scrollLeft, clientWidth } = rail;
+        const newIdx = Math.round(scrollLeft / clientWidth);
+        setIdx(Math.max(0, Math.min(newIdx, plans.length - 1)));
+      }, 60);
+    };
+    rail.addEventListener("scroll", onScroll, { passive: true });
+    return () => rail.removeEventListener("scroll", onScroll);
+  }, [isMobile, plans.length]);
+
+  // Keyboard arrow support
+  const onKeyDownCarousel = (e) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      onNext();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      onPrev();
+    }
   };
 
   return (
-    <section id="pricing" className="py-20 relative overflow-hidden" style={{ background: "var(--surface)" }} aria-labelledby="pricing-heading">
-      {/* soft corners */}
+    <section
+      id="pricing"
+      className="py-18 md:py-20 relative overflow-hidden"
+      style={{ background: "var(--surface)" }}
+      aria-labelledby="pricing-heading"
+    >
+      {/* Ambient glows (light & CPU-friendly) */}
       {!reduceMotion && (
         <>
-          <motion.div aria-hidden className="pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] rounded-full"
-            style={{ background: "radial-gradient(closest-side, rgba(232,80,2,.18), rgba(232,80,2,0) 70%)", filter: "blur(10px)" }}
-            initial={{ opacity: 0.28 }} animate={{ opacity: [0.16,0.28,0.2] }} transition={{ duration: 6, repeat: Infinity }} />
-          <motion.div aria-hidden className="pointer-events-none absolute -bottom-40 -right-40 w-[520px] h-[520px] rounded-full"
-            style={{ background: "radial-gradient(closest-side, rgba(255,147,87,.18), rgba(255,147,87,0) 70%)", filter: "blur(12px)" }}
-            initial={{ opacity: 0.28 }} animate={{ opacity: [0.16,0.28,0.2] }} transition={{ duration: 6.5, repeat: Infinity, delay: .4 }} />
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -top-40 -left-40 w-[420px] h-[420px] rounded-full"
+            style={{
+              background: "radial-gradient(closest-side, rgba(232,80,2,.14), rgba(232,80,2,0) 70%)",
+              filter: "blur(10px)",
+            }}
+            initial={{ opacity: 0.18 }}
+            animate={{ opacity: [0.12, 0.18, 0.15] }}
+            transition={{ duration: 7.5, repeat: Infinity }}
+          />
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-40 -right-40 w-[420px] h-[420px] rounded-full"
+            style={{
+              background: "radial-gradient(closest-side, rgba(255,147,87,.14), rgba(255,147,87,0) 70%)",
+              filter: "blur(12px)",
+            }}
+            initial={{ opacity: 0.18 }}
+            animate={{ opacity: [0.1, 0.18, 0.14] }}
+            transition={{ duration: 7.8, repeat: Infinity, delay: 0.4 }}
+          />
         </>
       )}
 
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h2 id="pricing-heading" className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
-            Simple, Proven Packages
-          </h2>
-          <p className="mt-2 text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
-            Pick what you need now—upgrade anytime as you see results.
-          </p>
+      <div className="container mx-auto px-4 max-w-7xl">
+        {/* Header */}
+        <div className="text-center mb-4 md:mb-6">
+          <motion.h2
+            id="pricing-heading"
+            className="text-3xl md:text-4xl font-bold font-['Poppins']"
+            style={{ color: "var(--text)" }}
+            initial={reduceMotion ? {} : { opacity: 0, y: 12 }}
+            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.35 }}
+          >
+            Simple, Proven Packages — tuned for your category
+          </motion.h2>
+          <motion.p
+            className="mt-2 text-sm md:text-base"
+            style={{ color: "var(--text-muted)" }}
+            initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
+            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+          >
+            Gaming, Vlogs, Talking Heads & Motion Graphics — or build your own.
+          </motion.p>
         </div>
 
-        {/* intent nudges */}
-        <div className="mx-auto mb-8 flex w-full max-w-[660px] items-center justify-center gap-2">
-          {[
-            { k: "growth", label: "Growth" },
-            { k: "consistency", label: "Consistency" },
-            { k: "polish", label: "Polish" },
-          ].map((opt) => (
-            <button key={opt.k}
-              onClick={() => setIntent(opt.k)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold border ${intent===opt.k ? "shadow" : ""}`}
-              style={{ color: "var(--text)", borderColor: "var(--border)", background: intent===opt.k ? "rgba(232,80,2,.14)" : "var(--surface-alt)" }}>
-              I want: {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {tiers.map((t, i) => {
-            const isFeatured = t.featured || highlight(t.key);
+        {/* Category Tabs */}
+        <motion.div
+          className="mx-auto mb-5 md:mb-7 flex w-full max-w-[1080px] items-center justify-center gap-2 flex-wrap"
+          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.28 }}
+        >
+          {CATS.map((c) => {
+            const on = c.k === cat;
             return (
-              <motion.article
-                key={t.name}
-                initial={{ opacity: 0, y: 18, scale: 0.98 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -8 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-                className={`group relative rounded-2xl p-6 border overflow-hidden ${isFeatured ? "ring-2 ring-[var(--orange)]/45" : ""}`}
-                style={{
-                  background: "var(--surface-alt)",
-                  borderColor: "var(--border)",
-                  boxShadow: isFeatured
-                    ? "0 18px 48px rgba(232,80,2,0.25), 0 8px 24px rgba(0,0,0,0.25)"
-                    : "0 10px 24px rgba(0,0,0,0.10)",
+              <button
+                key={c.k}
+                onClick={() => {
+                  setCat(c.k);
+                  setOpenIdx(null);
+                  setIdx(0);
                 }}
-                aria-label={`${t.name} plan, starting ${formatINR(t.priceInr)}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold border ${on ? "shadow" : ""}`}
+                style={{
+                  color: "var(--text)",
+                  borderColor: "var(--border)",
+                  background: on ? "rgba(232,80,2,.12)" : "var(--surface-alt)",
+                }}
+                aria-pressed={on}
+                aria-label={`Select ${c.label}`}
               >
-                <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{t.tag || "\u00A0"}</div>
-                <h3 className="text-xl font-semibold" style={{ color: "var(--text)" }}>{t.name}</h3>
-                <div className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{t.trial ? "One-time" : "Starting at"}</div>
-                <div className="text-4xl font-bold mt-1 font-['Poppins']" style={{ color: "var(--text)" }}>{formatINR(t.priceInr)}</div>
-
-                <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
-                  {t.bullet.map((b, bi) => (
-                    <li key={bi} className="flex items-start gap-2">
-                      <span aria-hidden="true">•</span><span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  onClick={() => { track("plan_click", { plan: t.key }); onOpenCalendly?.(); }}
-                  className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                  style={{
-                    background: isFeatured ? "linear-gradient(90deg, var(--orange), #ff9357)" : "linear-gradient(90deg, #ff9357, var(--orange))",
-                    boxShadow: isFeatured ? "0 18px 36px rgba(232,80,2,0.35)" : "0 12px 26px rgba(232,80,2,0.25)",
-                  }}
-                  aria-label={t.cta}
-                >
-                  {t.cta}
-                </button>
-
-                {t.trial && (
-                  <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    Trial fee adjusted in first package
-                  </div>
-                )}
-              </motion.article>
+                {c.label}
+              </button>
             );
           })}
+        </motion.div>
+
+        {/* Category headline */}
+        <div className="text-center mb-6">
+          <div className="text-lg md:text-xl font-semibold" style={{ color: "var(--text)" }}>
+            {CATS.find((x) => x.k === cat)?.headline}
+          </div>
+          <div className="text-sm md:text-base mt-1" style={{ color: "var(--text-muted)" }}>
+            {CATS.find((x) => x.k === cat)?.sub}
+          </div>
+        </div>
+
+        {/* ---------- DESKTOP/TABLET GRID ---------- */}
+        {!isMobile && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+            {plans.map((p, i) => {
+              const open = openIdx === i;
+              const isPopular = POPULAR[cat] === p.key;
+              return (
+                <motion.article
+                  key={`${cat}-${p.key}`}
+                  initial={{ opacity: 0, y: 22, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-12% 0px -12% 0px" }}
+                  {...(!isTouch && !reduceMotion ? { whileHover: { y: -3 } } : {})}
+                  whileTap={{ scale: 0.99 }}
+                  transition={{ duration: 0.28, ease: "easeOut" }}
+                  className="group relative rounded-2xl p-6 border"
+                  style={{
+                    background: "var(--surface-alt)",
+                    borderColor: "var(--border)",
+                    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+                  }}
+                  aria-label={`${p.name} plan`}
+                >
+                  {/* Popular ribbon */}
+                  {isPopular && (
+                    <div
+                      className="absolute -top-3 left-4 text-[11px] px-2 py-1 rounded-full font-semibold"
+                      style={{
+                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                        color: "#fff",
+                        boxShadow: "0 6px 14px rgba(232,80,2,.25)",
+                      }}
+                    >
+                      Most Popular
+                    </div>
+                  )}
+
+                  <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                    {p.tag || "\u00A0"} {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}
+                    {p.billing === "monthly" ? " • cancel anytime" : ""}
+                  </div>
+
+                  <h3
+                    className="text-xl font-semibold flex items-center flex-wrap"
+                    style={{ color: "var(--text)" }}
+                  >
+                    <span>{p.name}</span>
+                    <PriceBadge priceInr={p.priceInr} billing={p.billing} />
+                  </h3>
+
+                  <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
+                    {p.bullets.map((b, bi) => (
+                      <li key={bi} className="flex items-start gap-2">
+                        <span aria-hidden>•</span>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Expandable details */}
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setOpenIdx(open ? null : i)}
+                      className="text-sm underline"
+                      style={{ color: "var(--orange)" }}
+                      aria-expanded={open}
+                      aria-controls={`inc-${cat}-${i}`}
+                    >
+                      {open ? "Hide details" : "What’s included"}
+                    </button>
+                    <motion.div
+                      id={`inc-${cat}-${i}`}
+                      initial={false}
+                      animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ overflow: "hidden" }}
+                      className="mt-2"
+                    >
+                      <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+                        {p.includes?.map((x, xi) => (
+                          <li key={xi} className="flex items-start gap-2">
+                            <span aria-hidden>–</span>
+                            <span>{x}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </motion.div>
+                  </div>
+
+                  <button
+                    onClick={() => handleCTA(p)}
+                    className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                    style={{
+                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                      boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
+                    }}
+                    aria-label={p.cta}
+                  >
+                    {p.cta}
+                  </button>
+
+                  <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    No payment needed to preview concepts.
+                  </div>
+                </motion.article>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ---------- MOBILE CAROUSEL ---------- */}
+        {isMobile && (
+          <div
+            role="region"
+            aria-label={`${cat} plans carousel`}
+            className="relative"
+            onKeyDown={onKeyDownCarousel}
+          >
+            {/* Arrow buttons */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <button
+                type="button"
+                onClick={onPrev}
+                className="rounded-full border px-3 py-1 text-sm"
+                style={{ color: "var(--text)", borderColor: "var(--border)", background: "var(--surface-alt)" }}
+                aria-label="Previous plan"
+                disabled={idx <= 0}
+              >
+                ←
+              </button>
+              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Use ← → to browse
+              </div>
+              <button
+                type="button"
+                onClick={onNext}
+                className="rounded-full border px-3 py-1 text-sm"
+                style={{ color: "var(--text)", borderColor: "var(--border)", background: "var(--surface-alt)" }}
+                aria-label="Next plan"
+                disabled={idx >= plans.length - 1}
+              >
+                →
+              </button>
+            </div>
+
+            {/* Rail */}
+            <div
+              ref={railRef}
+              tabIndex={0}
+              aria-roledescription="carousel"
+              aria-label="Plans"
+              className="flex overflow-x-auto snap-x snap-mandatory scroll-px-4 gap-4 px-1 no-scrollbar"
+              style={{
+                scrollBehavior: reduceMotion ? "auto" : "smooth",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              {plans.map((p, i) => {
+                const isPopular = POPULAR[cat] === p.key;
+                const open = openIdx === i;
+                return (
+                  <article
+                    key={`${cat}-${p.key}`}
+                    className="snap-start shrink-0 w-[92%] mx-2 rounded-2xl p-5 border"
+                    style={{
+                      background: "var(--surface-alt)",
+                      borderColor: "var(--border)",
+                      boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+                    }}
+                    aria-label={`${p.name} plan`}
+                  >
+                    {/* Popular ribbon */}
+                    {isPopular && (
+                      <div
+                        className="inline-block -mt-3 mb-2 text-[11px] px-2 py-1 rounded-full font-semibold"
+                        style={{
+                          background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                          color: "#fff",
+                          boxShadow: "0 6px 14px rgba(232,80,2,.25)",
+                        }}
+                      >
+                        Most Popular
+                      </div>
+                    )}
+
+                    <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                      {p.tag || "\u00A0"} {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}{" "}
+                      {p.billing === "monthly" ? "• cancel anytime" : ""}
+                    </div>
+
+                    <h3 className="text-lg font-semibold flex items-center flex-wrap" style={{ color: "var(--text)" }}>
+                      <span>{p.name}</span>
+                      <PriceBadge priceInr={p.priceInr} billing={p.billing} />
+                    </h3>
+
+                    <ul className="mt-3 space-y-1.5 text-sm" style={{ color: "var(--text)" }}>
+                      {p.bullets.map((b, bi) => (
+                        <li key={bi} className="flex items-start gap-2">
+                          <span aria-hidden>•</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Expandable details */}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setOpenIdx(open ? null : i)}
+                        className="text-sm underline"
+                        style={{ color: "var(--orange)" }}
+                        aria-expanded={open}
+                        aria-controls={`m-inc-${cat}-${i}`}
+                      >
+                        {open ? "Hide details" : "What’s included"}
+                      </button>
+                      <div
+                        id={`m-inc-${cat}-${i}`}
+                        hidden={!open}
+                        className="mt-1"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        <ul className="text-sm space-y-1.5">
+                          {p.includes?.map((x, xi) => (
+                            <li key={xi} className="flex items-start gap-2">
+                              <span aria-hidden>–</span>
+                              <span>{x}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleCTA(p)}
+                      className="w-full mt-4 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{
+                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                        boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
+                      }}
+                      aria-label={p.cta}
+                    >
+                      {p.cta} →
+                    </button>
+
+                    <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      No payment needed to preview concepts.
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Dots */}
+            <div className="mt-3 flex items-center justify-center gap-2" aria-hidden="true">
+              {plans.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => scrollToIndex(i)}
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    background: i === idx ? "var(--orange)" : "var(--border)",
+                    transform: i === idx ? "scale(1.2)" : "scale(1)",
+                    transition: "transform .2s ease",
+                  }}
+                  aria-label={`Go to plan ${i + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Add-ons & Always included */}
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div
+            className="rounded-2xl p-5 border"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
+              Add-ons (any tier)
+            </div>
+            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+              <li>Rush 24h: +20% cost</li>
+              <li>Extra A/B thumbnail: +30%</li>
+              <li>Advanced motion pack (long-form): +₹200/min</li>
+              <li>Multi-language captions (2× SRT): +₹2,000/video</li>
+              <li>Face-swap / Voice generation: custom — consent-first & policy-compliant (get quote)</li>
+            </ul>
+          </div>
+          <div
+            className="rounded-2xl p-5 border"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
+              Always included
+            </div>
+            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+              <li>1 major + 2 minor revision rounds per deliverable</li>
+              <li>Organized handoff, export presets, project files on request (very large timelines may add cost)</li>
+              <li>AI for speed (transcripts, hook/metadata/thumbnail ideation) + human-directed finish</li>
+              <li>Standard turnaround: 48–72 hours (coordinated queues on larger plans)</li>
+            </ul>
+          </div>
         </div>
 
         {/* reassurance */}
         <div className="text-center mt-8">
           <p className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
-            100% satisfaction promise — if you don’t love the first delivery, we’ll revise it or refund the trial.
+            Prices in INR. Taxes extra if applicable. Don’t love the first delivery? We’ll revise or credit your trial.
           </p>
         </div>
       </div>
+
+      {/* Hide scrollbar utility (scoped) */}
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </section>
   );
 };
 
 
-
-
-/* ===================== Quick Lead Form (labels + creative placeholders) ===================== */
-
+/* ===================== Quick Lead Form (polished + autosave + a11y + analytics) ===================== */
 const QuickLeadForm = () => {
   const [name, setName] = React.useState("");
   const [handle, setHandle] = React.useState("");
@@ -1935,6 +2476,9 @@ const QuickLeadForm = () => {
   const [toast, setToast] = React.useState(null); // {type:'success'|'error', text:string}
   const [website, setWebsite] = React.useState(""); // honeypot
   const [selected, setSelected] = React.useState([]);
+  const [contactMethod, setContactMethod] = React.useState("email"); // 'email' | 'whatsapp'
+  const formRef = React.useRef(null);
+  const startedAt = React.useRef(Date.now());
 
   const interests = React.useMemo(
     () => ["Video Editing", "Thumbnails", "Shorts", "GFX", "Strategy"],
@@ -1951,66 +2495,92 @@ const QuickLeadForm = () => {
   const clean = (v) => (v || "").replace(/\s+/g, " ").trim();
   const valid = clean(name).length >= 2 && isEmail(email);
 
-  const toggleChip = (label) =>
-    setSelected((prev) =>
-      prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]
-    );
-
-  const makeMailto = () => {
-    const to = "hello@shinelstudiosofficial.com";
-    const subject = `Quick Quote Request — ${clean(name) || "Creator"}`;
-    const lines = [
-      `Name: ${clean(name)}`,
-      `Handle/URL: ${clean(handle)}`,
-      `Email: ${clean(email)}`,
-      selected.length ? `Interests: ${selected.join(", ")}` : null,
-      msg ? `Note: ${clean(msg)}` : null,
-      "",
-      "Hi Shinel Studios, I'd like a quick quote and a content audit.",
-    ].filter(Boolean);
-    const body = lines.join("\n");
-    return `mailto:${to}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
-  };
-
-  const whatsappURL = () => {
-    const base = "https://wa.me/918968141585";
-    const text =
-      `Hi Shinel Studios!` +
-      ` Name: ${clean(name) || "-"}` +
-      ` | Handle: ${clean(handle) || "-"}` +
-      ` | Email: ${clean(email) || "-"}` +
-      (selected.length ? ` | Interests: ${selected.join(", ")}` : "");
-    return `${base}?text=${encodeURIComponent(text)}`;
-  };
-
   const showToast = (type, text) => {
     setToast({ type, text });
     window.clearTimeout(showToast._t);
     showToast._t = window.setTimeout(() => setToast(null), 2600);
   };
 
-  const onSubmit = (e) => {
-    e?.preventDefault?.();
-    if (website) return showToast("error", "Something went wrong. Please try again.");
-    if (!valid) {
-      if (!name.trim()) return showToast("error", "Please enter your name.");
-      if (!isEmail(email)) return showToast("error", "Please enter a valid email.");
-    }
-    setSending(true);
+  const toggleChip = (label) =>
+    setSelected((prev) => {
+      const on = prev.includes(label);
+      try {
+        window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_interest_toggle", label, on: !on } }));
+      } catch {}
+      return on ? prev.filter((x) => x !== label) : [...prev, label];
+    });
+
+  // ---- Smart helpers --------------------------------------------------------
+  const getUTM = () => {
     try {
-      const href = makeMailto();
-      setTimeout(() => {
-        window.location.href = href;
-        setSending(false);
-        showToast("success", "Opening your email app…");
-      }, 120);
+      return JSON.parse(localStorage.getItem("utm") || "{}");
     } catch {
-      setSending(false);
-      showToast("error", "Could not open your email app.");
+      return {};
     }
   };
+
+  const draftLines = () => {
+    const utm = getUTM();
+    const lines = [
+      `Name: ${clean(name)}`,
+      `Handle/URL: ${clean(handle)}`,
+      `Email: ${clean(email)}`,
+      selected.length ? `Interests: ${selected.join(", ")}` : null,
+      msg ? `Note: ${clean(msg)}` : null,
+      Object.keys(utm).length ? `UTM: ${Object.entries(utm).map(([k, v]) => `${k}=${v}`).join("&")}` : null,
+      "",
+      "Hi Shinel Studios, I'd like a quick quote and a content audit.",
+    ].filter(Boolean);
+    return lines;
+  };
+
+  const makeMailto = () => {
+    const to = "hello@shinelstudiosofficial.com";
+    const subject = `Quick Quote Request — ${clean(name) || "Creator"}`;
+    const body = draftLines().join("\n");
+    return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const whatsappURL = () => {
+    const base = "https://wa.me/918968141585";
+    const lines = draftLines();
+    const text = `Hi Shinel Studios!\n${lines.join("\n")}`;
+    return `${base}?text=${encodeURIComponent(text)}`;
+  };
+
+  // ---- Autosave / restore ---------------------------------------------------
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ss_lead");
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s?.name) setName(s.name);
+      if (s?.handle) setHandle(s.handle);
+      if (s?.email) setEmail(s.email);
+      if (Array.isArray(s?.selected)) setSelected(s.selected);
+      if (typeof s?.msg === "string") setMsg(s.msg);
+      if (s?.contactMethod) setContactMethod(s.contactMethod);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    const payload = { name, handle, email, selected, msg, contactMethod };
+    try { localStorage.setItem("ss_lead", JSON.stringify(payload)); } catch {}
+  }, [name, handle, email, selected, msg, contactMethod]);
+
+  // Hide sticky mobile CTA while typing
+  React.useEffect(() => {
+    const el = formRef.current;
+    if (!el) return;
+    const onFocusIn = () => window.dispatchEvent(new Event("ss:hideMobileCTA"));
+    const onFocusOut = () => window.dispatchEvent(new Event("ss:showMobileCTA"));
+    el.addEventListener("focusin", onFocusIn);
+    el.addEventListener("focusout", onFocusOut);
+    return () => {
+      el.removeEventListener("focusin", onFocusIn);
+      el.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   // Ask the quick quote bar to hide when this section is near
   React.useEffect(() => {
@@ -2027,6 +2597,57 @@ const QuickLeadForm = () => {
     return () => io.disconnect();
   }, []);
 
+  // ---- Submit ---------------------------------------------------------------
+  const onSubmit = async (e) => {
+    e?.preventDefault?.();
+
+    // Simple bot guard: honeypot + too-fast submit (< 1500ms)
+    const elapsed = Date.now() - startedAt.current;
+    if (website || elapsed < 1500) {
+      return showToast("error", "Something went wrong. Please try again.");
+    }
+
+    if (!valid) {
+      if (!name.trim()) return showToast("error", "Please enter your name.");
+      if (!isEmail(email)) return showToast("error", "Please enter a valid email.");
+    }
+
+    setSending(true);
+    try {
+      if (contactMethod === "whatsapp") {
+        const href = whatsappURL();
+        setTimeout(() => {
+          window.open(href, "_blank", "noreferrer");
+          setSending(false);
+          showToast("success", "Opening WhatsApp…");
+          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "whatsapp" } })); } catch {}
+        }, 120);
+      } else {
+        const href = makeMailto();
+        const openedViaMailto = () => {
+          // Heuristic: we can't detect reliably; provide clipboard fallback after a delay
+          setTimeout(async () => {
+            if (!document.hasFocus() && navigator.clipboard) return; // likely switched to mail client
+            try {
+              await navigator.clipboard.writeText(draftLines().join("\n"));
+              showToast("success", "Copied message to clipboard — paste in your email app.");
+            } catch {}
+          }, 900);
+        };
+        setTimeout(() => {
+          window.location.href = href;
+          openedViaMailto();
+          setSending(false);
+          showToast("success", "Opening your email app…");
+          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "email" } })); } catch {}
+        }, 120);
+      }
+    } catch {
+      setSending(false);
+      showToast("error", "Could not open your app. Try the other button below.");
+    }
+  };
+
   return (
     <section
       id="leadform-section"
@@ -2034,7 +2655,7 @@ const QuickLeadForm = () => {
       style={{ background: "var(--surface-alt)" }}
       aria-labelledby="leadform-heading"
     >
-      <div className="container mx-auto px-4 max-w-3xl relative">
+      <div className="container mx-auto px-4 max-w-3xl relative" ref={formRef}>
         {/* Toast */}
         <AnimatePresence>
           {toast && (
@@ -2052,7 +2673,8 @@ const QuickLeadForm = () => {
                     : "linear-gradient(90deg,#e11d48,#f97316)",
                 boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
               }}
-              role="status" aria-live="polite"
+              role="status"
+              aria-live="polite"
             >
               {toast.text}
             </motion.div>
@@ -2071,12 +2693,15 @@ const QuickLeadForm = () => {
           <p className="mt-2 text-base md:text-lg" style={{ color: "var(--text-muted)" }}>
             Tell us where you post — we’ll reply within 24 hours.
           </p>
+          <div className="mt-3 flex items-center justify-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>No spam</span>
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>Consent-first AI</span>
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>Reply in 24h</span>
+          </div>
         </div>
 
         {/* Honeypot */}
-        <label className="sr-only" htmlFor="website">
-          Website
-        </label>
+        <label className="sr-only" htmlFor="website">Website</label>
         <input
           id="website"
           name="website"
@@ -2104,6 +2729,7 @@ const QuickLeadForm = () => {
                 style={inputStyle}
                 placeholder="Alex from Daily Vlogs"
                 autoComplete="name"
+                aria-invalid={clean(name).length < 2}
               />
             </div>
 
@@ -2129,15 +2755,43 @@ const QuickLeadForm = () => {
               <input
                 id="lead-email"
                 type="email"
+                inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-[48px] rounded-2xl px-4 outline-none"
                 style={inputStyle}
                 placeholder="creator@email.com"
                 autoComplete="email"
+                aria-invalid={!isEmail(email)}
+                aria-describedby="email-hint"
               />
+              <div id="email-hint" className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                We’ll only use this to reply to your quote.
+              </div>
             </div>
           </div>
+
+          {/* Preferred contact */}
+          <fieldset className="mt-1">
+            <legend className="text-sm mb-2" style={{ color: "var(--text)" }}>How should we contact you?</legend>
+            <div className="flex gap-3">
+              {[
+                { k: "email", label: "Email" },
+                { k: "whatsapp", label: "WhatsApp" },
+              ].map((opt) => (
+                <label key={opt.k} className="inline-flex items-center gap-2 text-sm" style={{ color: "var(--text)" }}>
+                  <input
+                    type="radio"
+                    name="contactMethod"
+                    value={opt.k}
+                    checked={contactMethod === opt.k}
+                    onChange={() => setContactMethod(opt.k)}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           {/* Interest chips */}
           <div>
@@ -2206,7 +2860,7 @@ const QuickLeadForm = () => {
               whileTap={!sending ? { scale: 0.98 } : {}}
               aria-live="polite"
             >
-              {sending ? "Opening mail…" : "Send & Get Quote"}
+              {sending ? (contactMethod === "whatsapp" ? "Opening WhatsApp…" : "Opening mail…") : "Send & Get Quote"}
             </motion.button>
 
             <motion.a
@@ -2217,6 +2871,9 @@ const QuickLeadForm = () => {
               style={{ border: "2px solid var(--orange)", color: "var(--orange)" }}
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "leadform" } })); } catch {}
+              }}
             >
               Message on WhatsApp
             </motion.a>
@@ -2231,145 +2888,353 @@ const QuickLeadForm = () => {
   );
 };
 
-/* ===================== Contact ===================== */
-const ContactCTA = () => (
-  <section
-    id="contact"
-    className="w-full py-20"
-    style={{ backgroundImage: 'linear-gradient(90deg, var(--orange), #ff9357)' }}
-  >
-    <div className="max-w-7xl mx-auto px-4 text-center">
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className="max-w-4xl mx-auto"
-      >
-        <h2
-          className="text-4xl md:text-6xl font-bold mb-6 font-['Poppins']"
-          style={{ color: '#fff' }}
-        >
-          Let’s Build Something Amazing Together
-        </h2>
-        <p
-          className="text-xl mb-8 max-w-2xl mx-auto"
-          style={{ color: 'rgba(255,255,255,0.9)' }}
-        >
-          Ready to take your content to the next level? Reach out and let’s start crafting your success story.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <motion.a
-            href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel.%20Can%20we%20talk?"
-            target="_blank"
-            rel="noreferrer"
-            className="bg-white text-black px-8 py-4 rounded-lg font-medium text-lg"
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            WhatsApp Us
-          </motion.a>
-          <motion.a
-            href="mailto:hello@shinelstudiosofficial.com"
-            className="px-8 py-4 rounded-lg font-medium text-lg border-2 border-white text-white"
-            whileHover={{ y: -2, backgroundColor: '#fff', color: '#000' }}
-          >
-            Email Us
-          </motion.a>
-        </div>
-      </motion.div>
-    </div>
-  </section>
-);
 
-/* ===================== Sticky Mobile CTA (safe-area, keyboard-aware) ===================== */
-const StickyMobileCTA = ({ onAudit }) => {
-  const [hidden, setHidden] = React.useState(false);
+/* ===================== Contact (polished + mobile-first + CPU-friendly) ===================== */
+const ContactCTA = ({ onBook }) => {
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
+  const buildWhatsApp = () => {
+    const base = "https://wa.me/918968141585";
+    let text = "Hi Shinel Studios! I want to grow my channel. Can we talk?";
+    try {
+      const utm = JSON.parse(localStorage.getItem("utm") || "{}");
+      const meta = Object.entries(utm).map(([k, v]) => `${k}=${v}`).join("&");
+      if (meta) text += `\nUTM: ${meta}`;
+    } catch {}
+    return `${base}?text=${encodeURIComponent(text)}`;
+  };
+
+  const buildMailto = () => {
+    const to = "hello@shinelstudiosofficial.com";
+    const subject = "Quick chat about my content growth";
+    const body = [
+      "Hi Shinel Studios,",
+      "",
+      "I'd love to talk about improving my thumbnails/retention and overall growth.",
+      "Can we schedule a quick call?",
+      "",
+      "— Sent from Contact section",
+    ].join("\n");
+    return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const handleBook = () => {
+    try {
+      window.dispatchEvent(new Event("calendly:open"));
+      window.dispatchEvent(
+        new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "contact" } })
+      );
+    } catch {}
+    onBook?.();
+  };
+
+  return (
+    <section
+      id="contact"
+      className="w-full py-16 md:py-20 relative overflow-hidden"
+      style={{
+        backgroundImage: "linear-gradient(90deg, var(--orange), #ff9357)",
+      }}
+      aria-labelledby="contact-heading"
+    >
+      {/* soft vignette for contrast */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(80% 120% at 50% 0%, rgba(0,0,0,.18) 0%, rgba(0,0,0,0) 55%), radial-gradient(120% 80% at 50% 100%, rgba(0,0,0,.20) 0%, rgba(0,0,0,0) 50%)",
+        }}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 relative">
+        <motion.div
+          initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="max-w-4xl mx-auto text-center"
+        >
+          <h2
+            id="contact-heading"
+            className="text-3xl md:text-6xl font-bold mb-4 md:mb-6 font-['Poppins']"
+            style={{ color: "#fff", lineHeight: 1.08 }}
+          >
+            Let’s Build Something Amazing Together
+          </h2>
+
+          <p
+            className="text-lg md:text-xl mb-6 md:mb-8 mx-auto max-w-2xl"
+            style={{ color: "rgba(255,255,255,0.9)" }}
+          >
+            Ready to take your content to the next level? Reach out — we’ll map a plan and start shipping wins.
+          </p>
+
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center">
+            <motion.a
+              href={buildWhatsApp()}
+              target="_blank"
+              rel="noreferrer"
+              className="bg-white text-black px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg shadow-sm text-center"
+              whileHover={reduceMotion ? {} : { y: -2 }}
+              whileTap={reduceMotion ? {} : { scale: 0.98 }}
+              aria-label="Chat with us on WhatsApp"
+              onClick={() => {
+                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "contact" } })); } catch {}
+              }}
+            >
+              WhatsApp Us
+            </motion.a>
+
+            <motion.button
+              type="button"
+              onClick={handleBook}
+              className="px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg text-white"
+              style={{
+                border: "2px solid rgba(255,255,255,.9)",
+                background:
+                  "linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,.08))",
+                backdropFilter: "blur(4px)",
+              }}
+              whileHover={reduceMotion ? {} : { y: -2 }}
+              whileTap={reduceMotion ? {} : { scale: 0.98 }}
+              aria-label="Book a free 15-minute audit"
+            >
+              Book Free Audit
+            </motion.button>
+
+            <motion.a
+              href={buildMailto()}
+              className="px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg border-2 border-white text-white text-center"
+              whileHover={reduceMotion ? {} : { y: -2 }}
+              whileTap={reduceMotion ? {} : { scale: 0.98 }}
+              aria-label="Email us"
+              onClick={() => {
+                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_email", src: "contact" } })); } catch {}
+              }}
+            >
+              Email Us
+            </motion.a>
+          </div>
+
+          {/* Trust badges */}
+          <div className="mt-5 md:mt-6 flex flex-wrap items-center justify-center gap-2.5 text-[12px] md:text-sm">
+            {[
+              "Reply in 24h",
+              "Consent-first AI",
+              "No spam",
+              "Project files on request",
+            ].map((t, i) => (
+              <span
+                key={i}
+                className="px-2.5 py-1 rounded-full"
+                style={{
+                  color: "rgba(255,255,255,0.92)",
+                  border: "1px solid rgba(255,255,255,0.5)",
+                  background: "rgba(255,255,255,0.08)",
+                }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+};
+
+/* ===================== Sticky Mobile CTA (compact, footer-aware) ===================== */
+const StickyMobileCTA = ({ onAudit, variant = "auto" }) => {
+  const [hidden, setHidden] = React.useState(true);
+  const [iconsOnly, setIconsOnly] = React.useState(false);
+  const [scrollDir, setScrollDir] = React.useState("up"); // up | down
+  const lastYRef = React.useRef(0);
+
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  // decide layout once (icon-only for very narrow screens or explicit variant)
+  React.useEffect(() => {
+    const narrow = typeof window !== "undefined" ? window.innerWidth < 360 : false;
+    setIconsOnly(variant === "icons" || (variant === "auto" && narrow));
+  }, [variant]);
+
+  /* ----- show after 20% scroll & based on direction ----- */
+  React.useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      const h = Math.max(
+        1,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+      const past20 = y / h > 0.2;
+
+      const dir = y > lastYRef.current ? "down" : "up";
+      lastYRef.current = y;
+      setScrollDir(dir);
+
+      // visible only when past 20% and scrolling up
+      setHidden(!(past20 && dir === "up"));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* ----- auto-hide when near footer/contact/leadform ----- */
+  React.useEffect(() => {
+    const selectors = ["#site-footer", "#contact", "#leadform-section"];
+    const targets = selectors
+      .map((s) => document.querySelector(s))
+      .filter(Boolean);
+    if (!targets.length || !("IntersectionObserver" in window)) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        // hide if ANY of these is in view at least a little
+        const near = entries.some((e) => e.isIntersecting);
+        if (near) setHidden(true);
+      },
+      { rootMargin: "0px 0px -20% 0px", threshold: [0, 0.05] }
+    );
+    targets.forEach((t) => io.observe(t));
+    return () => io.disconnect();
+  }, []);
+
+  /* ----- keyboard-aware (don’t overlap inputs) ----- */
   React.useEffect(() => {
     const vv = window.visualViewport;
-
-    const handleVV = () => {
-      if (!vv) return;
+    if (!vv) return;
+    const onVV = () => {
       const keyboardLikely = window.innerHeight - vv.height > 140;
-      setHidden(keyboardLikely);
+      if (keyboardLikely) setHidden(true);
     };
-
-    const hide = () => setHidden(true);
-    const show = () => setHidden(false);
-
-    vv?.addEventListener("resize", handleVV);
-    vv?.addEventListener("scroll", handleVV);
-    window.addEventListener("focusin", handleVV);
-    window.addEventListener("focusout", handleVV);
-    window.addEventListener("ss:hideMobileCTA", hide);
-    window.addEventListener("ss:showMobileCTA", show);
-    window.addEventListener("calendly:open", hide);
-    window.addEventListener("calendly:close", show);
-
+    vv.addEventListener("resize", onVV);
+    vv.addEventListener("scroll", onVV);
     return () => {
-      vv?.removeEventListener("resize", handleVV);
-      vv?.removeEventListener("scroll", handleVV);
-      window.removeEventListener("focusin", handleVV);
-      window.removeEventListener("focusout", handleVV);
-      window.removeEventListener("ss:hideMobileCTA", hide);
-      window.removeEventListener("ss:showMobileCTA", show);
-      window.removeEventListener("calendly:open", hide);
-      window.removeEventListener("calendly:close", show);
+      vv.removeEventListener("resize", onVV);
+      vv.removeEventListener("scroll", onVV);
     };
   }, []);
 
+  /* ----- listen to other UI events (Calendly, lead form) ----- */
+  React.useEffect(() => {
+    const hide = () => setHidden(true);
+    const show = () => setHidden(false);
+    window.addEventListener("leadform:visible", hide);
+    window.addEventListener("calendly:open", hide);
+    window.addEventListener("calendly:close", show);
+    window.addEventListener("ss:hideMobileCTA", hide);
+    window.addEventListener("ss:showMobileCTA", show);
+    return () => {
+      window.removeEventListener("leadform:visible", hide);
+      window.removeEventListener("calendly:open", hide);
+      window.removeEventListener("calendly:close", show);
+      window.removeEventListener("ss:hideMobileCTA", hide);
+      window.removeEventListener("ss:showMobileCTA", show);
+    };
+  }, []);
+
+  if (variant === "off") return null;
   if (hidden) return null;
+
+  const waHref =
+    "https://wa.me/918968141585?text=" +
+    encodeURIComponent("Hi Shinel Studios! I want to grow my channel. Can we talk?");
+
+  const onQuote = () => {
+    try {
+      document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
+      window.dispatchEvent(
+        new CustomEvent("analytics", { detail: { ev: "cta_click_quote", src: "sticky" } })
+      );
+    } catch {}
+  };
+
+  const onWhatsApp = () => {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "sticky" } })
+      );
+    } catch {}
+  };
 
   return (
     <div
       className="md:hidden fixed left-0 right-0 z-40 px-3"
-      style={{ bottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}
+      style={{
+        bottom: "max(10px, env(safe-area-inset-bottom, 10px))",
+      }}
       role="region"
       aria-label="Quick contact options"
     >
       <div
-        className="flex gap-2 rounded-2xl p-2 shadow-xl header-blur"
-        style={{ border: "1px solid var(--border)" }}
+        className="mx-auto w-full max-w-sm flex items-center justify-center gap-2 rounded-2xl p-1.5 shadow-xl"
+        style={{
+          border: "1px solid var(--border)",
+          background: "color-mix(in oklab, var(--surface) 85%, transparent)",
+          backdropFilter: "blur(6px)",
+          boxShadow: "0 8px 24px rgba(0,0,0,.25)",
+          transition: "transform .2s ease, opacity .2s ease",
+          transform: reduceMotion ? "none" : "translateY(0)",
+          opacity: 0.98,
+        }}
       >
+        {/* WhatsApp */}
         <a
-          href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel."
+          href={waHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn-brand flex-1 text-center"
-          onClick={() => {
-            try {
-              window.dispatchEvent(
-                new CustomEvent("analytics", {
-                  detail: { ev: "cta_click_whatsapp", src: "sticky" },
-                })
-              );
-            } catch {}
+          onClick={onWhatsApp}
+          className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 rounded-xl font-semibold outline-none"
+          style={{
+            background: "linear-gradient(90deg, var(--orange), #ff9357)",
+            color: "#fff",
           }}
           aria-label="Chat on WhatsApp"
         >
-          WhatsApp
+          <MessageCircle size={18} />
+          {!iconsOnly && <span className="truncate">WhatsApp</span>}
         </a>
 
-        <a
-          href="#contact"
-          className="btn-ghost flex-1 text-center"
-          style={{ borderColor: "var(--orange)", color: "var(--orange)" }}
-          onClick={(e) => {
-            try {
-              window.dispatchEvent(
-                new CustomEvent("analytics", {
-                  detail: { ev: "cta_click_quote", src: "sticky" },
-                })
-              );
-            } catch {}
-            // To open Calendly instead of scrolling:
-            // e.preventDefault(); onAudit?.();
+        {/* Get Quote */}
+        <button
+          type="button"
+          onClick={onQuote}
+          className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 rounded-xl font-semibold"
+          style={{
+            border: "2px solid var(--orange)",
+            color: "var(--orange)",
+            background: "transparent",
           }}
           aria-label="Get a quick quote"
         >
-          Get Quote
-        </a>
+          <FileText size={18} />
+          {!iconsOnly && <span className="truncate">Get Quote</span>}
+        </button>
       </div>
+
+      {/* tiny pull-hint when labels are hidden */}
+      {iconsOnly && (
+        <div className="mt-1 grid place-items-center">
+          <div
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+            style={{
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+              background: "var(--surface-alt)",
+            }}
+          >
+            <ChevronUp size={12} />
+            <span>More options above</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2426,11 +3291,6 @@ const SeoSchema = () => {
         "name": "YouTube Editing & Packaging",
         "provider": { "@type": "Organization", "name": "Shinel Studios", "url": origin },
         "areaServed": "IN",
-        "offers": [
-          { "@type": "Offer", "name": "Starter", "priceCurrency": "INR", "price": "3999", "availability": "https://schema.org/InStock" },
-          { "@type": "Offer", "name": "Shorts Pack", "priceCurrency": "INR", "price": "6000", "availability": "https://schema.org/InStock" },
-          { "@type": "Offer", "name": "Creator Essentials", "priceCurrency": "INR", "price": "9999", "availability": "https://schema.org/InStock" }
-        ],
         "url": `${origin}/#services`
       },
       {
@@ -2454,7 +3314,7 @@ const SeoSchema = () => {
 };
 
 /* ===================== Page Component (conversion-first order) ===================== */
-function ShinelStudiosHomepage() {
+export default function ShinelStudiosHomepage() {
   const isDark = document.documentElement.classList.contains("dark");
   const [showCalendly, setShowCalendly] = React.useState(false);
 
@@ -2484,22 +3344,22 @@ function ShinelStudiosHomepage() {
       {/* 7) Testimonials (human proof + analytics) */}
       <TestimonialsSection isDark={isDark} />
 
-      {/* 8) Pricing (intent toggles + Calendly CTA) */}
+      {/* 8) Pricing (category tabs + estimator, no public unit prices) */}
       <Pricing onOpenCalendly={() => setShowCalendly(true)} />
 
-      {/* 8.5) ROI / CTR Lift Calculator (lead magnet → micro-commitment) */}
+      {/* 8.5) ROI / CTR Lift Calculator */}
       <RoiCalculator onBook={() => setShowCalendly(true)} />
 
-      {/* 9) Single lead capture (no duplicate forms) */}
+      {/* 9) Single lead capture */}
       <QuickLeadForm />
 
-      {/* 10) FAQ (objection handling) */}
+      {/* 10) FAQ */}
       <FAQSection />
 
-      {/* 11) Process (how it works) */}
+      {/* 11) Process */}
       <ProcessSection />
 
-      {/* 12) Final CTA (secondary contact paths) */}
+      {/* 12) Final CTA */}
       <ContactCTA />
 
       {/* Utilities / overlays */}
@@ -2509,6 +3369,3 @@ function ShinelStudiosHomepage() {
     </div>
   );
 }
-
-export default ShinelStudiosHomepage;
-
