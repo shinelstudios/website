@@ -1,71 +1,81 @@
-// src/components/ProtectedRoute.jsx
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
-function parseJwt(t) {
+const API_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "";
+
+// tiny, safe decode
+function parseJwt(token) {
   try {
-    const [, p] = String(t).split(".");
-    if (!p) return null;
-    const json = atob(p.replace(/-/g, "+").replace(/_/g, "/"));
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
     return JSON.parse(decodeURIComponent(escape(json)));
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-export default function ProtectedRoute({ children }) {
+async function tryRefresh() {
+  const refresh = localStorage.getItem("refresh");
+  if (!refresh) return null;
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${refresh}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!data?.token) return null;
+
+  try {
+    localStorage.setItem("token", data.token);
+    if (data.refresh) localStorage.setItem("refresh", data.refresh);
+    if (data.role) localStorage.setItem("userRole", data.role);
+  } catch {}
+  window.dispatchEvent(new Event("auth:changed"));
+  return data.token;
+}
+
+export default function ProtectedRoute({ children, roles }) {
   const loc = useLocation();
-  const [status, setStatus] = React.useState("checking"); // checking | ok | login
+  const [status, setStatus] = React.useState("checking"); // checking | ok | redirect
 
   React.useEffect(() => {
-    (async () => {
-      try {
-        const token = localStorage.getItem("token") || "";
-        if (!token) return setStatus("login");
+    let cancelled = false;
 
-        const payload = parseJwt(token) || {};
-        const now = Math.floor(Date.now() / 1000);
-        const exp = Number(payload.exp || 0);
+    async function check() {
+      const token = localStorage.getItem("token");
+      const payload = token ? parseJwt(token) : null;
+      const now = Math.floor(Date.now() / 1000);
+      const expired = !payload || (payload.exp && payload.exp <= now);
 
-        // still valid
-        if (exp && exp > now + 15) {
-          // keep local user fields in sync
-          if (payload.email) localStorage.setItem("userEmail", payload.email);
-          if (payload.firstName) localStorage.setItem("userFirstName", payload.firstName);
-          if (payload.lastName) localStorage.setItem("userLastName", payload.lastName);
-          if (payload.role) localStorage.setItem("userRole", payload.role);
-          setStatus("ok");
-          return;
-        }
+      let t = token;
 
-        // try refresh
-        const res = await fetch("/auth/refresh", { method: "POST", credentials: "include" });
-        if (!res.ok) return setStatus("login");
-        const data = await res.json();
-        if (!data?.token) return setStatus("login");
-
-        localStorage.setItem("token", data.token);
-        const p2 = parseJwt(data.token) || {};
-        if (p2.email) localStorage.setItem("userEmail", p2.email);
-        if (p2.firstName) localStorage.setItem("userFirstName", p2.firstName);
-        if (p2.lastName) localStorage.setItem("userLastName", p2.lastName);
-        if (p2.role) localStorage.setItem("userRole", p2.role);
-        window.dispatchEvent(new Event("auth:changed"));
-        setStatus("ok");
-      } catch {
-        setStatus("login");
+      if (expired) {
+        t = await tryRefresh();
       }
-    })();
-  }, []);
 
-  if (status === "checking") {
-    return (
-      <div className="min-h-[40vh] grid place-items-center" style={{ color: "var(--text)" }}>
-        Checking access…
-      </div>
-    );
-  }
-  if (status === "login") {
-    // you asked to land on Home after login, but if you’d rather bounce back here, swap to `?next=${loc.pathname}`
-    return <Navigate to="/login" replace />;
-  }
+      if (!t) {
+        if (!cancelled) setStatus("redirect");
+        return;
+      }
+
+      // role check
+      const role = (parseJwt(t)?.role || localStorage.getItem("userRole") || "").toLowerCase();
+      if (roles && roles.length > 0 && !roles.map((r) => r.toLowerCase()).includes(role)) {
+        if (!cancelled) setStatus("redirect");
+        return;
+      }
+
+      if (!cancelled) setStatus("ok");
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [loc.pathname, roles]);
+
+  if (status === "checking") return null;
+  if (status === "redirect") return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
   return children;
 }

@@ -1,12 +1,11 @@
-// src/App.jsx
 import React from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
-import LoadingScreen from "./components/LoadingScreen.jsx"; // 🔄 branded splash while lazy chunks load
+import LoadingScreen from "./components/LoadingScreen.jsx";
 
-// Lazy-load heavier pages for better initial performance
+/* Pages (lazy) */
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
 const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
 const GFX = React.lazy(() => import("./components/GFX.jsx"));
@@ -15,63 +14,45 @@ const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
 const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
 const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
 const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
-const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx")); // NEW
+const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx"));
 
-/* ---------- Helpers ---------- */
-function parseJwt(token) {
-  try {
-    const [, payload] = String(token).split(".");
-    if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decodeURIComponent(escape(json)));
-  } catch {
-    return null;
-  }
-}
+/* Tools (lazy) */
+const ToolsIndex = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
+const SrtTool = React.lazy(() => import("./components/tools/SrtTool.jsx"));
+const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
+const ThumbnailIdeation = React.lazy(() => import("./components/tools/ThumbnailIdeation.jsx"));
+const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 
-/* Scroll to hash targets (e.g., /#services) with header offset */
+/* Smooth hash scrolling with header offset */
 function ScrollToHash() {
   const location = useLocation();
-
   React.useEffect(() => {
-    const MAX_TRIES = 10;
-    const INTERVAL = 50;
+    const MAX_TRIES = 10, INTERVAL = 50;
     let tries = 0;
-
     const timer = setInterval(() => {
       const hash = (location.hash || "").replace("#", "");
       const el = hash ? document.getElementById(hash) : null;
-      const headerH =
-        parseInt(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 76;
-
+      const headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 76;
       if (el) {
         const top = window.scrollY + el.getBoundingClientRect().top - (headerH + 8);
         window.scrollTo({ top, behavior: "smooth" });
         clearInterval(timer);
       } else if (++tries >= MAX_TRIES) {
-        if (location.pathname === "/" && !hash) {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
+        if (location.pathname === "/" && !hash) window.scrollTo({ top: 0, behavior: "smooth" });
         clearInterval(timer);
       }
     }, INTERVAL);
-
     return () => clearInterval(timer);
   }, [location.pathname, location.hash]);
-
   return null;
 }
 
-/* Simple legal page (Privacy/Terms). Replace with your own page later if you like. */
+/* Simple legal pages */
 function LegalPage({ kind = "privacy" }) {
-  React.useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-  }, []);
-
+  React.useEffect(() => { window.scrollTo({ top: 0, behavior: "auto" }); }, []);
   const isPrivacy = kind === "privacy";
   const title = isPrivacy ? "Privacy Policy" : "Terms of Service";
   const updated = "Last updated: Sep 2025";
-
   const text = {
     privacy: [
       "We only collect information you provide (like your name, email, and links you share).",
@@ -86,30 +67,22 @@ function LegalPage({ kind = "privacy" }) {
       "Payments, refunds, and timelines follow the package notes and written agreements.",
     ],
   };
-
   return (
     <section style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 py-14 max-w-3xl">
         <h1 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
           {title}
         </h1>
-        <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
-          {updated}
-        </div>
-
+        <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{updated}</div>
         <div className="mt-6 space-y-4" style={{ color: "var(--text)" }}>
-          {(isPrivacy ? text.privacy : text.terms).map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
+          {(isPrivacy ? text.privacy : text.terms).map((p, i) => (<p key={i}>{p}</p>))}
         </div>
-
         <div className="mt-8 rounded-xl p-4" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Questions? Email{" "}
             <a href="mailto:hello@shinelstudiosofficial.com" style={{ color: "var(--orange)" }}>
               hello@shinelstudiosofficial.com
-            </a>
-            .
+            </a>.
           </p>
         </div>
       </div>
@@ -117,13 +90,10 @@ function LegalPage({ kind = "privacy" }) {
   );
 }
 
-/* Layout with global header/footer and site-wide theme toggle */
+/* Global layout */
 function Layout() {
   const [isDark, setIsDark] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("theme");
-      if (saved) return saved === "dark";
-    } catch {}
+    try { const saved = localStorage.getItem("theme"); if (saved) return saved === "dark"; } catch {}
     if (document.documentElement.classList.contains("dark")) return true;
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
@@ -131,29 +101,15 @@ function Layout() {
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
-      try {
-        localStorage.setItem("theme", isDark ? "dark" : "light");
-      } catch {}
-
-      // Update plain theme-color (mobile address bar)
+      try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
       let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
-      if (!metaTheme) {
-        metaTheme = document.createElement("meta");
-        metaTheme.setAttribute("name", "theme-color");
-        document.head.appendChild(metaTheme);
-      }
+      if (!metaTheme) { metaTheme = document.createElement("meta"); metaTheme.setAttribute("name", "theme-color"); document.head.appendChild(metaTheme); }
       metaTheme.setAttribute("content", isDark ? "#0F0F0F" : "#ffffff");
-
-      // Swap favicons if present
       const lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
-      const darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
-      if (lightIcon && darkIcon) {
-        lightIcon.disabled = !!isDark;
-        darkIcon.disabled = !isDark;
-      }
+      const darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
+      if (lightIcon && darkIcon) { lightIcon.disabled = !!isDark; darkIcon.disabled = !isDark; }
       const fallback = document.getElementById("favicon");
-      if (fallback)
-        fallback.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
+      if (fallback) fallback.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
     });
   }, [isDark]);
 
@@ -161,12 +117,7 @@ function Layout() {
     <>
       <SiteHeader isDark={isDark} setIsDark={setIsDark} />
       <ScrollToHash />
-      <main
-        style={{
-          paddingTop: "var(--header-h, 76px)",
-          transition: "padding-top .2s ease",
-        }}
-      >
+      <main style={{ paddingTop: "var(--header-h, 76px)", transition: "padding-top .2s ease" }}>
         <Outlet />
       </main>
       <SiteFooter />
@@ -174,53 +125,26 @@ function Layout() {
   );
 }
 
-/* If already logged in, skip /login and go to Home */
+/* Redirect /login if already authed */
 function RedirectIfAuthed({ children }) {
   const isAuthed = React.useMemo(() => {
-    try {
-      return Boolean(localStorage.getItem("token"));
-    } catch {
-      return false;
-    }
+    try { return Boolean(localStorage.getItem("token")); } catch { return false; }
   }, []);
-  return isAuthed ? <Navigate to="/" replace /> : children;
+  return isAuthed ? <Navigate to="/studio" replace /> : children;
 }
 
-/* Admin-only wrapper (role-gated route) */
-function AdminRoute({ children }) {
-  const token = React.useMemo(() => {
-    try {
-      return localStorage.getItem("token") || "";
-    } catch {
-      return "";
-    }
-  }, []);
-  const payload = React.useMemo(() => parseJwt(token), [token]);
-  const role = (payload?.role || "").toLowerCase();
-
-  // Not logged in → send to login and bounce back here
-  if (!token) {
-    return <Navigate to={`/login?next=${encodeURIComponent("/admin/users")}`} replace />;
-  }
-  // Logged in but not admin → home
-  if (role !== "admin") {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-}
-
-/* Simple /logout route: clears token and bounces home */
+/* /logout clears storage */
 function Logout() {
   React.useEffect(() => {
     try {
       localStorage.removeItem("token");
+      localStorage.removeItem("refresh");
       localStorage.removeItem("userEmail");
-      localStorage.removeItem("userFirstName");
-      localStorage.removeItem("userLastName");
       localStorage.removeItem("userRole");
+      localStorage.removeItem("userFirst");
+      localStorage.removeItem("userLast");
       localStorage.removeItem("rememberMe");
     } catch {}
-    // notify header
     window.dispatchEvent(new Event("auth:changed"));
   }, []);
   return <Navigate to="/" replace />;
@@ -228,7 +152,6 @@ function Logout() {
 
 export default function App() {
   return (
-    // 🔥 Use branded loader while lazy chunks are fetched & rendered
     <React.Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route element={<Layout />}>
@@ -247,7 +170,7 @@ export default function App() {
             }
           />
 
-          {/* 🔒 Protected AI Studio */}
+          {/* 🔒 Studio hub */}
           <Route
             path="/studio"
             element={
@@ -257,23 +180,61 @@ export default function App() {
             }
           />
 
-          {/* 🔒 Admin → Add User (role-gated) */}
+          {/* 🔒 Tools (role-gated per matrix) */}
           <Route
-            path="/admin/users"
+            path="/tools"
             element={
-              <AdminRoute>
-                <AdminUsersPage />
-              </AdminRoute>
+              <ProtectedRoute requireRole={["admin","editor","client"]}>
+                <ToolsIndex />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/srt"
+            element={
+              <ProtectedRoute requireRole={["admin","editor"]}>
+                <SrtTool />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/seo"
+            element={
+              <ProtectedRoute requireRole={["admin","editor","client"]}>
+                <SeoTool />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/thumbnail-ideation"
+            element={
+              <ProtectedRoute requireRole={["admin","editor","client"]}>
+                <ThumbnailIdeation />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/custom-ais"
+            element={
+              <ProtectedRoute requireRole={["admin"]}>
+                <CustomAIs />
+              </ProtectedRoute>
             }
           />
 
-          {/* Convenience logout route */}
-          <Route path="/logout" element={<Logout />} />
+          {/* 🔒 Admin users */}
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute requireRole="admin">
+                <AdminUsersPage />
+              </ProtectedRoute>
+            }
+          />
 
-          {/* NEW: legal pages used by footer links */}
+          <Route path="/logout" element={<Logout />} />
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
-
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
