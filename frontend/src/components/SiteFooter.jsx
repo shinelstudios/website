@@ -1,6 +1,6 @@
 // src/components/SiteFooter.jsx
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
 import logoLight from "../assets/logo_light.png";
 
@@ -11,7 +11,20 @@ const track = (ev, detail = {}) => {
   } catch {}
 };
 
-const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
+/**
+ * Footer rules (to avoid repetition on homepage):
+ * - On "/" we hide the long “Quick Links” & Newsletter block (since homepage already has: services, FAQ, lead form, CTA)
+ * - On other routes we show full footer.
+ * - We reserve bottom padding on mobile if a sticky CTA exists.
+ */
+const SiteFooter = ({
+  forceCompact = false,
+  reserveForSticky = true,
+}) => {
+  const location = useLocation?.() || { pathname: (typeof window !== "undefined" && window.location.pathname) || "/" };
+  const onHome = location.pathname === "/";
+  const compact = forceCompact || onHome;
+
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -99,7 +112,13 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
       />
 
       <div className={`container mx-auto px-4 ${compact ? "pt-10 pb-10" : "pt-16 pb-16"}`}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div
+          className={
+            compact
+              ? "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr] gap-10"
+              : "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr_1fr] gap-12"
+          }
+        >
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-3">
@@ -109,6 +128,9 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
                 className="h-12 w-auto object-contain"
                 style={{ filter: "drop-shadow(0 2px 8px rgba(232,80,2,.25))" }}
               />
+              <span className="text-sm font-semibold px-2 py-1 rounded-full" style={{ background: "rgba(232,80,2,.18)", color: "#fff", border: "1px solid rgba(255,255,255,.2)" }}>
+                AI-first
+              </span>
             </div>
             <p className="mb-2" style={linkMuted}>
               We help creators & brands shine through unforgettable visuals and smart strategy.
@@ -117,7 +139,8 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
               <em>Where Ideas Shine</em>
             </p>
 
-            <div className="flex gap-4" aria-label="Social links">
+            {/* Socials */}
+            <div className="flex gap-4">
               {SOCIALS.map(({ label, href, Icon }) => (
                 <a
                   key={label}
@@ -125,85 +148,118 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
                   aria-label={label}
                   title={label}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="noreferrer"
                   onClick={() => track("cta_click_social", { src: "footer", label })}
                 >
                   <Icon size={22} style={linkMuted} className="transition-opacity hover:opacity-100 opacity-70" />
                 </a>
               ))}
             </div>
+
+            {/* Compact: simple contact row */}
+            {compact && (
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+                <a
+                  href="mailto:hello@shinelstudiosofficial.com"
+                  className="underline hover:opacity-100 opacity-80"
+                  onClick={() => track("cta_click_contact", { via: "email", place: "footer_compact" })}
+                >
+                  hello@shinelstudiosofficial.com
+                </a>
+                <span aria-hidden className="opacity-50">•</span>
+                <a
+                  href="https://wa.me/918838179165"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 underline hover:opacity-100 opacity-80"
+                  onClick={() => track("cta_click_contact", { via: "whatsapp", place: "footer_compact" })}
+                >
+                  <MessageCircle size={16} /> WhatsApp
+                </a>
+              </div>
+            )}
           </div>
 
-          {/* Quick Links */}
-          <nav aria-label="Footer">
-            <h3 className="text-lg font-bold mb-5">Quick Links</h3>
-            <ul className="space-y-3">
-              {[
-                { t: "Home", href: "/#home" },
-                { t: "Services", href: "/#services" },
-                { t: "Testimonials", href: "/#testimonials" },
-                { t: "Contact", href: "/#contact" },
-              ].map(({ t, href }) => (
-                <li key={t}>
-                  <a href={href} className="hover:underline" style={linkMuted}>
-                    {t}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          {/* Quick Links (hidden on home to avoid repetition) */}
+          {!compact && (
+            <nav aria-label="Footer">
+              <h3 className="text-lg font-bold mb-5">Quick Links</h3>
+              <ul className="space-y-3">
+                {[
+                  { t: "Home", href: "/#home" },
+                  { t: "Services", href: "/#services" },
+                  { t: "Our Work", href: "/#work" },
+                  { t: "Contact", href: "/#contact" },
+                  { t: "Video Editing", href: "/video-editing" },
+                  { t: "GFX", href: "/gfx" },
+                  { t: "Thumbnails", href: "/thumbnails" },
+                  { t: "Shorts", href: "/shorts" },
+                ].map((l) => (
+                  <li key={l.t}>
+                    <Link
+                      to={l.href}
+                      className="hover:underline"
+                      style={linkMuted}
+                      onClick={() => track("cta_click_footer_link", { label: l.t })}
+                    >
+                      {l.t}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
 
-          {/* Updates */}
-          <div>
-            <h3 className="text-lg font-bold mb-5">Stay Updated</h3>
-            <p className="mb-4" style={linkMuted}>
-              Get the latest tips and updates from our team.
-            </p>
+          {/* Newsletter (hidden on home to prevent duplication) */}
+          {!compact && (
+            <div>
+              <h3 className="text-lg font-bold mb-5">Stay in the loop</h3>
+              <p className="mb-3" style={linkMuted}>
+                Fresh ideas, thumbnail tests, tools & case studies. 1–2× / month.
+              </p>
 
-            <form className="flex gap-2" onSubmit={onSubscribe} noValidate>
-              <label className="sr-only" htmlFor="newsletter-email">
-                Email
-              </label>
-              <input
-                id="newsletter-email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
-                style={{
-                  background: "var(--footer-input-bg, rgba(255,255,255,0.06))",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  color: "var(--footer-text, #fff)",
-                }}
-                autoComplete="email"
-                aria-describedby="newsletter-help"
-              />
-              <button
-                type="submit"
-                disabled={busy}
-                className="px-5 py-3 rounded-lg text-white disabled:opacity-70"
-                style={{ background: "var(--orange, #E85002)" }}
-                aria-label="Subscribe"
-                title="Subscribe"
+              <form className="flex gap-2" onSubmit={onSubscribe} noValidate>
+                <label className="sr-only" htmlFor="newsletter-email">Email</label>
+                <input
+                  id="newsletter-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
+                  style={{
+                    background: "var(--footer-input-bg, rgba(255,255,255,0.06))",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "var(--footer-text, #fff)",
+                  }}
+                  autoComplete="email"
+                />
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="px-5 py-3 rounded-lg text-white disabled:opacity-70"
+                  style={{ background: "var(--orange, #E85002)" }}
+                  aria-label="Subscribe"
+                  title="Subscribe"
+                >
+                  <Mail size={18} />
+                </button>
+              </form>
+
+              <div
+                id="newsletter-help"
+                className="mt-2 text-sm"
+                style={{ color: "rgba(255,255,255,0.75)" }}
+                role="status"
+                aria-live="polite"
               >
-                <Mail size={18} />
-              </button>
-            </form>
-
-            <div
-              id="newsletter-help"
-              className="mt-2 text-sm"
-              style={{ color: "rgba(255,255,255,0.75)" }}
-              role="status"
-              aria-live="polite"
-            >
-              {msg || "No spam. Unsubscribe anytime."}
+                {msg || "No spam. Unsubscribe anytime."}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Legal bar: center copyright, right-aligned Privacy/Terms */}
+        {/* Legal bar */}
         <div
           className="mt-10 pt-6"
           style={{ borderTop: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
@@ -217,7 +273,7 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
               &copy; {new Date().getFullYear()} Shinel Studios™ · All rights reserved · Where Ideas Shine
             </p>
 
-            {/* right-corner legal links (stack centered on mobile) */}
+            {/* right-corner legal links */}
             <nav aria-label="Legal" className="flex justify-center md:justify-end items-center gap-6">
               <Link
                 to="/privacy"
@@ -227,9 +283,7 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
               >
                 Privacy
               </Link>
-              <span aria-hidden style={{ opacity: 0.5 }}>
-                •
-              </span>
+              <span aria-hidden style={{ opacity: 0.5 }}>•</span>
               <Link
                 to="/terms"
                 className="hover:underline"
@@ -239,35 +293,6 @@ const SiteFooter = ({ compact = false, reserveForSticky = true }) => {
                 Terms
               </Link>
             </nav>
-          </div>
-
-          {/* Optional compact contact chips for conversion (mobile friendly) */}
-          <div className="mt-6 flex items-center justify-center gap-3 md:gap-4">
-            <a
-              href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios!%20I%20want%20to%20grow%20my%20channel.%20Can%20we%20talk?"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => track("cta_click_whatsapp", { src: "footer" })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl"
-              style={{
-                background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                color: "#fff",
-              }}
-              aria-label="Chat on WhatsApp"
-            >
-              <MessageCircle size={16} />
-              <span>WhatsApp</span>
-            </a>
-            <a
-              href="mailto:hello@shinelstudiosofficial.com"
-              onClick={() => track("cta_click_email", { src: "footer" })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl"
-              style={{ border: "1.5px solid var(--orange)", color: "var(--orange)" }}
-              aria-label="Email us"
-            >
-              <Mail size={16} />
-              <span>Email</span>
-            </a>
           </div>
         </div>
       </div>

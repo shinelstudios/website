@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
-import LoadingScreen from "./components/LoadingScreen.jsx"; // 🔄 brand splash while lazy chunks load
+import LoadingScreen from "./components/LoadingScreen.jsx"; // 🔄 branded splash while lazy chunks load
 
 // Lazy-load heavier pages for better initial performance
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
@@ -15,6 +15,19 @@ const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
 const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
 const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
 const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
+const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx")); // NEW
+
+/* ---------- Helpers ---------- */
+function parseJwt(token) {
+  try {
+    const [, payload] = String(token).split(".");
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decodeURIComponent(escape(json)));
+  } catch {
+    return null;
+  }
+}
 
 /* Scroll to hash targets (e.g., /#services) with header offset */
 function ScrollToHash() {
@@ -77,10 +90,7 @@ function LegalPage({ kind = "privacy" }) {
   return (
     <section style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 py-14 max-w-3xl">
-        <h1
-          className="text-3xl md:text-4xl font-bold font-['Poppins']"
-          style={{ color: "var(--text)" }}
-        >
+        <h1 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
           {title}
         </h1>
         <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -93,10 +103,7 @@ function LegalPage({ kind = "privacy" }) {
           ))}
         </div>
 
-        <div
-          className="mt-8 rounded-xl p-4"
-          style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-        >
+        <div className="mt-8 rounded-xl p-4" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Questions? Email{" "}
             <a href="mailto:hello@shinelstudiosofficial.com" style={{ color: "var(--orange)" }}>
@@ -167,7 +174,7 @@ function Layout() {
   );
 }
 
-/* If already logged in, skip /login and go to /studio */
+/* If already logged in, skip /login and go to Home */
 function RedirectIfAuthed({ children }) {
   const isAuthed = React.useMemo(() => {
     try {
@@ -176,7 +183,30 @@ function RedirectIfAuthed({ children }) {
       return false;
     }
   }, []);
-  return isAuthed ? <Navigate to="/studio" replace /> : children;
+  return isAuthed ? <Navigate to="/" replace /> : children;
+}
+
+/* Admin-only wrapper (role-gated route) */
+function AdminRoute({ children }) {
+  const token = React.useMemo(() => {
+    try {
+      return localStorage.getItem("token") || "";
+    } catch {
+      return "";
+    }
+  }, []);
+  const payload = React.useMemo(() => parseJwt(token), [token]);
+  const role = (payload?.role || "").toLowerCase();
+
+  // Not logged in → send to login and bounce back here
+  if (!token) {
+    return <Navigate to={`/login?next=${encodeURIComponent("/admin/users")}`} replace />;
+  }
+  // Logged in but not admin → home
+  if (role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+  return children;
 }
 
 /* Simple /logout route: clears token and bounces home */
@@ -185,6 +215,9 @@ function Logout() {
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("userEmail");
+      localStorage.removeItem("userFirstName");
+      localStorage.removeItem("userLastName");
+      localStorage.removeItem("userRole");
       localStorage.removeItem("rememberMe");
     } catch {}
     // notify header
@@ -221,6 +254,16 @@ export default function App() {
               <ProtectedRoute>
                 <AIStudioPage />
               </ProtectedRoute>
+            }
+          />
+
+          {/* 🔒 Admin → Add User (role-gated) */}
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminUsersPage />
+              </AdminRoute>
             }
           />
 

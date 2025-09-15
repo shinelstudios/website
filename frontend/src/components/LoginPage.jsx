@@ -1,459 +1,146 @@
-// src/components/LoginPage.jsx
-import React, { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  Menu, X, ChevronDown, Eye, EyeOff, Loader2, AlertCircle, ArrowLeft,
-} from "lucide-react";
+// src/pages/LoginPage.jsx
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 
-import logoLight from "../assets/logo_light.png";
-
-/* ───────────────────────────── Header (minimal, no login button) ───────────────────────────── */
-const Header = () => {
-  const [workOpen, setWorkOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const workRef = useRef(null);
-
-  useEffect(() => {
-    const onDoc = (e) => {
-      if (workOpen && workRef.current && !workRef.current.contains(e.target)) {
-        setWorkOpen(false);
-      }
-    };
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setWorkOpen(false);
-        setMobileOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("touchstart", onDoc, { passive: true });
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("touchstart", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [workOpen]);
-
-  return (
-    <header
-      className="fixed top-0 inset-x-0 z-40 backdrop-blur-lg"
-      style={{ background: "rgba(0,0,0,.85)", borderBottom: "1px solid rgba(255,255,255,.12)" }}
-    >
-      <div
-        aria-hidden
-        className="absolute left-0 top-0 h-[1px] w-full"
-        style={{ background: "linear-gradient(90deg,#E85002,#ff9357)" }}
-      />
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-3">
-          <div className="h-12 flex items-center overflow-visible">
-            <img
-              src={logoLight}
-              alt="Shinel Studios"
-              className="h-full w-auto object-contain select-none"
-              style={{
-                transform: "scale(2.2)",
-                transformOrigin: "left center",
-                filter: "drop-shadow(0 1px 2px rgba(0,0,0,.35))",
-              }}
-              decoding="async"
-            />
-          </div>
-        </Link>
-
-        <nav className="hidden md:flex items-center gap-7">
-          <a href="/#home" className="nav-link">Home</a>
-          <a href="/#services" className="nav-link">Services</a>
-          <a href="/#testimonials" className="nav-link">Testimonials</a>
-          <a href="/#contact" className="nav-link">Contact</a>
-
-          <div className="relative" ref={workRef}>
-            <button
-              onClick={() => setWorkOpen((v) => !v)}
-              className="inline-flex items-center gap-1 nav-link"
-              aria-expanded={workOpen}
-              aria-controls="work-menu"
-              type="button"
-            >
-              Our Work
-              <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            <AnimatePresence>
-              {workOpen && (
-                <motion.div
-                  id="work-menu"
-                  initial={{ opacity: 0, scale: 0.98, y: 6 }}
-                  animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.18 } }}
-                  exit={{ opacity: 0, scale: 0.98, y: 6, transition: { duration: 0.15 } }}
-                  className="absolute left-0 mt-3 w-64 rounded-xl shadow-xl overflow-hidden"
-                  style={{ background: "#0F0F0F", border: "1px solid rgba(255,255,255,.12)" }}
-                >
-                  {[
-                    { name: "Video Editing", href: "/video-editing" },
-                    { name: "GFX", href: "/gfx" },
-                    { name: "Thumbnails", href: "/thumbnails" },
-                    { name: "Shorts", href: "/shorts" },
-                  ].map((it) => (
-                    <Link
-                      key={it.name}
-                      to={it.href}
-                      className="block w-full px-4 py-3 text-left work-item"
-                      onClick={() => setWorkOpen(false)}
-                    >
-                      {it.name}
-                    </Link>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <button
-            className="md:hidden p-2 text-white"
-            aria-label="Menu"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu size={22} />
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-};
-
-/* ───────────────────────────── Motion Variants (CPU-friendly) ───────────────────────────── */
-const overlayFade = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.18, ease: "easeOut" } },
-  exit: { opacity: 0, transition: { duration: 0.15 } },
-};
-const cardPop = {
-  hidden: { opacity: 0, y: 16, scale: 0.985 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.22, ease: "easeOut" } },
-  exit: { opacity: 0, y: 12, scale: 0.985, transition: { duration: 0.18, ease: "easeIn" } },
-};
-
-/* ───────────────────────────── Login Page ───────────────────────────── */
-const LoginPage = () => {
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(true);
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [showPwd, setShowPwd] = useState(false);
-  const [capsOn, setCapsOn] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  const firstFieldRef = useRef(null);
-  const pwdRef = useRef(null);
-  const cardRef = useRef(null);
-  const peekTimer = useRef(null);
-
-  useEffect(() => { firstFieldRef.current?.focus(); }, []);
-
-  // Close on ESC
-  useEffect(() => {
-    const onEsc = (e) => { if (e.key === "Escape") closeModal(); };
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
-  }, []);
-
-  // CapsLock indicator
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.getModifierState && e.getModifierState("CapsLock")) setCapsOn(true);
-      else setCapsOn(false);
-    };
-    const el = pwdRef.current;
-    el?.addEventListener("keyup", onKey);
-    el?.addEventListener("keydown", onKey);
-    return () => {
-      el?.removeEventListener("keyup", onKey);
-      el?.removeEventListener("keydown", onKey);
-    };
-  }, []);
-
-  // Close helper (back or X or overlay click)
-  const closeModal = () => {
-    setOpen(false);
-    setTimeout(() => {
-      if (window.history?.state && window.history.state.idx > 0) navigate(-1);
-      else navigate("/");
-    }, 180);
-  };
-
-  const validate = () => {
-    const next = {};
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter a valid email.";
-    if (!password || password.length < 8) next.password = "Password must be at least 8 characters.";
-    return next;
-  };
-
-  // Simple network timeout wrapper
-  const fetchWithTimeout = (url, opts, ms = 12000) =>
-    new Promise((resolve, reject) => {
-      const id = setTimeout(() => reject(new Error("Network timeout")), ms);
-      fetch(url, opts).then(
-        (res) => { clearTimeout(id); resolve(res); },
-        (err) => { clearTimeout(id); reject(err); }
-      );
-    });
-
-  // ✅ Backend login
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
-    const next = validate();
-    setErrors(next);
-    if (Object.keys(next).length) return;
-
-    setSubmitting(true);
+    setErr("");
+    setLoading(true);
     try {
-      const res = await fetchWithTimeout(`${import.meta.env.VITE_API_URL}/auth/login`, {
+      // Hit your Worker (env var or same origin proxy)
+      const res = await fetch("/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include", // sets refresh cookie
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Login failed");
+      if (!res.ok || !data?.token) {
+        setErr(data?.error || "Login failed. Please check your details.");
+        setLoading(false);
+        return;
+      }
 
-      // Save auth info
+      // Save token + lightweight profile for quick UI
       localStorage.setItem("token", data.token);
-      localStorage.setItem("userEmail", email);
-      if (remember) localStorage.setItem("rememberMe", "1");
-      else localStorage.removeItem("rememberMe");
 
-      // Notify header and others
+      // Decode the token (just payload)
+      try {
+        const payload = JSON.parse(
+          decodeURIComponent(
+            escape(atob(data.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+          )
+        );
+        if (payload?.email)  localStorage.setItem("userEmail", payload.email);
+        if (payload?.role)   localStorage.setItem("userRole", payload.role);
+        if (payload?.firstName) localStorage.setItem("userFirstName", payload.firstName);
+        if (payload?.lastName)  localStorage.setItem("userLastName", payload.lastName);
+      } catch {}
+
+      // announce to the app and go Home
       window.dispatchEvent(new Event("auth:changed"));
-
-      // Redirect
-      navigate("/studio");
-    } catch (err) {
-      const msg = (err?.message || "").toLowerCase().includes("timeout")
-        ? "Request timed out. Please check your connection and try again."
-        : (err?.message || "Login failed");
-      setErrors({ general: msg });
-    } finally {
-      setSubmitting(false);
+      const next = new URLSearchParams(location.search).get("next") || "/";
+      location.replace(next); // → Home (or next)
+    } catch (e) {
+      setErr("Network error. Try again.");
+      setLoading(false);
     }
   };
 
-  // Press-and-hold password peek
-  const startPeek = () => {
-    setShowPwd(true);
-    clearTimeout(peekTimer.current);
-    peekTimer.current = setTimeout(() => setShowPwd(false), 1500);
-  };
-  const stopPeek = () => {
-    clearTimeout(peekTimer.current);
-    setShowPwd(false);
-  };
-
   return (
-    <>
-      <Header />
+    <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--surface)" }}>
+      <motion.form
+        onSubmit={onSubmit}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md rounded-2xl p-6 md:p-7"
+        style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+      >
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-1" style={{ color: "var(--text)" }}>
+          Welcome back
+        </h1>
+        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+          Sign in to access your role-specific AI tools.
+        </p>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center px-4"
-            variants={overlayFade}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            style={{
-              background: "linear-gradient(180deg, rgba(0,0,0,0.60), rgba(0,0,0,0.60))",
-              backdropFilter: "blur(3px)",
-            }}
-            onMouseDown={(e) => {
-              // click outside to close
-              if (cardRef.current && !cardRef.current.contains(e.target)) closeModal();
-            }}
-          >
-            <motion.div
-              key="modal"
-              id="login-card"
-              ref={cardRef}
-              className="relative w-full max-w-md p-6 sm:p-7 rounded-2xl"
-              variants={cardPop}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              aria-modal="true"
-              role="dialog"
-              aria-labelledby="login-title"
-              aria-describedby="login-desc"
-              style={{
-                background: "linear-gradient(180deg, #101010 0%, #0F0F0F 100%)",
-                border: "1.5px solid rgba(232,80,2,0.8)",
-                boxShadow: "0 10px 28px rgba(0,0,0,.45)",
-                color: "#fff",
-              }}
-            >
-              {/* Top row: back + close */}
-              <div className="flex items-center justify-between mb-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="p-2 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
-                  aria-label="Go back"
-                  title="Go back"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="p-2 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
-                  aria-label="Close login"
-                  title="Close"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Title & disclaimer */}
-              <h1 id="login-title" className="text-[22px] sm:text-[26px] font-semibold">
-                Welcome Back
-              </h1>
-              <p id="login-desc" className="mt-1 mb-5 text-white/70 text-xs sm:text-sm leading-relaxed">
-                Sign in with your invite email. <strong>Access is restricted</strong> — for{" "}
-                <strong>SHINEL STUDIOS clients</strong> or <strong>team members</strong> only.
-              </p>
-
-              <form onSubmit={handleSubmit} noValidate aria-busy={submitting}>
-                {/* Email */}
-                <div className="mb-2">
-                  <input
-                    ref={firstFieldRef}
-                    id="email"
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={submitting}
-                    autoComplete="username"
-                    className="w-full px-4 py-3 rounded-lg outline-none"
-                    style={{
-                      background: "#243041",
-                      color: "#EAF1FF",
-                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.12)",
-                    }}
-                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
-                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.12)")}
-                  />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
-                      <AlertCircle size={14} /> {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                {/* Password */}
-                <div className="relative mb-2">
-                  <input
-                    ref={pwdRef}
-                    id="password"
-                    type={showPwd ? "text" : "password"}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={submitting}
-                    autoComplete="current-password"
-                    className="w-full px-4 py-3 rounded-lg outline-none pr-12"
-                    style={{
-                      background: "#243041",
-                      color: "#EAF1FF",
-                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.12)",
-                    }}
-                    onFocus={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 2px #E85002")}
-                    onBlur={(e) => (e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.12)")}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPwd((v) => !v)}
-                    onMouseDown={startPeek}
-                    onMouseUp={stopPeek}
-                    onMouseLeave={stopPeek}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/80"
-                    aria-label={showPwd ? "Hide password" : "Show password"}
-                    title={showPwd ? "Hide password" : "Show password"}
-                    tabIndex={-1}
-                  >
-                    {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-
-                {capsOn && (
-                  <p className="mt-1 text-xs text-yellow-300">
-                    Caps Lock is on.
-                  </p>
-                )}
-
-                {errors.password && (
-                  <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
-                    <AlertCircle size={14} /> {errors.password}
-                  </p>
-                )}
-
-                {/* General error */}
-                {errors.general && (
-                  <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
-                    <AlertCircle size={14} /> {errors.general}
-                  </p>
-                )}
-
-                {/* Stay signed in (kept functional) */}
-                <label className="mt-3 mb-4 flex items-center gap-2 select-none text-sm text-white/80">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    disabled={submitting}
-                  />
-                  Keep me signed in
-                </label>
-
-                {/* Submit */}
-                <motion.button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E85002]"
-                  style={{ background: "#E85002", color: "#fff" }}
-                  whileHover={{ y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {submitting && <Loader2 size={18} className="animate-spin" />}
-                  {submitting ? "Signing in..." : "Login"}
-                </motion.button>
-              </form>
-
-              {/* Tiny footer row */}
-              <div className="mt-4 flex items-center justify-between text-[12px] text-white/60">
-                <span>
-                  Need access?{" "}
-                  <a href="/#contact" className="underline text-white/80">
-                    Contact us
-                  </a>
-                </span>
-                <div className="flex items-center gap-3">
-                  <Link to="/privacy" className="hover:text-white/90">Privacy</Link>
-                  <span aria-hidden>•</span>
-                  <Link to="/terms" className="hover:text-white/90">Terms</Link>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+        {err && (
+          <div className="mb-4 text-sm rounded-lg px-3 py-2" style={{ background: "rgba(232,80,2,.10)", color: "var(--orange)", border: "1px solid var(--border)" }}>
+            {err}
+          </div>
         )}
-      </AnimatePresence>
-    </>
-  );
-};
 
-export default LoginPage;
+        <label className="block text-sm mb-1" style={{ color: "var(--text)" }}>
+          Email
+        </label>
+        <div className="relative mb-4">
+          <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-70" />
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
+            className="w-full h-11 rounded-lg pl-9 pr-3 outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          />
+        </div>
+
+        <label className="block text-sm mb-1" style={{ color: "var(--text)" }}>
+          Password
+        </label>
+        <div className="relative mb-2">
+          <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-70" />
+          <input
+            type={showPwd ? "text" : "password"}
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full h-11 rounded-lg pl-9 pr-10 outline-none"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPwd((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded"
+            aria-label={showPwd ? "Hide password" : "Show password"}
+            style={{ color: "var(--text-muted)" }}
+          >
+            {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between text-sm mb-5" style={{ color: "var(--text-muted)" }}>
+          <label className="inline-flex items-center gap-2">
+            <input type="checkbox" onChange={(e) => localStorage.setItem("rememberMe", e.target.checked ? "1" : "0")} />
+            Remember me
+          </label>
+          <span className="opacity-70">Forgot password?</span>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-xl h-11 font-semibold text-white"
+          style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+        >
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+
+        {/* No register link (admins create users) */}
+        <div className="mt-6 text-xs text-center" style={{ color: "var(--text-muted)" }}>
+          Need an account? Contact your Shinel Studios admin.
+        </div>
+      </motion.form>
+    </div>
+  );
+}

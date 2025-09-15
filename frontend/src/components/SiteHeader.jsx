@@ -3,17 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sun,
-  Moon,
-  Menu,
-  X,
-  ChevronDown,
-  Lock,
-  Wand2,
-  Languages,
-  Search,
-  Lightbulb,
-  Brain,
+  Sun, Moon, Menu, X, ChevronDown, Lock,
+  Wand2, Languages, Search, Lightbulb, Brain
 } from "lucide-react";
 
 import logoLight from "../assets/logo_light.png";
@@ -26,7 +17,7 @@ const animations = {
   },
 };
 
-// --- tiny jwt parser (no crypto) to read { email, role, exp } ---
+// --- parse JWT payload (no crypto) ---
 function parseJwt(token) {
   try {
     const [, payload] = token.split(".");
@@ -38,26 +29,30 @@ function parseJwt(token) {
   }
 }
 
-// --- auth lookup (reads JWT token + stored email) ---
+// --- auth lookup (reads token + local fallbacks) ---
 function getAuthState() {
   try {
     const token = localStorage.getItem("token");
     const emailLS = localStorage.getItem("userEmail");
-    if (!token) return { isAuthed: false, email: null, role: null, exp: null };
+
+    if (!token) return { isAuthed: false, email: null, role: null, exp: null, firstName: null, lastName: null };
 
     const payload = parseJwt(token) || {};
     const exp = typeof payload.exp === "number" ? payload.exp : null;
     const now = Math.floor(Date.now() / 1000);
     if (exp && exp <= now) {
       localStorage.removeItem("token");
-      return { isAuthed: false, email: null, role: null, exp: null };
+      return { isAuthed: false, email: null, role: null, exp: null, firstName: null, lastName: null };
     }
 
     const email = (payload.email || emailLS || "").trim() || null;
-    const role = payload.role || null;
-    return { isAuthed: true, email, role, exp };
+    const role = payload.role || localStorage.getItem("userRole") || null;
+    const firstName = payload.firstName || localStorage.getItem("userFirstName") || null;
+    const lastName  = payload.lastName  || localStorage.getItem("userLastName")  || null;
+
+    return { isAuthed: true, email, role, exp, firstName, lastName };
   } catch {
-    return { isAuthed: false, email: null, role: null, exp: null };
+    return { isAuthed: false, email: null, role: null, exp: null, firstName: null, lastName: null };
   }
 }
 
@@ -85,7 +80,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   const [hovered, setHovered] = useState(null);
   const [active, setActive] = useState("Home");
   const [progress, setProgress] = useState(0);
-
   const [auth, setAuth] = useState(getAuthState());
 
   const headerRef = useRef(null);
@@ -96,6 +90,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   useEffect(() => setFaviconForTheme(isDark), [isDark]);
 
+  // react to login/logout from other tabs or pages
   useEffect(() => {
     const update = () => setAuth(getAuthState());
     window.addEventListener("storage", update);
@@ -106,6 +101,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
   }, []);
 
+  // auto-expire
   useEffect(() => {
     if (!auth.isAuthed || !auth.exp) return;
     const now = Math.floor(Date.now() / 1000);
@@ -117,35 +113,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     return () => clearTimeout(t);
   }, [auth.isAuthed, auth.exp]);
 
-  // For section highlight in hash/IO
-  const sections = useMemo(() => ["Home", "Services", "Work", "Contact"], []);
-
-  const workItems = useMemo(
-    () => [
-      { name: "Video Editing", href: "/video-editing" },
-      { name: "GFX", href: "/gfx" },
-      { name: "Thumbnails", href: "/thumbnails" },
-      { name: "Shorts", href: "/shorts" },
-    ],
-    []
-  );
-
-  // ✅ AI Tools (curated to 4)
-  const toolsItems = useMemo(
-    () => [
-      { name: "Auto SRT Files (Multi-Language)", path: "/tools/srt", icon: Languages },
-      { name: "SEO Tool (Titles, Descriptions, Tags)", path: "/tools/seo", icon: Search },
-      { name: "Viral Thumbnail Ideation", path: "/tools/thumbnail-ideation", icon: Lightbulb },
-      { name: "Custom AIs", path: "/tools/custom-ais", icon: Brain },
-    ],
-    []
-  );
-
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-  // scroll progress + header shadow state
+  // progress + shadow
   const lastAnimFrame = useRef(null);
   useEffect(() => {
     const tick = () => {
@@ -169,7 +137,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
   }, []);
 
-  // header height → CSS vars
+  // header height -> CSS vars
   useEffect(() => {
     if (!headerRef.current || !("ResizeObserver" in window)) return;
     const ro = new ResizeObserver((entries) => {
@@ -186,7 +154,8 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     document.documentElement.style.setProperty("--header-offset", `${headerH}px`);
   }, [headerH]);
 
-  // section highlight
+  // section highlight (IDs: home/services/work/contact)
+  const sections = useMemo(() => ["Home", "Services", "Work", "Contact"], []);
   useEffect(() => {
     const ids = sections.map((s) => s.toLowerCase());
     const io = new IntersectionObserver(
@@ -240,7 +209,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
   }, [workOpen, toolsOpen]);
 
-  // lock body scroll
+  // lock body scroll for mobile menu
   useEffect(() => {
     const lock = (v) => {
       document.documentElement.style.overflow = v ? "hidden" : "";
@@ -248,9 +217,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
     lock(isMenuOpen);
     if (isMenuOpen && menuPanelRef.current) {
-      const first = menuPanelRef.current.querySelector(
-        'a,button,[tabindex]:not([tabindex="-1"])'
-      );
+      const first = menuPanelRef.current.querySelector('a,button,[tabindex]:not([tabindex="-1"])');
       first?.focus?.();
     }
     return () => lock(false);
@@ -278,8 +245,33 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     );
   };
 
+  // role-aware tool links
+  const toolsCatalog = useMemo(
+    () => [
+      { name: "Auto SRT Files (Multi-Language)", path: "/tools/srt", icon: Languages, roles: ["admin", "editor"] },
+      { name: "SEO Tool (Titles, Descriptions, Tags)", path: "/tools/seo", icon: Search, roles: ["admin", "editor", "client"] },
+      { name: "Viral Thumbnail Ideation", path: "/tools/thumbnail-ideation", icon: Lightbulb, roles: ["admin", "editor", "client"] },
+      { name: "Custom AIs", path: "/tools/custom-ais", icon: Brain, roles: ["admin"] },
+    ],
+    []
+  );
+  const role = (auth.role || "").toLowerCase();
+  const toolsVisible = auth.isAuthed ? toolsCatalog.filter(t => t.roles.includes(role)) : toolsCatalog;
+
   const logoSrc = isDark ? logoLight : logoDark;
-  const avatarInitial = (auth.email || "?").trim().charAt(0).toUpperCase();
+
+  const initials = (() => {
+    const a = (auth.firstName || "").trim().charAt(0).toUpperCase();
+    const b = (auth.lastName || "").trim().charAt(0).toUpperCase();
+    if (a || b) return `${a}${b || ""}`;
+    const email = auth.email || "";
+    return email ? (email[0] || "?").toUpperCase() : "?";
+  })();
+
+  const displayName = auth.firstName?.trim()
+    ? auth.firstName.trim()
+    : (auth.email || "Signed in");
+
   const toolHref = (path) => (auth.isAuthed ? path : `/login?next=${encodeURIComponent(path)}`);
 
   return (
@@ -291,8 +283,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         animate="visible"
         role="banner"
         style={{
-          background:
-            "color-mix(in oklab, var(--header-bg) 88%, transparent) 0% / cover",
+          background: "color-mix(in oklab, var(--header-bg) 88%, transparent) 0% / cover",
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
           borderBottom: "0",
@@ -301,47 +292,27 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           overflow: "visible",
         }}
       >
-        {/* soft hairline + progress */}
+        {/* scroll progress */}
         <div
           className="absolute left-0 top-0 h-[2px] origin-left"
           style={{
             width: "100%",
             transform: `scaleX(${Math.max(0, Math.min(1, progress / 100)).toFixed(4)})`,
             background: "linear-gradient(90deg, var(--orange), #ff9357)",
-            transition: reduceMotion ? "none" : "transform .08s linear",
+            transition: "transform .08s linear",
             opacity: scrolled ? 1 : 0.9,
           }}
           aria-hidden="true"
         />
 
-        {/* subtle gradient shadow under header for contrast */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 -bottom-px h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(0,0,0,.18), transparent)",
-            opacity: 0.25,
-          }}
-        />
-
         {/* nav row */}
         <nav
           className="container mx-auto px-4 flex items-center justify-between"
-          style={{
-            paddingTop: scrolled ? "6px" : "10px",
-            paddingBottom: scrolled ? "6px" : "10px",
-            transition: "padding .2s ease",
-            position: "relative",
-            zIndex: 3,
-          }}
+          style={{ paddingTop: scrolled ? "6px" : "10px", paddingBottom: scrolled ? "6px" : "10px", transition: "padding .2s ease", position: "relative", zIndex: 3 }}
           aria-label="Primary"
         >
-          {/* logo + AI-first badge */}
-          <Link
-            to="/"
-            className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-          >
+          {/* logo */}
+          <Link to="/" className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded">
             <div className="h-12 flex items-center overflow-visible">
               <motion.img
                 src={logoSrc}
@@ -356,11 +327,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             </div>
             <span
               className="ml-2 hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-              style={{
-                color: "var(--orange)",
-                border: "1px solid var(--border)",
-                background: "rgba(232,80,2,0.08)",
-              }}
+              style={{ color: "var(--orange)", border: "1px solid var(--border)", background: "rgba(232,80,2,0.08)" }}
             >
               <Wand2 size={12} />
               AI-first
@@ -372,67 +339,40 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             <NavLink label="Home" to="/" active={active} />
             <NavLink label="Services" to="/#services" active={active} />
 
-            {/* Our Work dropdown */}
+            {/* Our Work (simple) */}
             <div className="relative" ref={workRef}>
               <motion.button
                 type="button"
                 className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-                aria-expanded={workOpen}
-                aria-haspopup="menu"
-                aria-controls="our-work-menu"
                 onClick={() => setWorkOpen((v) => !v)}
                 initial={false}
-                style={{
-                  color:
-                    hovered === "Our Work" || workOpen
-                      ? "var(--nav-hover)"
-                      : "var(--nav-link)",
-                }}
-                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-                transition={{ duration: 0.22 }}
+                style={{ color: workOpen ? "var(--nav-hover)" : "var(--nav-link)" }}
               >
-                <span className="nav-label">Our Work</span>
-                <ChevronDown
-                  size={16}
-                  className={`transition-transform ${workOpen ? "rotate-180" : ""}`}
-                />
+                <span>Our Work</span>
+                <ChevronDown size={16} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
               </motion.button>
 
               <AnimatePresence>
                 {workOpen && (
                   <motion.div
-                    id="our-work-menu"
-                    role="menu"
                     initial={{ opacity: 0, scale: 0.96, y: 8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                     className="absolute left-0 mt-3 w-64 rounded-2xl shadow-xl overflow-hidden"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      zIndex: 4,
-                    }}
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
                   >
-                    {workItems.map((item) => (
+                    {[
+                      { name: "Video Editing", href: "/video-editing" },
+                      { name: "GFX", href: "/gfx" },
+                      { name: "Thumbnails", href: "/thumbnails" },
+                      { name: "Shorts", href: "/shorts" },
+                    ].map((item) => (
                       <Link
                         key={item.name}
-                        role="menuitem"
-                        tabIndex={0}
                         to={item.href}
-                        className="block w-full px-4 py-3 text-left font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--orange)",
-                          transition: "color .15s, background-color .15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--orange)";
-                          e.currentTarget.style.color = "#fff";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--orange)";
-                        }}
+                        className="block w-full px-4 py-3 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{ color: "var(--orange)" }}
                         onClick={() => setWorkOpen(false)}
                       >
                         {item.name}
@@ -443,73 +383,49 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               </AnimatePresence>
             </div>
 
-            {/* Tools dropdown (AI-first, curated) */}
+            {/* Tools (role-aware) */}
             <div className="relative" ref={toolsRef}>
               <motion.button
                 type="button"
                 className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-                aria-expanded={toolsOpen}
-                aria-haspopup="menu"
-                aria-controls="ai-tools-menu"
                 onClick={() => setToolsOpen((v) => !v)}
                 initial={false}
-                style={{
-                  color:
-                    hovered === "Tools" || toolsOpen
-                      ? "var(--nav-hover)"
-                      : "var(--nav-link)",
-                }}
-                whileHover={reduceMotion ? {} : { y: -1, letterSpacing: 0.2 }}
-                transition={{ duration: 0.22 }}
+                style={{ color: toolsOpen ? "var(--nav-hover)" : "var(--nav-link)" }}
               >
-                <span className="nav-label">Tools</span>
+                <span>Tools</span>
                 {!auth.isAuthed && <Lock size={14} className="ml-1 opacity-70" />}
-                <ChevronDown
-                  size={16}
-                  className={`ml-1 transition-transform ${toolsOpen ? "rotate-180" : ""}`}
-                />
+                <ChevronDown size={16} className={`ml-1 transition-transform ${toolsOpen ? "rotate-180" : ""}`} />
               </motion.button>
 
               <AnimatePresence>
                 {toolsOpen && (
                   <motion.div
-                    id="ai-tools-menu"
-                    role="menu"
                     initial={{ opacity: 0, scale: 0.96, y: 8 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: 8 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                     className="absolute left-0 mt-3 w-[320px] rounded-2xl shadow-xl overflow-hidden"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      zIndex: 4,
-                    }}
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
                   >
                     <div
                       className="px-4 py-2 text-[11px] font-semibold tracking-wide uppercase"
                       style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
                     >
-                      AI Tools {auth.isAuthed ? "" : "· Login required"}
+                      AI Tools {auth.isAuthed ? (role ? `· ${role}` : "") : "· Login required"}
                     </div>
-                    {toolsItems.map(({ name, path, icon: Icon }, i) => (
+
+                    {(auth.isAuthed ? toolsVisible : toolsCatalog).map(({ name, path, icon: Icon }, i, arr) => (
                       <Link
                         key={name}
-                        role="menuitem"
-                        tabIndex={0}
                         to={toolHref(path)}
-                        className="flex items-center gap-2 w-full px-4 py-3 text-left font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        className="flex items-center gap-2 w-full px-4 py-3 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                         style={{
                           color: "var(--text)",
                           transition: "color .15s, background-color .15s",
-                          borderBottom: i === toolsItems.length - 1 ? "0" : "1px solid var(--border)",
+                          borderBottom: i === arr.length - 1 ? "0" : "1px solid var(--border)",
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--surface-alt)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-alt)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                         onClick={() => setToolsOpen(false)}
                         aria-label={auth.isAuthed ? name : `${name} (login required)`}
                       >
@@ -524,8 +440,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                         {!auth.isAuthed && <Lock size={14} className="opacity-70" />}
                       </Link>
                     ))}
+
                     <div className="px-4 py-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                      Voice/face features are always consent-first and policy-compliant.
+                      Voice/face features are consent-first & policy-compliant.
                     </div>
                   </motion.div>
                 )}
@@ -537,6 +454,18 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           <div className="flex items-center gap-2 md:gap-3">
             {auth.isAuthed ? (
               <>
+                {/* Admin quick link */}
+                {role === "admin" && (
+                  <Link
+                    to="/admin/users"
+                    className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  >
+                    Admin
+                  </Link>
+                )}
+
+                {/* Studio */}
                 <Link
                   to="/studio"
                   className="hidden md:inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
@@ -544,6 +473,8 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 >
                   Studio
                 </Link>
+
+                {/* Compact identity pill */}
                 <div
                   className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full"
                   style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
@@ -552,24 +483,28 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     aria-hidden
                     className="h-6 w-6 rounded-full grid place-items-center text-[11px] font-bold"
                     style={{ background: "var(--orange)", color: "#fff" }}
+                    title={auth.email || ""}
                   >
-                    {avatarInitial || "?"}
+                    {initials}
                   </div>
                   <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                    {auth.email || "Signed in"}
+                    {displayName}
                   </span>
                   {auth.role && (
                     <span
                       className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
                       style={{ background: "var(--border)", color: "var(--text-muted)" }}
                     >
-                      {auth.role}
+                      {role}
                     </span>
                   )}
                   <button
                     onClick={() => {
                       localStorage.removeItem("token");
                       localStorage.removeItem("userEmail");
+                      localStorage.removeItem("userFirstName");
+                      localStorage.removeItem("userLastName");
+                      localStorage.removeItem("userRole");
                       window.dispatchEvent(new Event("auth:changed"));
                     }}
                     className="ml-2 underline text-xs"
@@ -605,10 +540,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               <motion.button
                 onClick={() => setIsDark((v) => !v)}
                 className="p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{
-                  background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                  color: "var(--text)",
-                }}
+                style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", color: "var(--text)" }}
                 aria-label="Toggle theme"
                 aria-pressed={isDark}
                 whileTap={{ rotate: 180, scale: 0.9 }}
@@ -643,13 +575,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="md:hidden"
-              style={{
-                background: "var(--surface)",
-                borderTop: "1px solid var(--border)",
-                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-                position: "relative",
-                zIndex: 3,
-              }}
+              style={{ background: "var(--surface)", borderTop: "1px solid var(--border)", paddingBottom: "max(12px, env(safe-area-inset-bottom))", position: "relative", zIndex: 3 }}
               role="dialog"
               aria-modal="true"
               aria-label="Main menu"
@@ -660,76 +586,35 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     { label: "Home", to: "/" },
                     { label: "Services", to: "/#services" },
                     { label: "Our Work", to: "/#work" },
-                    { label: "Tools", to: toolHref("/tools") },
-                    ...(auth.isAuthed ? [{ label: "Studio", to: "/studio" }] : []),
+                    ...(auth.isAuthed ? [{ label: "Studio", to: "/studio" }] : [{ label: "Tools", to: toolHref("/tools") }]),
+                    ...(auth.isAuthed && role === "admin" ? [{ label: "Admin", to: "/admin/users" }] : []),
                   ].map((item) => (
                     <li key={item.label}>
                       <Link
                         to={item.to}
                         onClick={() => setIsMenuOpen(false)}
                         className="block w-full rounded-xl px-4 py-3 text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         {item.label}
-                        {item.label === "Tools" && !auth.isAuthed && (
-                          <Lock size={14} className="inline ml-2 opacity-70 align-[-2px]" />
-                        )}
                       </Link>
                     </li>
                   ))}
                 </ul>
 
-                {/* Our Work quick links */}
+                {/* AI Tools quick links (role-aware) */}
                 <div className="mt-4">
-                  <div
-                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Our Work
+                  <div className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    AI Tools {auth.isAuthed ? (role ? `· ${role}` : "") : "(login)"}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {workItems.map((item) => (
-                      <Link
-                        key={item.name}
-                        to={item.href}
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        {item.name}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-
-                {/* AI Tools quick links (curated) */}
-                <div className="mt-4">
-                  <div
-                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    AI Tools {auth.isAuthed ? "" : "(login)"}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {toolsItems.map(({ name, path, icon: Icon }) => (
+                    {(auth.isAuthed ? toolsVisible : toolsCatalog).map(({ name, path, icon: Icon }) => (
                       <Link
                         key={name}
                         to={toolHref(path)}
                         onClick={() => setIsMenuOpen(false)}
                         className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         <Icon size={16} style={{ color: "var(--orange)" }} />
                         <span className="flex-1">{name}</span>
@@ -739,38 +624,22 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   </div>
                 </div>
 
-                {!auth.isAuthed ? (
-                  <div className="mt-6 flex flex-col gap-2">
-                    <Link
-                      to="/login"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block w-full rounded-full px-5 py-3 text-center font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        color: "var(--text)",
-                        background: "transparent",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      Login
-                    </Link>
-                  </div>
-                ) : (
+                {/* identity footer (mobile) */}
+                {auth.isAuthed ? (
                   <div className="mt-6 flex items-center justify-between px-1 text-sm" style={{ color: "var(--text)" }}>
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         aria-hidden
                         className="h-6 w-6 rounded-full grid place-items-center text-[11px] font-bold"
                         style={{ background: "var(--orange)", color: "#fff" }}
+                        title={auth.email || ""}
                       >
-                        {avatarInitial || "?"}
+                        {initials}
                       </div>
-                      <span className="truncate max-w-[60%]">{auth.email || "Signed in"}</span>
+                      <span className="truncate max-w-[60%]">{displayName}</span>
                       {auth.role && (
-                        <span
-                          className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
-                          style={{ background: "var(--border)", color: "var(--text-muted)" }}
-                        >
-                          {auth.role}
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0" style={{ background: "var(--border)", color: "var(--text-muted)" }}>
+                          {role}
                         </span>
                       )}
                     </div>
@@ -778,6 +647,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       onClick={() => {
                         localStorage.removeItem("token");
                         localStorage.removeItem("userEmail");
+                        localStorage.removeItem("userFirstName");
+                        localStorage.removeItem("userLastName");
+                        localStorage.removeItem("userRole");
                         window.dispatchEvent(new Event("auth:changed"));
                         setIsMenuOpen(false);
                       }}
@@ -786,127 +658,24 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       Logout
                     </button>
                   </div>
+                ) : (
+                  <div className="mt-6">
+                    <Link
+                      to="/login"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="block w-full rounded-full px-5 py-3 text-center font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                    >
+                      Login
+                    </Link>
+                  </div>
                 )}
               </nav>
             </motion.div>
           )}
         </AnimatePresence>
-
-        <TrustBar />
       </motion.header>
     </motion.div>
-  );
-};
-
-// --- TrustBar ---
-const TrustBar = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-  const lines = [
-    "AI-first studio • human-directed quality",
-    "20+ active clients across niches",
-    "Thumbnails delivering +40% CTR",
-    "Edits driving 2× watch time",
-    "7M+ views driven for clients",
-    "Auto-captions & multi-language subs",
-    "Face/voice features with consent",
-    "Hook scoring & title testing",
-    "AI script co-pilot for ideation",
-    "End-to-end: Long-form, Shorts, Thumbnails, GFX",
-    "48–72 hr standard turnaround",
-    "Dedicated PM & weekly checkpoints",
-  ];
-
-  if (reduceMotion) {
-    return (
-      <div
-        className="w-full"
-        style={{
-          background: "var(--header-bg)",
-          boxShadow: "inset 0 1px 0 var(--border)",
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        <div className="container mx-auto px-3 py-1.5 text-center text-[11px] md:text-sm select-none">
-          <div className="inline-flex items-center gap-6 md:gap-10" style={{ color: "var(--text)" }}>
-            {lines.map((t, i) => (
-              <span key={i}>{t}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="w-full trustbar"
-      style={{
-        background: "var(--header-bg)",
-        boxShadow: "inset 0 1px 0 var(--border)",
-        position: "relative",
-        zIndex: 2,
-      }}
-    >
-      <div
-        className="overflow-hidden select-none"
-        style={{
-          WebkitMaskImage:
-            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-          maskImage:
-            "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-        }}
-      >
-        <div className="marquee-track">
-          <div className="marquee-row">
-            {lines.map((t, i) => (
-              <span key={`a-${i}`} className="marquee-item">
-                {t}
-              </span>
-            ))}
-          </div>
-          <div className="marquee-row" aria-hidden="true">
-            {lines.map((t, i) => (
-              <span key={`b-${i}`} className="marquee-item">
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        .trustbar { --marquee-speed: 26s; }
-        .marquee-track { display: flex; width: max-content; }
-        .marquee-row {
-          display: inline-flex;
-          align-items: center;
-          gap: 2rem;
-          padding: 0.45rem 0;
-          animation: ss-marquee var(--marquee-speed) linear infinite;
-          will-change: transform;
-        }
-        @keyframes ss-marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .trustbar:hover .marquee-row { animation-play-state: paused; }
-        .marquee-item {
-          font-size: 11px;
-          line-height: 1;
-          white-space: nowrap;
-          color: var(--text);
-          display: inline-flex;
-          align-items: center;
-          gap: .5rem;
-        }
-        @media (min-width: 768px) { .marquee-item { font-size: 0.875rem; } }
-        @media (max-width: 420px) { .trustbar { --marquee-speed: 22s; } }
-      `}</style>
-    </div>
   );
 };
 
