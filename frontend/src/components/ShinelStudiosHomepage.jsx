@@ -27,6 +27,7 @@ const ALL_ASSETS = import.meta.glob(
  * Memoized INR formatter (performance boost)
  * Creates formatter once and reuses it
  */
+// safe, memoized INR formatter
 const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -35,19 +36,21 @@ const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
 
 export const formatINR = (num, options = {}) => {
   try {
-    if (Object.keys(options).length === 0) {
+    if (!options || Object.keys(options).length === 0) {
       return INR_FORMATTER.format(Number(num || 0));
     }
-    return new Intl.NumberFormat("en-IN", {
+    const cfg = {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 0,
       ...options,
-    }).format(Number(num || 0));
+    };
+    return new Intl.NumberFormat("en-IN", cfg).format(Number(num || 0));
   } catch {
     return `₹${num}`;
   }
 };
+
 
 /**
  * OPTIMIZED: Asset finder with caching
@@ -102,30 +105,29 @@ let analyticsQueue = [];
 let analyticsTimer = null;
 
 const flushAnalytics = () => {
-  if (analyticsQueue.length === 0) return;
-  
+  if (!analyticsQueue.length) return;
   try {
-    window.dispatchEvent(new CustomEvent("analytics:batch", { 
-      detail: { events: [...analyticsQueue] } 
-    }));
+    // Dispatch a batched custom event for your internal listeners
+    const batch = analyticsQueue.slice();
+    window.dispatchEvent(new CustomEvent("analytics:batch", { detail: { events: batch } }));
     analyticsQueue = [];
-  } catch (error) {
-    console.warn("Analytics error:", error);
+  } catch (err) {
+    console.warn("Analytics flush failed", err);
   }
 };
 
-export const track = (ev, detail = {}) => {
-  analyticsQueue.push({ 
-    ev, 
-    ...detail, 
+export const track = (ev, details = {}) => {
+  analyticsQueue.push({
+    ev,
+    detail: details,
     timestamp: Date.now(),
-    url: window.location.pathname 
+    url: (typeof window !== "undefined" && window.location && window.location.pathname) || "/",
   });
-  
-  // Batch analytics events for performance
+
   if (analyticsTimer) clearTimeout(analyticsTimer);
-  analyticsTimer = setTimeout(flushAnalytics, 1000);
+  analyticsTimer = setTimeout(flushAnalytics, 800);
 };
+
 
 /* ===================== OPTIMIZED Motion Variants ===================== */
 
@@ -348,17 +350,17 @@ CalendlyModal.displayName = "CalendlyModal";
  */
 export const useIntersectionObserver = (ref, options = {}) => {
   const [isIntersecting, setIsIntersecting] = useState(false);
-  
+
   useEffect(() => {
     const element = ref.current;
-    if (!element || !('IntersectionObserver' in window)) {
-      setIsIntersecting(true); // Fallback for older browsers
+    if (!element || typeof IntersectionObserver === "undefined") {
+      setIsIntersecting(true);
       return;
     }
 
     const observer = new IntersectionObserver(
       ([entry]) => setIsIntersecting(entry.isIntersecting),
-      { rootMargin: '50px', threshold: 0.1, ...options }
+      { rootMargin: options.rootMargin || '50px', threshold: options.threshold ?? 0.1 }
     );
 
     observer.observe(element);
@@ -367,6 +369,7 @@ export const useIntersectionObserver = (ref, options = {}) => {
 
   return isIntersecting;
 };
+
 
 /**
  * Debounce hook for performance
