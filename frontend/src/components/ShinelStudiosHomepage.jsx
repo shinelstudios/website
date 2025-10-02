@@ -10,6 +10,21 @@ import {
 import RoiCalculator from "./RoiCalculator";
 import ExitIntentModal from "./ExitIntentModal";
 import QuickQuoteBar from "./QuickQuoteBar";
+// --- explicit LCP images (use these to avoid const mutation issues) ---
+import sample_before from "../assets/sample_before.jpg";
+import sample_after  from "../assets/sample_after.jpg";
+
+// --- creators' logos (static imports avoid Vite dynamic/static warning) ---
+import kamz from "../assets/creators/kamz.png";
+import deadlox from "../assets/creators/deadlox.png";
+import kundan from "../assets/creators/kundan.png";
+import aish from "../assets/creators/aish.png";
+import gamermummy from "../assets/creators/gamermummy.png";
+import anchit from "../assets/creators/anchit.png";
+import maggie from "../assets/creators/maggie.png";
+import ankit from "../assets/creators/ankit.png";
+import manav from "../assets/creators/manav.png";
+
 
 /**
  * OPTIMIZED: Asset loading with lazy loading support
@@ -27,7 +42,6 @@ const ALL_ASSETS = import.meta.glob(
  * Memoized INR formatter (performance boost)
  * Creates formatter once and reuses it
  */
-// safe, memoized INR formatter
 const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -58,31 +72,41 @@ export const formatINR = (num, options = {}) => {
  */
 const assetCache = new Map();
 
+/**
+ * findAssetByBase(key, map)
+ * - map is expected to be an import.meta.glob map where values are functions returning a Promise
+ * - returns the resolved URL string or null
+ */
 export const findAssetByBase = async (key, map = ALL_ASSETS) => {
   if (!key) return null;
-  
-  // Check cache first
-  if (assetCache.has(key)) {
-    return assetCache.get(key);
-  }
-  
+
+  // check cache first
+  if (assetCache.has(key)) return assetCache.get(key);
+
   const search = String(key).toLowerCase();
+
   for (const path in map) {
     const file = path.split("/").pop() || "";
     const base = file.replace(/\.(png|jpe?g|webp|svg|avif)$/i, "").toLowerCase();
-    
+
     if (base.includes(search)) {
       try {
-        const asset = await map[path]();
-        const url = typeof asset === 'string' ? asset : asset.default;
-        assetCache.set(key, url);
-        return url;
+        const loader = map[path];
+        // loader is function (because eager:false) — call it to get the module/url
+        const asset = await loader();
+        // asset may be a string (url) depending on Vite config
+        const url = typeof asset === "string" ? asset : (asset && asset.default) || null;
+        if (url) {
+          assetCache.set(key, url);
+          return url;
+        }
       } catch (error) {
-        console.warn(`Failed to load asset: ${key}`, error);
+        console.warn(`Failed to load asset ${key} from ${path}`, error);
         return null;
       }
     }
   }
+
   return null;
 };
 
@@ -94,7 +118,7 @@ export const svgPlaceholder = (label = "Image") => {
     const entities = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;' };
     return entities[char];
   });
-  
+
   return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop offset='0%25' stop-color='%23FFF1E8'/%3E%3Cstop offset='100%25' stop-color='%23FFE4D6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g)' width='800' height='450'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23E85002' font-family='Poppins,sans-serif' font-size='28' font-weight='700'%3E${safe}%3C/text%3E%3C/svg%3E`;
 };
 
@@ -131,10 +155,6 @@ export const track = (ev, details = {}) => {
 
 /* ===================== OPTIMIZED Motion Variants ===================== */
 
-/**
- * Centralized animation variants with reduced motion support
- * Uses shorter durations for better perceived performance
- */
 export const animations = {
   fadeDown: { 
     hidden: { opacity: 0, y: -12 }, 
@@ -158,9 +178,6 @@ export const animations = {
   },
 };
 
-/**
- * OPTIMIZED: Card hover with performance optimizations
- */
 export const tiltHover = {
   whileHover: { y: -3, rotateX: 0.6, rotateY: -0.6 },
   transition: { type: "spring", stiffness: 260, damping: 20 }
@@ -168,34 +185,36 @@ export const tiltHover = {
 
 /* ===================== OPTIMIZED Sample Images with Lazy Loading ===================== */
 
+// Prefer the static imports first (these are resolved at build time by Vite)
+export const SAMPLE_BEFORE = sample_before || svgPlaceholder("Before");
+export const SAMPLE_AFTER  = sample_after  || svgPlaceholder("After");
+
 let sampleBeforePromise = null;
 let sampleAfterPromise = null;
 
 export const getSampleBefore = async () => {
-  if (!sampleBeforePromise) {
-    sampleBeforePromise = findAssetByBase("sample_before").then(
-      url => url || svgPlaceholder("Before")
-    );
+  if (sampleBeforePromise) return sampleBeforePromise;
+  // Prefer static import (fast). If not present, try dynamic lookup.
+  if (typeof sample_before === "string" && sample_before) {
+    sampleBeforePromise = Promise.resolve(sample_before);
+    return sampleBeforePromise;
   }
+  sampleBeforePromise = findAssetByBase("sample_before").then(url => url || svgPlaceholder("Before"));
   return sampleBeforePromise;
 };
 
 export const getSampleAfter = async () => {
-  if (!sampleAfterPromise) {
-    sampleAfterPromise = findAssetByBase("sample_after").then(
-      url => url || svgPlaceholder("After")
-    );
+  if (sampleAfterPromise) return sampleAfterPromise;
+  if (typeof sample_after === "string" && sample_after) {
+    sampleAfterPromise = Promise.resolve(sample_after);
+    return sampleAfterPromise;
   }
+  sampleAfterPromise = findAssetByBase("sample_after").then(url => url || svgPlaceholder("After"));
   return sampleAfterPromise;
 };
 
-// Legacy sync exports (load immediately for backward compatibility)
-export const SAMPLE_BEFORE = svgPlaceholder("Before");
-export const SAMPLE_AFTER = svgPlaceholder("After");
-
-// Preload actual images in the background
-getSampleBefore().then(url => { if (url) SAMPLE_BEFORE = url; });
-getSampleAfter().then(url => { if (url) SAMPLE_AFTER = url; });
+// NOTE: removed runtime reassignment of SAMPLE_BEFORE/SAMPLE_AFTER to avoid const mutation errors.
+// If you need runtime replacement, change SAMPLE_* to `let` and reassign carefully.
 
 /* ===================== OPTIMIZED Calendly Modal ===================== */
 
@@ -342,6 +361,7 @@ export const CalendlyModal = memo(({ open, onClose }) => {
 });
 
 CalendlyModal.displayName = "CalendlyModal";
+
 
 /* ===================== PERFORMANCE UTILITIES ===================== */
 
@@ -1661,7 +1681,7 @@ const BeforeAfter = ({
   );
 };
 
-/* ===================== Enhanced Proof Section ===================== */
+/* ===================== Enhanced Proof Section (fixed) ===================== */
 const ProofSection = () => {
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -1672,142 +1692,117 @@ const ProofSection = () => {
   const [hasAnimated, setHasAnimated] = useState(false);
   const sectionRef = useRef(null);
 
+  // Use the static imports added at top as guaranteed sources
+  const DEFAULT_SAMPLE_BEFORE = sample_before;
+  const DEFAULT_SAMPLE_AFTER  = sample_after;
+
   // Animated counter for CTR percentage
   useEffect(() => {
     if (hasAnimated || reduceMotion) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated) {
-          setHasAnimated(true);
-          let start = 0;
-          const end = 62;
-          const duration = 2000;
-          const startTime = Date.now();
+    let observer;
+    const rafIds = new Set();
 
-          const animate = () => {
-            const now = Date.now();
-            const progress = Math.min((now - startTime) / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-            const current = Math.floor(start + (end - start) * eased);
-            
-            setCountUp(current);
-            
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            }
-          };
+    const startCounter = () => {
+      setHasAnimated(true);
+      const start = 0;
+      const end = 62;
+      const duration = 2000;
+      const startTime = Date.now();
 
-          requestAnimationFrame(animate);
+      const animate = () => {
+        const now = Date.now();
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+        const current = Math.floor(start + (end - start) * eased);
+
+        setCountUp(current);
+
+        if (progress < 1) {
+          const id = requestAnimationFrame(animate);
+          rafIds.add(id);
         }
-      },
-      { threshold: 0.3 }
-    );
+      };
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
+      const id = requestAnimationFrame(animate);
+      rafIds.add(id);
+    };
+
+    try {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting && !hasAnimated) startCounter();
+        },
+        { threshold: 0.3 }
+      );
+
+      if (sectionRef.current) observer.observe(sectionRef.current);
+    } catch (e) {
+      // fallback: start immediately
+      startCounter();
     }
 
-    return () => observer.disconnect();
+    return () => {
+      if (observer && observer.disconnect) observer.disconnect();
+      rafIds.forEach((id) => cancelAnimationFrame(id));
+      rafIds.clear();
+    };
   }, [hasAnimated, reduceMotion]);
 
   const stats = [
-    { 
+    {
       icon: <BarChart3 size={20} />,
       label: "Average Improvement",
       value: "+62%",
-      suffix: "CTR"
+      suffix: "CTR",
     },
-    { 
+    {
       icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2"/>
-          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2" />
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
         </svg>
       ),
       label: "More Views",
       value: "2.3x",
-      suffix: "avg"
+      suffix: "avg",
     },
-    { 
+    {
       icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
       label: "Faster Results",
       value: "7",
-      suffix: "days"
+      suffix: "days",
     },
   ];
 
-  return (
-    <section 
-      id="proof" 
-      ref={sectionRef}
-      className="py-20 relative overflow-hidden" 
-      style={{ background: "var(--surface-alt)" }} 
-      aria-labelledby="proof-heading"
-    >
-      {/* Subtle background pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: `radial-gradient(circle, var(--text) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }}
-        aria-hidden="true"
-      />
+  // fallback icon if IconImage isn't defined earlier
+  const IconBadge = typeof IconImage === "function" ? IconImage : (props) => <Wand2 {...props} />;
 
-      {/* Gradient accents */}
+  return (
+    <section id="proof" ref={sectionRef} className="py-20 relative overflow-hidden" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
+      {/* Subtle background pattern */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `radial-gradient(circle, var(--text) 1px, transparent 1px)`, backgroundSize: "40px 40px" }} aria-hidden="true" />
+
       {!reduceMotion && (
         <>
-          <div
-            className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, var(--orange), transparent 60%)",
-            }}
-            aria-hidden="true"
-          />
-          <div
-            className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, #ff9357, transparent 60%)",
-            }}
-            aria-hidden="true"
-          />
+          <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none" style={{ background: "radial-gradient(circle, var(--orange), transparent 60%)" }} aria-hidden="true" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none" style={{ background: "radial-gradient(circle, #ff9357, transparent 60%)" }} aria-hidden="true" />
         </>
       )}
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
-        <motion.div
-          className="text-center mb-12"
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-10%" }}
-          transition={{ duration: 0.5 }}
-        >
-          {/* Badge */}
-          <motion.div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5"
-            style={{
-              color: "var(--orange)",
-              border: "1px solid var(--border)",
-              background: "rgba(232,80,2,0.08)",
-              boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
-            }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
-          >
-            <IconImage size={14} />
+        <motion.div className="text-center mb-12" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ duration: 0.5 }}>
+          <motion.div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5" style={{ color: "var(--orange)", border: "1px solid var(--border)", background: "rgba(232,80,2,0.08)", boxShadow: "0 4px 12px rgba(232,80,2,0.1)" }} whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}>
+            <IconBadge size={14} />
             Real Results
           </motion.div>
 
-          <h2
-            id="proof-heading"
-            className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
-            style={{ color: "var(--text)" }}
-          >
+          <h2 id="proof-heading" className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3" style={{ color: "var(--text)" }}>
             Packaging That Lifts CTR
           </h2>
           <p className="text-base md:text-xl max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
@@ -1816,43 +1811,15 @@ const ProofSection = () => {
         </motion.div>
 
         {/* Before/After Comparison */}
-        <motion.div
-          initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-10%" }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <BeforeAfter
-            before={SAMPLE_BEFORE}
-            after={SAMPLE_AFTER}
-            label="Drag to compare (Before → After)"
-            beforeAlt="Original thumbnail"
-            afterAlt="Optimized thumbnail"
-            width={1280}
-            height={720}
-          />
+        <motion.div initial={reduceMotion ? {} : { opacity: 0, y: 30 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ duration: 0.6, delay: 0.1 }}>
+          <BeforeAfter before={DEFAULT_SAMPLE_BEFORE} after={DEFAULT_SAMPLE_AFTER} label="Drag to compare (Before → After)" beforeAlt="Original thumbnail" afterAlt="Optimized thumbnail" width={1280} height={720} />
         </motion.div>
 
         {/* Animated CTR Badge */}
-        <motion.div
-          className="mt-8 flex justify-center"
-          initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-        >
-          <motion.div
-            className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl"
-            style={{
-              background: "linear-gradient(135deg, var(--orange), #ff9357)",
-              boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
-            }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
-          >
+        <motion.div className="mt-8 flex justify-center" initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }} whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }}>
+          <motion.div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl" style={{ background: "linear-gradient(135deg, var(--orange), #ff9357)", boxShadow: "0 10px 30px rgba(232,80,2,0.3)" }} whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}>
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl md:text-4xl font-bold text-white">
-                +{countUp}%
-              </span>
+              <span className="text-3xl md:text-4xl font-bold text-white">+{countUp}%</span>
               <span className="text-sm text-white/90">CTR</span>
             </div>
             <div className="h-8 w-px bg-white/30" aria-hidden="true" />
@@ -1864,68 +1831,25 @@ const ProofSection = () => {
         </motion.div>
 
         {/* Stats Grid */}
-        <motion.div
-          className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
+        <motion.div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.4 }}>
           {stats.map((stat, idx) => (
-            <motion.div
-              key={idx}
-              className="p-5 rounded-xl border"
-              style={{
-                background: "var(--surface)",
-                borderColor: "var(--border)",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-              }}
-              whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key={idx} className="p-5 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }} whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }} transition={{ duration: 0.2 }}>
               <div className="flex items-center justify-between mb-2">
-                <div style={{ color: "var(--orange)" }}>
-                  {stat.icon}
-                </div>
-                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                  {stat.label}
-                </div>
+                <div style={{ color: "var(--orange)" }}>{stat.icon}</div>
+                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{stat.label}</div>
               </div>
               <div className="flex items-baseline gap-1">
-                <div className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>
-                  {stat.value}
-                </div>
-                <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {stat.suffix}
-                </div>
+                <div className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>{stat.value}</div>
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>{stat.suffix}</div>
               </div>
             </motion.div>
           ))}
         </motion.div>
 
         {/* Trust indicators */}
-        <motion.div
-          className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs"
-          style={{ color: "var(--text-muted)" }}
-          initial={reduceMotion ? {} : { opacity: 0 }}
-          whileInView={reduceMotion ? {} : { opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-        >
-          {[
-            "✓ A/B tested designs",
-            "✓ Data-backed iterations",
-            "✓ Real creator results",
-            "✓ 48-72h turnaround"
-          ].map((item, i) => (
-            <span
-              key={i}
-              className="px-3 py-1.5 rounded-full"
-              style={{
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-              }}
-            >
+        <motion.div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs" style={{ color: "var(--text-muted)" }} initial={reduceMotion ? {} : { opacity: 0 }} whileInView={reduceMotion ? {} : { opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.5 }}>
+          {["✓ A/B tested designs", "✓ Data-backed iterations", "✓ Real creator results", "✓ 48-72h turnaround"].map((item, i) => (
+            <span key={i} className="px-3 py-1.5 rounded-full" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
               {item}
             </span>
           ))}
@@ -1935,21 +1859,22 @@ const ProofSection = () => {
   );
 };
 
-/* ===================== Enhanced Creators Worked With ===================== */
+
+/* ===================== Enhanced Creators Worked With (fixed static imports) ===================== */
 const CreatorsWorkedWith = ({ isDark }) => {
-  const reduceMotion = 
-    typeof window !== "undefined" && 
+  const reduceMotion =
+    typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredCreator, setHoveredCreator] = useState(null);
 
-  const LOGOS = import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", { 
-    eager: true, 
-    query: "?url", 
-    import: "default" 
-  });
+  // Use static imports (defined at top of file)
+  const LOGOS_MAP = {
+    kamz, deadlox, kundan, aish, gamermummy, anchit, maggie, ankit, manav
+  };
+
   const SUBS = (typeof window !== "undefined" && window.SS_SUBS) || {};
 
   const creators = [
@@ -1963,7 +1888,7 @@ const CreatorsWorkedWith = ({ isDark }) => {
     { name: "Crown Ankit", key: "ankit", category: "Gaming", color: "#48dbfb" },
     { name: "Manav Maggie Sukhija", key: "manav", category: "Lifestyle", color: "#ff9357" },
   ].map((c) => {
-    const url = findAssetByBase(c.key, LOGOS);
+    const url = LOGOS_MAP[c.key];
     return url ? { ...c, url, subs: SUBS[c.key] } : null;
   }).filter(Boolean);
 
@@ -1984,182 +1909,56 @@ const CreatorsWorkedWith = ({ isDark }) => {
     <section className="relative py-24 overflow-hidden" style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 relative z-10 max-w-7xl">
         {/* Header */}
-        <motion.div
-          className="text-center mb-16"
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          {/* Minimal stats badge */}
-          <motion.div
-            className="inline-flex items-center gap-4 px-6 py-2 rounded-full mb-6"
-            style={{
-              background: "var(--surface-alt)",
-              border: "1px solid var(--border)",
-            }}
-            whileHover={reduceMotion ? {} : { scale: 1.02 }}
-          >
+        <motion.div className="text-center mb-16" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
+          <motion.div className="inline-flex items-center gap-4 px-6 py-2 rounded-full mb-6" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }} whileHover={reduceMotion ? {} : { scale: 1.02 }}>
             <div className="flex items-center gap-2">
-              <div
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: "var(--orange)" }}
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                {creators.length}+ Active Clients
-              </span>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--orange)" }} aria-hidden="true" />
+              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{creators.length}+ Active Clients</span>
             </div>
             <div className="h-3 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
             <div className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path 
-                  d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" 
-                  stroke="var(--orange)" 
-                  strokeWidth="2" 
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>
-                {fmt(totalSubs)}+ Combined Reach
-              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" stroke="var(--orange)" strokeWidth="2" strokeLinecap="round"/></svg>
+              <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>{fmt(totalSubs)}+ Combined Reach</span>
             </div>
           </motion.div>
 
-          <h2 
-            className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-4"
-            style={{ color: "var(--text)" }}
-          >
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-4" style={{ color: "var(--text)" }}>
             Trusted by Creators Across Genres
           </h2>
-          <p 
-            className="text-base md:text-lg max-w-2xl mx-auto"
-            style={{ color: "var(--text-muted)" }}
-          >
-            From <strong style={{ color: "var(--text)" }}>Gaming</strong> to{" "}
-            <strong style={{ color: "var(--text)" }}>Lifestyle</strong> to{" "}
-            <strong style={{ color: "var(--text)" }}>Devotional</strong> — we adapt to your niche
+          <p className="text-base md:text-lg max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
+            From <strong style={{ color: "var(--text)" }}>Gaming</strong> to <strong style={{ color: "var(--text)" }}>Lifestyle</strong> to <strong style={{ color: "var(--text)" }}>Devotional</strong> — we adapt to your niche
           </p>
         </motion.div>
 
         {/* Marquee container */}
-        <div 
-          className="relative"
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => setIsPaused(false)}
-          role="region"
-          aria-label="Creator showcase"
-        >
-          {/* Cleaner gradient fades */}
-          <div 
-            className="pointer-events-none absolute left-0 top-0 bottom-0 w-32 md:w-40 z-10"
-            style={{ 
-              background: `linear-gradient(90deg, var(--surface) 0%, transparent 100%)` 
-            }} 
-            aria-hidden="true"
-          />
-          <div 
-            className="pointer-events-none absolute right-0 top-0 bottom-0 w-32 md:w-40 z-10"
-            style={{ 
-              background: `linear-gradient(270deg, var(--surface) 0%, transparent 100%)` 
-            }} 
-            aria-hidden="true"
-          />
+        <div className="relative" onMouseEnter={() => setIsPaused(true)} onMouseLeave={() => setIsPaused(false)} role="region" aria-label="Creator showcase">
+          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-32 md:w-40 z-10" style={{ background: `linear-gradient(90deg, var(--surface) 0%, transparent 100%)` }} aria-hidden="true" />
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-32 md:w-40 z-10" style={{ background: `linear-gradient(270deg, var(--surface) 0%, transparent 100%)` }} aria-hidden="true" />
 
-          {/* Scrolling list - cleaner design */}
-          <ul 
-            className={`flex items-center gap-4 whitespace-nowrap py-2 ${
-              reduceMotion || isPaused ? "" : "animate-[marq_45s_linear_infinite]"
-            }`}
-            style={{
-              willChange: reduceMotion || isPaused ? "auto" : "transform",
-            }}
-          >
+          <ul className={`flex items-center gap-4 whitespace-nowrap py-2 ${reduceMotion || isPaused ? "" : "animate-[marq_45s_linear_infinite]"}`} style={{ willChange: reduceMotion || isPaused ? "auto" : "transform" }}>
             {loop.map((c, i) => {
               const isHovered = hoveredCreator === `${c.key}-${i}`;
               return (
-                <motion.li 
-                  key={`${c.key}-${i}`}
-                  className="inline-flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none"
-                  style={{ 
-                    background: isHovered ? "var(--surface-alt)" : "transparent",
-                    border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
-                    transition: "all 0.25s ease",
-                    minWidth: "fit-content"
-                  }}
-                  onMouseEnter={() => setHoveredCreator(`${c.key}-${i}`)}
-                  onMouseLeave={() => setHoveredCreator(null)}
-                  whileHover={reduceMotion ? {} : { y: -4 }}
-                >
-                  {/* Cleaner avatar */}
+                <motion.li key={`${c.key}-${i}`} className="inline-flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none" style={{ background: isHovered ? "var(--surface-alt)" : "transparent", border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`, transition: "all 0.25s ease", minWidth: "fit-content" }} onMouseEnter={() => setHoveredCreator(`${c.key}-${i}`)} onMouseLeave={() => setHoveredCreator(null)} whileHover={reduceMotion ? {} : { y: -4 }}>
                   <div className="relative flex-shrink-0">
                     <span className="relative block w-12 h-12 rounded-full overflow-hidden">
-                      <img 
-                        src={c.url} 
-                        alt={`${c.name} logo`} 
-                        className="w-full h-full object-cover"
-                        style={{ 
-                          filter: isHovered ? "grayscale(0)" : "grayscale(0.05)",
-                          transition: "filter 0.25s ease",
-                        }} 
-                        loading="lazy" 
-                      />
+                      <img src={c.url} alt={`${c.name} logo`} className="w-full h-full object-cover" style={{ filter: isHovered ? "grayscale(0)" : "grayscale(0.05)", transition: "filter 0.25s ease" }} loading="lazy" />
                     </span>
-                    
-                    {/* Simple ring on hover */}
-                    <span 
-                      className="absolute inset-0 rounded-full pointer-events-none"
-                      style={{
-                        border: isHovered ? `2px solid ${c.color}` : "2px solid transparent",
-                        transition: "border 0.25s ease",
-                      }} 
-                      aria-hidden="true" 
-                    />
 
-                    {/* Minimal verified badge */}
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{
-                        background: "var(--orange)",
-                        border: "2px solid var(--surface)",
-                      }}
-                      aria-label="Verified client"
-                    >
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none">
-                        <path 
-                          d="M20 6L9 17l-5-5" 
-                          stroke="white" 
-                          strokeWidth="3" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                    <span className="absolute inset-0 rounded-full pointer-events-none" style={{ border: isHovered ? `2px solid ${c.color}` : "2px solid transparent", transition: "border 0.25s ease" }} aria-hidden="true" />
+
+                    <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "var(--orange)", border: "2px solid var(--surface)" }} aria-label="Verified client">
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </span>
                   </div>
 
-                  {/* Cleaner info layout */}
                   <span className="inline-flex flex-col gap-1">
                     <span className="flex items-center gap-2">
-                      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                        {c.name}
-                      </span>
-                      <span 
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                        style={{ 
-                          background: "var(--surface-alt)",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        {c.category}
-                      </span>
+                      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{c.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>{c.category}</span>
                     </span>
 
-                    {/* Subscriber count */}
-                    {fmt(c.subs) && (
-                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {fmt(c.subs)} subscribers
-                      </span>
-                    )}
+                    {fmt(c.subs) && (<span className="text-xs" style={{ color: "var(--text-muted)" }}>{fmt(c.subs)} subscribers</span>)}
                   </span>
                 </motion.li>
               );
@@ -2167,33 +1966,16 @@ const CreatorsWorkedWith = ({ isDark }) => {
           </ul>
         </div>
 
-        {/* Minimal pause hint */}
-        {!reduceMotion && (
-          <motion.p 
-            className="text-center mt-8 text-xs"
-            style={{ color: "var(--text-muted)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-          >
-            Hover to pause
-          </motion.p>
-        )}
+        {!reduceMotion && <motion.p className="text-center mt-8 text-xs" style={{ color: "var(--text-muted)" }} initial={{ opacity: 0 }} animate={{ opacity: 0.6 }}>Hover to pause</motion.p>}
       </div>
 
       <style>{`
-        @keyframes marq { 
-          0% { transform: translateX(0); } 
-          100% { transform: translateX(-50%); } 
-        }
-        
-        @media (prefers-reduced-motion: reduce) { 
-          ul[class*="animate-"] { animation: none !important; }
-        }
+        @keyframes marq { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) { ul[class*="animate-"] { animation: none !important; } }
       `}</style>
     </section>
   );
 };
-
 
 
 /* ===================== Enhanced Case Studies (metric-first) ===================== */
