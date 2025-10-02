@@ -7,64 +7,52 @@
     <meta name="format-detection" content="telephone=no,address=no,email=no" />
     <meta http-equiv="x-dns-prefetch-control" content="on" />
 
-    <!-- =========================
-         DNS Prefetch & Preconnect
-         (fast DNS + TLS handshakes for critical third parties)
-         ========================= -->
+    <!-- DNS Prefetch (pairs with preconnects) -->
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="dns-prefetch" href="https://fonts.googleapis.com">
     <link rel="dns-prefetch" href="https://calendly.com">
 
+    <!-- Preconnects (perf) -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://calendly.com" crossorigin>
+    <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
 
-    <!-- =========================
-         Preload: LCP / Hero
-         - Replace the hrefs below with your real hero asset paths (AVIF preferred)
-         - Keep the rel=preload + as=image so the browser prioritizes the LCP image
-         - If you use multiple sizes, preload the largest critical size that matches your LCP
-         ========================= -->
-    <!-- Primary: AVIF (best) -->
-    <link rel="preload" as="image" href="/assets/hero-lcp.avif" type="image/avif">
-    <!-- Fallbacks (optional) -->
-    <link rel="preload" as="image" href="/assets/hero-lcp.webp" type="image/webp" media="(prefers-reduced-motion: no-preference)">
-    <link rel="preload" as="image" href="/assets/hero-lcp.jpg" type="image/jpeg">
-
-    <!-- Preload critical CSS (if you extract a tiny critical stylesheet) -->
-    <!-- <link rel="preload" href="/styles/critical.css" as="style"> -->
-
-    <!-- =========================
-         Non-blocking Google Fonts (preload as style + onload)
-         Falls back to standard link if JS disabled.
-         This prevents the font stylesheet from blocking first paint.
-         ========================= -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" as="style" onload="this.rel='stylesheet'">
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    </noscript>
+    <!-- Fonts (optional: remove if you self-host Poppins) -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 
     <!-- Favicons -->
+    <!-- 1) System-controlled (fallback when JS is disabled) -->
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png"  media="(prefers-color-scheme: dark)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  media="(prefers-color-scheme: dark)">
+
+    <!-- 2) JS-controlled (for live theme toggles) -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" data-theme="light">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  data-theme="dark">
+
+    <!-- 3) Single tag we also update as a universal fallback -->
     <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
 
+    <!-- Apple touch icon -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 
-    <!-- Theme colors for system bar; JS also sets plain theme-color at runtime -->
+    <!-- Theme colors (system). JS also sets the plain theme-color at runtime. -->
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
 
-    <!-- ========== SEO / Social ========== -->
-    <title>Shinel Studios | Video Editing • Thumbnails • YouTube Growth</title>
-    <meta name="description" content="Shinel Studios — AI-aided video editing, thumbnails, shorts & YouTube growth. Fast turnaround, dedicated PM." />
+    <!-- PWA niceties (optional) -->
+    <!-- <link rel="manifest" href="/site.webmanifest"> -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- SEO -->
+    <title>Shinel Studios</title>
+    <meta name="description" content="Shinel Studios official site" />
     <meta name="keywords" content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://shinelstudios.in/" />
+    <!-- Hreflang (expand if you add locales) -->
     <link rel="alternate" href="https://shinelstudios.in/" hreflang="en-IN" />
     <link rel="alternate" href="https://shinelstudios.in/" hreflang="x-default" />
 
@@ -85,8 +73,9 @@
     <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
     <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
     <meta name="twitter:image" content="https://shinelstudios.in/og-image.png" />
+    <!-- <meta name="twitter:site" content="@shinelstudios" /> -->
 
-    <!-- Schema Markup: Organization & Products (kept as-is) -->
+    <!-- Schema Markup: Organization -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -110,6 +99,7 @@
     }
     </script>
 
+    <!-- Schema Markup: Product/Offer (Shorts Pack & Creator Essentials) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -146,32 +136,12 @@
     }
     </script>
 
-    <!-- OPTIONAL: Content-Security-Policy (example — apply via headers in production)
-         If you enable GTM/Calendly/GA, add their hosts to script-src/connect-src/frame-src.
-    -->
-    <!--
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self';
-      script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://assets.calendly.com;
-      connect-src 'self' https://api.github.com https://calendly.com https://www.google-analytics.com;
-      img-src 'self' data: https:;
-      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      font-src https://fonts.gstatic.com;
-      frame-src https://calendly.com;
-    ">
-    -->
-
-    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
-
-    <!-- End head -->
+    <!-- Staging safety: uncomment to avoid indexing on previews -->
+    <!-- <meta name="robots" content="noindex,nofollow"> -->
   </head>
-
   <body>
-    <!-- =========================
-         Prepaint theme + viewport stabilizer
-         (keeps first paint consistent & swaps favicon quickly)
-         ========================= -->
     <script>
+      // --- Prepaint theme bootstrap (no dependencies) ---
       (function () {
         try {
           var isDark =
@@ -182,7 +152,7 @@
           var root = document.documentElement;
           root.classList.toggle('dark', !!isDark);
 
-          // Sync theme-color (plain tag)
+          // Sync theme-color (the *plain* one without media attr)
           var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
           if (!metaTheme) {
             metaTheme = document.createElement('meta');
@@ -192,12 +162,14 @@
           metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
 
           // Swap favicon immediately
+          // (1) toggle data-theme icons if present
           var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
           var darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
           if (lightIcon && darkIcon) {
             lightIcon.disabled = !!isDark;
             darkIcon.disabled  = !isDark;
           }
+          // (2) always update the single fallback tag too
           var favicon = document.getElementById('favicon');
           if (favicon) {
             favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
@@ -205,6 +177,7 @@
         } catch (e) { /* no-op */ }
       })();
 
+      // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
       (function () {
         try {
           var setVH = function () {
@@ -222,35 +195,9 @@
       Please enable it to view our work, pricing and booking.
     </noscript>
 
-    <!-- =========================
-         LCP-friendly noscript hero
-         - This helps crawlers and Lighthouse choose a concrete LCP element
-         - The real hero in React will replace this when JS runs
-         - Replace sources with the exact paths you have in /assets/
-         ========================= -->
-    <noscript>
-      <picture>
-        <!-- AVIF preferred -->
-        <source srcset="/assets/hero-lcp.avif" type="image/avif">
-        <!-- WebP fallback -->
-        <source srcset="/assets/hero-lcp.webp" type="image/webp">
-        <!-- JPEG fallback (always include width/height if you know them) -->
-        <img
-          src="/assets/hero-lcp.jpg"
-          alt="Shinel Studios — Video editing, thumbnails and YouTube growth"
-          width="1600"
-          height="900"
-          style="width:100%;height:auto;display:block;object-fit:cover;"
-          decoding="async"
-          fetchpriority="high"
-        />
-      </picture>
-    </noscript>
-
-    <!-- SPA root -->
     <div id="root"></div>
 
-    <!-- Global subscriber counts used by CreatorsWorkedWith (keeps LCP small) -->
+    <!-- Global subscriber counts used by CreatorsWorkedWith. -->
     <script>
       window.SS_SUBS = {
         deadlox: 7000,
@@ -265,57 +212,6 @@
       };
     </script>
 
-    <!-- ========= Analytics loader (lazy) =========
-         - Nothing is loaded by default to keep TBT low
-         - Call window._ss.loadAnalytics('G-XXXX') when you want to initialize (after interaction or idle)
-    -->
-    <script>
-      (function () {
-        window._ss = window._ss || {};
-        window._ss.loadAnalytics = function(measurementId) {
-          if (!measurementId) return;
-          if (window.gtag) return; // already loaded
-          var s = document.createElement('script');
-          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + measurementId;
-          s.async = true;
-          document.head.appendChild(s);
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          window.gtag = gtag;
-          gtag('js', new Date());
-          gtag('config', measurementId, { anonymize_ip: true, send_page_view: false });
-        };
-        // Example: lazy load analytics when browser is idle
-        // if ('requestIdleCallback' in window) {
-        //   requestIdleCallback(function () { window._ss.loadAnalytics('G-REPLACE_ME'); });
-        // } else {
-        //   setTimeout(function () { window._ss.loadAnalytics('G-REPLACE_ME'); }, 3000);
-        // }
-      })();
-    </script>
-
-    <!-- Main application bundle (type=module is deferred by nature of module) -->
     <script type="module" src="/src/main.jsx"></script>
-
-    <!-- Deployment notes (keep for ops) -->
-    <!--
-      Cloudflare:
-       - Enable Polish / Image Resizing for on-the-fly AVIF/WebP
-       - Cache-Control: HTML short (stale-while-revalidate), static hashed assets long (1y immutable)
-       - Brotli & HTTP/3 ON
-
-      Calendly:
-       - Widget/script: lazy-load on click/interaction
-       - Do NOT include Calendly script in head by default
-
-      Fonts:
-       - To further optimize: self-host WOFF2 and preload them with font-display:swap
-
-      Lighthouse goals to aim for:
-       - LCP < 2.5s (preload hero; use AVIF)
-       - TBT < 150ms (defer heavy scripts; lazy-load analytics)
-       - CLS < 0.05 (provide width/height attributes for images & fonts)
-    -->
-
   </body>
 </html>

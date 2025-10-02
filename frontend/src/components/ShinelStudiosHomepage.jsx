@@ -1,408 +1,201 @@
-/* ===================== OPTIMIZED Imports & Globals ===================== */
-import React, { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+/* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, 
-  Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp
+  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink
 } from "lucide-react";
 
-// Lazy load heavy components for better initial performance
 import RoiCalculator from "./RoiCalculator";
 import ExitIntentModal from "./ExitIntentModal";
+import { MessageCircle, FileText, ChevronUp } from "lucide-react"
 import QuickQuoteBar from "./QuickQuoteBar";
-// --- explicit LCP images (use these to avoid const mutation issues) ---
-import sample_before from "../assets/sample_before.jpg";
-import sample_after  from "../assets/sample_after.jpg";
-
-// --- creators' logos (static imports avoid Vite dynamic/static warning) ---
-import kamz from "../assets/creators/kamz.png";
-import deadlox from "../assets/creators/deadlox.png";
-import kundan from "../assets/creators/kundan.png";
-import aish from "../assets/creators/aish.png";
-import gamermummy from "../assets/creators/gamermummy.png";
-import anchit from "../assets/creators/anchit.png";
-import maggie from "../assets/creators/maggie.png";
-import ankit from "../assets/creators/ankit.png";
-import manav from "../assets/creators/manav.png";
-
 
 /**
- * OPTIMIZED: Asset loading with lazy loading support
- * - Changed eager: false for better initial load time
- * - Assets load on-demand rather than all at once
+ * Centralized asset glob (Vite)
+ * - New syntax: { query: '?url', import: 'default' } replaces deprecated "as: 'url'"
+ * - Loads anything under /src/assets (creators, logos, proofs, etc.)
+ * - Access via findAssetByBase()
  */
 const ALL_ASSETS = import.meta.glob(
-  "../assets/**/*.{png,jpg,jpeg,webp,svg,avif}",
-  { eager: false, query: "?url", import: "default" }
+  "../assets/**/*.{png,jpg,jpeg,webp,svg}",
+  { eager: true, query: "?url", import: "default" }
 );
 
-/* ===================== OPTIMIZED Shared Helpers ===================== */
+/* ===================== Shared Helpers ===================== */
 
-/**
- * Memoized INR formatter (performance boost)
- * Creates formatter once and reuses it
- */
-const INR_FORMATTER = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0,
-});
-
+/** Safe INR formatter (no decimals by default) */
 export const formatINR = (num, options = {}) => {
   try {
-    if (!options || Object.keys(options).length === 0) {
-      return INR_FORMATTER.format(Number(num || 0));
-    }
-    const cfg = {
+    return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       maximumFractionDigits: 0,
       ...options,
-    };
-    return new Intl.NumberFormat("en-IN", cfg).format(Number(num || 0));
+    }).format(Number(num || 0));
   } catch {
     return `₹${num}`;
   }
 };
 
-
-/**
- * OPTIMIZED: Asset finder with caching
- * Prevents repeated searches for same asset
- */
-const assetCache = new Map();
-
-/**
- * findAssetByBase(key, map)
- * - map is expected to be an import.meta.glob map where values are functions returning a Promise
- * - returns the resolved URL string or null
- */
-export const findAssetByBase = async (key, map = ALL_ASSETS) => {
+/** Find first asset whose basename contains key (case-insensitive) */
+export const findAssetByBase = (key, map = ALL_ASSETS) => {
   if (!key) return null;
-
-  // check cache first
-  if (assetCache.has(key)) return assetCache.get(key);
-
   const search = String(key).toLowerCase();
-
-  for (const path in map) {
-    const file = path.split("/").pop() || "";
-    const base = file.replace(/\.(png|jpe?g|webp|svg|avif)$/i, "").toLowerCase();
-
-    if (base.includes(search)) {
-      try {
-        const loader = map[path];
-        // loader is function (because eager:false) — call it to get the module/url
-        const asset = await loader();
-        // asset may be a string (url) depending on Vite config
-        const url = typeof asset === "string" ? asset : (asset && asset.default) || null;
-        if (url) {
-          assetCache.set(key, url);
-          return url;
-        }
-      } catch (error) {
-        console.warn(`Failed to load asset ${key} from ${path}`, error);
-        return null;
-      }
-    }
+  for (const p in map) {
+    const url = map[p];
+    if (typeof url !== "string") continue;
+    const file = p.split("/").pop() || "";
+    const base = file.replace(/\.(png|jpe?g|webp|svg)$/i, "").toLowerCase();
+    if (base.includes(search)) return map[p];
   }
-
   return null;
 };
 
-/**
- * OPTIMIZED: SVG placeholder with better encoding
- */
+/** Tiny inline SVG placeholder */
 export const svgPlaceholder = (label = "Image") => {
-  const safe = String(label).replace(/[<>"'&]/g, (char) => {
-    const entities = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;' };
-    return entities[char];
-  });
-
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop offset='0%25' stop-color='%23FFF1E8'/%3E%3Cstop offset='100%25' stop-color='%23FFE4D6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g)' width='800' height='450'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23E85002' font-family='Poppins,sans-serif' font-size='28' font-weight='700'%3E${safe}%3C/text%3E%3C/svg%3E`;
+  const safe = String(label).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+    `<stop offset='0%' stop-color='#FFF1E8'/><stop offset='100%' stop-color='#FFE4D6'/></linearGradient></defs>` +
+    `<rect fill='url(#g)' width='800' height='450'/>` +
+    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#E85002' font-family='Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial' font-size='28' font-weight='700'>${safe}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-/**
- * OPTIMIZED: Analytics with debouncing and batching
- */
-let analyticsQueue = [];
-let analyticsTimer = null;
-
-const flushAnalytics = () => {
-  if (!analyticsQueue.length) return;
-  try {
-    // Dispatch a batched custom event for your internal listeners
-    const batch = analyticsQueue.slice();
-    window.dispatchEvent(new CustomEvent("analytics:batch", { detail: { events: batch } }));
-    analyticsQueue = [];
-  } catch (err) {
-    console.warn("Analytics flush failed", err);
-  }
+/** Lightweight analytics dispatcher (no-op safe) */
+export const track = (ev, detail = {}) => {
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
 };
 
-export const track = (ev, details = {}) => {
-  analyticsQueue.push({
-    ev,
-    detail: details,
-    timestamp: Date.now(),
-    url: (typeof window !== "undefined" && window.location && window.location.pathname) || "/",
-  });
-
-  if (analyticsTimer) clearTimeout(analyticsTimer);
-  analyticsTimer = setTimeout(flushAnalytics, 800);
-};
-
-
-/* ===================== OPTIMIZED Motion Variants ===================== */
-
+/* Motion variants (shared) */
 export const animations = {
-  fadeDown: { 
-    hidden: { opacity: 0, y: -12 }, 
-    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } } 
-  },
-  fadeUp: { 
-    hidden: { opacity: 0, y: 16 }, 
-    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } } 
-  },
-  fadeIn: { 
-    hidden: { opacity: 0 }, 
-    visible: { opacity: 1, transition: { duration: 0.3, ease: "easeOut" } } 
-  },
-  staggerParent: { 
-    hidden: {}, 
-    visible: { transition: { staggerChildren: 0.06 } } 
-  },
-  scaleIn: { 
-    hidden: { opacity: 0, scale: 0.96, y: 8 }, 
-    visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } } 
-  },
+  fadeDown: { hidden:{opacity:0,y:-12}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
+  fadeUp:   { hidden:{opacity:0,y: 16}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
+  fadeIn:   { hidden:{opacity:0},       visible:{opacity:1,      transition:{duration:.35,ease:"easeOut"}} },
+  staggerParent: { hidden:{}, visible:{ transition:{ staggerChildren:.08 } } },
+  scaleIn: { hidden:{opacity:0,scale:.96,y:8}, visible:{opacity:1,scale:1,y:0,transition:{duration:.25,ease:"easeOut"}} },
 };
 
+// card hover polish for grids
 export const tiltHover = {
   whileHover: { y: -3, rotateX: 0.6, rotateY: -0.6 },
-  transition: { type: "spring", stiffness: 260, damping: 20 }
+  transition: { type: "spring", stiffness: 240, damping: 18 }
 };
 
-/* ===================== OPTIMIZED Sample Images with Lazy Loading ===================== */
+/* Resolve sample images via asset glob (fallbacks if missing) */
+export const SAMPLE_BEFORE = findAssetByBase("sample_before") || svgPlaceholder("Before");
+export const SAMPLE_AFTER  = findAssetByBase("sample_after")  || svgPlaceholder("After");
 
-// Prefer the static imports first (these are resolved at build time by Vite)
-export const SAMPLE_BEFORE = sample_before || svgPlaceholder("Before");
-export const SAMPLE_AFTER  = sample_after  || svgPlaceholder("After");
+/* ===================== Calendly Modal (focus-trap, ARIA polish, safer sandbox) ===================== */
 
-let sampleBeforePromise = null;
-let sampleAfterPromise = null;
-
-export const getSampleBefore = async () => {
-  if (sampleBeforePromise) return sampleBeforePromise;
-  // Prefer static import (fast). If not present, try dynamic lookup.
-  if (typeof sample_before === "string" && sample_before) {
-    sampleBeforePromise = Promise.resolve(sample_before);
-    return sampleBeforePromise;
-  }
-  sampleBeforePromise = findAssetByBase("sample_before").then(url => url || svgPlaceholder("Before"));
-  return sampleBeforePromise;
-};
-
-export const getSampleAfter = async () => {
-  if (sampleAfterPromise) return sampleAfterPromise;
-  if (typeof sample_after === "string" && sample_after) {
-    sampleAfterPromise = Promise.resolve(sample_after);
-    return sampleAfterPromise;
-  }
-  sampleAfterPromise = findAssetByBase("sample_after").then(url => url || svgPlaceholder("After"));
-  return sampleAfterPromise;
-};
-
-// NOTE: removed runtime reassignment of SAMPLE_BEFORE/SAMPLE_AFTER to avoid const mutation errors.
-// If you need runtime replacement, change SAMPLE_* to `let` and reassign carefully.
-
-/* ===================== OPTIMIZED Calendly Modal ===================== */
-
-/**
- * Memoized URL builder to prevent recalculation
- */
 const buildCalendlyUrl = () => {
   const base = "https://calendly.com/shinelstudios/15min-audit";
   try {
-    const url = new URL(base);
+    const u = new URL(base);
     const utm = JSON.parse(localStorage.getItem("utm") || "{}");
-    
-    Object.entries(utm).forEach(([k, v]) => {
-      if (v && String(v).trim()) url.searchParams.set(k, v);
-    });
-    
-    url.searchParams.set("hide_event_type_details", "1");
-    url.searchParams.set("primary_color", "E85002");
-    return url.toString();
-  } catch (error) {
-    console.warn("Calendly URL error:", error);
+    Object.entries(utm).forEach(([k, v]) => u.searchParams.set(k, v));
+    u.searchParams.set("hide_event_type_details", "1");
+    u.searchParams.set("primary_color", "E85002");
+    return u.toString();
+  } catch {
     return base;
   }
 };
 
-/**
- * OPTIMIZED: Calendly Modal with better performance and accessibility
- * - Uses useReducedMotion hook from Framer Motion
- * - Better focus management
- * - Proper cleanup
- */
-export const CalendlyModal = memo(({ open, onClose }) => {
+const CalendlyModal = ({ open, onClose }) => {
   const dialogRef = useRef(null);
-  const shouldReduceMotion = useReducedMotion();
-  const url = useMemo(buildCalendlyUrl, []); // Stable per mount
-  
-  // Memoized close handler
-  const handleClose = useCallback(() => {
-    onClose?.();
-  }, [onClose]);
+  const firstFocusable = useRef(null);
+  const lastFocusable = useRef(null);
+  const url = useMemo(buildCalendlyUrl, []); // stable per mount
 
   useEffect(() => {
     if (!open) return;
-    
     const prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
 
-    // Track modal open
-    track("modal_open", { type: "calendly" });
-
-    // Focus management
+    // focus trap
     const el = dialogRef.current;
     if (el) {
       const focusables = el.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])'
       );
-      if (focusables.length > 0) {
-        focusables[0]?.focus();
+      if (focusables.length) {
+        firstFocusable.current = focusables[0];
+        lastFocusable.current = focusables[focusables.length - 1];
+        firstFocusable.current.focus();
       }
     }
 
-    // Keyboard handlers
     const onKeydown = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        handleClose();
+      if (e.key === "Escape") onClose?.();
+      if (e.key === "Tab" && firstFocusable.current && lastFocusable.current) {
+        if (e.shiftKey && document.activeElement === firstFocusable.current) {
+          e.preventDefault(); lastFocusable.current.focus();
+        } else if (!e.shiftKey && document.activeElement === lastFocusable.current) {
+          e.preventDefault(); firstFocusable.current.focus();
+        }
       }
     };
-    
     document.addEventListener("keydown", onKeydown);
 
     return () => {
       document.documentElement.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeydown);
-      track("modal_close", { type: "calendly" });
     };
-  }, [open, handleClose]);
+  }, [open, onClose]);
 
   if (!open) return null;
-
-  const handleOverlayClick = (e) => {
-    if (e.currentTarget === e.target) handleClose();
-  };
+  const onOverlay = (e) => { if (e.currentTarget === e.target) onClose?.(); };
 
   return (
     <motion.div
-      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="calendly-modal-title"
-      onClick={handleOverlayClick}
-      initial={shouldReduceMotion ? {} : { opacity: 0 }}
-      animate={shouldReduceMotion ? {} : { opacity: 1 }}
-      exit={shouldReduceMotion ? {} : { opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      aria-label="Free 15-minute content audit"
+      onMouseDown={onOverlay}
+      onTouchStart={onOverlay}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
     >
       <motion.div
         ref={dialogRef}
-        className="bg-[var(--surface)] rounded-2xl w-full max-w-3xl overflow-hidden border-2"
-        style={{ borderColor: "var(--orange)" }}
-        initial={shouldReduceMotion ? {} : { scale: 0.95, y: 20 }}
-        animate={shouldReduceMotion ? {} : { scale: 1, y: 0 }}
-        exit={shouldReduceMotion ? {} : { scale: 0.95, y: 20 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        onClick={(e) => e.stopPropagation()}
+        className="bg-[var(--surface)] rounded-2xl w-full max-w-3xl overflow-hidden border focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+        style={{ borderColor: "var(--border)" }}
+        initial={{ scale: 0.98, y: 8, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.98, y: 8, opacity: 0 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
       >
-        {/* Header */}
-        <div 
-          className="flex items-center justify-between px-6 py-4 border-b" 
-          style={{ borderColor: "var(--border)" }}
-        >
-          <h2 
-            id="calendly-modal-title"
-            className="font-bold text-lg" 
-            style={{ color: "var(--text)" }}
-          >
-            Free 15-Min Content Audit
-          </h2>
+        <div className="flex items-center justify-between px-4 py-3" style={{ color: "var(--text)" }}>
+          <b>Free 15-min Content Audit</b>
           <button
-            onClick={handleClose}
-            className="p-2 rounded-lg hover:bg-[var(--surface-alt)] transition-colors"
-            aria-label="Close dialog"
+            onClick={onClose}
+            className="text-sm opacity-80 hover:opacity-100 px-3 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+            aria-label="Close scheduling dialog"
           >
-            <X size={20} />
+            Close
           </button>
         </div>
 
-        {/* Iframe */}
         <div className="h-[70vh]">
           <iframe
-            title="Schedule consultation with Shinel Studios"
+            title="Book a call"
             src={url}
             className="w-full h-full"
             style={{ border: 0 }}
             loading="lazy"
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
             referrerPolicy="strict-origin-when-cross-origin"
-            allow="camera; microphone; fullscreen"
+            allow="camera; microphone; fullscreen; clipboard-read; clipboard-write"
           />
         </div>
       </motion.div>
     </motion.div>
   );
-});
-
-CalendlyModal.displayName = "CalendlyModal";
-
-
-/* ===================== PERFORMANCE UTILITIES ===================== */
-
-/**
- * Custom hook for optimized intersection observer
- */
-export const useIntersectionObserver = (ref, options = {}) => {
-  const [isIntersecting, setIsIntersecting] = useState(false);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || typeof IntersectionObserver === "undefined") {
-      setIsIntersecting(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsIntersecting(entry.isIntersecting),
-      { rootMargin: options.rootMargin || '50px', threshold: options.threshold ?? 0.1 }
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref, options.rootMargin, options.threshold]);
-
-  return isIntersecting;
-};
-
-
-/**
- * Debounce hook for performance
- */
-export const useDebounce = (value, delay = 300) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
 };
 
 /* ===================== Hero Section (Enhanced) ===================== */
@@ -1681,7 +1474,7 @@ const BeforeAfter = ({
   );
 };
 
-/* ===================== Enhanced Proof Section (fixed) ===================== */
+/* ===================== Enhanced Proof Section ===================== */
 const ProofSection = () => {
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -1692,117 +1485,142 @@ const ProofSection = () => {
   const [hasAnimated, setHasAnimated] = useState(false);
   const sectionRef = useRef(null);
 
-  // Use the static imports added at top as guaranteed sources
-  const DEFAULT_SAMPLE_BEFORE = sample_before;
-  const DEFAULT_SAMPLE_AFTER  = sample_after;
-
   // Animated counter for CTR percentage
   useEffect(() => {
     if (hasAnimated || reduceMotion) return;
 
-    let observer;
-    const rafIds = new Set();
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          let start = 0;
+          const end = 62;
+          const duration = 2000;
+          const startTime = Date.now();
 
-    const startCounter = () => {
-      setHasAnimated(true);
-      const start = 0;
-      const end = 62;
-      const duration = 2000;
-      const startTime = Date.now();
+          const animate = () => {
+            const now = Date.now();
+            const progress = Math.min((now - startTime) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+            const current = Math.floor(start + (end - start) * eased);
+            
+            setCountUp(current);
+            
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            }
+          };
 
-      const animate = () => {
-        const now = Date.now();
-        const progress = Math.min((now - startTime) / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-        const current = Math.floor(start + (end - start) * eased);
-
-        setCountUp(current);
-
-        if (progress < 1) {
-          const id = requestAnimationFrame(animate);
-          rafIds.add(id);
+          requestAnimationFrame(animate);
         }
-      };
+      },
+      { threshold: 0.3 }
+    );
 
-      const id = requestAnimationFrame(animate);
-      rafIds.add(id);
-    };
-
-    try {
-      observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting && !hasAnimated) startCounter();
-        },
-        { threshold: 0.3 }
-      );
-
-      if (sectionRef.current) observer.observe(sectionRef.current);
-    } catch (e) {
-      // fallback: start immediately
-      startCounter();
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
     }
 
-    return () => {
-      if (observer && observer.disconnect) observer.disconnect();
-      rafIds.forEach((id) => cancelAnimationFrame(id));
-      rafIds.clear();
-    };
+    return () => observer.disconnect();
   }, [hasAnimated, reduceMotion]);
 
   const stats = [
-    {
+    { 
       icon: <BarChart3 size={20} />,
       label: "Average Improvement",
       value: "+62%",
-      suffix: "CTR",
+      suffix: "CTR"
     },
-    {
+    { 
       icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2" />
-          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2"/>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
         </svg>
       ),
       label: "More Views",
       value: "2.3x",
-      suffix: "avg",
+      suffix: "avg"
     },
-    {
+    { 
       icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       ),
       label: "Faster Results",
       value: "7",
-      suffix: "days",
+      suffix: "days"
     },
   ];
 
-  // fallback icon if IconImage isn't defined earlier
-  const IconBadge = typeof IconImage === "function" ? IconImage : (props) => <Wand2 {...props} />;
-
   return (
-    <section id="proof" ref={sectionRef} className="py-20 relative overflow-hidden" style={{ background: "var(--surface-alt)" }} aria-labelledby="proof-heading">
+    <section 
+      id="proof" 
+      ref={sectionRef}
+      className="py-20 relative overflow-hidden" 
+      style={{ background: "var(--surface-alt)" }} 
+      aria-labelledby="proof-heading"
+    >
       {/* Subtle background pattern */}
-      <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: `radial-gradient(circle, var(--text) 1px, transparent 1px)`, backgroundSize: "40px 40px" }} aria-hidden="true" />
+      <div
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `radial-gradient(circle, var(--text) 1px, transparent 1px)`,
+          backgroundSize: '40px 40px',
+        }}
+        aria-hidden="true"
+      />
 
+      {/* Gradient accents */}
       {!reduceMotion && (
         <>
-          <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none" style={{ background: "radial-gradient(circle, var(--orange), transparent 60%)" }} aria-hidden="true" />
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none" style={{ background: "radial-gradient(circle, #ff9357, transparent 60%)" }} aria-hidden="true" />
+          <div
+            className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, var(--orange), transparent 60%)",
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, #ff9357, transparent 60%)",
+            }}
+            aria-hidden="true"
+          />
         </>
       )}
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
-        <motion.div className="text-center mb-12" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ duration: 0.5 }}>
-          <motion.div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5" style={{ color: "var(--orange)", border: "1px solid var(--border)", background: "rgba(232,80,2,0.08)", boxShadow: "0 4px 12px rgba(232,80,2,0.1)" }} whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}>
-            <IconBadge size={14} />
+        <motion.div
+          className="text-center mb-12"
+          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-10%" }}
+          transition={{ duration: 0.5 }}
+        >
+          {/* Badge */}
+          <motion.div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5"
+            style={{
+              color: "var(--orange)",
+              border: "1px solid var(--border)",
+              background: "rgba(232,80,2,0.08)",
+              boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
+            }}
+            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
+          >
+            <IconImage size={14} />
             Real Results
           </motion.div>
 
-          <h2 id="proof-heading" className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3" style={{ color: "var(--text)" }}>
+          <h2
+            id="proof-heading"
+            className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
+            style={{ color: "var(--text)" }}
+          >
             Packaging That Lifts CTR
           </h2>
           <p className="text-base md:text-xl max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
@@ -1811,15 +1629,43 @@ const ProofSection = () => {
         </motion.div>
 
         {/* Before/After Comparison */}
-        <motion.div initial={reduceMotion ? {} : { opacity: 0, y: 30 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true, margin: "-10%" }} transition={{ duration: 0.6, delay: 0.1 }}>
-          <BeforeAfter before={DEFAULT_SAMPLE_BEFORE} after={DEFAULT_SAMPLE_AFTER} label="Drag to compare (Before → After)" beforeAlt="Original thumbnail" afterAlt="Optimized thumbnail" width={1280} height={720} />
+        <motion.div
+          initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-10%" }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          <BeforeAfter
+            before={SAMPLE_BEFORE}
+            after={SAMPLE_AFTER}
+            label="Drag to compare (Before → After)"
+            beforeAlt="Original thumbnail"
+            afterAlt="Optimized thumbnail"
+            width={1280}
+            height={720}
+          />
         </motion.div>
 
         {/* Animated CTR Badge */}
-        <motion.div className="mt-8 flex justify-center" initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }} whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.3 }}>
-          <motion.div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl" style={{ background: "linear-gradient(135deg, var(--orange), #ff9357)", boxShadow: "0 10px 30px rgba(232,80,2,0.3)" }} whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}>
+        <motion.div
+          className="mt-8 flex justify-center"
+          initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <motion.div
+            className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl"
+            style={{
+              background: "linear-gradient(135deg, var(--orange), #ff9357)",
+              boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
+            }}
+            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
+          >
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl md:text-4xl font-bold text-white">+{countUp}%</span>
+              <span className="text-3xl md:text-4xl font-bold text-white">
+                +{countUp}%
+              </span>
               <span className="text-sm text-white/90">CTR</span>
             </div>
             <div className="h-8 w-px bg-white/30" aria-hidden="true" />
@@ -1831,25 +1677,68 @@ const ProofSection = () => {
         </motion.div>
 
         {/* Stats Grid */}
-        <motion.div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <motion.div
+          className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
+          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
           {stats.map((stat, idx) => (
-            <motion.div key={idx} className="p-5 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }} whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }} transition={{ duration: 0.2 }}>
+            <motion.div
+              key={idx}
+              className="p-5 rounded-xl border"
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--border)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+              }}
+              whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
+              transition={{ duration: 0.2 }}
+            >
               <div className="flex items-center justify-between mb-2">
-                <div style={{ color: "var(--orange)" }}>{stat.icon}</div>
-                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{stat.label}</div>
+                <div style={{ color: "var(--orange)" }}>
+                  {stat.icon}
+                </div>
+                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  {stat.label}
+                </div>
               </div>
               <div className="flex items-baseline gap-1">
-                <div className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>{stat.value}</div>
-                <div className="text-sm" style={{ color: "var(--text-muted)" }}>{stat.suffix}</div>
+                <div className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>
+                  {stat.value}
+                </div>
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  {stat.suffix}
+                </div>
               </div>
             </motion.div>
           ))}
         </motion.div>
 
         {/* Trust indicators */}
-        <motion.div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs" style={{ color: "var(--text-muted)" }} initial={reduceMotion ? {} : { opacity: 0 }} whileInView={reduceMotion ? {} : { opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.5 }}>
-          {["✓ A/B tested designs", "✓ Data-backed iterations", "✓ Real creator results", "✓ 48-72h turnaround"].map((item, i) => (
-            <span key={i} className="px-3 py-1.5 rounded-full" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+        <motion.div
+          className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs"
+          style={{ color: "var(--text-muted)" }}
+          initial={reduceMotion ? {} : { opacity: 0 }}
+          whileInView={reduceMotion ? {} : { opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          {[
+            "✓ A/B tested designs",
+            "✓ Data-backed iterations",
+            "✓ Real creator results",
+            "✓ 48-72h turnaround"
+          ].map((item, i) => (
+            <span
+              key={i}
+              className="px-3 py-1.5 rounded-full"
+              style={{
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+              }}
+            >
               {item}
             </span>
           ))}
@@ -1859,22 +1748,21 @@ const ProofSection = () => {
   );
 };
 
-
-/* ===================== Enhanced Creators Worked With (fixed static imports) ===================== */
+/* ===================== Enhanced Creators Worked With ===================== */
 const CreatorsWorkedWith = ({ isDark }) => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
+  const reduceMotion = 
+    typeof window !== "undefined" && 
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredCreator, setHoveredCreator] = useState(null);
 
-  // Use static imports (defined at top of file)
-  const LOGOS_MAP = {
-    kamz, deadlox, kundan, aish, gamermummy, anchit, maggie, ankit, manav
-  };
-
+  const LOGOS = import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", { 
+    eager: true, 
+    query: "?url", 
+    import: "default" 
+  });
   const SUBS = (typeof window !== "undefined" && window.SS_SUBS) || {};
 
   const creators = [
@@ -1888,7 +1776,7 @@ const CreatorsWorkedWith = ({ isDark }) => {
     { name: "Crown Ankit", key: "ankit", category: "Gaming", color: "#48dbfb" },
     { name: "Manav Maggie Sukhija", key: "manav", category: "Lifestyle", color: "#ff9357" },
   ].map((c) => {
-    const url = LOGOS_MAP[c.key];
+    const url = findAssetByBase(c.key, LOGOS);
     return url ? { ...c, url, subs: SUBS[c.key] } : null;
   }).filter(Boolean);
 
@@ -1909,56 +1797,182 @@ const CreatorsWorkedWith = ({ isDark }) => {
     <section className="relative py-24 overflow-hidden" style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 relative z-10 max-w-7xl">
         {/* Header */}
-        <motion.div className="text-center mb-16" initial={reduceMotion ? {} : { opacity: 0, y: 20 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
-          <motion.div className="inline-flex items-center gap-4 px-6 py-2 rounded-full mb-6" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }} whileHover={reduceMotion ? {} : { scale: 1.02 }}>
+        <motion.div
+          className="text-center mb-16"
+          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
+          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          {/* Minimal stats badge */}
+          <motion.div
+            className="inline-flex items-center gap-4 px-6 py-2 rounded-full mb-6"
+            style={{
+              background: "var(--surface-alt)",
+              border: "1px solid var(--border)",
+            }}
+            whileHover={reduceMotion ? {} : { scale: 1.02 }}
+          >
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--orange)" }} aria-hidden="true" />
-              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>{creators.length}+ Active Clients</span>
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: "var(--orange)" }}
+                aria-hidden="true"
+              />
+              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                {creators.length}+ Active Clients
+              </span>
             </div>
             <div className="h-3 w-px" style={{ background: "var(--border)" }} aria-hidden="true" />
             <div className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" stroke="var(--orange)" strokeWidth="2" strokeLinecap="round"/></svg>
-              <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>{fmt(totalSubs)}+ Combined Reach</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path 
+                  d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" 
+                  stroke="var(--orange)" 
+                  strokeWidth="2" 
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>
+                {fmt(totalSubs)}+ Combined Reach
+              </span>
             </div>
           </motion.div>
 
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-4" style={{ color: "var(--text)" }}>
+          <h2 
+            className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-4"
+            style={{ color: "var(--text)" }}
+          >
             Trusted by Creators Across Genres
           </h2>
-          <p className="text-base md:text-lg max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
-            From <strong style={{ color: "var(--text)" }}>Gaming</strong> to <strong style={{ color: "var(--text)" }}>Lifestyle</strong> to <strong style={{ color: "var(--text)" }}>Devotional</strong> — we adapt to your niche
+          <p 
+            className="text-base md:text-lg max-w-2xl mx-auto"
+            style={{ color: "var(--text-muted)" }}
+          >
+            From <strong style={{ color: "var(--text)" }}>Gaming</strong> to{" "}
+            <strong style={{ color: "var(--text)" }}>Lifestyle</strong> to{" "}
+            <strong style={{ color: "var(--text)" }}>Devotional</strong> — we adapt to your niche
           </p>
         </motion.div>
 
         {/* Marquee container */}
-        <div className="relative" onMouseEnter={() => setIsPaused(true)} onMouseLeave={() => setIsPaused(false)} role="region" aria-label="Creator showcase">
-          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-32 md:w-40 z-10" style={{ background: `linear-gradient(90deg, var(--surface) 0%, transparent 100%)` }} aria-hidden="true" />
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-32 md:w-40 z-10" style={{ background: `linear-gradient(270deg, var(--surface) 0%, transparent 100%)` }} aria-hidden="true" />
+        <div 
+          className="relative"
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          role="region"
+          aria-label="Creator showcase"
+        >
+          {/* Cleaner gradient fades */}
+          <div 
+            className="pointer-events-none absolute left-0 top-0 bottom-0 w-32 md:w-40 z-10"
+            style={{ 
+              background: `linear-gradient(90deg, var(--surface) 0%, transparent 100%)` 
+            }} 
+            aria-hidden="true"
+          />
+          <div 
+            className="pointer-events-none absolute right-0 top-0 bottom-0 w-32 md:w-40 z-10"
+            style={{ 
+              background: `linear-gradient(270deg, var(--surface) 0%, transparent 100%)` 
+            }} 
+            aria-hidden="true"
+          />
 
-          <ul className={`flex items-center gap-4 whitespace-nowrap py-2 ${reduceMotion || isPaused ? "" : "animate-[marq_45s_linear_infinite]"}`} style={{ willChange: reduceMotion || isPaused ? "auto" : "transform" }}>
+          {/* Scrolling list - cleaner design */}
+          <ul 
+            className={`flex items-center gap-4 whitespace-nowrap py-2 ${
+              reduceMotion || isPaused ? "" : "animate-[marq_45s_linear_infinite]"
+            }`}
+            style={{
+              willChange: reduceMotion || isPaused ? "auto" : "transform",
+            }}
+          >
             {loop.map((c, i) => {
               const isHovered = hoveredCreator === `${c.key}-${i}`;
               return (
-                <motion.li key={`${c.key}-${i}`} className="inline-flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none" style={{ background: isHovered ? "var(--surface-alt)" : "transparent", border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`, transition: "all 0.25s ease", minWidth: "fit-content" }} onMouseEnter={() => setHoveredCreator(`${c.key}-${i}`)} onMouseLeave={() => setHoveredCreator(null)} whileHover={reduceMotion ? {} : { y: -4 }}>
+                <motion.li 
+                  key={`${c.key}-${i}`}
+                  className="inline-flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none"
+                  style={{ 
+                    background: isHovered ? "var(--surface-alt)" : "transparent",
+                    border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
+                    transition: "all 0.25s ease",
+                    minWidth: "fit-content"
+                  }}
+                  onMouseEnter={() => setHoveredCreator(`${c.key}-${i}`)}
+                  onMouseLeave={() => setHoveredCreator(null)}
+                  whileHover={reduceMotion ? {} : { y: -4 }}
+                >
+                  {/* Cleaner avatar */}
                   <div className="relative flex-shrink-0">
                     <span className="relative block w-12 h-12 rounded-full overflow-hidden">
-                      <img src={c.url} alt={`${c.name} logo`} className="w-full h-full object-cover" style={{ filter: isHovered ? "grayscale(0)" : "grayscale(0.05)", transition: "filter 0.25s ease" }} loading="lazy" />
+                      <img 
+                        src={c.url} 
+                        alt={`${c.name} logo`} 
+                        className="w-full h-full object-cover"
+                        style={{ 
+                          filter: isHovered ? "grayscale(0)" : "grayscale(0.05)",
+                          transition: "filter 0.25s ease",
+                        }} 
+                        loading="lazy" 
+                      />
                     </span>
+                    
+                    {/* Simple ring on hover */}
+                    <span 
+                      className="absolute inset-0 rounded-full pointer-events-none"
+                      style={{
+                        border: isHovered ? `2px solid ${c.color}` : "2px solid transparent",
+                        transition: "border 0.25s ease",
+                      }} 
+                      aria-hidden="true" 
+                    />
 
-                    <span className="absolute inset-0 rounded-full pointer-events-none" style={{ border: isHovered ? `2px solid ${c.color}` : "2px solid transparent", transition: "border 0.25s ease" }} aria-hidden="true" />
-
-                    <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "var(--orange)", border: "2px solid var(--surface)" }} aria-label="Verified client">
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    {/* Minimal verified badge */}
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
+                      style={{
+                        background: "var(--orange)",
+                        border: "2px solid var(--surface)",
+                      }}
+                      aria-label="Verified client"
+                    >
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none">
+                        <path 
+                          d="M20 6L9 17l-5-5" 
+                          stroke="white" 
+                          strokeWidth="3" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </span>
                   </div>
 
+                  {/* Cleaner info layout */}
                   <span className="inline-flex flex-col gap-1">
                     <span className="flex items-center gap-2">
-                      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{c.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}>{c.category}</span>
+                      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                        {c.name}
+                      </span>
+                      <span 
+                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                        style={{ 
+                          background: "var(--surface-alt)",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {c.category}
+                      </span>
                     </span>
 
-                    {fmt(c.subs) && (<span className="text-xs" style={{ color: "var(--text-muted)" }}>{fmt(c.subs)} subscribers</span>)}
+                    {/* Subscriber count */}
+                    {fmt(c.subs) && (
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {fmt(c.subs)} subscribers
+                      </span>
+                    )}
                   </span>
                 </motion.li>
               );
@@ -1966,12 +1980,28 @@ const CreatorsWorkedWith = ({ isDark }) => {
           </ul>
         </div>
 
-        {!reduceMotion && <motion.p className="text-center mt-8 text-xs" style={{ color: "var(--text-muted)" }} initial={{ opacity: 0 }} animate={{ opacity: 0.6 }}>Hover to pause</motion.p>}
+        {/* Minimal pause hint */}
+        {!reduceMotion && (
+          <motion.p 
+            className="text-center mt-8 text-xs"
+            style={{ color: "var(--text-muted)" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.6 }}
+          >
+            Hover to pause
+          </motion.p>
+        )}
       </div>
 
       <style>{`
-        @keyframes marq { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        @media (prefers-reduced-motion: reduce) { ul[class*="animate-"] { animation: none !important; } }
+        @keyframes marq { 
+          0% { transform: translateX(0); } 
+          100% { transform: translateX(-50%); } 
+        }
+        
+        @media (prefers-reduced-motion: reduce) { 
+          ul[class*="animate-"] { animation: none !important; }
+        }
       `}</style>
     </section>
   );
@@ -3712,17 +3742,21 @@ const FAQSection = () => {
   );
 };
 
-/* ===================== Conversion-Optimized Pricing ===================== */
+/* ===================== Pricing (final, mobile carousel + high-converting polish) ===================== */
 const Pricing = ({ onOpenCalendly }) => {
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  const [isMobile, setIsMobile] = useState(() =>
+  const isTouch =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(hover: none)").matches;
+
+  // Detect mobile viewport (≤ 640px) for carousel mode
+  const [isMobile, setIsMobile] = React.useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 640px)").matches : false
   );
-  
-  useEffect(() => {
+  React.useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 640px)");
     const onChange = (e) => setIsMobile(e.matches);
@@ -3730,126 +3764,300 @@ const Pricing = ({ onOpenCalendly }) => {
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
 
+  /* ---------- Tabs ---------- */
   const CATS = [
     {
       k: "gaming",
       label: "Gaming",
       headline: "Level up your channel, not just your KD",
       sub: "Hook-first edits, cracked thumbnails, and highlight engines built for any title.",
-      icon: <Zap size={16} />,
     },
     {
       k: "vlog",
       label: "Vlogs",
       headline: "Turn everyday moments into bingeable stories",
       sub: "Cleaner cuts, clearer hooks, and packaging that earns the click.",
-      icon: <IconImage size={16} />,
     },
     {
       k: "talking",
-      label: "Podcasts",
+      label: "Talking Heads & Motion Graphics",
       headline: "Ship long-form, spin a clips flywheel",
       sub: "Studio-grade edits, transcripts, and steady clips for discovery.",
-      icon: <MessageCircle size={16} />,
     },
     {
       k: "others",
-      label: "Custom",
+      label: "Others",
       headline: "Custom mix for brands & niches",
-      sub: "Tell us your format and goals — we'll tailor a plan.",
-      icon: <Wand2 size={16} />,
+      sub: "Tell us your format and goals — we’ll tailor a plan.",
     },
   ];
-  
-  const [cat, setCat] = useState("gaming");
+  const [cat, setCat] = React.useState("gaming");
 
+  /* ---------- INTERNAL rate card (not rendered) ---------- */
+  const RATE_CARD = {
+    gaming: { thumb: 170, short: 200, longPerMin: 200 },
+    vlog: { longPerMin: 200, longPerMinCine: 250, thumb: 170, short: 200 },
+    talking: { editPerMin: 180, clip: 220, thumb: 170 }, // podcasts merged here
+  };
+
+  const estimatePlan = (catKey, spec = {}) => {
+    const r = RATE_CARD[catKey] || {};
+    let total = 0;
+
+    if (catKey === "gaming") {
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+      total += (spec.shorts || 0) * (r.short || 0);
+      total += (spec.longMins || 0) * (r.longPerMin || 0);
+    } else if (catKey === "vlog") {
+      const cine = Math.min(spec.longMins || 0, spec.cineMins || 0);
+      const normal = Math.max(0, (spec.longMins || 0) - cine);
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+      total += (spec.shorts || 0) * (r.short || 0);
+      total += cine * (r.longPerMinCine || r.longPerMin || 0);
+      total += normal * (r.longPerMin || 0);
+    } else if (catKey === "talking") {
+      total += (spec.episodeMins || 0) * (r.editPerMin || 0);
+      total += (spec.clips || 0) * (r.clip || 0);
+      total += (spec.thumbs || 0) * (r.thumb || 0);
+    }
+    return Math.round(total || 0);
+  };
+
+  /* ---------- Plans (public prices) ---------- */
   const PLANS = {
     gaming: [
       {
-        name: "Starter",
-        tag: "Test the waters",
+        name: "Starter — Warm-Up",
+        tag: "Kickoff + mini audit",
         key: "starter",
-        cta: "Start Now",
-        priceInr: 599,
+        cta: "Start Warm-Up",
+        priceInr: 599, // one-time
         billing: "one-time",
-        savings: null,
         bullets: [
-          "1 AI-assisted thumbnail + human polish",
-          "1 Short (≤50s) with captions & sound",
-          "Mini channel audit report",
+          "1 Thumbnail (AI-assisted + human polish)",
+          "1 Short (≤50s) with kinetic captions & sound design",
+          "Mini channel audit (hooks, metadata, packaging)",
         ],
         includes: [
-          "2 thumbnail variants (A/B ready)",
+          "A/B-ready: 2 thumbnail comps (color & text style)",
           "Custom short thumbnail",
-          "48-72h turnaround",
+          "Turnaround: 48–72h",
         ],
-        results: "+18% avg CTR lift (based on 50+ starters)",
+        spec: { thumbs: 1, shorts: 1, longMins: 0 },
       },
       {
         name: "Clutch Highlights",
-        tag: "Most Popular",
+        tag: "Predictable Shorts growth",
         key: "highlights",
-        cta: "Get Started",
-        priceInr: 6999,
+        cta: "Book Highlights",
+        priceInr: 6999, // monthly
         billing: "monthly",
-        savings: "Save ₹2,000 vs individual",
         bullets: [
           "30 Gaming Shorts (feed-optimized)",
           "30 custom short thumbnails",
-          "Platform-ready animations",
+          "Subscribe/Follow animation (YT/IG/TikTok)",
         ],
         includes: [
-          "Meme timing + emoji accents",
-          "5 AI transitions/hooks",
+          "Meme timing • emoji accents • SFX",
+          "5 AI-made transitions/hooks",
           "Captions + title suggestions",
         ],
-        results: "+9.4K avg subs/quarter (gaming clients)",
-        popular: true,
+        spec: { shorts: 30, thumbs: 4, longMins: 0 },
       },
       {
         name: "Rank Up",
-        tag: "Best value",
+        tag: "Thumbnails + long-form rhythm",
         key: "rankup",
-        cta: "Level Up",
-        priceInr: 5499,
+        cta: "Book Rank Up",
+        priceInr: 5499, // monthly
         billing: "monthly",
-        savings: "Save ₹3,200 vs individual",
         bullets: [
-          "2 Long-form edits (8 min each)",
-          "7 Thumbnails (2 A/B + 5 live)",
-          "Full SEO optimization",
+          "2 Long-form edits (≤8 min each)",
+          "2 Thumbnails (A/B-ready) + 5 Live thumbnails",
+          "Titles, tags & descriptions (full SEO for these videos)",
         ],
         includes: [
-          "Intros/outros + memes + SFX",
-          "Transitions + animations",
-          "AI templates included",
+          "Intros/outros • memes • sound design • captions",
+          "Transitions • zooms • subscribe animations",
+          "AI transitions & custom templates where needed",
         ],
-        results: "+62% CTR on packaged videos",
+        spec: { thumbs: 7, shorts: 0, longMins: 16 },
       },
       {
         name: "Pro League",
-        tag: "Full-service",
+        tag: "End-to-end growth engine",
         key: "pro",
-        cta: "Go Pro",
-        priceInr: 13499,
+        cta: "Book Pro League",
+        priceInr: 13499, // monthly
         billing: "monthly",
-        savings: "Save ₹5,500 vs individual",
         bullets: [
-          "4 Long-form edits + 20 Shorts",
-          "10 Total thumbnails (4 A/B + 6 live)",
-          "Priority 48-72h SLA",
+          "4 Long-form edits (≤8 min each)",
+          "4 Video thumbnails A/B + 6 Live thumbnails",
+          "20 Shorts",
         ],
         includes: [
-          "Everything in Rank Up",
-          "Free stream SEO",
-          "Shinel SEO Tools access",
+          "All Rank Up inclusions + free SEO for live streams",
+          "Access to Shinel SEO Tools",
+          "SLA: 48–72h, priority queueing",
         ],
-        results: "3.1x views (avg growth in 8 weeks)",
+        spec: { thumbs: 10, shorts: 20, longMins: 32 },
       },
     ],
-    // Add similar structure for vlog, talking, others...
+    vlog: [
+      {
+        name: "Starter — Spark",
+        tag: "Kickoff + mini audit",
+        key: "starter",
+        cta: "Start Spark",
+        priceInr: 699, // one-time
+        billing: "one-time",
+        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)", "Mini audit (storyline & packaging)"],
+        includes: ["AI hook help for openers", "Color & audio cleanup on the short", "Basic SEO checklist"],
+        spec: { thumbs: 1, shorts: 1, longMins: 0, cineMins: 0 },
+      },
+      {
+        name: "Daily Driver",
+        tag: "Reliable cadence",
+        key: "driver",
+        cta: "Book Daily Driver",
+        priceInr: 9999, // monthly
+        billing: "monthly",
+        bullets: ["3 Vlog edits (≤8 min each)", "3 Thumbnails", "9 Reels/Shorts (platform-ready)"],
+        includes: [
+          "Color grading • captions where needed",
+          "Intro/Outro for videos",
+          "AI short thumbnails • AI opening beat/transition",
+        ],
+        spec: { longMins: 24, cineMins: 0, thumbs: 3, shorts: 9 },
+      },
+      {
+        name: "Storyteller",
+        tag: "Narrative & cinematic polish",
+        key: "story",
+        cta: "Book Storyteller",
+        priceInr: 7499, // monthly
+        billing: "monthly",
+        bullets: ["2 Cinematic vlogs (≤8 min)", "2 Thumbnails", "6 Reels/Shorts"],
+        includes: [
+          "Music curation & SFX",
+          "Cinematic LUT pass + stabilization",
+          "Color grading • captions • AI opener/transition",
+        ],
+        spec: { longMins: 16, cineMins: 16, thumbs: 2, shorts: 6 },
+      },
+      {
+        name: "Creator Suite",
+        tag: "Scale up everything",
+        key: "suite",
+        cta: "Book Creator Suite",
+        priceInr: 17999, // monthly
+        billing: "monthly",
+        bullets: [
+          "4 Vlog edits (≤8 min) + 2 Cinematic vlogs (≤8 min)",
+          "6 Thumbnails (A/B-ready)",
+          "15 Reels/Shorts + brand-kit starter",
+        ],
+        includes: ["Title/Thumb concept board", "AI thumbnail credits", "Early access to Shinel AI tools"],
+        spec: { longMins: 48, cineMins: 16, thumbs: 6, shorts: 15 },
+      },
+    ],
+    talking: [
+      {
+        name: "Starter — On Air",
+        tag: "One-time",
+        key: "starter",
+        cta: "Start On Air",
+        priceInr: 999, // one-time
+        billing: "one-time",
+        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)"],
+        includes: [
+          "Motion-graphics lower-third & speaker ID",
+          "Kinetic captions on the short",
+          "Basic SEO checklist • 48–72h SLA",
+        ],
+        spec: { episodeMins: 0, clips: 1, thumbs: 1 },
+      },
+      {
+        name: "Studio",
+        tag: "Long-form + clips flywheel",
+        key: "studio",
+        cta: "Book Studio",
+        priceInr: 13999, // monthly
+        billing: "monthly",
+        bullets: ["2 Full videos (≤8 min) edited", "12 Clips (30–60s) • 2 Thumbnails", "Show notes + timestamps"],
+        includes: [
+          "Transcription & filler-word removal pass",
+          "Noise cleanup preset • light motion graphics",
+          "72h SLA",
+        ],
+        spec: { episodeMins: 16, clips: 12, thumbs: 2 },
+      },
+      {
+        name: "Clips Engine",
+        tag: "High-volume discovery",
+        key: "clips",
+        cta: "Book Clips Engine",
+        priceInr: 14999, // monthly
+        billing: "monthly",
+        bullets: ["30 Clips (30–60s) from long recordings", "Square/vertical exports", "30 clip covers"],
+        includes: [
+          "Multi-cam auto-framing",
+          "Kinetic captions • subscribe/follow animations",
+          "Topic tags & title suggestions",
+        ],
+        spec: { episodeMins: 0, clips: 30, thumbs: 4 },
+      },
+      {
+        name: "Network",
+        tag: "Scale your show",
+        key: "network",
+        cta: "Book Network",
+        priceInr: 24999, // monthly
+        billing: "monthly",
+        bullets: ["4 Videos (≤8 min) • 20 Clips", "4 Thumbnails", "Chapters + blog draft"],
+        includes: ["Template pack (FFX/MOGRT)", "Brand kit & style guide", "Access to Shinel SEO tools"],
+        spec: { episodeMins: 32, clips: 20, thumbs: 4 },
+      },
+    ],
+    others: [
+      {
+        name: "Explainer Sprint",
+        tag: "Business • Product • SaaS",
+        key: "explainer",
+        cta: "Plan an Explainer",
+        priceInr: null, // quote
+        billing: "quote",
+        bullets: [
+          "30–60s product explainer or ad",
+          "Script assist + storyboard frames",
+          "On-brand motion graphics",
+        ],
+        includes: [
+          "Voiceover guidance (or provided VO)",
+          "Two styleboards to choose from",
+          "Square/vertical exports + captions",
+        ],
+        spec: {},
+      },
+      {
+        name: "Custom Builder",
+        tag: "Strategy-first",
+        key: "custom",
+        cta: "Build My Plan",
+        priceInr: null, // quote only
+        billing: "quote",
+        bullets: [
+          "Mix editing • thumbnails • shorts • motion graphics",
+          "Ideal for brands, explainers, tutorials & more",
+          "We’ll scope to your cadence and KPIs",
+        ],
+        includes: ["Free 15-min audit call", "Roadmap & sample concepts before you commit", "Tailored SLA & handoff"],
+        spec: {},
+      },
+    ],
   };
 
+  // "Most Popular" mapping per category
   const POPULAR = {
     gaming: "highlights",
     vlog: "driver",
@@ -3857,361 +4065,511 @@ const Pricing = ({ onOpenCalendly }) => {
     others: "explainer",
   };
 
-  const plans = PLANS[cat] || PLANS.gaming;
-  const [openIdx, setOpenIdx] = useState(null);
-  const [hoveredPlan, setHoveredPlan] = useState(null);
+  const plans = PLANS[cat];
+  const [openIdx, setOpenIdx] = React.useState(null);
 
   const handleCTA = (plan) => {
+    const estimate = estimatePlan(cat, plan.spec || {});
     try {
-      track("pricing_cta_click", { category: cat, plan: plan.key, price: plan.priceInr });
+      track("pricing_estimate", { category: cat, plan: plan.key, estimate });
+      track("plan_click", { category: cat, plan: plan.key, billing: plan.billing });
     } catch {}
     onOpenCalendly?.();
+  };
+
+  const PriceBadge = ({ priceInr, billing }) => {
+    if (priceInr == null) {
+      return (
+        <span
+          className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full border"
+          style={{ color: "var(--orange)", borderColor: "var(--orange)" }}
+        >
+          Get Quote
+        </span>
+      );
+    }
+    return (
+      <span
+        className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full"
+        style={{ background: "rgba(232,80,2,.12)", color: "var(--orange)" }}
+      >
+        {formatINR(priceInr)} {billing === "monthly" ? "/mo" : ""}
+      </span>
+    );
+  };
+
+  /* ---------- Mobile carousel logic ---------- */
+  const railRef = React.useRef(null);
+  const [idx, setIdx] = React.useState(0);
+
+  const scrollToIndex = (i) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const clamped = Math.max(0, Math.min(i, plans.length - 1));
+    const child = rail.children[clamped];
+    if (!child) return;
+    child.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
+    setIdx(clamped);
+  };
+
+  const onPrev = () => scrollToIndex(idx - 1);
+  const onNext = () => scrollToIndex(idx + 1);
+
+  // Update active index on user scroll (mobile)
+  React.useEffect(() => {
+    if (!isMobile || !railRef.current) return;
+    const rail = railRef.current;
+    let t = null;
+    const onScroll = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const { scrollLeft, clientWidth } = rail;
+        const newIdx = Math.round(scrollLeft / clientWidth);
+        setIdx(Math.max(0, Math.min(newIdx, plans.length - 1)));
+      }, 60);
+    };
+    rail.addEventListener("scroll", onScroll, { passive: true });
+    return () => rail.removeEventListener("scroll", onScroll);
+  }, [isMobile, plans.length]);
+
+  // Keyboard arrow support
+  const onKeyDownCarousel = (e) => {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      onNext();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      onPrev();
+    }
   };
 
   return (
     <section
       id="pricing"
-      className="py-20 relative overflow-hidden"
+      className="py-18 md:py-20 relative overflow-hidden"
       style={{ background: "var(--surface)" }}
       aria-labelledby="pricing-heading"
     >
-      {/* Ambient background */}
+      {/* Ambient glows (light & CPU-friendly) */}
       {!reduceMotion && (
-        <div
-          className="absolute top-1/4 right-20 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, var(--orange), transparent 60%)" }}
-          aria-hidden="true"
-        />
+        <>
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -top-40 -left-40 w-[420px] h-[420px] rounded-full"
+            style={{
+              background: "radial-gradient(closest-side, rgba(232,80,2,.14), rgba(232,80,2,0) 70%)",
+              filter: "blur(10px)",
+            }}
+            initial={{ opacity: 0.18 }}
+            animate={{ opacity: [0.12, 0.18, 0.15] }}
+            transition={{ duration: 7.5, repeat: Infinity }}
+          />
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-40 -right-40 w-[420px] h-[420px] rounded-full"
+            style={{
+              background: "radial-gradient(closest-side, rgba(255,147,87,.14), rgba(255,147,87,0) 70%)",
+              filter: "blur(12px)",
+            }}
+            initial={{ opacity: 0.18 }}
+            animate={{ opacity: [0.1, 0.18, 0.14] }}
+            transition={{ duration: 7.8, repeat: Infinity, delay: 0.4 }}
+          />
+        </>
       )}
 
-      <div className="container mx-auto px-4 max-w-7xl relative z-10">
-        {/* Header with social proof */}
-        <motion.div
-          className="text-center mb-12"
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-        >
-          <motion.div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-4"
-            style={{
-              color: "var(--orange)",
-              border: "1px solid var(--border)",
-              background: "rgba(232,80,2,0.08)",
-              boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
-            }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            94% client retention rate
-          </motion.div>
-
-          <h2
+      <div className="container mx-auto px-4 max-w-7xl">
+        {/* Header */}
+        <div className="text-center mb-4 md:mb-6">
+          <motion.h2
             id="pricing-heading"
-            className="text-4xl md:text-5xl font-bold font-['Poppins'] mb-3"
+            className="text-3xl md:text-4xl font-bold font-['Poppins']"
             style={{ color: "var(--text)" }}
+            initial={reduceMotion ? {} : { opacity: 0, y: 12 }}
+            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.35 }}
           >
-            Pricing That Scales With You
-          </h2>
-          <p
-            className="text-base md:text-lg max-w-2xl mx-auto"
+            Simple, Proven Packages — tuned for your category
+          </motion.h2>
+          <motion.p
+            className="mt-2 text-sm md:text-base"
             style={{ color: "var(--text-muted)" }}
+            initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
+            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.3, delay: 0.05 }}
           >
-            Start small, scale fast. No setup fees. Cancel anytime.
-          </p>
+            Gaming, Vlogs, Talking Heads & Motion Graphics — or build your own.
+          </motion.p>
+        </div>
 
-          {/* Trust indicators */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-6 text-sm">
-            {[
-              { icon: "✓", text: "Money-back guarantee" },
-              { icon: "✓", text: "No long-term contracts" },
-              { icon: "✓", text: "Flexible revisions" },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2"
-                style={{ color: "var(--text-muted)" }}
-              >
-                <span style={{ color: "var(--orange)" }}>{item.icon}</span>
-                {item.text}
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Category Tabs with icons */}
+        {/* Category Tabs */}
         <motion.div
-          className="flex items-center justify-center gap-2 mb-8 flex-wrap"
+          className="mx-auto mb-5 md:mb-7 flex w-full max-w-[1080px] items-center justify-center gap-2 flex-wrap"
           initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true }}
+          transition={{ duration: 0.28 }}
         >
           {CATS.map((c) => {
             const on = c.k === cat;
             return (
-              <motion.button
+              <button
                 key={c.k}
                 onClick={() => {
                   setCat(c.k);
                   setOpenIdx(null);
+                  setIdx(0);
                 }}
-                className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold border"
+                className={`rounded-full px-4 py-2 text-sm font-semibold border ${on ? "shadow" : ""}`}
                 style={{
-                  color: on ? "#fff" : "var(--text)",
-                  borderColor: on ? "var(--orange)" : "var(--border)",
-                  background: on ? "var(--orange)" : "var(--surface-alt)",
-                  boxShadow: on ? "0 4px 12px rgba(232,80,2,0.25)" : "none",
+                  color: "var(--text)",
+                  borderColor: "var(--border)",
+                  background: on ? "rgba(232,80,2,.12)" : "var(--surface-alt)",
                 }}
-                whileHover={reduceMotion ? {} : { y: -2 }}
-                whileTap={reduceMotion ? {} : { scale: 0.98 }}
+                aria-pressed={on}
+                aria-label={`Select ${c.label}`}
               >
-                {c.icon}
                 {c.label}
-              </motion.button>
+              </button>
             );
           })}
         </motion.div>
 
         {/* Category headline */}
-        <div className="text-center mb-10">
-          <div className="text-xl md:text-2xl font-bold mb-2" style={{ color: "var(--text)" }}>
+        <div className="text-center mb-6">
+          <div className="text-lg md:text-xl font-semibold" style={{ color: "var(--text)" }}>
             {CATS.find((x) => x.k === cat)?.headline}
           </div>
-          <div className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
+          <div className="text-sm md:text-base mt-1" style={{ color: "var(--text-muted)" }}>
             {CATS.find((x) => x.k === cat)?.sub}
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {plans.map((p, i) => {
-            const isHovered = hoveredPlan === i;
-            const isPopular = p.popular || POPULAR[cat] === p.key;
-            
-            return (
-              <motion.article
-                key={`${cat}-${p.key}`}
-                className="relative rounded-2xl p-6 border-2"
-                style={{
-                  background: "var(--surface-alt)",
-                  borderColor: isPopular ? "var(--orange)" : isHovered ? "var(--orange)" : "var(--border)",
-                  boxShadow: isPopular || isHovered
-                    ? "0 12px 30px rgba(232,80,2,0.2)"
-                    : "0 4px 12px rgba(0,0,0,0.06)",
-                  transform: isPopular ? "scale(1.05)" : "scale(1)",
-                  transition: "all 0.3s ease",
-                }}
-                initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-                whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                onMouseEnter={() => setHoveredPlan(i)}
-                onMouseLeave={() => setHoveredPlan(null)}
-                whileHover={reduceMotion ? {} : { y: -6 }}
-              >
-                {/* Popular badge */}
-                {isPopular && (
-                  <div
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold"
-                    style={{
-                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                      color: "#fff",
-                      boxShadow: "0 4px 12px rgba(232,80,2,0.3)",
-                    }}
-                  >
-                    {p.tag}
-                  </div>
-                )}
-
-                {/* Header */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold" style={{ color: "var(--text)" }}>
-                      {p.name}
-                    </h3>
-                    {p.savings && (
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                        style={{
-                          background: "rgba(34,197,94,0.15)",
-                          color: "#22c55e",
-                        }}
-                      >
-                        {p.savings}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Price */}
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-3xl font-bold" style={{ color: "var(--text)" }}>
-                      {p.priceInr ? formatINR(p.priceInr) : "Custom"}
-                    </span>
-                    {p.billing === "monthly" && (
-                      <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                        /month
-                      </span>
-                    )}
-                  </div>
-
-                  {p.billing === "monthly" && (
-                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Cancel anytime • No contracts
+        {/* ---------- DESKTOP/TABLET GRID ---------- */}
+        {!isMobile && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+            {plans.map((p, i) => {
+              const open = openIdx === i;
+              const isPopular = POPULAR[cat] === p.key;
+              return (
+                <motion.article
+                  key={`${cat}-${p.key}`}
+                  initial={{ opacity: 0, y: 22, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-12% 0px -12% 0px" }}
+                  {...(!isTouch && !reduceMotion ? { whileHover: { y: -3 } } : {})}
+                  whileTap={{ scale: 0.99 }}
+                  transition={{ duration: 0.28, ease: "easeOut" }}
+                  className="group relative rounded-2xl p-6 border"
+                  style={{
+                    background: "var(--surface-alt)",
+                    borderColor: "var(--border)",
+                    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+                  }}
+                  aria-label={`${p.name} plan`}
+                >
+                  {/* Popular ribbon */}
+                  {isPopular && (
+                    <div
+                      className="absolute -top-3 left-4 text-[11px] px-2 py-1 rounded-full font-semibold"
+                      style={{
+                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                        color: "#fff",
+                        boxShadow: "0 6px 14px rgba(232,80,2,.25)",
+                      }}
+                    >
+                      Most Popular
                     </div>
                   )}
-                </div>
 
-                {/* Results badge */}
-                {p.results && (
-                  <div
-                    className="mb-4 p-3 rounded-lg flex items-start gap-2"
-                    style={{
-                      background: "rgba(232,80,2,0.08)",
-                      border: "1px solid rgba(232,80,2,0.2)",
-                    }}
-                  >
-                    <BarChart3 size={16} style={{ color: "var(--orange)", flexShrink: 0, marginTop: 2 }} />
-                    <div className="text-xs" style={{ color: "var(--text)" }}>
-                      <strong>Proven results:</strong> {p.results}
-                    </div>
+                  <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+                    {p.tag || "\u00A0"} {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}
+                    {p.billing === "monthly" ? " • cancel anytime" : ""}
                   </div>
-                )}
 
-                {/* Bullets */}
-                <ul className="space-y-2.5 mb-4">
-                  {p.bullets.map((b, bi) => (
-                    <li key={bi} className="flex items-start gap-2 text-sm">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 mt-0.5">
-                        <path d="M20 6L9 17l-5-5" stroke="var(--orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      <span style={{ color: "var(--text)" }}>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Expandable */}
-                <button
-                  type="button"
-                  onClick={() => setOpenIdx(openIdx === i ? null : i)}
-                  className="text-sm font-medium mb-4 flex items-center gap-1"
-                  style={{ color: "var(--orange)" }}
-                >
-                  {openIdx === i ? "Hide" : "Show"} what's included
-                  <motion.svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    animate={{ rotate: openIdx === i ? 180 : 0 }}
+                  <h3
+                    className="text-xl font-semibold flex items-center flex-wrap"
+                    style={{ color: "var(--text)" }}
                   >
-                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </motion.svg>
-                </button>
+                    <span>{p.name}</span>
+                    <PriceBadge priceInr={p.priceInr} billing={p.billing} />
+                  </h3>
 
-                <motion.div
-                  initial={false}
-                  animate={{ height: openIdx === i ? "auto" : 0, opacity: openIdx === i ? 1 : 0 }}
-                  transition={{ duration: 0.2 }}
-                  style={{ overflow: "hidden" }}
-                >
-                  <ul className="space-y-1.5 mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-                    {p.includes?.map((inc, ii) => (
-                      <li key={ii} className="flex items-start gap-2">
-                        <span>•</span>
-                        <span>{inc}</span>
+                  <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
+                    {p.bullets.map((b, bi) => (
+                      <li key={bi} className="flex items-start gap-2">
+                        <span aria-hidden>•</span>
+                        <span>{b}</span>
                       </li>
                     ))}
                   </ul>
-                </motion.div>
 
-                {/* CTA */}
-                <motion.button
-                  onClick={() => handleCTA(p)}
-                  className="w-full rounded-xl py-3 font-semibold text-white flex items-center justify-center gap-2"
+                  {/* Expandable details */}
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setOpenIdx(open ? null : i)}
+                      className="text-sm underline"
+                      style={{ color: "var(--orange)" }}
+                      aria-expanded={open}
+                      aria-controls={`inc-${cat}-${i}`}
+                    >
+                      {open ? "Hide details" : "What’s included"}
+                    </button>
+                    <motion.div
+                      id={`inc-${cat}-${i}`}
+                      initial={false}
+                      animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ overflow: "hidden" }}
+                      className="mt-2"
+                    >
+                      <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+                        {p.includes?.map((x, xi) => (
+                          <li key={xi} className="flex items-start gap-2">
+                            <span aria-hidden>–</span>
+                            <span>{x}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </motion.div>
+                  </div>
+
+                  <button
+                    onClick={() => handleCTA(p)}
+                    className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                    style={{
+                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                      boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
+                    }}
+                    aria-label={p.cta}
+                  >
+                    {p.cta}
+                  </button>
+
+                  <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    No payment needed to preview concepts.
+                  </div>
+                </motion.article>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ---------- MOBILE CAROUSEL ---------- */}
+        {isMobile && (
+          <div
+            role="region"
+            aria-label={`${cat} plans carousel`}
+            className="relative"
+            onKeyDown={onKeyDownCarousel}
+          >
+            {/* Arrow buttons */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <button
+                type="button"
+                onClick={onPrev}
+                className="rounded-full border px-3 py-1 text-sm"
+                style={{ color: "var(--text)", borderColor: "var(--border)", background: "var(--surface-alt)" }}
+                aria-label="Previous plan"
+                disabled={idx <= 0}
+              >
+                ←
+              </button>
+              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Use ← → to browse
+              </div>
+              <button
+                type="button"
+                onClick={onNext}
+                className="rounded-full border px-3 py-1 text-sm"
+                style={{ color: "var(--text)", borderColor: "var(--border)", background: "var(--surface-alt)" }}
+                aria-label="Next plan"
+                disabled={idx >= plans.length - 1}
+              >
+                →
+              </button>
+            </div>
+
+            {/* Rail */}
+            <div
+              ref={railRef}
+              tabIndex={0}
+              aria-roledescription="carousel"
+              aria-label="Plans"
+              className="flex overflow-x-auto snap-x snap-mandatory scroll-px-4 gap-4 px-1 no-scrollbar"
+              style={{
+                scrollBehavior: reduceMotion ? "auto" : "smooth",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              {plans.map((p, i) => {
+                const isPopular = POPULAR[cat] === p.key;
+                const open = openIdx === i;
+                return (
+                  <article
+                    key={`${cat}-${p.key}`}
+                    className="snap-start shrink-0 w-[92%] mx-2 rounded-2xl p-5 border"
+                    style={{
+                      background: "var(--surface-alt)",
+                      borderColor: "var(--border)",
+                      boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
+                    }}
+                    aria-label={`${p.name} plan`}
+                  >
+                    {/* Popular ribbon */}
+                    {isPopular && (
+                      <div
+                        className="inline-block -mt-3 mb-2 text-[11px] px-2 py-1 rounded-full font-semibold"
+                        style={{
+                          background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                          color: "#fff",
+                          boxShadow: "0 6px 14px rgba(232,80,2,.25)",
+                        }}
+                      >
+                        Most Popular
+                      </div>
+                    )}
+
+                    <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                      {p.tag || "\u00A0"} {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}{" "}
+                      {p.billing === "monthly" ? "• cancel anytime" : ""}
+                    </div>
+
+                    <h3 className="text-lg font-semibold flex items-center flex-wrap" style={{ color: "var(--text)" }}>
+                      <span>{p.name}</span>
+                      <PriceBadge priceInr={p.priceInr} billing={p.billing} />
+                    </h3>
+
+                    <ul className="mt-3 space-y-1.5 text-sm" style={{ color: "var(--text)" }}>
+                      {p.bullets.map((b, bi) => (
+                        <li key={bi} className="flex items-start gap-2">
+                          <span aria-hidden>•</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Expandable details */}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setOpenIdx(open ? null : i)}
+                        className="text-sm underline"
+                        style={{ color: "var(--orange)" }}
+                        aria-expanded={open}
+                        aria-controls={`m-inc-${cat}-${i}`}
+                      >
+                        {open ? "Hide details" : "What’s included"}
+                      </button>
+                      <div
+                        id={`m-inc-${cat}-${i}`}
+                        hidden={!open}
+                        className="mt-1"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        <ul className="text-sm space-y-1.5">
+                          {p.includes?.map((x, xi) => (
+                            <li key={xi} className="flex items-start gap-2">
+                              <span aria-hidden>–</span>
+                              <span>{x}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleCTA(p)}
+                      className="w-full mt-4 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{
+                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                        boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
+                      }}
+                      aria-label={p.cta}
+                    >
+                      {p.cta} →
+                    </button>
+
+                    <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      No payment needed to preview concepts.
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Dots */}
+            <div className="mt-3 flex items-center justify-center gap-2" aria-hidden="true">
+              {plans.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => scrollToIndex(i)}
+                  className="h-2 w-2 rounded-full"
                   style={{
-                    background: isPopular
-                      ? "linear-gradient(90deg, var(--orange), #ff9357)"
-                      : "linear-gradient(90deg, #1a1a1a, #2a2a2a)",
-                    boxShadow: isPopular 
-                      ? "0 8px 20px rgba(232,80,2,0.3)" 
-                      : "0 4px 12px rgba(0,0,0,0.15)",
+                    background: i === idx ? "var(--orange)" : "var(--border)",
+                    transform: i === idx ? "scale(1.2)" : "scale(1)",
+                    transition: "transform .2s ease",
                   }}
-                  whileHover={reduceMotion ? {} : { scale: 1.02, y: -2 }}
-                  whileTap={reduceMotion ? {} : { scale: 0.98 }}
-                >
-                  {p.cta}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </motion.button>
+                  aria-label={`Go to plan ${i + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
-                <div className="mt-3 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  No payment to preview • First delivery risk-free
-                </div>
-              </motion.article>
-            );
-          })}
+        {/* Add-ons & Always included */}
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div
+            className="rounded-2xl p-5 border"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
+              Add-ons (any tier)
+            </div>
+            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+              <li>Rush 24h: +20% cost</li>
+              <li>Extra A/B thumbnail: +30%</li>
+              <li>Advanced motion pack (long-form): +₹200/min</li>
+              <li>Multi-language captions (2× SRT): +₹2,000/video</li>
+              <li>Face-swap / Voice generation: custom — consent-first & policy-compliant (get quote)</li>
+            </ul>
+          </div>
+          <div
+            className="rounded-2xl p-5 border"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
+              Always included
+            </div>
+            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
+              <li>1 major + 2 minor revision rounds per deliverable</li>
+              <li>Organized handoff, export presets, project files on request (very large timelines may add cost)</li>
+              <li>AI for speed (transcripts, hook/metadata/thumbnail ideation) + human-directed finish</li>
+              <li>Standard turnaround: 48–72 hours (coordinated queues on larger plans)</li>
+            </ul>
+          </div>
         </div>
 
-        {/* What's Always Included section */}
-        <motion.div
-          className="max-w-4xl mx-auto p-6 rounded-2xl mb-10"
-          style={{
-            background: "var(--surface-alt)",
-            border: "1px solid var(--border)",
-          }}
-          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h3 className="text-lg font-bold mb-4 text-center" style={{ color: "var(--text)" }}>
-            Always Included (Every Plan)
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-            {[
-              "1 major + 2 minor revisions per deliverable",
-              "48-72h standard turnaround",
-              "AI speed + human quality control",
-              "Organized file handoff",
-              "Project files available on request",
-              "Dedicated support channel",
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M20 6L9 17l-5-5" stroke="var(--orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span style={{ color: "var(--text)" }}>{item}</span>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Money-back guarantee */}
-        <motion.div
-          className="max-w-2xl mx-auto text-center p-6 rounded-xl"
-          style={{
-            background: "rgba(34,197,94,0.08)",
-            border: "1px solid rgba(34,197,94,0.2)",
-          }}
-          initial={reduceMotion ? {} : { opacity: 0, scale: 0.95 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-        >
-          <div className="text-2xl mb-2">🛡️</div>
-          <div className="font-bold mb-2" style={{ color: "var(--text)" }}>
-            Risk-Free Guarantee
-          </div>
-          <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Not satisfied with your first delivery? We'll revise until you're happy or issue a full refund. No questions asked.
-          </div>
-        </motion.div>
+        {/* reassurance */}
+        <div className="text-center mt-8">
+          <p className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
+            Prices in INR. Taxes extra if applicable. Don’t love the first delivery? We’ll revise or credit your trial.
+          </p>
+        </div>
       </div>
+
+      {/* Hide scrollbar utility (scoped) */}
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </section>
   );
 };
+
 
 
 /* ===================== Quick Lead Form (polished + autosave + a11y + analytics) ===================== */
