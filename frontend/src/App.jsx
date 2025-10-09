@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
+import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";  // ✅ Correct path
 
 /* Pages (lazy) */
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
@@ -15,6 +16,7 @@ const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
 const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
 const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
 const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx"));
+const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx")); // ⭐ New page
 
 /* Tools (lazy) */
 const ToolsIndex = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
@@ -160,6 +162,7 @@ export default function App() {
           <Route path="/gfx" element={<GFX />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
+          <Route path="/live-templates" element={<LiveTemplates />} /> {/* ⭐ New route */}
 
           <Route
             path="/login"
@@ -170,7 +173,7 @@ export default function App() {
             }
           />
 
-          {/* 🔒 Studio hub */}
+          {/* Studio hub */}
           <Route
             path="/studio"
             element={
@@ -180,7 +183,7 @@ export default function App() {
             }
           />
 
-          {/* 🔒 Tools (role-gated per matrix) */}
+          {/* Tools (role-gated) */}
           <Route
             path="/tools"
             element={
@@ -189,14 +192,17 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          
+          {/* AutoSRT Tool - All authenticated users */}
           <Route
             path="/tools/srt"
             element={
-              <ProtectedRoute requireRole={["admin","editor"]}>
-                <SrtTool />
+              <ProtectedRoute requireRole={["admin","editor","client"]}>
+                <AutoSRTTool />
               </ProtectedRoute>
             }
           />
+          
           <Route
             path="/tools/seo"
             element={
@@ -222,7 +228,7 @@ export default function App() {
             }
           />
 
-          {/* 🔒 Admin users */}
+          {/* Admin users */}
           <Route
             path="/admin/users"
             element={
