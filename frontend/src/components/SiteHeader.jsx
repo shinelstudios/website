@@ -498,7 +498,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 className="h-auto w-36 sm:w-44 object-contain block select-none"
                 style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.35))" }}
                 decoding="async"
-                fetchPriority="high"
                 initial={prefersReduced ? {} : { opacity: 0, scale: 0.96 }}
                 animate={prefersReduced ? {} : { opacity: 1, scale: 1 }}
                 transition={{ duration: 0.36, ease: "easeOut" }}

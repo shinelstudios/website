@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
-import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";  // ✅ Correct path
+import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 
 /* Pages (lazy) */
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
@@ -16,7 +16,7 @@ const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
 const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
 const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
 const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx"));
-const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx")); // ⭐ New page
+const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
 
 /* Tools (lazy) */
 const ToolsIndex = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
@@ -162,7 +162,12 @@ export default function App() {
           <Route path="/gfx" element={<GFX />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
-          <Route path="/live-templates" element={<LiveTemplates />} /> {/* ⭐ New route */}
+          
+          {/* SEO-friendly route for gaming thumbnail templates */}
+          <Route path="/gaming-thumbnail-templates" element={<LiveTemplates />} />
+          
+          {/* Redirect old route to new SEO-friendly route */}
+          <Route path="/live-templates" element={<Navigate to="/gaming-thumbnail-templates" replace />} />
 
           <Route
             path="/login"
