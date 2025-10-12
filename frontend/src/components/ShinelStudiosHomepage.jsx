@@ -2,13 +2,22 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink
+  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp
 } from "lucide-react";
 
 import RoiCalculator from "./RoiCalculator";
 import ExitIntentModal from "./ExitIntentModal";
-import { MessageCircle, FileText, ChevronUp } from "lucide-react"
 import QuickQuoteBar from "./QuickQuoteBar";
+
+import { BeforeAfter } from './BeforeAfter'; // Assuming this component is in the same folder
+
+// --- STEP 1: Import your available images here ---
+import SAMPLE_VLOG_BEFORE from '../assets/Vlog_sample_before.jpg';
+import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
+
+// Make sure to import your components and icons
+// import { BeforeAfter } from './BeforeAfter';
+// import { BarChart3, IconImage } from 'lucide-react';
 
 /**
  * Centralized asset glob (Vite)
@@ -1101,417 +1110,65 @@ const ServicesSection = () => {
   );
 };
 
-/* ===================== Enhanced Before/After (keyboard + drag + animations) ===================== */
-const BeforeAfter = ({
-  before,
-  after,
-  label = "Thumbnail Revamp",
-  beforeAlt = "Before",
-  afterAlt = "After",
-  width = 1280,
-  height = 720,
-}) => {
-  const [v, setV] = useState(50);
-  const [isHovering, setIsHovering] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const wrapRef = useRef(null);
-  const dragging = useRef(false);
+// --- STEP 2: Manage all your showcase data here ---
+// You can add more objects to this array to create more tabs.
+// For now, it reuses the vlog images as placeholders.
+const showcases = [
+  {
+    category: "Gaming (BGMI)",
+    beforeImage: SAMPLE_VLOG_BEFORE, // Replace with BGMI_BEFORE image when you have it
+    afterImage: SAMPLE_VLOG_AFTER,   // Replace with BGMI_AFTER image when you have it
+    stats: {
+      ctrIncrease: 78,
+      viewsMultiplier: "3.1x",
+      turnaroundDays: "2",
+    },
+  },
+  {
+    category: "Vlog",
+    beforeImage: SAMPLE_VLOG_BEFORE, // This uses your actual imported image
+    afterImage: SAMPLE_VLOG_AFTER,   // This uses your actual imported image
+    stats: {
+      ctrIncrease: 62,
+      viewsMultiplier: "2.3x",
+      turnaroundDays: "3",
+    },
+  },
+  {
+    category: "Gaming (Valorant)",
+    beforeImage: SAMPLE_VLOG_BEFORE, // Replace with VALORANT_BEFORE image when you have it
+    afterImage: SAMPLE_VLOG_AFTER,   // Replace with VALORANT_AFTER image when you have it
+    stats: {
+      ctrIncrease: 94,
+      viewsMultiplier: "4.5x",
+      turnaroundDays: "2",
+    },
+  },
+];
 
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-
-  const setFromClientX = (clientX) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const pct = ((clientX - rect.left) / rect.width) * 100;
-    setV(clamp(pct, 0, 100));
-  };
-
-  // Pointer handlers
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragging.current) return;
-      if (e.type.startsWith("touch")) {
-        setFromClientX(e.touches[0].clientX);
-      } else {
-        setFromClientX(e.clientX);
-      }
-      e.preventDefault();
-    };
-    const onUp = () => {
-      dragging.current = false;
-      setIsDragging(false);
-    };
-
-    document.addEventListener("mousemove", onMove, { passive: false });
-    document.addEventListener("mouseup", onUp);
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", onUp);
-
-    return () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onUp);
-    };
-  }, []);
-
-  // Auto-play demo on first view
-  const [hasPlayed, setHasPlayed] = useState(false);
-  useEffect(() => {
-    if (hasPlayed || reduceMotion) return;
-    
-    const el = wrapRef.current;
-    if (!el || !("IntersectionObserver" in window)) return;
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasPlayed) {
-          setHasPlayed(true);
-          // Smooth auto-slide demo
-          let start = null;
-          const duration = 2000;
-          const animate = (timestamp) => {
-            if (!start) start = timestamp;
-            const progress = (timestamp - start) / duration;
-            
-            if (progress < 1) {
-              // Ease in-out
-              const eased = progress < 0.5
-                ? 2 * progress * progress
-                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-              setV(50 + (eased * 50 - 25));
-              requestAnimationFrame(animate);
-            } else {
-              setV(50);
-            }
-          };
-          requestAnimationFrame(animate);
-        }
-      },
-      { threshold: 0.5 }
-    );
-
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasPlayed, reduceMotion]);
-
-  return (
-    <figure className="w-full max-w-4xl mx-auto" role="group" aria-labelledby="ba-caption">
-      <div
-        ref={wrapRef}
-        className="relative rounded-2xl overflow-hidden border-2 select-none group"
-        style={{
-          borderColor: isDragging ? "var(--orange)" : "var(--border)",
-          boxShadow: isDragging
-            ? "0 20px 40px rgba(232,80,2,0.25)"
-            : isHovering
-            ? "0 12px 30px rgba(0,0,0,0.15)"
-            : "0 8px 20px rgba(0,0,0,0.1)",
-          transition: "all 0.3s ease",
-        }}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-        onMouseDown={(e) => {
-          dragging.current = true;
-          setIsDragging(true);
-          setFromClientX(e.clientX);
-        }}
-        onTouchStart={(e) => {
-          dragging.current = true;
-          setIsDragging(true);
-          setFromClientX(e.touches[0].clientX);
-        }}
-      >
-        {/* AFTER image (background) */}
-        <div className="relative">
-          <img
-            src={after}
-            alt={afterAlt}
-            loading="lazy"
-            decoding="async"
-            width={width}
-            height={height}
-            className="w-full block"
-            style={{ aspectRatio: `${width} / ${height}` }}
-          />
-          
-          {/* After label */}
-          <motion.div
-            className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{
-              background: "rgba(0,0,0,0.75)",
-              color: "#fff",
-              backdropFilter: "blur(8px)",
-            }}
-            initial={reduceMotion ? {} : { opacity: 0, x: 10 }}
-            animate={reduceMotion ? {} : { opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            ✨ After
-          </motion.div>
-        </div>
-
-        {/* BEFORE image (revealed by clipPath) */}
-        <div
-          className="absolute inset-0"
-          style={{
-            clipPath: `inset(0 ${100 - v}% 0 0)`,
-          }}
-        >
-          <img
-            src={before}
-            alt={beforeAlt}
-            loading="lazy"
-            decoding="async"
-            width={width}
-            height={height}
-            className="w-full block"
-            style={{ aspectRatio: `${width} / ${height}` }}
-          />
-          
-          {/* Before label */}
-          <motion.div
-            className="absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{
-              background: "rgba(0,0,0,0.75)",
-              color: "#fff",
-              backdropFilter: "blur(8px)",
-            }}
-            initial={reduceMotion ? {} : { opacity: 0, x: -10 }}
-            animate={reduceMotion ? {} : { opacity: v > 15 ? 1 : 0, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            📷 Before
-          </motion.div>
-        </div>
-
-        {/* Enhanced divider line with glow */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            left: `${v}%`,
-            width: 3,
-            background: "linear-gradient(to bottom, rgba(232,80,2,0), var(--orange), rgba(232,80,2,0))",
-            boxShadow: isDragging
-              ? "0 0 20px rgba(232,80,2,0.8), 0 0 40px rgba(232,80,2,0.4)"
-              : "0 0 10px rgba(232,80,2,0.5)",
-            transition: "box-shadow 0.2s ease",
-          }}
-          aria-hidden="true"
-        />
-
-        {/* Handle with enhanced design */}
-        <motion.button
-          type="button"
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-12 w-12 rounded-full shadow-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-[var(--orange)] z-10"
-          style={{
-            left: `${v}%`,
-            background: "linear-gradient(135deg, var(--orange), #ff9357)",
-            color: "#fff",
-            border: "3px solid rgba(255,255,255,0.9)",
-            cursor: isDragging ? "grabbing" : "grab",
-          }}
-          aria-label={`Reveal slider: ${Math.round(v)} percent`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(v)}
-          role="slider"
-          onKeyDown={(e) => {
-            if (e.key === "ArrowLeft") setV((p) => clamp(p - 2, 0, 100));
-            if (e.key === "ArrowRight") setV((p) => clamp(p + 2, 0, 100));
-            if (e.key === "Home") setV(0);
-            if (e.key === "End") setV(100);
-          }}
-          onMouseDown={() => {
-            dragging.current = true;
-            setIsDragging(true);
-          }}
-          onTouchStart={() => {
-            dragging.current = true;
-            setIsDragging(true);
-          }}
-          whileHover={reduceMotion ? {} : { scale: 1.1 }}
-          whileTap={reduceMotion ? {} : { scale: 0.95 }}
-          animate={
-            !reduceMotion && !isDragging && isHovering
-              ? {
-                  scale: [1, 1.05, 1],
-                }
-              : {}
-          }
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          {/* Enhanced icon */}
-          <div className="flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M13 6l-6 6 6 6M19 6l-6 6 6 6"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-
-          {/* Pulse ring on hover */}
-          {!reduceMotion && (isHovering || isDragging) && (
-            <motion.div
-              className="absolute inset-0 rounded-full border-2"
-              style={{ borderColor: "var(--orange)" }}
-              initial={{ scale: 1, opacity: 0.8 }}
-              animate={{ scale: 1.8, opacity: 0 }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              aria-hidden="true"
-            />
-          )}
-        </motion.button>
-
-        {/* Progress indicator */}
-        <motion.div
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-semibold"
-          style={{
-            background: "rgba(0,0,0,0.75)",
-            color: "#fff",
-            backdropFilter: "blur(8px)",
-          }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: isDragging ? 1 : 0, y: isDragging ? 0 : 10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {Math.round(v)}%
-        </motion.div>
-
-        {/* Hint overlay (shows briefly on first view) */}
-        {!hasPlayed && !reduceMotion && (
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{
-              background: "rgba(0,0,0,0.4)",
-              backdropFilter: "blur(2px)",
-            }}
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 0 }}
-            transition={{ delay: 3, duration: 0.5 }}
-          >
-            <div
-              className="px-4 py-2 rounded-full text-sm font-semibold"
-              style={{
-                background: "rgba(255,255,255,0.95)",
-                color: "var(--text)",
-              }}
-            >
-              👆 Drag to compare
-            </div>
-          </motion.div>
-        )}
-
-        {/* Visually-hidden range input */}
-        <label htmlFor="ba-range" className="sr-only">
-          Drag to compare {beforeAlt} and {afterAlt}
-        </label>
-        <input
-          id="ba-range"
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={v}
-          onChange={(e) => setV(+e.target.value)}
-          className="sr-only"
-          aria-hidden="false"
-        />
-      </div>
-
-      {/* Enhanced caption */}
-      <figcaption id="ba-caption" className="text-center mt-4">
-        <motion.div
-          className="inline-flex flex-col items-center gap-2"
-          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <div className="text-sm md:text-base font-semibold" style={{ color: "var(--text)" }}>
-            {label}
-          </div>
-          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            <span className="hidden sm:inline">
-              <span className="font-medium" style={{ color: "var(--text)" }}>Drag</span> the slider or use
-            </span>
-            <span className="sm:hidden">Use</span>
-            <kbd
-              className="px-2 py-1 rounded font-mono text-xs"
-              style={{
-                borderColor: "var(--border)",
-                border: "1px solid",
-                background: "var(--surface)",
-              }}
-            >
-              ←
-            </kbd>
-            <span>/</span>
-            <kbd
-              className="px-2 py-1 rounded font-mono text-xs"
-              style={{
-                borderColor: "var(--border)",
-                border: "1px solid",
-                background: "var(--surface)",
-              }}
-            >
-              →
-            </kbd>
-            <span>to compare</span>
-          </div>
-        </motion.div>
-      </figcaption>
-    </figure>
-  );
-};
 
 /* ===================== Enhanced Proof Section ===================== */
 const ProofSection = () => {
   const reduceMotion =
     typeof window !== "undefined" &&
-    window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // State to manage the currently selected showcase
+  const [activeIndex, setActiveIndex] = useState(0);
   const [countUp, setCountUp] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
+  const [isInView, setIsInView] = useState(false);
   const sectionRef = useRef(null);
 
-  // Animated counter for CTR percentage
-  useEffect(() => {
-    if (hasAnimated || reduceMotion) return;
+  // Get the data for the currently active showcase
+  const currentShowcase = showcases[activeIndex];
 
+  // Effect to detect when the section is scrolled into view
+  useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated) {
-          setHasAnimated(true);
-          let start = 0;
-          const end = 62;
-          const duration = 2000;
-          const startTime = Date.now();
-
-          const animate = () => {
-            const now = Date.now();
-            const progress = Math.min((now - startTime) / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-            const current = Math.floor(start + (end - start) * eased);
-            
-            setCountUp(current);
-            
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            }
-          };
-
-          requestAnimationFrame(animate);
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.unobserve(entry.target);
         }
       },
       { threshold: 0.3 }
@@ -1522,16 +1179,43 @@ const ProofSection = () => {
     }
 
     return () => observer.disconnect();
-  }, [hasAnimated, reduceMotion]);
+  }, []);
 
+  // Animated counter effect: re-runs when activeIndex or isInView changes
+  useEffect(() => {
+    if (!isInView || reduceMotion) return;
+
+    let start = 0;
+    const end = currentShowcase.stats.ctrIncrease;
+    const duration = 1500;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const now = Date.now();
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const current = Math.floor(start + (end - start) * eased);
+
+      setCountUp(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+    
+  }, [activeIndex, isInView, reduceMotion, currentShowcase.stats.ctrIncrease]);
+
+  // Dynamically generate the stats array based on the current showcase
   const stats = [
-    { 
+    {
       icon: <BarChart3 size={20} />,
-      label: "Average Improvement",
-      value: "+62%",
+      label: "CTR Improvement",
+      value: `+${currentShowcase.stats.ctrIncrease}%`,
       suffix: "CTR"
     },
-    { 
+    {
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2"/>
@@ -1539,30 +1223,30 @@ const ProofSection = () => {
         </svg>
       ),
       label: "More Views",
-      value: "2.3x",
+      value: currentShowcase.stats.viewsMultiplier,
       suffix: "avg"
     },
-    { 
+    {
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       ),
-      label: "Faster Results",
-      value: "7",
+      label: "Turnaround",
+      value: currentShowcase.stats.turnaroundDays,
       suffix: "days"
     },
   ];
 
   return (
-    <section 
-      id="proof" 
+    <section
+      id="proof"
       ref={sectionRef}
-      className="py-20 relative overflow-hidden" 
-      style={{ background: "var(--surface-alt)" }} 
+      className="py-20 relative overflow-hidden"
+      style={{ background: "var(--surface-alt)" }}
       aria-labelledby="proof-heading"
     >
-      {/* Subtle background pattern */}
+      {/* Background patterns and gradients */}
       <div
         className="absolute inset-0 opacity-[0.02]"
         style={{
@@ -1571,8 +1255,6 @@ const ProofSection = () => {
         }}
         aria-hidden="true"
       />
-
-      {/* Gradient accents */}
       {!reduceMotion && (
         <>
           <div
@@ -1601,7 +1283,6 @@ const ProofSection = () => {
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.5 }}
         >
-          {/* Badge */}
           <motion.div
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5"
             style={{
@@ -1615,7 +1296,6 @@ const ProofSection = () => {
             <IconImage size={14} />
             Real Results
           </motion.div>
-
           <h2
             id="proof-heading"
             className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
@@ -1628,25 +1308,48 @@ const ProofSection = () => {
           </p>
         </motion.div>
 
-        {/* Before/After Comparison */}
+        {/* Showcase Selector Tabs */}
+        <div className="mb-8 flex justify-center flex-wrap gap-3">
+          {showcases.map((showcase, index) => (
+            <motion.button
+              key={showcase.category}
+              onClick={() => setActiveIndex(index)}
+              className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors duration-300 ${
+                activeIndex === index
+                  ? "text-white"
+                  : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
+              }`}
+              style={{
+                border: "1px solid var(--border)",
+                background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #ff9357)" : "var(--surface)",
+              }}
+              whileHover={{ y: -2 }}
+            >
+              {showcase.category}
+            </motion.button>
+          ))}
+        </div>
+
+        {/* Before/After Comparison (Dynamic) */}
         <motion.div
+          key={activeIndex}
           initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.6, delay: 0.1 }}
         >
           <BeforeAfter
-            before={SAMPLE_BEFORE}
-            after={SAMPLE_AFTER}
+            before={currentShowcase.beforeImage}
+            after={currentShowcase.afterImage}
             label="Drag to compare (Before → After)"
-            beforeAlt="Original thumbnail"
-            afterAlt="Optimized thumbnail"
+            beforeAlt={`Original thumbnail for ${currentShowcase.category}`}
+            afterAlt={`Optimized thumbnail for ${currentShowcase.category}`}
             width={1280}
             height={720}
           />
         </motion.div>
 
-        {/* Animated CTR Badge */}
+        {/* Animated CTR Badge (Dynamic) */}
         <motion.div
           className="mt-8 flex justify-center"
           initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }}
@@ -1671,18 +1374,19 @@ const ProofSection = () => {
             <div className="h-8 w-px bg-white/30" aria-hidden="true" />
             <div className="text-left">
               <div className="text-xs text-white/80">After revamp</div>
-              <div className="text-sm font-semibold text-white">Real campaign</div>
+              <div className="text-sm font-semibold text-white">{currentShowcase.category}</div>
             </div>
           </motion.div>
         </motion.div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid (Dynamic) */}
         <motion.div
           className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
+          key={`stats-${activeIndex}`}
           initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
         >
           {stats.map((stat, idx) => (
             <motion.div

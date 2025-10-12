@@ -42,7 +42,7 @@ const LoadingScreen = () => {
           className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 object-contain relative z-10 select-none pointer-events-none"
           draggable="false"
           loading="eager"
-          fetchpriority="high"
+          fetchPriority="high"
           style={{
             animation: 'logoFloat 3s ease-in-out infinite',
             willChange: 'transform',

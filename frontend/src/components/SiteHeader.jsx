@@ -1264,14 +1264,73 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   );
 };
 
-/* ---------------- Trust Bar (Enhanced with stats) ---------------- */
+/* ---------------- Trust Bar (iOS-Fixed & Enhanced) ---------------- */
 const TrustBar = ({ items, prefersReduced }) => {
   const elements = items || [];
   const trackRef = useRef(null);
+  const containerRef = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const [forceRender, setForceRender] = useState(0);
 
-  // Duplicate items for seamless loop (only once)
-  const duplicatedItems = [...elements, ...elements];
+  // Memoize duplicated items for better performance
+  const duplicatedItems = useMemo(() => [...elements, ...elements], [elements]);
+
+  // iOS-specific: Force animation restart after mount
+  useEffect(() => {
+    if (!prefersReduced && trackRef.current) {
+      // Detect iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      
+      if (isIOS) {
+        // Force reflow to trigger animation on iOS
+        const track = trackRef.current;
+        const originalAnimation = track.style.animation;
+        
+        // Brief delay to ensure iOS is ready
+        setTimeout(() => {
+          track.style.animation = 'none';
+          track.offsetHeight; // Force reflow
+          track.style.animation = originalAnimation;
+        }, 50);
+      }
+    }
+  }, [prefersReduced, forceRender]);
+
+  // Pause animation when tab is not visible (performance boost)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Enhanced touch handling for iOS
+  const handleTouchStart = (e) => {
+    setIsPaused(true);
+  };
+
+  const handleTouchEnd = (e) => {
+    setIsPaused(false);
+  };
+
+  // Prevent iOS from interfering with animation
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      const preventScroll = (e) => {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      };
+      
+      container.addEventListener('touchmove', preventScroll, { passive: false });
+      return () => container.removeEventListener('touchmove', preventScroll);
+    }
+  }, []);
 
   return (
     <div
@@ -1282,6 +1341,7 @@ const TrustBar = ({ items, prefersReduced }) => {
         position: "relative",
         zIndex: 2,
         overflow: "hidden",
+        WebkitOverflowScrolling: "touch", // iOS smooth scrolling
       }}
     >
       {prefersReduced ? (
@@ -1295,6 +1355,7 @@ const TrustBar = ({ items, prefersReduced }) => {
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           {elements.map((item, i) => (
@@ -1318,14 +1379,16 @@ const TrustBar = ({ items, prefersReduced }) => {
       ) : (
         // Animated marquee version
         <div
+          ref={containerRef}
           className="marquee-container"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
-          onTouchStart={() => setIsPaused(true)}
-          onTouchEnd={() => setIsPaused(false)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
           style={{
             position: "relative",
             overflow: "hidden",
+            cursor: "pointer",
           }}
         >
           {/* Gradient masks for smooth fade */}
@@ -1359,7 +1422,7 @@ const TrustBar = ({ items, prefersReduced }) => {
           {/* Scrolling content */}
           <div
             ref={trackRef}
-            className={`marquee-track ${isPaused ? 'paused' : ''}`}
+            className={`marquee-track ${isPaused ? 'paused' : ''} ${!isVisible ? 'hidden-tab' : ''}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -1409,6 +1472,7 @@ const TrustBar = ({ items, prefersReduced }) => {
           -webkit-user-select: none;
           -moz-user-select: none;
           -ms-user-select: none;
+          -webkit-tap-highlight-color: transparent;
         }
 
         /* Hide scrollbar for static version */
@@ -1416,27 +1480,46 @@ const TrustBar = ({ items, prefersReduced }) => {
           display: none;
         }
 
-        /* Marquee animation */
+        /* iOS-optimized marquee animation */
         @keyframes marquee-scroll {
           0% {
-            transform: translateX(0);
+            transform: translate3d(0, 0, 0);
           }
           100% {
-            transform: translateX(-50%);
+            transform: translate3d(-50%, 0, 0);
+          }
+        }
+
+        @-webkit-keyframes marquee-scroll {
+          0% {
+            -webkit-transform: translate3d(0, 0, 0);
+          }
+          100% {
+            -webkit-transform: translate3d(-50%, 0, 0);
           }
         }
 
         .marquee-track {
           animation: marquee-scroll var(--marquee-duration) linear infinite;
-          will-change: transform;
           -webkit-animation: marquee-scroll var(--marquee-duration) linear infinite;
-          -moz-animation: marquee-scroll var(--marquee-duration) linear infinite;
+          will-change: transform;
+          transform: translate3d(0, 0, 0);
+          -webkit-transform: translate3d(0, 0, 0);
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+          -webkit-perspective: 1000px;
+          perspective: 1000px;
+          -webkit-font-smoothing: subpixel-antialiased;
         }
 
         .marquee-track.paused {
           animation-play-state: paused;
           -webkit-animation-play-state: paused;
-          -moz-animation-play-state: paused;
+        }
+
+        .marquee-track.hidden-tab {
+          animation-play-state: paused;
+          -webkit-animation-play-state: paused;
         }
 
         /* Responsive speeds */
@@ -1463,37 +1546,55 @@ const TrustBar = ({ items, prefersReduced }) => {
           .marquee-track {
             animation: none !important;
             -webkit-animation: none !important;
-            -moz-animation: none !important;
           }
         }
 
-        /* Smooth rendering */
+        /* Smooth rendering - Enhanced for iOS */
         .marquee-container {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
+          -webkit-transform: translateZ(0);
+          transform: translateZ(0);
         }
 
         .marquee-item {
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
-          -moz-backface-visibility: hidden;
-          transform: translateZ(0);
-          -webkit-transform: translateZ(0);
-          -moz-transform: translateZ(0);
+          transform: translate3d(0, 0, 0);
+          -webkit-transform: translate3d(0, 0, 0);
+          -webkit-font-smoothing: subpixel-antialiased;
         }
 
-        /* iOS specific fixes */
+        /* iOS Safari specific fixes */
         @supports (-webkit-touch-callout: none) {
           .marquee-track {
-            -webkit-transform: translateZ(0);
-            -webkit-perspective: 1000;
+            -webkit-transform: translate3d(0, 0, 0);
+            -webkit-perspective: 1000px;
+            -webkit-backface-visibility: hidden;
+            transform-style: preserve-3d;
+            -webkit-transform-style: preserve-3d;
+          }
+          
+          .marquee-container {
+            -webkit-overflow-scrolling: touch;
+            isolation: isolate;
+          }
+
+          /* Force GPU acceleration on iOS */
+          .marquee-item {
+            -webkit-transform: translateZ(0) scale(1);
+            transform: translateZ(0) scale(1);
           }
         }
 
-        /* Android Chrome fixes */
-        @media screen and (-webkit-min-device-pixel-ratio: 0) and (min-resolution: .001dpcm) {
+        /* iPad specific */
+        @media only screen 
+          and (min-device-width: 768px) 
+          and (max-device-width: 1024px) 
+          and (-webkit-min-device-pixel-ratio: 2) {
           .marquee-track {
-            transform: translate3d(0, 0, 0);
+            -webkit-transform: translate3d(0, 0, 0.01px);
+            transform: translate3d(0, 0, 0.01px);
           }
         }
 
@@ -1505,11 +1606,18 @@ const TrustBar = ({ items, prefersReduced }) => {
           }
         }
 
-        /* Firefox specific */
-        @-moz-document url-prefix() {
+        /* Fix for iOS 15+ animation bug */
+        @supports (hanging-punctuation: first) and (font: -apple-system-body) {
           .marquee-track {
-            -moz-transform: translateZ(0);
+            animation-timing-function: linear;
+            animation-fill-mode: forwards;
           }
+        }
+
+        /* Prevent iOS bounce effect */
+        body {
+          overscroll-behavior-x: none;
+          -webkit-overflow-scrolling: auto;
         }
       `}</style>
     </div>

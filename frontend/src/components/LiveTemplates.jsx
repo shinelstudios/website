@@ -352,7 +352,6 @@ const FAQ_DATA = [
    - Drag from handles OR anywhere on the track
    + Document-level listeners (pointer) with passive listeners for move
    - pos1 <= pos2 enforced, no stale closures
-   - No fetchPriority anywhere
    ====================================================================== */
 const TripleBeforeAfterSlider = ({ images, device }) => {
   const [pos1, setPos1] = useState(33);
