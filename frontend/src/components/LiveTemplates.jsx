@@ -994,7 +994,7 @@ const FloatingCTA = ({ device, festival }) => {
       }}
     >
       <a
-        href="https://wa.me/918838179165?text=Hi%20Shinel%20Studios%2C%20I%20want%20the%20Live%20Template%20subscription"
+        href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios%2C%20I%20want%20the%20Live%20Template%20subscription"
         className="flex items-center justify-center gap-2 rounded-xl font-bold"
         style={{
           width: "100%",
@@ -1669,7 +1669,7 @@ export default function LiveTemplates() {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
-                  href="https://wa.me/918838179165?text=Hi%20Shinel%20Studios%2C%20I%20want%20the%20Live%20Template%20subscription"
+                  href="https://wa.me/918968141585?text=Hi%20Shinel%20Studios%2C%20I%20want%20the%20Live%20Template%20subscription"
                   className="inline-flex items-center justify-center gap-3 rounded-xl font-bold group"
                   style={{
                     padding: device.isMobile ? "18px 28px" : "20px 36px",

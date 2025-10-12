@@ -1,27 +1,107 @@
 // src/components/SiteFooter.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle } from "lucide-react";
-import logoLight from "../assets/logo_light.png";
+import {
+  Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle,
+  Send, Heart, Sparkles, TrendingUp, Users, Award, Clock,
+  CheckCircle2, ArrowUpRight, ExternalLink, MapPin
+} from "lucide-react";
+import { motion } from "framer-motion";
+import logoLight from "../assets/logo_light.png"; // WHITE logo (dark bg)
+import logoDark from "../assets/logo_dark.png";   // DARK logo (light bg)
 
-/** tiny event tracker (safe no-op if listener absent) */
+/* -------------------------------- analytics (no-op safe) ------------------------------- */
 const track = (ev, detail = {}) => {
-  try {
-    window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } }));
-  } catch {}
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
 };
 
-/**
- * Footer rules (to avoid repetition on homepage):
- * - On "/" we hide the long “Quick Links” & Newsletter block (since homepage already has: services, FAQ, lead form, CTA)
- * - On other routes we show full footer.
- * - We reserve bottom padding on mobile if a sticky CTA exists.
+/* -------------------------------- theme sync helper ------------------------------------ */
+/** Robustly determine theme.
+ * Sources (in order):
+ *  - explicit prop isDark (boolean)
+ *  - html/body classList contains "dark"
+ *  - html/body data-theme="dark|light"
+ *  - localStorage "theme" | "color-theme"
+ *  - prefers-color-scheme
+ * Also listens to:
+ *  - attribute/class mutations on html & body
+ *  - media query changes
+ *  - window "storage" and custom "themechange" events
  */
+function useThemeMode(isDarkProp) {
+  const compute = () => {
+    try {
+      if (typeof isDarkProp === "boolean") return isDarkProp ? "dark" : "light";
+
+      const html = document.documentElement;
+      const body = document.body;
+
+      const clsDark = html?.classList?.contains("dark") || body?.classList?.contains?.("dark");
+      if (clsDark) return "dark";
+
+      const attr = (el) => el?.getAttribute?.("data-theme") || el?.getAttribute?.("data-mode") || "";
+      const aHtml = attr(html).toLowerCase();
+      const aBody = attr(body).toLowerCase();
+      if (aHtml === "dark" || aBody === "dark") return "dark";
+      if (aHtml === "light" || aBody === "light") return "light";
+
+      const ls = (k) => (typeof localStorage !== "undefined" ? localStorage.getItem(k) : null);
+      const lsTheme = (ls("theme") || ls("color-theme") || "").toLowerCase();
+      if (lsTheme === "dark" || lsTheme === "light") return lsTheme;
+
+      return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  };
+
+  const [mode, setMode] = useState("light");
+
+  useEffect(() => {
+    setMode(compute());
+
+    if (typeof isDarkProp === "boolean") return;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    const obs = new MutationObserver(() => setMode(compute()));
+    obs.observe(html, { attributes: true, attributeFilter: ["data-theme", "data-mode", "class"] });
+    if (body) obs.observe(body, { attributes: true, attributeFilter: ["data-theme", "data-mode", "class"] });
+
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const onMedia = () => setMode(compute());
+    try { mq?.addEventListener?.("change", onMedia); } catch { mq?.addListener?.(onMedia); }
+
+    const onStorage = () => setMode(compute());
+    window.addEventListener("storage", onStorage);
+
+    const onThemeChange = () => setMode(compute()); // header can dispatch: window.dispatchEvent(new Event("themechange"))
+    window.addEventListener("themechange", onThemeChange);
+
+    return () => {
+      obs.disconnect();
+      try { mq?.removeEventListener?.("change", onMedia); } catch { mq?.removeListener?.(onMedia); }
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("themechange", onThemeChange);
+    };
+  }, [isDarkProp]);
+
+  return mode;
+}
+
+/* =======================================================================================
+   Footer
+======================================================================================= */
 const SiteFooter = ({
+  isDark,                 // optional: if provided, forces mode (same as header)
   forceCompact = false,
   reserveForSticky = true,
 }) => {
-  const location = useLocation?.() || { pathname: (typeof window !== "undefined" && window.location.pathname) || "/" };
+  const theme = useThemeMode(isDark);
+  const isDarkMode = theme === "dark";
+
+  const location = useLocation?.() || { pathname: window.location.pathname || "/" };
   const onHome = location.pathname === "/";
   const compact = forceCompact || onHome;
 
@@ -29,167 +109,254 @@ const SiteFooter = ({
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const footerRef = useRef(null);
 
-  // Detect small screens (to reserve space for sticky CTA)
+  /* single IntersectionObserver (fast) */
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(max-width: 767px)");
-    const onChange = () => setIsMobile(mq.matches);
-    onChange();
-    mq.addEventListener?.("change", onChange);
-    return () => mq.removeEventListener?.("change", onChange);
+    if (!footerRef.current || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setIsVisible(true), { threshold: 0.06 });
+    io.observe(footerRef.current);
+    return () => io.disconnect();
   }, []);
 
-  // Reserve ~64px when sticky CTA might overlap (mobile only)
-  const reservedPad =
-    reserveForSticky && isMobile ? "calc(64px + env(safe-area-inset-bottom, 0px))" : "0px";
+  /* screen size for sticky spacing */
+  useEffect(() => {
+    const mq = window.matchMedia?.("(max-width: 767px)");
+    const on = () => setIsMobile(!!mq?.matches);
+    on(); mq?.addEventListener?.("change", on);
+    return () => mq?.removeEventListener?.("change", on);
+  }, []);
 
-  const linkMuted = { color: "var(--footer-muted, rgba(255,255,255,0.7))" };
+  const reservedPad = reserveForSticky && isMobile ? "calc(64px + env(safe-area-inset-bottom,0))" : "0";
+  const logoSrc = isDarkMode ? logoLight : logoDark; // correct in both modes
 
-  const SOCIALS = [
-    { label: "Instagram", href: "https://www.instagram.com/shinel.studios/", Icon: Instagram },
-    { label: "LinkedIn", href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin },
-    { label: "Facebook", href: "https://www.facebook.com/", Icon: Facebook },
-    { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter },
-  ];
+  const SOCIALS = useMemo(() => ([
+    { label: "Instagram", href: "https://www.instagram.com/shinel.studios/", Icon: Instagram, color: "#E4405F" },
+    { label: "LinkedIn",  href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin,  color: "#0A66C2" },
+    { label: "Facebook",  href: "https://www.facebook.com/", Icon: Facebook, color: "#1877F2" },
+    { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter, color: "#1DA1F2" },
+  ]), []);
+
+  const FEATURES = useMemo(() => ([
+    { icon: Users,      text: "20+ Active Clients" },
+    { icon: TrendingUp, text: "7M+ Views Driven" },
+    { icon: Award,      text: "+40% CTR Boost" },
+    { icon: Clock,      text: "48–72 hr Turnaround" },
+  ]), []);
 
   const onSubscribe = async (e) => {
     e.preventDefault();
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((email || "").trim());
-    if (!ok) {
-      setMsg("Please enter a valid email.");
-      return;
-    }
-    setBusy(true);
-    setMsg("");
+    if (!ok) return setMsg("Please enter a valid email.");
+    setBusy(true); setMsg("");
     try {
       track("cta_click_subscribe", { src: "footer", email });
       const endpoint = import.meta?.env?.VITE_NEWSLETTER_ENDPOINT;
       if (endpoint) {
-        await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, source: "footer" }),
-        });
+        await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, source: "footer" }) });
       } else {
         const to = "hello@shinelstudiosofficial.com";
-        const subject = "Newsletter Subscribe";
-        const body = `Please subscribe me to updates.\nEmail: ${email}\nSource: footer`;
-        window.open(
-          `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
-          "_blank",
-          "noopener,noreferrer"
-        );
+        window.open(`mailto:${to}?subject=${encodeURIComponent("Newsletter Subscribe")}&body=${encodeURIComponent(`Please subscribe me.\nEmail: ${email}\nSource: footer`)}`, "_blank");
       }
-      setMsg("Thanks for subscribing ✨");
-      setEmail("");
-    } catch {
-      setMsg("Could not subscribe right now. Please try again.");
-    } finally {
-      setBusy(false);
-    }
+      setMsg("Thanks for subscribing ✨"); setEmail("");
+    } catch { setMsg("Could not subscribe right now. Please try again."); }
+    finally { setBusy(false); }
   };
+
+  /* theme vars */
+  const vars = {
+    "--orange": "var(--orange, #E85002)",
+    "--footer-bg": isDarkMode ? "var(--bg, #0B0B0B)" : "var(--bg, #FFFFFF)",
+    "--footer-text": isDarkMode ? "rgba(255,255,255,0.92)" : "rgba(15,15,15,0.92)",
+    "--footer-muted": isDarkMode ? "rgba(255,255,255,0.66)" : "rgba(15,15,15,0.66)",
+    "--card-bg": isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(15,15,15,0.05)",
+    "--card-border": isDarkMode ? "rgba(255,255,255,0.10)" : "rgba(15,15,15,0.10)",
+    "--divider": isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(15,15,15,0.12)",
+  };
+
+  /* right column shown in compact (balances the grid on home) */
+  const CompactRight = () => (
+    <aside className={isVisible ? "fade-in-delay-1" : ""}>
+      <h3 className="text-xl font-bold mb-4 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
+        <ArrowUpRight size={18} style={{ color: "var(--orange)" }} />
+        Reach Us
+      </h3>
+      <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+        <a
+          href="mailto:hello@shinelstudiosofficial.com"
+          className="flex items-center gap-2 text-sm mb-3"
+          style={{ color: "var(--footer-muted)" }}
+          onClick={() => track("cta_click_contact", { via: "email", place: "footer_compact_right" })}
+        >
+          <Mail size={16} style={{ color: "var(--orange)" }} />
+          hello@shinelstudiosofficial.com
+        </a>
+        <a
+          href="https://wa.me/918838179165"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 text-sm mb-3"
+          style={{ color: "var(--footer-muted)" }}
+          onClick={() => track("cta_click_contact", { via: "whatsapp", place: "footer_compact_right" })}
+        >
+          <MessageCircle size={16} style={{ color: "#25D366" }} />
+          WhatsApp Us
+        </a>
+        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--footer-muted)" }}>
+          <MapPin size={16} style={{ color: "var(--orange)" }} />
+          Punjab, India
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <a href="#contact" className="text-center px-3 py-2 rounded-lg text-sm font-semibold btn-elevate"
+             style={{ background: "linear-gradient(135deg, var(--orange) 0%, #ff6b35 100%)", color: "#fff" }}>
+            Get Free Audit
+          </a>
+          <a href="#contact" className="text-center px-3 py-2 rounded-lg text-sm font-semibold"
+             style={{ background: "var(--card-bg)", color: "var(--orange)", border: "1px solid var(--card-border)" }}>
+            Get Quote
+          </a>
+        </div>
+      </div>
+    </aside>
+  );
 
   return (
     <footer
-      id="site-footer"
+      ref={footerRef}
       role="contentinfo"
       style={{
-        background: "var(--footer-bg, #000)",
-        color: "var(--footer-text, #fff)",
-        paddingBottom: reservedPad, // keep footer content clear of any sticky bar
+        ...vars,
+        background:
+          "radial-gradient(1200px 400px at 10% -10%, rgba(232,80,2,0.08), transparent 60%), radial-gradient(1200px 400px at 90% -10%, rgba(255,147,87,0.05), transparent 60%), var(--footer-bg)",
+        color: "var(--footer-text)",
+        paddingBottom: reservedPad,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* thin glowing accent line */}
-      <div
-        aria-hidden
-        className="w-full"
-        style={{
-          height: 2,
-          background: "linear-gradient(90deg, transparent, var(--orange, #E85002), transparent)",
-          opacity: 0.9,
-        }}
-      />
+      {/* top accent (no glow to keep it light on GPU) */}
+      <div style={{ height: 2, background: "linear-gradient(90deg, transparent, var(--orange), transparent)" }} />
 
-      <div className={`container mx-auto px-4 ${compact ? "pt-10 pb-10" : "pt-16 pb-16"}`}>
-        <div
-          className={
-            compact
-              ? "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr] gap-10"
-              : "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr_1fr] gap-12"
-          }
-        >
-          {/* Brand */}
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <img
-                src={logoLight}
+      <div className={`container mx-auto px-4 ${compact ? "pt-12 pb-10" : "pt-20 pb-16"}`} style={{ position: "relative", zIndex: 1 }}>
+        {/* Balanced grids */}
+        <div className={compact ? "grid grid-cols-1 md:grid-cols-2 gap-12"
+                                : "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr_1fr] gap-16 lg:gap-20"}>
+          {/* BRAND / LEFT */}
+          <div className={isVisible ? "fade-in" : ""}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+              <motion.img
+                src={logoSrc}
                 alt="Shinel Studios"
-                className="h-12 w-auto object-contain"
-                style={{ filter: "drop-shadow(0 2px 8px rgba(232,80,2,.25))" }}
+                className="w-48 sm:w-56 md:w-64 h-auto object-contain"
+                style={{ maxWidth: "100%" }}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={isVisible ? { opacity: 1, scale: 1 } : {}}
+                transition={{ duration: 0.45, ease: "easeOut" }}
+                whileHover={{ scale: 1.03 }}
+                draggable="false"
               />
-              <span className="text-sm font-semibold px-2 py-1 rounded-full" style={{ background: "rgba(232,80,2,.18)", color: "#fff", border: "1px solid rgba(255,255,255,.2)" }}>
-                AI-first
+              <span
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+                style={{
+                  background: "rgba(232,80,2,0.15)",
+                  color: "var(--orange)",
+                  border: "1px solid rgba(232,80,2,0.3)",
+                  backdropFilter: "blur(6px)",
+                }}
+              >
+                <Sparkles size={14} /> AI-first Studio
               </span>
             </div>
-            <p className="mb-2" style={linkMuted}>
+
+            <p className="text-base mb-3" style={{ color: "var(--footer-muted)" }}>
               We help creators & brands shine through unforgettable visuals and smart strategy.
             </p>
-            <p className="mb-6 font-medium" style={{ color: "var(--footer-text, #fff)", opacity: 0.9 }}>
-              <em>Where Ideas Shine</em>
+
+            <p className="text-lg font-semibold mb-6 flex items-center gap-2" style={{ color: "var(--orange)" }}>
+              <Heart size={18} /> <em>Where Ideas Shine</em>
             </p>
 
-            {/* Socials */}
-            <div className="flex gap-4">
-              {SOCIALS.map(({ label, href, Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  aria-label={label}
-                  title={label}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => track("cta_click_social", { src: "footer", label })}
-                >
-                  <Icon size={22} style={linkMuted} className="transition-opacity hover:opacity-100 opacity-70" />
-                </a>
-              ))}
-            </div>
-
-            {/* Compact: simple contact row */}
-            {compact && (
-              <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
-                <a
-                  href="mailto:hello@shinelstudiosofficial.com"
-                  className="underline hover:opacity-100 opacity-80"
-                  onClick={() => track("cta_click_contact", { via: "email", place: "footer_compact" })}
-                >
-                  hello@shinelstudiosofficial.com
-                </a>
-                <span aria-hidden className="opacity-50">•</span>
-                <a
-                  href="https://wa.me/918838179165"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 underline hover:opacity-100 opacity-80"
-                  onClick={() => track("cta_click_contact", { via: "whatsapp", place: "footer_compact" })}
-                >
-                  <MessageCircle size={16} /> WhatsApp
-                </a>
+            {!compact && (
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {FEATURES.map((f, i) => (
+                  <motion.div
+                    key={f.text}
+                    className="flex items-center gap-2 p-2 rounded-lg"
+                    style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={isVisible ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.35, delay: i * 0.06 }}
+                  >
+                    <f.icon size={16} style={{ color: "var(--orange)" }} />
+                    <span className="text-xs" style={{ color: "var(--footer-muted)" }}>{f.text}</span>
+                  </motion.div>
+                ))}
               </div>
             )}
+
+            {/* Socials (transform/opacity only on hover; no box-shadow) */}
+            <div className="flex gap-3 mb-6">
+              {SOCIALS.map(({ label, href, Icon, color }, i) => (
+                <motion.a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={label}
+                  title={label}
+                  className="social-link"
+                  onClick={() => track("cta_click_social", { src: "footer", label })}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={isVisible ? { opacity: 1, scale: 1 } : {}}
+                  transition={{ duration: 0.25, delay: i * 0.04 }}
+                  whileHover={{ y: -2, scale: 1.06 }}
+                  whileTap={{ scale: 0.97 }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    background: "var(--card-bg)",
+                    border: "1px solid var(--card-border)",
+                    color: "var(--footer-text)",
+                    transition: "background-color .18s ease, color .18s ease, border-color .18s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = color;
+                    e.currentTarget.style.borderColor = color;
+                    e.currentTarget.style.color = "#fff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "var(--card-bg)";
+                    e.currentTarget.style.borderColor = "var(--card-border)";
+                    e.currentTarget.style.color = "var(--footer-text)";
+                  }}
+                >
+                  <Icon size={20} />
+                </motion.a>
+              ))}
+            </div>
           </div>
 
-          {/* Quick Links (hidden on home to avoid repetition) */}
+          {/* RIGHT column for COMPACT (balances layout on home) */}
+          {compact && <CompactRight />}
+
+          {/* QUICK LINKS */}
           {!compact && (
-            <nav aria-label="Footer">
-              <h3 className="text-lg font-bold mb-5">Quick Links</h3>
-              <ul className="space-y-3">
+            <nav aria-label="Footer navigation" className={isVisible ? "fade-in-delay-1" : ""}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
+                <ArrowUpRight size={20} style={{ color: "var(--orange)" }} /> Quick Links
+              </h3>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  { t: "Home", href: "/#home" },
-                  { t: "Services", href: "/#services" },
-                  { t: "Our Work", href: "/#work" },
-                  { t: "Contact", href: "/#contact" },
+                  { t: "Home", href: "/#home", icon: Sparkles },
+                  { t: "Services", href: "/#services", icon: Award },
+                  { t: "Our Work", href: "/#work", icon: TrendingUp },
+                  { t: "Contact", href: "/#contact", icon: Mail },
                   { t: "Video Editing", href: "/video-editing" },
                   { t: "GFX", href: "/gfx" },
                   { t: "Thumbnails", href: "/thumbnails" },
@@ -198,11 +365,13 @@ const SiteFooter = ({
                   <li key={l.t}>
                     <Link
                       to={l.href}
-                      className="hover:underline"
-                      style={linkMuted}
+                      className="inline-flex items-center gap-2 group py-1"
+                      style={{ color: "var(--footer-muted)" }}
                       onClick={() => track("cta_click_footer_link", { label: l.t })}
                     >
-                      {l.t}
+                      {l.icon && <l.icon size={14} style={{ color: "var(--orange)" }} />}
+                      <span className="group-hover:translate-x-1 transition-transform duration-200">{l.t}</span>
+                      <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--orange)" }} />
                     </Link>
                   </li>
                 ))}
@@ -210,84 +379,79 @@ const SiteFooter = ({
             </nav>
           )}
 
-          {/* Newsletter (hidden on home to prevent duplication) */}
+          {/* NEWSLETTER */}
           {!compact && (
-            <div>
-              <h3 className="text-lg font-bold mb-5">Stay in the loop</h3>
-              <p className="mb-3" style={linkMuted}>
+            <div className={isVisible ? "fade-in-delay-2" : ""}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
+                <Send size={20} style={{ color: "var(--orange)" }} /> Stay Updated
+              </h3>
+              <p className="mb-4" style={{ color: "var(--footer-muted)" }}>
                 Fresh ideas, thumbnail tests, tools & case studies. 1–2× / month.
               </p>
 
-              <form className="flex gap-2" onSubmit={onSubscribe} noValidate>
-                <label className="sr-only" htmlFor="newsletter-email">Email</label>
-                <input
-                  id="newsletter-email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 px-4 py-3 rounded-lg focus:outline-none"
-                  style={{
-                    background: "var(--footer-input-bg, rgba(255,255,255,0.06))",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "var(--footer-text, #fff)",
-                  }}
-                  autoComplete="email"
-                />
-                <button
+              <form className="space-y-3" onSubmit={onSubscribe} noValidate>
+                <div className="relative">
+                  <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--orange)", opacity: 0.85 }} />
+                  <input
+                    id="newsletter-email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--orange)] transition-all duration-200"
+                    style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--footer-text)" }}
+                    autoComplete="email"
+                    aria-describedby="newsletter-help"
+                  />
+                </div>
+                <motion.button
                   type="submit"
                   disabled={busy}
-                  className="px-5 py-3 rounded-lg text-white disabled:opacity-70"
-                  style={{ background: "var(--orange, #E85002)" }}
-                  aria-label="Subscribe"
-                  title="Subscribe"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full px-5 py-3 rounded-xl text-white font-semibold disabled:opacity-70 flex items-center justify-center gap-2 transition-transform duration-150"
+                  style={{ background: "linear-gradient(135deg, var(--orange) 0%, #ff6b35 100%)" }}
                 >
-                  <Mail size={18} />
-                </button>
+                  {busy ? "Subscribing..." : (<><CheckCircle2 size={18} /> Subscribe Now</>)}
+                </motion.button>
               </form>
 
-              <div
-                id="newsletter-help"
-                className="mt-2 text-sm"
-                style={{ color: "rgba(255,255,255,0.75)" }}
-                role="status"
-                aria-live="polite"
-              >
-                {msg || "No spam. Unsubscribe anytime."}
+              <div id="newsletter-help" className="mt-3 text-xs flex items-center gap-1" style={{ color: "var(--footer-muted)" }} role="status" aria-live="polite">
+                {msg || (<><CheckCircle2 size={12} style={{ color: "var(--orange)" }} /> No spam. Unsubscribe anytime.</>)}
               </div>
             </div>
           )}
         </div>
 
-        {/* Legal bar */}
-        <div
-          className="mt-10 pt-6"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-y-2">
-            {/* left spacer (desktop) */}
-            <div className="hidden md:block" />
+        {/* LEGAL BAR */}
+        <div className="mt-16 pt-8" style={{ borderTop: "1px solid var(--divider)" }}>
+          <div className="flex flex-col md:flex-row items-center justify-center md:justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              <p className="text-sm" style={{ color: "var(--footer-muted)" }}>© {new Date().getFullYear()} Shinel Studios™</p>
+              <span className="hidden md:inline" style={{ color: "var(--footer-muted)" }}>·</span>
+              <p className="text-sm" style={{ color: "var(--footer-muted)" }}>All rights reserved</p>
+              <span className="hidden md:inline" style={{ color: "var(--footer-muted)" }}>·</span>
+              <p className="text-sm" style={{ color: "var(--footer-muted)" }}>Where Ideas Shine</p>
+            </div>
 
-            {/* centered copyright */}
-            <p className="text-center">
-              &copy; {new Date().getFullYear()} Shinel Studios™ · All rights reserved · Where Ideas Shine
-            </p>
-
-            {/* right-corner legal links */}
-            <nav aria-label="Legal" className="flex justify-center md:justify-end items-center gap-6">
+            <nav aria-label="Legal pages" className="flex items-center gap-3 justify-center">
               <Link
                 to="/privacy"
-                className="hover:underline"
-                style={linkMuted}
+                className="text-sm hover:translate-y-[-2px] transition-transform duration-150"
+                style={{ color: "var(--footer-muted)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--footer-text)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--footer-muted)")}
                 onClick={() => track("cta_click_legal", { page: "privacy" })}
               >
                 Privacy
               </Link>
-              <span aria-hidden style={{ opacity: 0.5 }}>•</span>
+              <span style={{ color: "var(--footer-muted)" }}>·</span>
               <Link
                 to="/terms"
-                className="hover:underline"
-                style={linkMuted}
+                className="text-sm hover:translate-y-[-2px] transition-transform duration-150"
+                style={{ color: "var(--footer-muted)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--footer-text)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--footer-muted)")}
                 onClick={() => track("cta_click_legal", { page: "terms" })}
               >
                 Terms
@@ -296,6 +460,20 @@ const SiteFooter = ({
           </div>
         </div>
       </div>
+
+      {/* Animations (transform/opacity only) */}
+      <style>{`
+        .fade-in { animation: fadeIn .5s ease-out forwards; }
+        .fade-in-delay-1 { animation: fadeIn .5s ease-out .15s forwards; opacity: 0; }
+        .fade-in-delay-2 { animation: fadeIn .5s ease-out .30s forwards; opacity: 0; }
+        @keyframes fadeIn { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
+        .social-link { will-change: transform, opacity; transform: translateZ(0); }
+        .btn-elevate { will-change: transform; transform: translateZ(0); }
+        @media (prefers-reduced-motion: reduce) {
+          .fade-in, .fade-in-delay-1, .fade-in-delay-2 { animation: none !important; opacity: 1 !important; }
+          .social-link, .btn-elevate { transition: none !important; }
+        }
+      `}</style>
     </footer>
   );
 };

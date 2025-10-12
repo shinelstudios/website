@@ -1267,6 +1267,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 /* ---------------- Trust Bar (Enhanced with stats) ---------------- */
 const TrustBar = ({ items, prefersReduced }) => {
   const elements = items || [];
+  const trackRef = useRef(null);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Duplicate items for seamless loop (only once)
+  const duplicatedItems = [...elements, ...elements];
+
   return (
     <div
       className="w-full trustbar"
@@ -1275,79 +1281,235 @@ const TrustBar = ({ items, prefersReduced }) => {
         boxShadow: "inset 0 1px 0 var(--border)",
         position: "relative",
         zIndex: 2,
+        overflow: "hidden",
       }}
     >
-      <div
-        className="overflow-hidden select-none"
-        style={{
-          WebkitMaskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-          maskImage: "linear-gradient(90deg, transparent, black 6%, black 94%, transparent)",
-        }}
-      >
-        <div className="marquee-track" aria-hidden={prefersReduced}>
-          <div className="marquee-row">
-            {elements.map((item, i) => (
-              <span key={`a-${i}`} className="marquee-item">
-                {item.icon && <item.icon size={14} style={{ color: "var(--orange)" }} />}
-                {item.text}
-              </span>
-            ))}
-          </div>
-          <div className="marquee-row" aria-hidden="true">
-            {elements.map((item, i) => (
-              <span key={`b-${i}`} className="marquee-item">
-                {item.icon && <item.icon size={14} style={{ color: "var(--orange)" }} />}
-                {item.text}
+      {prefersReduced ? (
+        // Static version for users who prefer reduced motion
+        <div 
+          className="static-trust-bar"
+          style={{ 
+            padding: "0.625rem 1rem", 
+            display: "flex", 
+            gap: "1.5rem", 
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          }}
+        >
+          {elements.map((item, i) => (
+            <div 
+              key={`static-${i}`} 
+              style={{ 
+                whiteSpace: "nowrap", 
+                fontSize: "0.75rem", 
+                color: "var(--text)", 
+                display: "inline-flex", 
+                gap: "0.5rem", 
+                alignItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              {item.icon && <item.icon size={14} style={{ color: "var(--orange)", flexShrink: 0 }} />}
+              <span>{item.text}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Animated marquee version
+        <div
+          className="marquee-container"
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setIsPaused(false)}
+          style={{
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {/* Gradient masks for smooth fade */}
+          <div
+            className="marquee-mask-left"
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: "clamp(20px, 8%, 60px)",
+              background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            className="marquee-mask-right"
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: "clamp(20px, 8%, 60px)",
+              background: "linear-gradient(90deg, transparent 0%, var(--header-bg) 100%)",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Scrolling content */}
+          <div
+            ref={trackRef}
+            className={`marquee-track ${isPaused ? 'paused' : ''}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2rem",
+              padding: "0.625rem 0",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {duplicatedItems.map((item, i) => (
+              <span 
+                key={`item-${i}`} 
+                className="marquee-item"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontSize: "clamp(0.6875rem, 1.5vw, 0.875rem)",
+                  lineHeight: 1.2,
+                  color: "var(--text)",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                {item.icon && (
+                  <item.icon 
+                    size={14} 
+                    style={{ 
+                      color: "var(--orange)", 
+                      flexShrink: 0,
+                      minWidth: "14px",
+                      minHeight: "14px",
+                    }} 
+                  />
+                )}
+                <span>{item.text}</span>
               </span>
             ))}
           </div>
         </div>
-        {prefersReduced && (
-          <div style={{ padding: "0.5rem 0", display: "flex", gap: "1rem", overflowX: "auto" }}>
-            {elements.map((item, i) => (
-              <div key={`r-${i}`} style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--text)", display: "inline-flex", gap: ".5rem", alignItems: "center" }}>
-                {item.icon && <item.icon size={14} style={{ color: "var(--orange)" }} />}
-                {item.text}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       <style>{`
-        .trustbar { --marquee-speed: 30s; }
-        .marquee-track { display: flex; width: max-content; }
-        .marquee-row {
-          display: inline-flex;
-          align-items: center;
-          gap: 2rem;
-          padding: 0.5rem 0;
-          animation: ss-marquee var(--marquee-speed) linear infinite;
+        /* Base styles */
+        .trustbar {
+          --marquee-duration: 40s;
+          user-select: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+        }
+
+        /* Hide scrollbar for static version */
+        .static-trust-bar::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* Marquee animation */
+        @keyframes marquee-scroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+
+        .marquee-track {
+          animation: marquee-scroll var(--marquee-duration) linear infinite;
           will-change: transform;
+          -webkit-animation: marquee-scroll var(--marquee-duration) linear infinite;
+          -moz-animation: marquee-scroll var(--marquee-duration) linear infinite;
         }
-        @keyframes ss-marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+
+        .marquee-track.paused {
+          animation-play-state: paused;
+          -webkit-animation-play-state: paused;
+          -moz-animation-play-state: paused;
         }
-        .trustbar:hover .marquee-row { animation-play-state: paused; }
-        .marquee-item {
-          font-size: 11px;
-          line-height: 1.2;
-          white-space: nowrap;
-          color: var(--text);
-          display: inline-flex;
-          align-items: center;
-          gap: .5rem;
+
+        /* Responsive speeds */
+        @media (max-width: 640px) {
+          .trustbar {
+            --marquee-duration: 30s;
+          }
         }
-        @media (min-width: 768px) {
-          .marquee-item { font-size: 0.875rem; }
+
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .trustbar {
+            --marquee-duration: 35s;
+          }
         }
-        @media (max-width: 420px) {
-          .trustbar { --marquee-speed: 24s; }
+
+        @media (min-width: 1025px) {
+          .trustbar {
+            --marquee-duration: 45s;
+          }
         }
-        /* reduce animation for motion-preference */
+
+        /* Reduced motion support */
         @media (prefers-reduced-motion: reduce) {
-          .marquee-row { animation: none !important; transform: translateX(0) !important; }
+          .marquee-track {
+            animation: none !important;
+            -webkit-animation: none !important;
+            -moz-animation: none !important;
+          }
+        }
+
+        /* Smooth rendering */
+        .marquee-container {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+
+        .marquee-item {
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          -moz-backface-visibility: hidden;
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
+          -moz-transform: translateZ(0);
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+          .marquee-track {
+            -webkit-transform: translateZ(0);
+            -webkit-perspective: 1000;
+          }
+        }
+
+        /* Android Chrome fixes */
+        @media screen and (-webkit-min-device-pixel-ratio: 0) and (min-resolution: .001dpcm) {
+          .marquee-track {
+            transform: translate3d(0, 0, 0);
+          }
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+          .marquee-mask-left,
+          .marquee-mask-right {
+            display: none;
+          }
+        }
+
+        /* Firefox specific */
+        @-moz-document url-prefix() {
+          .marquee-track {
+            -moz-transform: translateZ(0);
+          }
         }
       `}</style>
     </div>
