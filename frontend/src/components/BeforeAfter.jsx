@@ -18,6 +18,7 @@ const BeforeAfter = ({
   const [isDragging, setIsDragging] = useState(false);
   const wrapRef = useRef(null);
   const dragging = useRef(false);
+  const animationFrameRef = useRef(null);
 
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -34,37 +35,41 @@ const BeforeAfter = ({
     setV(clamp(pct, 0, 100));
   };
 
-  // Pointer handlers
+  // Pointer handlers with iOS optimization
   useEffect(() => {
     const onMove = (e) => {
       if (!dragging.current) return;
-      if (e.type.startsWith("touch")) {
+      if (e.type.startsWith("touch") && e.touches.length > 0) {
         setFromClientX(e.touches[0].clientX);
-      } else {
+        e.preventDefault();
+      } else if (e.clientX !== undefined) {
         setFromClientX(e.clientX);
       }
-      e.preventDefault();
     };
     const onUp = () => {
       dragging.current = false;
       setIsDragging(false);
     };
 
-    document.addEventListener("mousemove", onMove, { passive: false });
+    // iOS-friendly event listeners
+    document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
     document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", onUp);
+    document.addEventListener("touchend", onUp, { passive: true });
+    document.addEventListener("touchcancel", onUp, { passive: true });
 
     return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("touchend", onUp);
+      document.removeEventListener("touchcancel", onUp);
     };
   }, []);
 
-  // Auto-play demo on first view
+  // Auto-play demo on first view with iOS optimization
   const [hasPlayed, setHasPlayed] = useState(false);
+  
   useEffect(() => {
     if (hasPlayed || reduceMotion) return;
     
@@ -75,12 +80,13 @@ const BeforeAfter = ({
       ([entry]) => {
         if (entry.isIntersecting && !hasPlayed) {
           setHasPlayed(true);
-          // Smooth auto-slide demo
+          // Smooth auto-slide demo with iOS optimization
           let start = null;
           const duration = 2000;
+          
           const animate = (timestamp) => {
             if (!start) start = timestamp;
-            const progress = (timestamp - start) / duration;
+            const progress = Math.min((timestamp - start) / duration, 1);
             
             if (progress < 1) {
               // Ease in-out
@@ -88,19 +94,26 @@ const BeforeAfter = ({
                 ? 2 * progress * progress
                 : 1 - Math.pow(-2 * progress + 2, 2) / 2;
               setV(50 + (eased * 50 - 25));
-              requestAnimationFrame(animate);
+              animationFrameRef.current = requestAnimationFrame(animate);
             } else {
               setV(50);
+              animationFrameRef.current = null;
             }
           };
-          requestAnimationFrame(animate);
+          
+          animationFrameRef.current = requestAnimationFrame(animate);
         }
       },
-      { threshold: 0.5 }
+      { threshold: 0.3, rootMargin: "0px" }
     );
 
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, [hasPlayed, reduceMotion]);
 
   return (
@@ -116,6 +129,10 @@ const BeforeAfter = ({
             ? "0 12px 30px rgba(0,0,0,0.15)"
             : "0 8px 20px rgba(0,0,0,0.1)",
           transition: "all 0.3s ease",
+          touchAction: "none",
+          WebkitTapHighlightColor: "transparent",
+          WebkitUserSelect: "none",
+          WebkitTouchCallout: "none",
         }}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
@@ -127,7 +144,9 @@ const BeforeAfter = ({
         onTouchStart={(e) => {
           dragging.current = true;
           setIsDragging(true);
-          setFromClientX(e.touches[0].clientX);
+          if (e.touches.length > 0) {
+            setFromClientX(e.touches[0].clientX);
+          }
         }}
       >
         {/* AFTER image (background) */}
@@ -150,6 +169,8 @@ const BeforeAfter = ({
               background: "rgba(0,0,0,0.75)",
               color: "#fff",
               backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              willChange: "transform, opacity",
             }}
             initial={reduceMotion ? {} : { opacity: 0, x: 10 }}
             animate={reduceMotion ? {} : { opacity: 1, x: 0 }}
@@ -164,6 +185,7 @@ const BeforeAfter = ({
           className="absolute inset-0"
           style={{
             clipPath: `inset(0 ${100 - v}% 0 0)`,
+            WebkitClipPath: `inset(0 ${100 - v}% 0 0)`,
           }}
         >
           <img
@@ -184,6 +206,8 @@ const BeforeAfter = ({
               background: "rgba(0,0,0,0.75)",
               color: "#fff",
               backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              willChange: "transform, opacity",
             }}
             initial={reduceMotion ? {} : { opacity: 0, x: -10 }}
             animate={reduceMotion ? {} : { opacity: v > 15 ? 1 : 0, x: 0 }}
@@ -204,6 +228,8 @@ const BeforeAfter = ({
               ? "0 0 20px rgba(232,80,2,0.8), 0 0 40px rgba(232,80,2,0.4)"
               : "0 0 10px rgba(232,80,2,0.5)",
             transition: "box-shadow 0.2s ease",
+            willChange: "transform",
+            transform: "translate3d(0, 0, 0)",
           }}
           aria-hidden="true"
         />
@@ -218,6 +244,9 @@ const BeforeAfter = ({
             color: "#fff",
             border: "3px solid rgba(255,255,255,0.9)",
             cursor: isDragging ? "grabbing" : "grab",
+            willChange: "transform",
+            transform: "translate3d(-50%, -50%, 0)",
+            WebkitTapHighlightColor: "transparent",
           }}
           aria-label={`Reveal slider: ${Math.round(v)} percent`}
           aria-valuemin={0}
@@ -234,7 +263,8 @@ const BeforeAfter = ({
             dragging.current = true;
             setIsDragging(true);
           }}
-          onTouchStart={() => {
+          onTouchStart={(e) => {
+            e.stopPropagation();
             dragging.current = true;
             setIsDragging(true);
           }}
@@ -282,6 +312,9 @@ const BeforeAfter = ({
             background: "rgba(0,0,0,0.75)",
             color: "#fff",
             backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            willChange: "transform, opacity",
+            transform: "translate3d(-50%, 0, 0)",
           }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: isDragging ? 1 : 0, y: isDragging ? 0 : 10 }}
@@ -297,6 +330,7 @@ const BeforeAfter = ({
             style={{
               background: "rgba(0,0,0,0.4)",
               backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
             }}
             initial={{ opacity: 1 }}
             animate={{ opacity: 0 }}

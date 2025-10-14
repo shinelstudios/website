@@ -1271,66 +1271,104 @@ const TrustBar = ({ items, prefersReduced }) => {
   const containerRef = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
-  const [forceRender, setForceRender] = useState(0);
+  const [isIOS, setIsIOS] = useState(false);
+  const animationFrameRef = useRef(null);
 
   // Memoize duplicated items for better performance
-  const duplicatedItems = useMemo(() => [...elements, ...elements], [elements]);
+  const duplicatedItems = useMemo(() => [...elements, ...elements, ...elements], [elements]);
 
-  // iOS-specific: Force animation restart after mount
+  // Detect iOS
   useEffect(() => {
-    if (!prefersReduced && trackRef.current) {
-      // Detect iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsIOS(iOS);
+  }, []);
+
+  // iOS-specific: Ensure animation starts properly
+  useEffect(() => {
+    if (!prefersReduced && trackRef.current && isIOS) {
+      const track = trackRef.current;
       
-      if (isIOS) {
-        // Force reflow to trigger animation on iOS
-        const track = trackRef.current;
-        const originalAnimation = track.style.animation;
+      // Multiple strategies to ensure iOS animation works
+      const startAnimation = () => {
+        // Strategy 1: Remove and re-add animation
+        track.style.animation = 'none';
+        track.offsetHeight; // Force reflow
+        track.style.animation = '';
         
-        // Brief delay to ensure iOS is ready
-        setTimeout(() => {
-          track.style.animation = 'none';
-          track.offsetHeight; // Force reflow
-          track.style.animation = originalAnimation;
-        }, 50);
-      }
+        // Strategy 2: Force GPU layer creation
+        track.style.transform = 'translate3d(0, 0, 0)';
+        track.style.webkitTransform = 'translate3d(0, 0, 0)';
+        
+        // Strategy 3: Trigger animation via class
+        track.classList.remove('animate');
+        void track.offsetWidth; // Force reflow
+        track.classList.add('animate');
+      };
+
+      // Initial start
+      const timer1 = setTimeout(startAnimation, 100);
+      
+      // Backup start (in case iOS is slow)
+      const timer2 = setTimeout(startAnimation, 500);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     }
-  }, [prefersReduced, forceRender]);
+  }, [prefersReduced, isIOS]);
 
   // Pause animation when tab is not visible (performance boost)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      setIsVisible(!document.hidden);
+      const visible = !document.hidden;
+      setIsVisible(visible);
+      
+      // On iOS, restart animation when tab becomes visible
+      if (visible && isIOS && trackRef.current) {
+        const track = trackRef.current;
+        track.style.animation = 'none';
+        track.offsetHeight;
+        track.style.animation = '';
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  }, [isIOS]);
 
-  // Enhanced touch handling for iOS
+  // Enhanced touch handling for iOS - prevents animation stop
   const handleTouchStart = (e) => {
     setIsPaused(true);
   };
 
   const handleTouchEnd = (e) => {
     setIsPaused(false);
+    
+    // Restart animation on iOS after touch
+    if (isIOS && trackRef.current) {
+      const track = trackRef.current;
+      requestAnimationFrame(() => {
+        track.style.animation = 'none';
+        track.offsetHeight;
+        track.style.animation = '';
+      });
+    }
   };
 
-  // Prevent iOS from interfering with animation
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container) {
-      const preventScroll = (e) => {
-        if (e.cancelable) {
-          e.preventDefault();
-        }
-      };
-      
-      container.addEventListener('touchmove', preventScroll, { passive: false });
-      return () => container.removeEventListener('touchmove', preventScroll);
+  // Handle mouse events
+  const handleMouseEnter = () => {
+    if (!isIOS) {
+      setIsPaused(true);
     }
-  }, []);
+  };
+
+  const handleMouseLeave = () => {
+    if (!isIOS) {
+      setIsPaused(false);
+    }
+  };
 
   return (
     <div
@@ -1341,7 +1379,8 @@ const TrustBar = ({ items, prefersReduced }) => {
         position: "relative",
         zIndex: 2,
         overflow: "hidden",
-        WebkitOverflowScrolling: "touch", // iOS smooth scrolling
+        WebkitOverflowScrolling: "touch",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       {prefersReduced ? (
@@ -1381,14 +1420,16 @@ const TrustBar = ({ items, prefersReduced }) => {
         <div
           ref={containerRef}
           className="marquee-container"
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => setIsPaused(false)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           style={{
             position: "relative",
             overflow: "hidden",
-            cursor: "pointer",
+            cursor: "default",
+            WebkitUserSelect: "none",
+            userSelect: "none",
           }}
         >
           {/* Gradient masks for smooth fade */}
@@ -1422,7 +1463,7 @@ const TrustBar = ({ items, prefersReduced }) => {
           {/* Scrolling content */}
           <div
             ref={trackRef}
-            className={`marquee-track ${isPaused ? 'paused' : ''} ${!isVisible ? 'hidden-tab' : ''}`}
+            className={`marquee-track animate ${isPaused ? 'paused' : ''} ${!isVisible ? 'hidden-tab' : ''} ${isIOS ? 'ios-track' : ''}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -1467,7 +1508,7 @@ const TrustBar = ({ items, prefersReduced }) => {
       <style>{`
         /* Base styles */
         .trustbar {
-          --marquee-duration: 40s;
+          --marquee-duration: 45s;
           user-select: none;
           -webkit-user-select: none;
           -moz-user-select: none;
@@ -1480,41 +1521,65 @@ const TrustBar = ({ items, prefersReduced }) => {
           display: none;
         }
 
-        /* iOS-optimized marquee animation */
+        /* iOS-optimized marquee animation with hardware acceleration */
         @keyframes marquee-scroll {
           0% {
             transform: translate3d(0, 0, 0);
           }
           100% {
-            transform: translate3d(-50%, 0, 0);
+            transform: translate3d(-33.333%, 0, 0);
           }
         }
 
         @-webkit-keyframes marquee-scroll {
           0% {
             -webkit-transform: translate3d(0, 0, 0);
+            transform: translate3d(0, 0, 0);
           }
           100% {
-            -webkit-transform: translate3d(-50%, 0, 0);
+            -webkit-transform: translate3d(-33.333%, 0, 0);
+            transform: translate3d(-33.333%, 0, 0);
           }
         }
 
+        /* Base track styles with GPU acceleration */
         .marquee-track {
-          animation: marquee-scroll var(--marquee-duration) linear infinite;
-          -webkit-animation: marquee-scroll var(--marquee-duration) linear infinite;
           will-change: transform;
           transform: translate3d(0, 0, 0);
           -webkit-transform: translate3d(0, 0, 0);
-          -webkit-backface-visibility: hidden;
           backface-visibility: hidden;
-          -webkit-perspective: 1000px;
+          -webkit-backface-visibility: hidden;
           perspective: 1000px;
-          -webkit-font-smoothing: subpixel-antialiased;
+          -webkit-perspective: 1000px;
+          transform-style: preserve-3d;
+          -webkit-transform-style: preserve-3d;
         }
 
+        /* Animation application */
+        .marquee-track.animate {
+          animation: marquee-scroll var(--marquee-duration) linear infinite;
+          -webkit-animation: marquee-scroll var(--marquee-duration) linear infinite;
+        }
+
+        /* iOS-specific enhancements */
+        .marquee-track.ios-track {
+          -webkit-font-smoothing: subpixel-antialiased;
+          font-smoothing: subpixel-antialiased;
+          -webkit-transform: translate3d(0, 0, 0.01px);
+          transform: translate3d(0, 0, 0.01px);
+        }
+
+        .marquee-track.ios-track.animate {
+          animation-timing-function: linear;
+          animation-fill-mode: forwards;
+          -webkit-animation-timing-function: linear;
+          -webkit-animation-fill-mode: forwards;
+        }
+
+        /* Pause states */
         .marquee-track.paused {
-          animation-play-state: paused;
-          -webkit-animation-play-state: paused;
+          animation-play-state: paused !important;
+          -webkit-animation-play-state: paused !important;
         }
 
         .marquee-track.hidden-tab {
@@ -1525,19 +1590,19 @@ const TrustBar = ({ items, prefersReduced }) => {
         /* Responsive speeds */
         @media (max-width: 640px) {
           .trustbar {
-            --marquee-duration: 30s;
+            --marquee-duration: 35s;
           }
         }
 
         @media (min-width: 641px) and (max-width: 1024px) {
           .trustbar {
-            --marquee-duration: 35s;
+            --marquee-duration: 40s;
           }
         }
 
         @media (min-width: 1025px) {
           .trustbar {
-            --marquee-duration: 45s;
+            --marquee-duration: 50s;
           }
         }
 
@@ -1549,14 +1614,16 @@ const TrustBar = ({ items, prefersReduced }) => {
           }
         }
 
-        /* Smooth rendering - Enhanced for iOS */
+        /* Container optimizations */
         .marquee-container {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           -webkit-transform: translateZ(0);
           transform: translateZ(0);
+          isolation: isolate;
         }
 
+        /* Item rendering optimization */
         .marquee-item {
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
@@ -1575,26 +1642,47 @@ const TrustBar = ({ items, prefersReduced }) => {
             -webkit-transform-style: preserve-3d;
           }
           
+          .marquee-track.animate {
+            animation-name: marquee-scroll;
+            -webkit-animation-name: marquee-scroll;
+          }
+          
           .marquee-container {
             -webkit-overflow-scrolling: touch;
             isolation: isolate;
+            contain: layout style paint;
           }
 
           /* Force GPU acceleration on iOS */
           .marquee-item {
-            -webkit-transform: translateZ(0) scale(1);
-            transform: translateZ(0) scale(1);
+            -webkit-transform: translateZ(0) scale(1.0001);
+            transform: translateZ(0) scale(1.0001);
+          }
+
+          /* Fix for iOS bounce during animation */
+          body {
+            overscroll-behavior-x: none;
           }
         }
 
-        /* iPad specific */
+        /* iPad specific optimizations */
         @media only screen 
           and (min-device-width: 768px) 
           and (max-device-width: 1024px) 
           and (-webkit-min-device-pixel-ratio: 2) {
           .marquee-track {
-            -webkit-transform: translate3d(0, 0, 0.01px);
-            transform: translate3d(0, 0, 0.01px);
+            -webkit-transform: translate3d(0, 0, 0.001px);
+            transform: translate3d(0, 0, 0.001px);
+          }
+        }
+
+        /* iPhone specific optimizations */
+        @media only screen 
+          and (max-device-width: 896px) 
+          and (-webkit-min-device-pixel-ratio: 2) {
+          .marquee-track.animate {
+            animation-duration: calc(var(--marquee-duration) * 0.9);
+            -webkit-animation-duration: calc(var(--marquee-duration) * 0.9);
           }
         }
 
@@ -1608,16 +1696,57 @@ const TrustBar = ({ items, prefersReduced }) => {
 
         /* Fix for iOS 15+ animation bug */
         @supports (hanging-punctuation: first) and (font: -apple-system-body) {
-          .marquee-track {
+          .marquee-track.animate {
             animation-timing-function: linear;
             animation-fill-mode: forwards;
+            animation-iteration-count: infinite;
+            -webkit-animation-timing-function: linear;
+            -webkit-animation-fill-mode: forwards;
+            -webkit-animation-iteration-count: infinite;
           }
         }
 
-        /* Prevent iOS bounce effect */
-        body {
-          overscroll-behavior-x: none;
-          -webkit-overflow-scrolling: auto;
+        /* Prevent iOS text selection during animation */
+        .marquee-container * {
+          -webkit-user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Force hardware acceleration on all items */
+        .marquee-track > * {
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
+        }
+
+        /* Smooth rendering across all browsers */
+        @supports (animation-timeline: scroll()) {
+          .marquee-track {
+            animation-composition: replace;
+          }
+        }
+
+        /* Fix for Safari 14+ */
+        @supports (backdrop-filter: blur(1px)) {
+          .marquee-track {
+            -webkit-backface-visibility: hidden;
+            -webkit-perspective: 1000;
+            -webkit-transform: translate3d(0, 0, 0);
+          }
+        }
+
+        /* Performance optimization for low-end devices */
+        @media (prefers-reduced-data: reduce) {
+          .trustbar {
+            --marquee-duration: 60s;
+          }
+        }
+
+        /* Dark mode optimization */
+        @media (prefers-color-scheme: dark) {
+          .marquee-item {
+            -webkit-font-smoothing: antialiased;
+          }
         }
       `}</style>
     </div>

@@ -1158,6 +1158,7 @@ const ProofSection = () => {
   const [countUp, setCountUp] = useState(0);
   const [isInView, setIsInView] = useState(false);
   const sectionRef = useRef(null);
+  const animationFrameRef = useRef(null);
 
   // Get the data for the currently active showcase
   const currentShowcase = showcases[activeIndex];
@@ -1171,7 +1172,7 @@ const ProofSection = () => {
           observer.unobserve(entry.target);
         }
       },
-      { threshold: 0.3 }
+      { threshold: 0.2, rootMargin: "0px" }
     );
 
     if (sectionRef.current) {
@@ -1181,11 +1182,14 @@ const ProofSection = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Animated counter effect: re-runs when activeIndex or isInView changes
+  // Animated counter effect with iOS optimization
   useEffect(() => {
-    if (!isInView || reduceMotion) return;
+    if (!isInView || reduceMotion) {
+      setCountUp(currentShowcase.stats.ctrIncrease);
+      return;
+    }
 
-    let start = 0;
+    const start = 0;
     const end = currentShowcase.stats.ctrIncrease;
     const duration = 1500;
     const startTime = Date.now();
@@ -1199,12 +1203,19 @@ const ProofSection = () => {
       setCountUp(current);
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
       }
     };
 
-    requestAnimationFrame(animate);
+    animationFrameRef.current = requestAnimationFrame(animate);
     
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, [activeIndex, isInView, reduceMotion, currentShowcase.stats.ctrIncrease]);
 
   // Dynamically generate the stats array based on the current showcase
@@ -1282,6 +1293,7 @@ const ProofSection = () => {
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.5 }}
+          style={{ willChange: "transform, opacity" }}
         >
           <motion.div
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5"
@@ -1290,6 +1302,7 @@ const ProofSection = () => {
               border: "1px solid var(--border)",
               background: "rgba(232,80,2,0.08)",
               boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
+              willChange: "transform",
             }}
             whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
           >
@@ -1322,8 +1335,11 @@ const ProofSection = () => {
               style={{
                 border: "1px solid var(--border)",
                 background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #ff9357)" : "var(--surface)",
+                willChange: "transform",
+                WebkitTapHighlightColor: "transparent",
               }}
               whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.95 }}
             >
               {showcase.category}
             </motion.button>
@@ -1337,6 +1353,7 @@ const ProofSection = () => {
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.6, delay: 0.1 }}
+          style={{ willChange: "transform, opacity" }}
         >
           <BeforeAfter
             before={currentShowcase.beforeImage}
@@ -1356,12 +1373,15 @@ const ProofSection = () => {
           whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.3 }}
+          style={{ willChange: "transform, opacity" }}
         >
           <motion.div
             className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl"
             style={{
               background: "linear-gradient(135deg, var(--orange), #ff9357)",
               boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
+              willChange: "transform",
+              WebkitTapHighlightColor: "transparent",
             }}
             whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
           >
@@ -1387,6 +1407,7 @@ const ProofSection = () => {
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
+          style={{ willChange: "transform, opacity" }}
         >
           {stats.map((stat, idx) => (
             <motion.div
@@ -1396,6 +1417,7 @@ const ProofSection = () => {
                 background: "var(--surface)",
                 borderColor: "var(--border)",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                willChange: "transform",
               }}
               whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
               transition={{ duration: 0.2 }}
@@ -4864,198 +4886,310 @@ const ContactCTA = ({ onBook }) => {
   );
 };
 
-/* ===================== Sticky Mobile CTA (compact, footer-aware) ===================== */
-const StickyMobileCTA = ({ onAudit, variant = "auto" }) => {
-  const [hidden, setHidden] = React.useState(true);
-  const [iconsOnly, setIconsOnly] = React.useState(false);
-  const [scrollDir, setScrollDir] = React.useState("up"); // up | down
-  const lastYRef = React.useRef(0);
+/* ===================== Smart Floating WhatsApp Button (iOS-optimized, CPU-friendly) ===================== */
+const FloatingWhatsApp = () => {
+  const [visible, setVisible] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [hideFromROI, setHideFromROI] = useState(false);
+  const lastScrollY = useRef(0);
+  const hideTimeout = useRef(null);
+  const ticking = useRef(false);
 
   const reduceMotion =
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
-  // decide layout once (icon-only for very narrow screens or explicit variant)
-  React.useEffect(() => {
-    const narrow = typeof window !== "undefined" ? window.innerWidth < 360 : false;
-    setIconsOnly(variant === "icons" || (variant === "auto" && narrow));
-  }, [variant]);
+  // Smart visibility logic - iOS optimized
+  useEffect(() => {
+    const updateVisibility = () => {
+      const currentScrollY = window.scrollY;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const windowHeight = window.innerHeight;
+      const scrollPercent = currentScrollY / (scrollHeight - windowHeight);
 
-  /* ----- show after 20% scroll & based on direction ----- */
-  React.useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || 0;
-      const h = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight
-      );
-      const past20 = y / h > 0.2;
+      // Show after 15% scroll
+      const shouldShow = scrollPercent > 0.15;
+      
+      // Hide when scrolling down, show when scrolling up
+      const scrollingUp = currentScrollY < lastScrollY.current;
+      
+      lastScrollY.current = currentScrollY;
 
-      const dir = y > lastYRef.current ? "down" : "up";
-      lastYRef.current = y;
-      setScrollDir(dir);
+      // Don't show if ROI CTA is visible
+      if (hideFromROI) {
+        setVisible(false);
+        return;
+      }
 
-      // visible only when past 20% and scrolling up
-      setHidden(!(past20 && dir === "up"));
+      if (shouldShow && scrollingUp) {
+        setVisible(true);
+        setMinimized(false);
+        
+        // Auto-minimize after 3 seconds
+        clearTimeout(hideTimeout.current);
+        hideTimeout.current = setTimeout(() => {
+          setMinimized(true);
+        }, 3000);
+      } else if (!scrollingUp && currentScrollY > lastScrollY.current) {
+        setMinimized(true);
+      }
+
+      ticking.current = false;
     };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
-  /* ----- auto-hide when near footer/contact/leadform ----- */
-  React.useEffect(() => {
-    const selectors = ["#site-footer", "#contact", "#leadform-section"];
-    const targets = selectors
-      .map((s) => document.querySelector(s))
+    const onScroll = () => {
+      if (!ticking.current) {
+        requestAnimationFrame(updateVisibility);
+        ticking.current = true;
+      }
+    };
+
+    // Initial check
+    updateVisibility();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      clearTimeout(hideTimeout.current);
+    };
+  }, [hideFromROI]);
+
+  // Hide near footer/contact/leadform
+  useEffect(() => {
+    const targets = ['#contact', '#leadform-section']
+      .map(s => document.querySelector(s))
       .filter(Boolean);
-    if (!targets.length || !("IntersectionObserver" in window)) return;
+
+    if (!targets.length || !('IntersectionObserver' in window)) return;
 
     const io = new IntersectionObserver(
       (entries) => {
-        // hide if ANY of these is in view at least a little
-        const near = entries.some((e) => e.isIntersecting);
-        if (near) setHidden(true);
+        const nearBottom = entries.some(e => e.isIntersecting && e.intersectionRatio > 0.05);
+        if (nearBottom) {
+          setVisible(false);
+        }
       },
-      { rootMargin: "0px 0px -20% 0px", threshold: [0, 0.05] }
+      { rootMargin: '0px 0px -15% 0px', threshold: [0, 0.05, 0.1] }
     );
-    targets.forEach((t) => io.observe(t));
+
+    targets.forEach(t => io.observe(t));
     return () => io.disconnect();
   }, []);
 
-  /* ----- keyboard-aware (don’t overlap inputs) ----- */
-  React.useEffect(() => {
+  // Hide when keyboard is open (iOS)
+  useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const onVV = () => {
-      const keyboardLikely = window.innerHeight - vv.height > 140;
-      if (keyboardLikely) setHidden(true);
+    
+    const onResize = () => {
+      const keyboardOpen = window.innerHeight - vv.height > 150;
+      if (keyboardOpen) {
+        setVisible(false);
+      } else if (lastScrollY.current > 100) {
+        setVisible(true);
+      }
     };
-    vv.addEventListener("resize", onVV);
-    vv.addEventListener("scroll", onVV);
+    
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
     return () => {
-      vv.removeEventListener("resize", onVV);
-      vv.removeEventListener("scroll", onVV);
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
     };
   }, []);
 
-  /* ----- listen to other UI events (Calendly, lead form) ----- */
-  React.useEffect(() => {
-    const hide = () => setHidden(true);
-    const show = () => setHidden(false);
-    window.addEventListener("leadform:visible", hide);
-    window.addEventListener("calendly:open", hide);
-    window.addEventListener("calendly:close", show);
-    window.addEventListener("ss:hideMobileCTA", hide);
-    window.addEventListener("ss:showMobileCTA", show);
+  // Listen to calendar/form/ROI events
+  useEffect(() => {
+    const hide = () => setVisible(false);
+    const show = () => setVisible(true);
+    const handleROI = (e) => setHideFromROI(e.detail?.visible || false);
+    
+    window.addEventListener('calendly:open', hide);
+    window.addEventListener('calendly:close', show);
+    window.addEventListener('roi:cta:visible', handleROI);
+    document.addEventListener('leadform:visible', (e) => {
+      if (e.detail?.visible) hide();
+      else show();
+    });
+    
     return () => {
-      window.removeEventListener("leadform:visible", hide);
-      window.removeEventListener("calendly:open", hide);
-      window.removeEventListener("calendly:close", show);
-      window.removeEventListener("ss:hideMobileCTA", hide);
-      window.removeEventListener("ss:showMobileCTA", show);
+      window.removeEventListener('calendly:open', hide);
+      window.removeEventListener('calendly:close', show);
+      window.removeEventListener('roi:cta:visible', handleROI);
     };
   }, []);
 
-  if (variant === "off") return null;
-  if (hidden) return null;
-
-  const waHref =
+  const whatsappUrl = 
     "https://wa.me/918968141585?text=" +
     encodeURIComponent("Hi Shinel Studios! I want to grow my channel. Can we talk?");
 
-  const onQuote = () => {
+  const handleClick = () => {
     try {
-      document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
       window.dispatchEvent(
-        new CustomEvent("analytics", { detail: { ev: "cta_click_quote", src: "sticky" } })
+        new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "floating" } })
       );
     } catch {}
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const onWhatsApp = () => {
-    try {
-      window.dispatchEvent(
-        new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "sticky" } })
-      );
-    } catch {}
+  const handleMouseEnter = () => {
+    setMinimized(false);
+    clearTimeout(hideTimeout.current);
   };
+
+  if (!visible) return null;
 
   return (
-    <div
-      className="md:hidden fixed left-0 right-0 z-40 px-3"
-      style={{
-        bottom: "max(10px, env(safe-area-inset-bottom, 10px))",
-      }}
-      role="region"
-      aria-label="Quick contact options"
-    >
-      <div
-        className="mx-auto w-full max-w-sm flex items-center justify-center gap-2 rounded-2xl p-1.5 shadow-xl"
+    <AnimatePresence>
+      <motion.div
+        className="md:hidden fixed z-50"
         style={{
-          border: "1px solid var(--border)",
-          background: "color-mix(in oklab, var(--surface) 85%, transparent)",
-          backdropFilter: "blur(6px)",
-          boxShadow: "0 8px 24px rgba(0,0,0,.25)",
-          transition: "transform .2s ease, opacity .2s ease",
-          transform: reduceMotion ? "none" : "translateY(0)",
-          opacity: 0.98,
+          right: 'max(16px, env(safe-area-inset-right, 16px))',
+          bottom: 'max(20px, calc(env(safe-area-inset-bottom, 16px) + 4px))',
+          willChange: 'transform, opacity',
+          transform: 'translate3d(0, 0, 0)',
+          WebkitTransform: 'translate3d(0, 0, 0)',
+        }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ 
+          scale: minimized ? 0.9 : 1, 
+          opacity: 1,
+        }}
+        exit={{ scale: 0, opacity: 0 }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 300, 
+          damping: 25,
+          mass: 0.8,
         }}
       >
-        {/* WhatsApp */}
-        <a
-          href={waHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={onWhatsApp}
-          className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 rounded-xl font-semibold outline-none"
+        <motion.button
+          onClick={handleClick}
+          onMouseEnter={handleMouseEnter}
+          onTouchStart={handleMouseEnter}
+          className="relative rounded-full shadow-2xl"
           style={{
-            background: "linear-gradient(90deg, var(--orange), #ff9357)",
-            color: "#fff",
+            background: 'linear-gradient(135deg, #25D366, #128C7E)',
+            width: minimized ? '56px' : '60px',
+            height: minimized ? '56px' : '60px',
+            willChange: 'transform',
+            transform: 'translate3d(0, 0, 0)',
+            WebkitTransform: 'translate3d(0, 0, 0)',
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
+            border: '3px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 8px 24px rgba(37, 211, 102, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2)',
           }}
+          whileHover={!reduceMotion ? { scale: 1.08 } : {}}
+          whileTap={{ scale: 0.92 }}
           aria-label="Chat on WhatsApp"
         >
-          <MessageCircle size={18} />
-          {!iconsOnly && <span className="truncate">WhatsApp</span>}
-        </a>
-
-        {/* Get Quote */}
-        <button
-          type="button"
-          onClick={onQuote}
-          className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 rounded-xl font-semibold"
-          style={{
-            border: "2px solid var(--orange)",
-            color: "var(--orange)",
-            background: "transparent",
-          }}
-          aria-label="Get a quick quote"
-        >
-          <FileText size={18} />
-          {!iconsOnly && <span className="truncate">Get Quote</span>}
-        </button>
-      </div>
-
-      {/* tiny pull-hint when labels are hidden */}
-      {iconsOnly && (
-        <div className="mt-1 grid place-items-center">
-          <div
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
-            style={{
-              color: "var(--text-muted)",
-              border: "1px solid var(--border)",
-              background: "var(--surface-alt)",
-            }}
-          >
-            <ChevronUp size={12} />
-            <span>More options above</span>
+          {/* WhatsApp Icon */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg 
+              width={minimized ? "26" : "30"} 
+              height={minimized ? "26" : "30"} 
+              viewBox="0 0 24 24" 
+              fill="none"
+              style={{ 
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: 'translate3d(0, 0, 0)',
+                WebkitTransform: 'translate3d(0, 0, 0)',
+              }}
+            >
+              <path
+                d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"
+                fill="white"
+              />
+            </svg>
           </div>
-        </div>
-      )}
-    </div>
+
+          {/* Pulse ring animation - CPU friendly */}
+          {!reduceMotion && !minimized && (
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{
+                border: '2px solid #25D366',
+                transform: 'translate3d(0, 0, 0)',
+                WebkitTransform: 'translate3d(0, 0, 0)',
+              }}
+              initial={{ scale: 1, opacity: 0.7 }}
+              animate={{ scale: 1.5, opacity: 0 }}
+              transition={{ 
+                duration: 2.5, 
+                repeat: Infinity,
+                ease: "easeOut",
+                repeatDelay: 0.5,
+              }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Notification badge */}
+          {!minimized && (
+            <motion.div
+              className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
+              style={{
+                background: '#ff3b30',
+                color: 'white',
+                boxShadow: '0 2px 8px rgba(255, 59, 48, 0.5)',
+                border: '2px solid white',
+              }}
+              initial={{ scale: 0 }}
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ 
+                duration: 2,
+                repeat: Infinity,
+                repeatDelay: 3,
+              }}
+            >
+              1
+            </motion.div>
+          )}
+        </motion.button>
+
+        {/* Tooltip - only show when expanded */}
+        <AnimatePresence>
+          {!minimized && (
+            <motion.div
+              className="absolute right-full mr-3 top-1/2 -translate-y-1/2 whitespace-nowrap pointer-events-none"
+              initial={{ opacity: 0, x: 10, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 10, scale: 0.9 }}
+              transition={{ 
+                duration: 0.2,
+                ease: "easeOut",
+              }}
+            >
+              <div
+                className="px-3 py-2 rounded-lg text-xs font-semibold shadow-xl"
+                style={{
+                  background: 'rgba(0, 0, 0, 0.9)',
+                  color: 'white',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+              >
+                💬 Quick chat?
+                {/* Arrow */}
+                <div
+                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full"
+                  style={{
+                    width: 0,
+                    height: 0,
+                    borderTop: '5px solid transparent',
+                    borderBottom: '5px solid transparent',
+                    borderLeft: '5px solid rgba(0, 0, 0, 0.9)',
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </AnimatePresence>
   );
 };
-
 
 /* ===================== SEO Schema (Organization + WebSite + Service + FAQPage) ===================== */
 const SeoSchema = () => {
@@ -5179,10 +5313,141 @@ export default function ShinelStudiosHomepage() {
       {/* 12) Final CTA */}
       <ContactCTA />
 
-      {/* Utilities / overlays */}
-      <StickyMobileCTA onAudit={() => setShowCalendly(true)} />
+      {/* Single smart floating WhatsApp button - replaces old conflicting CTAs */}
+      <FloatingWhatsApp />
       <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
       <ExitIntentModal pdfUrl="/lead/thumbnail-checklist.pdf" />
+
+
+      {/* iOS and Performance Optimizations */}
+<style>{`
+  /* iOS-specific optimizations */
+  @supports (-webkit-touch-callout: none) {
+    /* Prevent iOS bounce/rubber-band on body */
+    body {
+      overscroll-behavior-y: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Hardware acceleration for floating elements */
+    .fixed, 
+    [class*="fixed"],
+    [style*="position: fixed"] {
+      -webkit-transform: translate3d(0, 0, 0);
+      transform: translate3d(0, 0, 0);
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      -webkit-perspective: 1000px;
+      perspective: 1000px;
+    }
+
+    /* Smooth scrolling on iOS */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Fix for iOS button tap */
+    button, 
+    a,
+    [role="button"] {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Prevent text selection during interactions */
+    [draggable],
+    .no-select {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Fix for iOS input zoom */
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+
+    /* Better touch scrolling */
+    .overflow-auto,
+    .overflow-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+  }
+
+  /* CPU-friendly animations - only transform and opacity */
+  @media (prefers-reduced-motion: no-preference) {
+    * {
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Optimize animated elements */
+    [class*="motion-"],
+    [class*="animate-"],
+    .animated {
+      will-change: transform, opacity;
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+  }
+
+  /* Stop all animations when tab is hidden (performance) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Optimize for 60fps animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 20px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1) translate3d(0, 0, 0);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.05) translate3d(0, 0, 0);
+      opacity: 0.9;
+    }
+  }
+
+  /* Fix for Safari safe area */
+  @supports (padding: max(0px)) {
+    .fixed-bottom {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+  }
+
+  /* Prevent layout shift from scrollbar */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  /* Smooth momentum scrolling for iOS */
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+`}</style>
     </div>
   );
 }
