@@ -8,22 +8,22 @@ import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 
 /* Pages (lazy) */
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
-const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
-const GFX = React.lazy(() => import("./components/GFX.jsx"));
-const Thumbnails = React.lazy(() => import("./components/Thumbnails.jsx"));
-const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
-const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
-const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
-const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
-const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx"));
-const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
+const VideoEditing       = React.lazy(() => import("./components/VideoEditing.jsx"));
+const GFX                = React.lazy(() => import("./components/GFX.jsx"));
+const Thumbnails         = React.lazy(() => import("./components/Thumbnails.jsx"));
+const Shorts             = React.lazy(() => import("./components/Shorts.jsx"));
+const LoginPage          = React.lazy(() => import("./components/LoginPage.jsx"));
+const ProtectedRoute     = React.lazy(() => import("./components/ProtectedRoute.jsx"));
+const AIStudioPage       = React.lazy(() => import("./components/AIStudioPage.jsx"));
+const AdminUsersPage     = React.lazy(() => import("./components/AdminUsersPage.jsx"));
+const LiveTemplates      = React.lazy(() => import("./components/LiveTemplates.jsx"));
 
 /* Tools (lazy) */
-const ToolsIndex = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
-const SrtTool = React.lazy(() => import("./components/tools/SrtTool.jsx"));
-const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
-const ThumbnailIdeation = React.lazy(() => import("./components/tools/ThumbnailIdeation.jsx"));
-const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
+const ToolsIndex         = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
+const SrtTool            = React.lazy(() => import("./components/tools/SrtTool.jsx"));
+const SeoTool            = React.lazy(() => import("./components/tools/SeoTool.jsx"));
+const ThumbnailIdeation  = React.lazy(() => import("./components/tools/ThumbnailIdeation.jsx"));
+const CustomAIs          = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 
 /* Smooth hash scrolling with header offset */
 function ScrollToHash() {
@@ -122,7 +122,8 @@ function Layout() {
       <main style={{ paddingTop: "var(--header-h, 76px)", transition: "padding-top .2s ease" }}>
         <Outlet />
       </main>
-      <SiteFooter />
+      {/* Pass isDark so footer logo/theme matches header */}
+      <SiteFooter isDark={isDark} />
     </>
   );
 }
@@ -157,18 +158,27 @@ export default function App() {
     <React.Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route element={<Layout />}>
+          {/* Home */}
           <Route index element={<ShinelStudiosHomepage />} />
+
+          {/* Existing pages */}
           <Route path="/video-editing" element={<VideoEditing />} />
           <Route path="/gfx" element={<GFX />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
-          
-          {/* SEO-friendly route for gaming thumbnail templates */}
+
+          {/* SEO-friendly page */}
           <Route path="/gaming-thumbnail-templates" element={<LiveTemplates />} />
-          
-          {/* Redirect old route to new SEO-friendly route */}
+          {/* Legacy redirect */}
           <Route path="/live-templates" element={<Navigate to="/gaming-thumbnail-templates" replace />} />
 
+          {/* NEW: routes used by header menu */}
+          <Route path="/gfx/thumbnails" element={<Thumbnails />} />
+          <Route path="/gfx/branding" element={<GFX />} />
+          <Route path="/videos/shorts" element={<Shorts />} />
+          <Route path="/videos/long" element={<VideoEditing />} />
+
+          {/* Auth */}
           <Route
             path="/login"
             element={
@@ -177,8 +187,9 @@ export default function App() {
               </RedirectIfAuthed>
             }
           />
+          <Route path="/logout" element={<Logout />} />
 
-          {/* Studio hub */}
+          {/* Studio hub (protected) */}
           <Route
             path="/studio"
             element={
@@ -197,8 +208,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          
-          {/* AutoSRT Tool - All authenticated users */}
           <Route
             path="/tools/srt"
             element={
@@ -207,7 +216,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          
           <Route
             path="/tools/seo"
             element={
@@ -233,7 +241,7 @@ export default function App() {
             }
           />
 
-          {/* Admin users */}
+          {/* Admin */}
           <Route
             path="/admin/users"
             element={
@@ -243,7 +251,7 @@ export default function App() {
             }
           />
 
-          <Route path="/logout" element={<Logout />} />
+          {/* Legal & 404 */}
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route path="*" element={<Navigate to="/" replace />} />

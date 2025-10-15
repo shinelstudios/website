@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sun, Moon, Menu, X, ChevronDown, Lock, Wand2, Search, Languages,
+  Sun, Moon, Menu, X, ChevronDown, ChevronRight, Lock, Wand2, Search, Languages,
   Lightbulb, Brain, UserCog, Bell, Settings, LogOut, User,
   Shield, Zap, ArrowRight, ExternalLink, Home, Briefcase, Mail,
-  BarChart3
+  BarChart3, Video
 } from "lucide-react";
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
@@ -199,6 +199,10 @@ const animations = {
 const SiteHeader = ({ isDark, setIsDark }) => {
   const [auth, setAuth] = useState(getAuthState());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // NEW: nested "Work" submenu toggles (desktop)
+  const [workGfxOpen, setWorkGfxOpen] = useState(false);
+  const [workVidOpen, setWorkVidOpen] = useState(false);
+
   const [workOpen, setWorkOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -521,7 +525,200 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             <NavLink label="Home" to="/" icon={Home} />
             <NavLink label="Services" to="/#services" icon={Briefcase} />
             {/* Work now has an icon (BarChart3) like others */}
-            <NavLink label="Work" to="/#work" icon={BarChart3} />
+            {/* Work dropdown (desktop) */}
+<div className="relative" ref={workRef}>
+  <motion.button
+    type="button"
+    className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+    aria-expanded={workOpen}
+    aria-haspopup="menu"
+    aria-controls="work-menu"
+    onClick={() => {
+      setWorkOpen(v => !v);
+      if (!workOpen) { setWorkGfxOpen(false); setWorkVidOpen(false); }
+    }}
+    initial={false}
+    style={{
+      color: hovered === "Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)",
+    }}
+    whileHover={prefersReduced ? {} : { y: -1 }}
+    transition={{ duration: 0.22 }}
+    onMouseEnter={() => setHovered("Work")}
+    onMouseLeave={() => setHovered(null)}
+  >
+    <BarChart3 size={16} />
+    <span className="nav-label">Work</span>
+    <ChevronDown
+      size={16}
+      className={`ml-1 transition-transform ${workOpen ? "rotate-180" : ""}`}
+    />
+  </motion.button>
+
+  <AnimatePresence>
+    {workOpen && (
+      <motion.div
+        id="work-menu"
+        role="menu"
+        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
+        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
+        className="absolute left-0 mt-3 w-[420px] rounded-2xl shadow-xl overflow-hidden"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          zIndex: 4,
+        }}
+      >
+        {/* Header */}
+        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+          <div className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--text-muted)" }}>
+            Explore our work
+          </div>
+        </div>
+
+        {/* Two columns: GFX & Videos */}
+        <div className="grid grid-cols-2 gap-0">
+          {/* GFX column */}
+          <div className="p-3 border-r" style={{ borderColor: "var(--border)" }}>
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+              style={{ color: "var(--text)" }}
+              onClick={() => {
+                setWorkGfxOpen(v => !v);
+                if (!workGfxOpen) setWorkVidOpen(false);
+              }}
+              aria-expanded={workGfxOpen}
+              aria-controls="work-gfx-submenu"
+            >
+              <span className="flex items-center gap-2">
+                <Wand2 size={16} style={{ color: "var(--orange)" }} />
+                GFX
+              </span>
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${workGfxOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            <AnimatePresence initial={false}>
+              {workGfxOpen && (
+                <motion.div
+                  id="work-gfx-submenu"
+                  role="menu"
+                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  className="overflow-hidden mt-2"
+                >
+                  <ul className="space-y-1">
+                    <li>
+                      <Link
+                        to="/gfx/thumbnails"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)" }}
+                        onClick={() => setWorkOpen(false)}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span>Thumbnails</span>
+                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/gfx/branding"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)" }}
+                        onClick={() => setWorkOpen(false)}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span>Logo / Banner / Overlays (3-in-1)</span>
+                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                    </li>
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Videos column */}
+          <div className="p-3">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+              style={{ color: "var(--text)" }}
+              onClick={() => {
+                setWorkVidOpen(v => !v);
+                if (!workVidOpen) setWorkGfxOpen(false);
+              }}
+              aria-expanded={workVidOpen}
+              aria-controls="work-vid-submenu"
+            >
+              <span className="flex items-center gap-2">
+                <Video size={16} style={{ color: "var(--orange)" }} />
+                Videos
+              </span>
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${workVidOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            <AnimatePresence initial={false}>
+              {workVidOpen && (
+                <motion.div
+                  id="work-vid-submenu"
+                  role="menu"
+                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  className="overflow-hidden mt-2"
+                >
+                  <ul className="space-y-1">
+                    <li>
+                      <Link
+                        to="/videos/shorts"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)" }}
+                        onClick={() => setWorkOpen(false)}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span>Shorts</span>
+                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/videos/long"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)" }}
+                        onClick={() => setWorkOpen(false)}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span>Long Videos</span>
+                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                    </li>
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Footer hint */}
+        <div className="px-4 py-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+          Tip: Use <kbd className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)" }}>Esc</kbd> to close menus.
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
+
             <NavLink label="Contact" to="/#contact" icon={Mail} />
 
             {/* Tools dropdown with search */}
@@ -963,242 +1160,189 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         </nav>
 
         {/* mobile menu */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div
-              id="mobile-menu"
-              ref={menuPanelRef}
-              initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
-              animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
-              exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
-              className="md:hidden"
+<AnimatePresence>
+  {isMenuOpen && (
+    <motion.div
+      id="mobile-menu"
+      ref={menuPanelRef}
+      initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+      animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+      exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+      className="md:hidden"
+      style={{
+        background: "var(--surface)",
+        borderTop: "1px solid var(--border)",
+        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        position: "relative",
+        zIndex: 3,
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Main menu"
+    >
+      <nav className="px-4 py-3">
+        {/* Search in mobile */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search tools..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
               style={{
-                background: "var(--surface)",
-                borderTop: "1px solid var(--border)",
-                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-                position: "relative",
-                zIndex: 3,
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
               }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Main menu"
+            />
+          </div>
+        </div>
+
+        {/* Main nav links */}
+        <ul className="flex flex-col gap-2">
+          {/* Home & Services */}
+          <li>
+            <Link
+              to="/"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+              style={{
+                color: "var(--text)",
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+              }}
             >
-              <nav className="px-4 py-3">
-                {/* Search in mobile */}
-                <div className="mb-4">
-                  <div className="relative">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      placeholder="Search tools..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        background: "var(--surface-alt)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text)",
-                      }}
-                    />
-                  </div>
-                </div>
+              <Home size={20} style={{ color: "var(--orange)" }} /> Home
+            </Link>
+          </li>
 
-                {/* Main nav links */}
-                <ul className="flex flex-col gap-2">
-                  {[
-                    { label: "Home", to: "/", icon: Home },
-                    { label: "Services", to: "/#services", icon: Briefcase },
-                    { label: "Work", to: "/#work", icon: BarChart3 },
-                    { label: "Contact", to: "/#contact", icon: Mail }
-                  ].map((item) => (
-                    <li key={item.label}>
+          <li>
+            <Link
+              to="/#services"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+              style={{
+                color: "var(--text)",
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <Briefcase size={20} style={{ color: "var(--orange)" }} /> Services
+            </Link>
+          </li>
+
+          {/* Work accordion with submenus */}
+          <li>
+            <div
+              className="flex items-center justify-between w-full rounded-xl px-4 py-3 text-base font-medium"
+              style={{
+                color: "var(--text)",
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <BarChart3 size={20} style={{ color: "var(--orange)" }} />
+                Work
+              </div>
+              <button
+                type="button"
+                aria-expanded={workOpen}
+                aria-controls="mobile-work-accordion"
+                className="p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                onClick={() => setWorkOpen(v => !v)}
+              >
+                <ChevronDown size={18} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {workOpen && (
+                <motion.div
+                  id="mobile-work-accordion"
+                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                  className="overflow-hidden mt-2 ml-2"
+                >
+                  {/* GFX subgroup */}
+                  <div className="mb-2">
+                    <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+                      GFX
+                    </div>
+                    <div className="grid gap-2">
                       <Link
-                        to={item.to}
+                        to="/gfx/thumbnails"
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
+                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
-                        {item.icon && <item.icon size={20} style={{ color: "var(--orange)" }} />}
-                        {item.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Tools quick links */}
-                <div className="mt-4">
-                  <div
-                    className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-between"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    <span>{auth.isAuthed ? `Your tools • ${role}` : "AI Tools (login)"}</span>
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery("")}
-                        className="text-xs normal-case underline"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(searchQuery ? filteredTools : toolsCatalog).slice(0, 6).map((t) => {
-                      const Icon = t.icon;
-                      const allowed = auth.isAuthed && t.roles.includes(role);
-                      const to = allowed ? t.path : "/login?next=/studio";
-                      return (
-                        <Link
-                          key={t.name}
-                          to={to}
-                          onClick={() => setIsMenuOpen(false)}
-                          className="flex flex-col items-center gap-2 rounded-xl px-3 py-4 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                          style={{
-                            color: "var(--text)",
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)",
-                            opacity: auth.isAuthed ? (allowed ? 1 : 0.6) : 1,
-                          }}
-                        >
-                          <div className="relative">
-                            {Icon && <Icon size={24} style={{ color: "var(--orange)" }} />}
-                            {!allowed && (
-                              <Lock size={10} className="absolute -top-1 -right-1 opacity-70" />
-                            )}
-                          </div>
-                          <span className="text-xs text-center line-clamp-2">{t.name}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Notifications in mobile */}
-                {auth.isAuthed && notifications.length > 0 && (
-                  <div className="mt-4">
-                    <div
-                      className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider flex items-center justify-between"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <span>Notifications ({unreadCount})</span>
-                      <button
-                        onClick={clearAll}
-                        className="text-xs normal-case underline"
-                      >
-                        Clear all
-                      </button>
-                    </div>
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {notifications.slice(0, 3).map(n => (
-                        <div
-                          key={n.id}
-                          onClick={() => markAsRead(n.id)}
-                          className="px-3 py-2 rounded-lg text-sm"
-                          style={{
-                            background: n.read ? "var(--surface-alt)" : "rgba(232,80,2,0.08)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text)",
-                          }}
-                        >
-                          {n.message}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* auth summary / actions */}
-                {!auth.isAuthed ? (
-                  <div className="mt-6 flex flex-col gap-2">
-                    {/* Sign Up removed as requested */}
-                    <Link
-                      to="/login"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block w-full rounded-full px-5 py-3 text-center font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        color: "var(--text)",
-                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                      }}
-                    >
-                      Login
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="mt-6 space-y-3">
-                    <div className="flex items-center justify-between px-1 text-sm" style={{ color: "var(--text)" }}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className="h-8 w-8 rounded-full grid place-items-center text-xs font-bold"
-                          style={{ background: "var(--orange)", color: "#fff" }}
-                        >
-                          {initials}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{auth.firstName || auth.email || "Signed in"}</div>
-                          {role && (
-                            <span
-                              className="inline-block text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0"
-                              style={{ background: "var(--border)", color: "var(--text-muted)" }}
-                            >
-                              {role}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Quick actions */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <Link
-                        to="/profile"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        <User size={16} />
-                        Profile
+                        Thumbnails <ArrowRight size={14} style={{ color: "var(--orange)" }} />
                       </Link>
                       <Link
-                        to="/settings"
+                        to="/gfx/branding"
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium"
-                        style={{
-                          color: "var(--text)",
-                          background: "var(--surface-alt)",
-                          border: "1px solid var(--border)",
-                        }}
+                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
-                        <Settings size={16} />
-                        Settings
+                        Logo / Banner / Overlays (3-in-1) <ArrowRight size={14} style={{ color: "var(--orange)" }} />
                       </Link>
                     </div>
-
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg text-sm font-semibold"
-                      style={{
-                        color: "var(--text)",
-                        background: "var(--surface-alt)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <LogOut size={16} />
-                      Logout
-                    </button>
                   </div>
-                )}
-              </nav>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+                  {/* Videos subgroup */}
+                  <div className="mb-1">
+                    <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+                      Videos
+                    </div>
+                    <div className="grid gap-2">
+                      <Link
+                        to="/videos/shorts"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                      >
+                        Shorts <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                      <Link
+                        to="/videos/long"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                      >
+                        Long Videos <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </li>
+
+          {/* Contact */}
+          <li>
+            <Link
+              to="/#contact"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+              style={{
+                color: "var(--text)",
+                background: "var(--surface-alt)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <Mail size={20} style={{ color: "var(--orange)" }} /> Contact
+            </Link>
+          </li>
+        </ul>
+      </nav>
+    </motion.div>
+  )}
+</AnimatePresence>
+
 
         <TrustBar items={trustItems} prefersReduced={prefersReduced} />
       </motion.header>
