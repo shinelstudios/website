@@ -370,15 +370,16 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
   }, [workOpen, toolsOpen, userMenuOpen, notifOpen]);
 
-  // lock scroll when mobile menu open
-  useEffect(() => {
-    const lock = (v) => {
-      document.documentElement.style.overflow = v ? "hidden" : "";
-      document.body.style.overscrollBehavior = v ? "contain" : "";
-    };
-    lock(isMenuOpen);
-    return () => lock(false);
-  }, [isMenuOpen]);
+// lock scroll when mobile menu open
+useEffect(() => {
+  const lock = (v) => {
+    document.documentElement.style.overflow = v ? "hidden" : "";
+    document.body.style.overscrollBehavior = v ? "contain" : "";
+    document.body.style.touchAction = v ? "none" : ""; // <-- keep this line
+  };
+  lock(isMenuOpen);
+  return () => lock(false);
+}, [isMenuOpen]);
 
   const role = (auth.role || "client").toLowerCase();
   const availableTools = toolsCatalog.filter((t) => t.roles.includes(role));
@@ -397,6 +398,14 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     setIsMenuOpen(false);
     navigate("/");
   }, [navigate]);
+
+  // helper: close mobile menu and navigate programmatically (fixes some devices not following <Link>)
+const go = useCallback((to) => {
+  setIsMenuOpen(false);
+  // small timeout ensures the sheet unmounts before route change, avoiding blocked clicks on some Android/iOS
+  setTimeout(() => navigate(to), 0);
+}, [navigate]);
+
 
   // NEW: Quick search filter
   const filteredTools = useMemo(() => {
@@ -1162,29 +1171,37 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         {/* mobile menu */}
 <AnimatePresence>
   {isMenuOpen && (
-    <motion.div
+    <motion.aside
       id="mobile-menu"
       ref={menuPanelRef}
-      initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
-      animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
-      exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
-      className="md:hidden"
+      initial={prefersReduced ? {} : { opacity: 0, y: -8 }}
+      animate={prefersReduced ? {} : { opacity: 1, y: 0 }}
+      exit={prefersReduced ? {} : { opacity: 0, y: -8 }}
+      className="md:hidden fixed left-0 right-0"
       style={{
+        top: `var(--header-h, ${headerH}px)`,
+        height: "calc(100dvh - var(--header-h, 76px))",
         background: "var(--surface)",
         borderTop: "1px solid var(--border)",
+        zIndex: 60,
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
         paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-        position: "relative",
-        zIndex: 3,
       }}
       role="dialog"
       aria-modal="true"
       aria-label="Main menu"
     >
       <nav className="px-4 py-3">
-        {/* Search in mobile */}
+        {/* Search */}
         <div className="mb-4">
           <div className="relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2"
+              style={{ color: "var(--text-muted)" }}
+            />
             <input
               ref={searchInputRef}
               type="text"
@@ -1203,61 +1220,42 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
         {/* Main nav links */}
         <ul className="flex flex-col gap-2">
-          {/* Home & Services */}
           <li>
-            <Link
-              to="/"
-              onClick={() => setIsMenuOpen(false)}
+            <button
+              onClick={() => go("/")}
               className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{
-                color: "var(--text)",
-                background: "var(--surface-alt)",
-                border: "1px solid var(--border)",
-              }}
+              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
             >
               <Home size={20} style={{ color: "var(--orange)" }} /> Home
-            </Link>
+            </button>
           </li>
 
           <li>
-            <Link
-              to="/#services"
-              onClick={() => setIsMenuOpen(false)}
+            <button
+              onClick={() => go("/#services")}
               className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{
-                color: "var(--text)",
-                background: "var(--surface-alt)",
-                border: "1px solid var(--border)",
-              }}
+              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
             >
               <Briefcase size={20} style={{ color: "var(--orange)" }} /> Services
-            </Link>
+            </button>
           </li>
 
-          {/* Work accordion with submenus */}
+          {/* Work accordion — whole row toggles */}
           <li>
-            <div
+            <button
+              type="button"
               className="flex items-center justify-between w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{
-                color: "var(--text)",
-                background: "var(--surface-alt)",
-                border: "1px solid var(--border)",
-              }}
+              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+              aria-expanded={workOpen}
+              aria-controls="mobile-work-accordion"
+              onClick={() => setWorkOpen(v => !v)}
             >
-              <div className="flex items-center gap-3">
+              <span className="flex items-center gap-3">
                 <BarChart3 size={20} style={{ color: "var(--orange)" }} />
                 Work
-              </div>
-              <button
-                type="button"
-                aria-expanded={workOpen}
-                aria-controls="mobile-work-accordion"
-                className="p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                onClick={() => setWorkOpen(v => !v)}
-              >
-                <ChevronDown size={18} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
-              </button>
-            </div>
+              </span>
+              <ChevronDown size={18} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
+            </button>
 
             <AnimatePresence initial={false}>
               {workOpen && (
@@ -1274,22 +1272,20 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       GFX
                     </div>
                     <div className="grid gap-2">
-                      <Link
-                        to="/gfx/thumbnails"
-                        onClick={() => setIsMenuOpen(false)}
+                      <button
+                        onClick={() => go("/gfx/thumbnails")}
                         className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         Thumbnails <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                      <Link
-                        to="/gfx/branding"
-                        onClick={() => setIsMenuOpen(false)}
+                      </button>
+                      <button
+                        onClick={() => go("/gfx/branding")}
                         className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         Logo / Banner / Overlays (3-in-1) <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
+                      </button>
                     </div>
                   </div>
 
@@ -1299,22 +1295,20 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       Videos
                     </div>
                     <div className="grid gap-2">
-                      <Link
-                        to="/videos/shorts"
-                        onClick={() => setIsMenuOpen(false)}
+                      <button
+                        onClick={() => go("/videos/shorts")}
                         className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         Shorts <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                      <Link
-                        to="/videos/long"
-                        onClick={() => setIsMenuOpen(false)}
+                      </button>
+                      <button
+                        onClick={() => go("/videos/long")}
                         className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                       >
                         Long Videos <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -1322,26 +1316,22 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             </AnimatePresence>
           </li>
 
-          {/* Contact */}
           <li>
-            <Link
-              to="/#contact"
-              onClick={() => setIsMenuOpen(false)}
+            <button
+              onClick={() => go("/#contact")}
               className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{
-                color: "var(--text)",
-                background: "var(--surface-alt)",
-                border: "1px solid var(--border)",
-              }}
+              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
             >
               <Mail size={20} style={{ color: "var(--orange)" }} /> Contact
-            </Link>
+            </button>
           </li>
         </ul>
       </nav>
-    </motion.div>
+    </motion.aside>
   )}
 </AnimatePresence>
+
+
 
 
         <TrustBar items={trustItems} prefersReduced={prefersReduced} />

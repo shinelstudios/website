@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
@@ -25,31 +26,44 @@ const SeoTool            = React.lazy(() => import("./components/tools/SeoTool.j
 const ThumbnailIdeation  = React.lazy(() => import("./components/tools/ThumbnailIdeation.jsx"));
 const CustomAIs          = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 
-/* Smooth hash scrolling with header offset */
+/* ---------------------- Smooth Hash Scroll (robust) ---------------------- */
 function ScrollToHash() {
-  const location = useLocation();
+  const { pathname, hash } = useLocation();
+
   React.useEffect(() => {
-    const MAX_TRIES = 10, INTERVAL = 50;
-    let tries = 0;
-    const timer = setInterval(() => {
-      const hash = (location.hash || "").replace("#", "");
-      const el = hash ? document.getElementById(hash) : null;
-      const headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 76;
-      if (el) {
-        const top = window.scrollY + el.getBoundingClientRect().top - (headerH + 8);
-        window.scrollTo({ top, behavior: "smooth" });
-        clearInterval(timer);
-      } else if (++tries >= MAX_TRIES) {
-        if (location.pathname === "/" && !hash) window.scrollTo({ top: 0, behavior: "smooth" });
-        clearInterval(timer);
+    const scrollOnce = () => {
+      if (hash) {
+        const id = hash.replace("#", "");
+        const el = document.getElementById(id);
+        if (el) {
+          const headerH =
+            parseInt(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 76;
+          const top = window.scrollY + el.getBoundingClientRect().top - (headerH + 8);
+          window.scrollTo({ top, behavior: "smooth" });
+          return true;
+        }
+        return false;
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return true;
       }
-    }, INTERVAL);
+    };
+
+    // Retry a few times to handle async/lazy content
+    let tries = 0;
+    const MAX_TRIES = 20;
+    const timer = setInterval(() => {
+      const done = scrollOnce();
+      if (done || ++tries >= MAX_TRIES) clearInterval(timer);
+    }, 80);
+
     return () => clearInterval(timer);
-  }, [location.pathname, location.hash]);
+  }, [pathname, hash]);
+
   return null;
 }
 
-/* Simple legal pages */
+/* ---------------------- Legal Pages ---------------------- */
 function LegalPage({ kind = "privacy" }) {
   React.useEffect(() => { window.scrollTo({ top: 0, behavior: "auto" }); }, []);
   const isPrivacy = kind === "privacy";
@@ -92,7 +106,7 @@ function LegalPage({ kind = "privacy" }) {
   );
 }
 
-/* Global layout */
+/* ---------------------- Layout with Dynamic Header ---------------------- */
 function Layout() {
   const [isDark, setIsDark] = React.useState(() => {
     try { const saved = localStorage.getItem("theme"); if (saved) return saved === "dark"; } catch {}
@@ -100,16 +114,38 @@ function Layout() {
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
 
+  // Measure header height for proper offset on all pages (incl. mobile)
+  React.useEffect(() => {
+    const header = document.querySelector("header");
+    const updateHeaderHeight = () => {
+      if (header) {
+        const h = Math.round(header.getBoundingClientRect().height) || 76;
+        document.documentElement.style.setProperty("--header-h", `${h}px`);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => window.removeEventListener("resize", updateHeaderHeight);
+  }, []);
+
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
       try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
       let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
-      if (!metaTheme) { metaTheme = document.createElement("meta"); metaTheme.setAttribute("name", "theme-color"); document.head.appendChild(metaTheme); }
-      metaTheme.setAttribute("content", isDark ? "#0F0F0F" : "#ffffff");
+      if (!metaTheme) {
+        metaTheme = document.createElement("meta");
+        metaTheme.setAttribute("name", "theme-color");
+        document.head.appendChild(metaTheme);
+      }
+      metaTheme.setAttribute("content", isDark ? "#0F0F0F" : "#FFFFFF");
+
       const lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
       const darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
-      if (lightIcon && darkIcon) { lightIcon.disabled = !!isDark; darkIcon.disabled = !isDark; }
+      if (lightIcon && darkIcon) {
+        lightIcon.disabled = !!isDark;
+        darkIcon.disabled = !isDark;
+      }
       const fallback = document.getElementById("favicon");
       if (fallback) fallback.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
     });
@@ -119,16 +155,20 @@ function Layout() {
     <>
       <SiteHeader isDark={isDark} setIsDark={setIsDark} />
       <ScrollToHash />
-      <main style={{ paddingTop: "var(--header-h, 76px)", transition: "padding-top .2s ease" }}>
+      <main
+        style={{
+          paddingTop: "var(--header-h, 76px)",
+          transition: "padding-top .25s ease",
+        }}
+      >
         <Outlet />
       </main>
-      {/* Pass isDark so footer logo/theme matches header */}
       <SiteFooter isDark={isDark} />
     </>
   );
 }
 
-/* Redirect /login if already authed */
+/* ---------------------- Redirect if already logged in ---------------------- */
 function RedirectIfAuthed({ children }) {
   const isAuthed = React.useMemo(() => {
     try { return Boolean(localStorage.getItem("token")); } catch { return false; }
@@ -136,74 +176,57 @@ function RedirectIfAuthed({ children }) {
   return isAuthed ? <Navigate to="/studio" replace /> : children;
 }
 
-/* /logout clears storage */
+/* ---------------------- Logout ---------------------- */
 function Logout() {
   React.useEffect(() => {
     try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh");
-      localStorage.removeItem("userEmail");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userFirst");
-      localStorage.removeItem("userLast");
-      localStorage.removeItem("rememberMe");
+      ["token", "refresh", "userEmail", "userRole", "userFirst", "userLast", "rememberMe"]
+        .forEach((key) => localStorage.removeItem(key));
     } catch {}
     window.dispatchEvent(new Event("auth:changed"));
   }, []);
   return <Navigate to="/" replace />;
 }
 
+/* ---------------------- App Root ---------------------- */
 export default function App() {
+  const location = useLocation();
+
   return (
     <React.Suspense fallback={<LoadingScreen />}>
-      <Routes>
+      {/* Key the Routes by pathname so lazy elements remount cleanly on navigation */}
+      <Routes key={location.pathname}>
         <Route element={<Layout />}>
-          {/* Home */}
-          <Route index element={<ShinelStudiosHomepage />} />
 
-          {/* Existing pages */}
-          <Route path="/video-editing" element={<VideoEditing />} />
-          <Route path="/gfx" element={<GFX />} />
-          <Route path="/thumbnails" element={<Thumbnails />} />
-          <Route path="/shorts" element={<Shorts />} />
+          {/* Public routes */}
+          <Route index element={<ShinelStudiosHomepage key="home" />} />
+          <Route path="/video-editing" element={<VideoEditing key="video-editing" />} />
+          <Route path="/gfx" element={<GFX key="gfx" />} />
+          <Route path="/thumbnails" element={<Thumbnails key="thumbnails" />} />
+          <Route path="/shorts" element={<Shorts key="shorts" />} />
 
-          {/* SEO-friendly page */}
-          <Route path="/gaming-thumbnail-templates" element={<LiveTemplates />} />
-          {/* Legacy redirect */}
+          {/* SEO-friendly aliases */}
           <Route path="/live-templates" element={<Navigate to="/gaming-thumbnail-templates" replace />} />
+          <Route path="/gaming-thumbnail-templates" element={<LiveTemplates key="gaming-templates" />} />
 
-          {/* NEW: routes used by header menu */}
-          <Route path="/gfx/thumbnails" element={<Thumbnails />} />
-          <Route path="/gfx/branding" element={<GFX />} />
-          <Route path="/videos/shorts" element={<Shorts />} />
-          <Route path="/videos/long" element={<VideoEditing />} />
+          {/* Submenu routes */}
+          <Route path="/gfx/thumbnails" element={<Thumbnails key="gfx-thumbnails" />} />
+          <Route path="/gfx/branding" element={<GFX key="gfx-branding" />} />
+          <Route path="/videos/shorts" element={<Shorts key="videos-shorts" />} />
+          <Route path="/videos/long" element={<VideoEditing key="videos-long" />} />
 
           {/* Auth */}
-          <Route
-            path="/login"
-            element={
-              <RedirectIfAuthed>
-                <LoginPage />
-              </RedirectIfAuthed>
-            }
-          />
+          <Route path="/login" element={<RedirectIfAuthed><LoginPage /></RedirectIfAuthed>} />
           <Route path="/logout" element={<Logout />} />
 
-          {/* Studio hub (protected) */}
-          <Route
-            path="/studio"
-            element={
-              <ProtectedRoute>
-                <AIStudioPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Protected studio */}
+          <Route path="/studio" element={<ProtectedRoute><AIStudioPage /></ProtectedRoute>} />
 
-          {/* Tools (role-gated) */}
+          {/* Tools */}
           <Route
             path="/tools"
             element={
-              <ProtectedRoute requireRole={["admin","editor","client"]}>
+              <ProtectedRoute requireRole={["admin", "editor", "client"]}>
                 <ToolsIndex />
               </ProtectedRoute>
             }
@@ -211,7 +234,7 @@ export default function App() {
           <Route
             path="/tools/srt"
             element={
-              <ProtectedRoute requireRole={["admin","editor","client"]}>
+              <ProtectedRoute requireRole={["admin", "editor", "client"]}>
                 <AutoSRTTool />
               </ProtectedRoute>
             }
@@ -219,7 +242,7 @@ export default function App() {
           <Route
             path="/tools/seo"
             element={
-              <ProtectedRoute requireRole={["admin","editor","client"]}>
+              <ProtectedRoute requireRole={["admin", "editor", "client"]}>
                 <SeoTool />
               </ProtectedRoute>
             }
@@ -227,7 +250,7 @@ export default function App() {
           <Route
             path="/tools/thumbnail-ideation"
             element={
-              <ProtectedRoute requireRole={["admin","editor","client"]}>
+              <ProtectedRoute requireRole={["admin", "editor", "client"]}>
                 <ThumbnailIdeation />
               </ProtectedRoute>
             }
@@ -251,7 +274,7 @@ export default function App() {
             }
           />
 
-          {/* Legal & 404 */}
+          {/* Legal + fallback */}
           <Route path="/privacy" element={<LegalPage kind="privacy" />} />
           <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route path="*" element={<Navigate to="/" replace />} />

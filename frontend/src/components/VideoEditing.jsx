@@ -1,5 +1,5 @@
 // src/components/VideoEditing.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Play } from "lucide-react";
 import gamingVideos from "../data/gamingVideos.js";
 
@@ -7,7 +7,7 @@ import gamingVideos from "../data/gamingVideos.js";
 const ytThumb = (id) => `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
 const norm = (s = "") => String(s).toLowerCase();
 
-/** Try to infer a category from the item (works even if your data doesn't have `category`) */
+/** Infer a category dynamically if one isn’t defined in data */
 const inferCategory = (v) => {
   if (v.category) return v.category;
   const tags = (v.tags || []).map(norm).join(" | ");
@@ -28,11 +28,15 @@ const FilterChip = ({ children, active, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="text-xs px-3 py-1 rounded-full border transition-colors"
+    className="text-xs sm:text-sm px-3 py-1 rounded-full border transition-colors whitespace-nowrap"
     style={{
       color: active ? "#fff" : "var(--orange)",
-      background: active ? "var(--orange)" : "color-mix(in oklab, var(--orange) 12%, transparent)",
-      borderColor: active ? "var(--orange)" : "color-mix(in oklab, var(--orange) 35%, transparent)",
+      background: active
+        ? "var(--orange)"
+        : "color-mix(in oklab, var(--orange) 12%, transparent)",
+      borderColor: active
+        ? "var(--orange)"
+        : "color-mix(in oklab, var(--orange) 35%, transparent)",
     }}
   >
     {children}
@@ -52,7 +56,7 @@ const Tag = ({ children }) => (
   </span>
 );
 
-/* ---------- smart player ---------- */
+/* ---------- smart YouTube player ---------- */
 const YouTubeSmartPlayer = ({ youtubeId, title, thumb }) => {
   const [playing, setPlaying] = useState(false);
 
@@ -95,6 +99,7 @@ const YouTubeSmartPlayer = ({ youtubeId, title, thumb }) => {
   );
 };
 
+/* ---------- video card ---------- */
 const VideoCard = ({ v }) => {
   const cat = inferCategory(v);
   return (
@@ -106,7 +111,13 @@ const VideoCard = ({ v }) => {
         {v.type === "youtube" ? (
           <YouTubeSmartPlayer youtubeId={v.youtubeId} title={v.title} thumb={v.thumb} />
         ) : (
-          <video className="w-full h-full" src={v.src} poster={v.thumb} controls preload="metadata" />
+          <video
+            className="w-full h-full"
+            src={v.src}
+            poster={v.thumb}
+            controls
+            preload="metadata"
+          />
         )}
 
         {/* category badge */}
@@ -122,8 +133,11 @@ const VideoCard = ({ v }) => {
         </div>
       </div>
 
-      <div className="p-4">
-        <h3 className="text-lg font-semibold mb-1 line-clamp-2" style={{ color: "var(--text)" }}>
+      <div className="p-4 sm:p-5">
+        <h3
+          className="text-base sm:text-lg font-semibold mb-1 line-clamp-2"
+          style={{ color: "var(--text)" }}
+        >
           {v.title}
         </h3>
         <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
@@ -142,27 +156,50 @@ const VideoCard = ({ v }) => {
   );
 };
 
-/* ---------- page ---------- */
+/* ---------- main page ---------- */
 export default function VideoEditing() {
-  // Build category list from data + helpful defaults
+  // categories
   const categories = useMemo(() => {
-    const set = new Set(["All", "BGMI", "Valorant", "Live", "Vlog", "Documentary", "Trailers", "Cinematics", "Client Work"]);
+    const set = new Set([
+      "All",
+      "BGMI",
+      "Valorant",
+      "Live",
+      "Vlog",
+      "Documentary",
+      "Trailers",
+      "Cinematics",
+      "Client Work",
+    ]);
     gamingVideos.forEach((v) => set.add(inferCategory(v)));
-    // Keep "All" first, then others by insertion order
     return ["All", ...Array.from(set).filter((c) => c !== "All")];
   }, []);
 
   const [selected, setSelected] = useState("All");
 
-  // Filter items by selected category
+  // filter videos
   const filtered = useMemo(
     () => gamingVideos.filter((v) => selected === "All" || inferCategory(v) === selected),
     [selected]
   );
 
+  // fix for header overlap
+  useEffect(() => {
+    const header = document.querySelector("header");
+    const updateHeight = () => {
+      if (header) {
+        const h = Math.round(header.getBoundingClientRect().height);
+        document.documentElement.style.setProperty("--header-h", `${h}px`);
+      }
+    };
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
   return (
     <div className="min-h-screen">
-      {/* Meta */}
+      {/* Meta tags */}
       <title>Video Editing Services | Shinel Studios</title>
       <meta
         name="description"
@@ -176,19 +213,28 @@ export default function VideoEditing() {
       <meta property="og:type" content="website" />
       <meta property="og:url" content="https://shinelstudios.in/video-editing" />
 
-      {/* Hero */}
-      <section className="pt-28 pb-10 text-center" style={{ background: "var(--hero-bg)" }}>
+      {/* Hero section */}
+      <section
+        className="pt-28 pb-10 text-center overflow-hidden"
+        style={{ background: "var(--hero-bg)" }}
+      >
         <div className="container mx-auto px-4">
-          <h1 className="text-4xl md:text-6xl font-extrabold font-['Poppins']" style={{ color: "var(--text)" }}>
+          <h1
+            className="text-3xl sm:text-5xl md:text-6xl font-extrabold font-['Poppins']"
+            style={{ color: "var(--text)" }}
+          >
             Video <span style={{ color: "var(--orange)" }}>Editing</span>
           </h1>
-          <p className="mt-4 text-lg md:text-xl max-w-3xl mx-auto" style={{ color: "var(--text-muted)" }}>
-            High-impact edits, cinematic montages, trailers and shorts crafted for creators & brands. Optimized for
-            YouTube, TikTok & Reels.
+          <p
+            className="mt-4 text-base sm:text-lg md:text-xl max-w-3xl mx-auto"
+            style={{ color: "var(--text-muted)" }}
+          >
+            High-impact edits, cinematic montages, trailers and shorts crafted for creators &
+            brands. Optimized for YouTube, TikTok & Reels.
           </p>
 
-          {/* Category filter */}
-          <div className="mt-6 flex flex-wrap gap-2 justify-center">
+          {/* Category filters */}
+          <div className="mt-6 flex flex-wrap justify-center gap-2 px-2 sm:px-0">
             {categories.map((c) => (
               <FilterChip key={c} active={c === selected} onClick={() => setSelected(c)}>
                 {c}
@@ -198,10 +244,10 @@ export default function VideoEditing() {
         </div>
       </section>
 
-      {/* Grid */}
-      <section className="py-14" style={{ background: "var(--surface)" }}>
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Video Grid */}
+      <section className="py-12 sm:py-14" style={{ background: "var(--surface)" }}>
+        <div className="container mx-auto px-3 sm:px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
             {filtered.map((v) => (
               <VideoCard key={v.id} v={v} />
             ))}
