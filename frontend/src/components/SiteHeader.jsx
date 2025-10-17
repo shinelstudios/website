@@ -70,6 +70,22 @@ function setFaviconForTheme(isDark) {
   } catch {}
 }
 
+// Close EVERYTHING (used by mobile links + location changes)
+const closeAllMenus = useCallback(() => {
+  setToolsOpen(false);
+  setWorkOpen(false);
+  setUserMenuOpen(false);
+  setNotifOpen(false);
+  setIsMenuOpen(false);
+  setShowSearch(false);
+  // make sure any scroll lock is released immediately
+  try {
+    document.documentElement.style.overflow = "";
+    document.body.style.overscrollBehavior = "";
+  } catch {}
+}, []);
+
+
 /* ---------------- NEW: Notification system ---------------- */
 function useNotifications() {
   const [notifications, setNotifications] = useState([]);
@@ -344,6 +360,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     setActive(map[hash] || "Home");
   }, [location.pathname, location.hash]);
 
+  // Auto-close menus/drawers on navigation (fixes mobile tap not redirecting)
+useEffect(() => {
+  closeAllMenus();
+}, [location.pathname, location.hash, closeAllMenus]);
+
   // close popovers on outside / ESC
   useEffect(() => {
     const onDocDown = (e) => {
@@ -502,6 +523,7 @@ const go = useCallback((to) => {
           {/* logo + badge */}
           <Link
             to="/"
+            onClick={closeAllMenus}
             className="flex items-center select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
           >
             <div className="h-12 flex items-center overflow-visible">
@@ -626,7 +648,7 @@ const go = useCallback((to) => {
                         to="/gfx/thumbnails"
                         className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)" }}
-                        onClick={() => setWorkOpen(false)}
+                        onClick={closeAllMenus}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
@@ -639,7 +661,7 @@ const go = useCallback((to) => {
                         to="/gfx/branding"
                         className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)" }}
-                        onClick={() => setWorkOpen(false)}
+                        onClick={closeAllMenus}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
@@ -691,7 +713,7 @@ const go = useCallback((to) => {
                         to="/videos/shorts"
                         className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)" }}
-                        onClick={() => setWorkOpen(false)}
+                        onClick={closeAllMenus}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
@@ -704,7 +726,7 @@ const go = useCallback((to) => {
                         to="/videos/long"
                         className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
                         style={{ color: "var(--text)" }}
-                        onClick={() => setWorkOpen(false)}
+                        onClick={closeAllMenus}
                         onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                       >
