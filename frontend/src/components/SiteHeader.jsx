@@ -1,12 +1,14 @@
+// frontend/src/components/SiteHeader.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sun, Moon, Menu, X, ChevronDown, ChevronRight, Lock, Wand2, Search, Languages,
+  Sun, Moon, Menu, X, ChevronDown, Lock, Wand2, Search, Languages,
   Lightbulb, Brain, UserCog, Bell, Settings, LogOut, User,
   Shield, Zap, ArrowRight, ExternalLink, Home, Briefcase, Mail,
   BarChart3, Video
 } from "lucide-react";
+import TrustBar from "./Trustbar.jsx"; // ✅ use your new component
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 
@@ -69,22 +71,6 @@ function setFaviconForTheme(isDark) {
     if (link) link.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
   } catch {}
 }
-
-// Close EVERYTHING (used by mobile links + location changes)
-const closeAllMenus = useCallback(() => {
-  setToolsOpen(false);
-  setWorkOpen(false);
-  setUserMenuOpen(false);
-  setNotifOpen(false);
-  setIsMenuOpen(false);
-  setShowSearch(false);
-  // make sure any scroll lock is released immediately
-  try {
-    document.documentElement.style.overflow = "";
-    document.body.style.overscrollBehavior = "";
-  } catch {}
-}, []);
-
 
 /* ---------------- NEW: Notification system ---------------- */
 function useNotifications() {
@@ -200,6 +186,7 @@ const toolsCatalog = [
   },
 ];
 
+/* ---------------- tiny UI helpers ---------------- */
 const animations = {
   fadeDown: (reduced) => reduced ? {} : {
     hidden: { opacity: 0, y: -8 },
@@ -215,7 +202,7 @@ const animations = {
 const SiteHeader = ({ isDark, setIsDark }) => {
   const [auth, setAuth] = useState(getAuthState());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // NEW: nested "Work" submenu toggles (desktop)
+  // nested "Work" submenu toggles (desktop)
   const [workGfxOpen, setWorkGfxOpen] = useState(false);
   const [workVidOpen, setWorkVidOpen] = useState(false);
 
@@ -253,18 +240,28 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   useEffect(() => setFaviconForTheme(isDark), [isDark]);
 
+  // ✅ Close EVERYTHING — moved INSIDE component (fixes Rules of Hooks)
+  const closeAllMenus = useCallback(() => {
+    setToolsOpen(false);
+    setWorkOpen(false);
+    setWorkGfxOpen(false);
+    setWorkVidOpen(false);
+    setUserMenuOpen(false);
+    setNotifOpen(false);
+    setIsMenuOpen(false);
+    setShowSearch(false);
+    try {
+      document.documentElement.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+      document.body.style.touchAction = "";
+    } catch {}
+  }, []);
+
   // Keyboard shortcuts
   useKeyboardShortcuts({
     openTools: () => setToolsOpen(true),
     toggleTheme: () => setIsDark(d => !d),
-    closeAll: () => {
-      setToolsOpen(false);
-      setWorkOpen(false);
-      setUserMenuOpen(false);
-      setNotifOpen(false);
-      setIsMenuOpen(false);
-      setShowSearch(false);
-    }
+    closeAll: () => closeAllMenus()
   });
 
   // Focus search when opened
@@ -320,7 +317,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     document.documentElement.style.setProperty("--header-offset", `${headerH}px`);
   }, [headerH]);
 
-  // scroll progress + shadow (throttled & delta-check for CPU friendlier updates)
+  // scroll progress + shadow (throttled)
   useEffect(() => {
     let lastRun = 0;
     let lastProgress = progress;
@@ -344,26 +341,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     const onScroll = () => requestAnimationFrame(tick);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    // initial
     onScroll();
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally no progress as dependency to avoid frequent rebinds
+  }, []);
 
-  // active nav based on route/hash
+  // active nav based on route/hash (for basic highlight)
   useEffect(() => {
     const hash = (location.hash || "#home").replace("#", "");
     const map = { "": "Home", home: "Home", services: "Services", work: "Work", contact: "Contact" };
     setActive(map[hash] || "Home");
   }, [location.pathname, location.hash]);
 
-  // Auto-close menus/drawers on navigation (fixes mobile tap not redirecting)
-useEffect(() => {
-  closeAllMenus();
-}, [location.pathname, location.hash, closeAllMenus]);
+  // Auto-close on navigation (fixes mobile tap not redirecting)
+  useEffect(() => {
+    closeAllMenus();
+  }, [location.pathname, location.hash, closeAllMenus]);
 
   // close popovers on outside / ESC
   useEffect(() => {
@@ -374,14 +370,7 @@ useEffect(() => {
       if (notifOpen && notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
     };
     const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setWorkOpen(false);
-        setToolsOpen(false);
-        setUserMenuOpen(false);
-        setNotifOpen(false);
-        setIsMenuOpen(false);
-        setShowSearch(false);
-      }
+      if (e.key === "Escape") closeAllMenus();
     };
     document.addEventListener("pointerdown", onDocDown);
     document.addEventListener("keydown", onEsc);
@@ -389,18 +378,18 @@ useEffect(() => {
       document.removeEventListener("pointerdown", onDocDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [workOpen, toolsOpen, userMenuOpen, notifOpen]);
+  }, [workOpen, toolsOpen, userMenuOpen, notifOpen, closeAllMenus]);
 
-// lock scroll when mobile menu open
-useEffect(() => {
-  const lock = (v) => {
-    document.documentElement.style.overflow = v ? "hidden" : "";
-    document.body.style.overscrollBehavior = v ? "contain" : "";
-    document.body.style.touchAction = v ? "none" : ""; // <-- keep this line
-  };
-  lock(isMenuOpen);
-  return () => lock(false);
-}, [isMenuOpen]);
+  // lock scroll when mobile menu open
+  useEffect(() => {
+    const lock = (v) => {
+      document.documentElement.style.overflow = v ? "hidden" : "";
+      document.body.style.overscrollBehavior = v ? "contain" : "";
+      document.body.style.touchAction = v ? "none" : ""; // keep this line
+    };
+    lock(isMenuOpen);
+    return () => lock(false);
+  }, [isMenuOpen]);
 
   const role = (auth.role || "client").toLowerCase();
   const availableTools = toolsCatalog.filter((t) => t.roles.includes(role));
@@ -408,7 +397,7 @@ useEffect(() => {
   const logoSrc = isDark ? logoLight : logoDark;
   const initials = initialsFrom(auth.firstName, auth.lastName, auth.email);
 
-  // NEW: Handle logout
+  // logout
   const handleLogout = useCallback(() => {
     ["token","refresh","userEmail","userFirstName","userLastName","userRole","rememberMe"].forEach((k)=>localStorage.removeItem(k));
     window.dispatchEvent(new Event("auth:changed"));
@@ -420,15 +409,13 @@ useEffect(() => {
     navigate("/");
   }, [navigate]);
 
-  // helper: close mobile menu and navigate programmatically (fixes some devices not following <Link>)
-const go = useCallback((to) => {
-  setIsMenuOpen(false);
-  // small timeout ensures the sheet unmounts before route change, avoiding blocked clicks on some Android/iOS
-  setTimeout(() => navigate(to), 0);
-}, [navigate]);
+  // helper: close mobile menu and navigate programmatically
+  const go = useCallback((to) => {
+    setIsMenuOpen(false);
+    setTimeout(() => navigate(to), 0);
+  }, [navigate]);
 
-
-  // NEW: Quick search filter
+  // tool search filter
   const filteredTools = useMemo(() => {
     if (!searchQuery.trim()) return allToolsForMenu;
     const q = searchQuery.toLowerCase();
@@ -450,6 +437,7 @@ const go = useCallback((to) => {
           onMouseEnter={() => setHovered(label)}
           onMouseLeave={() => setHovered(null)}
           style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
+          onClick={closeAllMenus}
         >
           {Icon && <Icon size={16} />}
           <span
@@ -462,7 +450,7 @@ const go = useCallback((to) => {
     );
   };
 
-  // Memoize trust items (static)
+  // trust items (static)
   const trustItems = useMemo(() => ([
     { icon: Wand2, text: "AI-first studio • human-directed quality" },
     { icon: UserCog, text: "20+ active clients across niches" },
@@ -555,200 +543,182 @@ const go = useCallback((to) => {
           <div className="hidden md:flex items-center gap-8 relative">
             <NavLink label="Home" to="/" icon={Home} />
             <NavLink label="Services" to="/#services" icon={Briefcase} />
-            {/* Work now has an icon (BarChart3) like others */}
+
             {/* Work dropdown (desktop) */}
-<div className="relative" ref={workRef}>
-  <motion.button
-    type="button"
-    className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
-    aria-expanded={workOpen}
-    aria-haspopup="menu"
-    aria-controls="work-menu"
-    onClick={() => {
-      setWorkOpen(v => !v);
-      if (!workOpen) { setWorkGfxOpen(false); setWorkVidOpen(false); }
-    }}
-    initial={false}
-    style={{
-      color: hovered === "Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)",
-    }}
-    whileHover={prefersReduced ? {} : { y: -1 }}
-    transition={{ duration: 0.22 }}
-    onMouseEnter={() => setHovered("Work")}
-    onMouseLeave={() => setHovered(null)}
-  >
-    <BarChart3 size={16} />
-    <span className="nav-label">Work</span>
-    <ChevronDown
-      size={16}
-      className={`ml-1 transition-transform ${workOpen ? "rotate-180" : ""}`}
-    />
-  </motion.button>
+            <div className="relative" ref={workRef}>
+              <motion.button
+                type="button"
+                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+                aria-expanded={workOpen}
+                aria-haspopup="menu"
+                aria-controls="work-menu"
+                onClick={() => {
+                  setWorkOpen(v => !v);
+                  if (!workOpen) { setWorkGfxOpen(false); setWorkVidOpen(false); }
+                }}
+                initial={false}
+                style={{ color: hovered === "Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)" }}
+                whileHover={prefersReduced ? {} : { y: -1 }}
+                transition={{ duration: 0.22 }}
+                onMouseEnter={() => setHovered("Work")}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <BarChart3 size={16} />
+                <span className="nav-label">Work</span>
+                <ChevronDown size={16} className={`ml-1 transition-transform ${workOpen ? "rotate-180" : ""}`} />
+              </motion.button>
 
-  <AnimatePresence>
-    {workOpen && (
-      <motion.div
-        id="work-menu"
-        role="menu"
-        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
-        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-        transition={{ duration: 0.18, ease: "easeOut" }}
-        className="absolute left-0 mt-3 w-[420px] rounded-2xl shadow-xl overflow-hidden"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          zIndex: 4,
-        }}
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-          <div className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--text-muted)" }}>
-            Explore our work
-          </div>
-        </div>
+              <AnimatePresence>
+                {workOpen && (
+                  <motion.div
+                    id="work-menu"
+                    role="menu"
+                    initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+                    animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
+                    exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute left-0 mt-3 w-[420px] rounded-2xl shadow-xl overflow-hidden"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
+                  >
+                    <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+                      <div className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--text-muted)" }}>
+                        Explore our work
+                      </div>
+                    </div>
 
-        {/* Two columns: GFX & Videos */}
-        <div className="grid grid-cols-2 gap-0">
-          {/* GFX column */}
-          <div className="p-3 border-r" style={{ borderColor: "var(--border)" }}>
-            <button
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-              style={{ color: "var(--text)" }}
-              onClick={() => {
-                setWorkGfxOpen(v => !v);
-                if (!workGfxOpen) setWorkVidOpen(false);
-              }}
-              aria-expanded={workGfxOpen}
-              aria-controls="work-gfx-submenu"
-            >
-              <span className="flex items-center gap-2">
-                <Wand2 size={16} style={{ color: "var(--orange)" }} />
-                GFX
-              </span>
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${workGfxOpen ? "rotate-180" : ""}`}
-              />
-            </button>
+                    <div className="grid grid-cols-2 gap-0">
+                      {/* GFX column */}
+                      <div className="p-3 border-r" style={{ borderColor: "var(--border)" }}>
+                        <button
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                          style={{ color: "var(--text)" }}
+                          onClick={() => {
+                            setWorkGfxOpen(v => !v);
+                            if (!workGfxOpen) setWorkVidOpen(false);
+                          }}
+                          aria-expanded={workGfxOpen}
+                          aria-controls="work-gfx-submenu"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Wand2 size={16} style={{ color: "var(--orange)" }} />
+                            GFX
+                          </span>
+                          <ChevronDown size={16} className={`transition-transform ${workGfxOpen ? "rotate-180" : ""}`} />
+                        </button>
 
-            <AnimatePresence initial={false}>
-              {workGfxOpen && (
-                <motion.div
-                  id="work-gfx-submenu"
-                  role="menu"
-                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
-                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  className="overflow-hidden mt-2"
-                >
-                  <ul className="space-y-1">
-                    <li>
-                      <Link
-                        to="/gfx/thumbnails"
-                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)" }}
-                        onClick={closeAllMenus}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span>Thumbnails</span>
-                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/gfx/branding"
-                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)" }}
-                        onClick={closeAllMenus}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span>Logo / Banner / Overlays (3-in-1)</span>
-                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                    </li>
-                  </ul>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                        <AnimatePresence initial={false}>
+                          {workGfxOpen && (
+                            <motion.div
+                              id="work-gfx-submenu"
+                              role="menu"
+                              initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                              animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                              exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                              className="overflow-hidden mt-2"
+                            >
+                              <ul className="space-y-1">
+                                <li>
+                                  <Link
+                                    to="/gfx/thumbnails"
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                                    style={{ color: "var(--text)" }}
+                                    onClick={closeAllMenus}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <span>Thumbnails</span>
+                                    <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                                  </Link>
+                                </li>
+                                <li>
+                                  <Link
+                                    to="/gfx/branding"
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                                    style={{ color: "var(--text)" }}
+                                    onClick={closeAllMenus}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <span>Logo / Banner / Overlays (3-in-1)</span>
+                                    <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                                  </Link>
+                                </li>
+                              </ul>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
 
-          {/* Videos column */}
-          <div className="p-3">
-            <button
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-              style={{ color: "var(--text)" }}
-              onClick={() => {
-                setWorkVidOpen(v => !v);
-                if (!workVidOpen) setWorkGfxOpen(false);
-              }}
-              aria-expanded={workVidOpen}
-              aria-controls="work-vid-submenu"
-            >
-              <span className="flex items-center gap-2">
-                <Video size={16} style={{ color: "var(--orange)" }} />
-                Videos
-              </span>
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${workVidOpen ? "rotate-180" : ""}`}
-              />
-            </button>
+                      {/* Videos column */}
+                      <div className="p-3">
+                        <button
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                          style={{ color: "var(--text)" }}
+                          onClick={() => {
+                            setWorkVidOpen(v => !v);
+                            if (!workVidOpen) setWorkGfxOpen(false);
+                          }}
+                          aria-expanded={workVidOpen}
+                          aria-controls="work-vid-submenu"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Video size={16} style={{ color: "var(--orange)" }} />
+                            Videos
+                          </span>
+                          <ChevronDown size={16} className={`transition-transform ${workVidOpen ? "rotate-180" : ""}`} />
+                        </button>
 
-            <AnimatePresence initial={false}>
-              {workVidOpen && (
-                <motion.div
-                  id="work-vid-submenu"
-                  role="menu"
-                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
-                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  className="overflow-hidden mt-2"
-                >
-                  <ul className="space-y-1">
-                    <li>
-                      <Link
-                        to="/videos/shorts"
-                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)" }}
-                        onClick={closeAllMenus}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span>Shorts</span>
-                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/videos/long"
-                        className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)" }}
-                        onClick={closeAllMenus}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span>Long Videos</span>
-                        <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </Link>
-                    </li>
-                  </ul>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                        <AnimatePresence initial={false}>
+                          {workVidOpen && (
+                            <motion.div
+                              id="work-vid-submenu"
+                              role="menu"
+                              initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                              animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                              exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                              className="overflow-hidden mt-2"
+                            >
+                              <ul className="space-y-1">
+                                <li>
+                                  <Link
+                                    to="/videos/shorts"
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                                    style={{ color: "var(--text)" }}
+                                    onClick={closeAllMenus}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <span>Shorts</span>
+                                    <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                                  </Link>
+                                </li>
+                                <li>
+                                  <Link
+                                    to="/videos/long"
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg text-sm"
+                                    style={{ color: "var(--text)" }}
+                                    onClick={closeAllMenus}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <span>Long Videos</span>
+                                    <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                                  </Link>
+                                </li>
+                              </ul>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
 
-        {/* Footer hint */}
-        <div className="px-4 py-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-          Tip: Use <kbd className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)" }}>Esc</kbd> to close menus.
-        </div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-</div>
+                    <div className="px-4 py-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+                      Tip: Use <kbd className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)" }}>Esc</kbd> to close menus.
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <NavLink label="Contact" to="/#contact" icon={Mail} />
 
@@ -762,19 +732,14 @@ const go = useCallback((to) => {
                 aria-controls="ai-tools-menu"
                 onClick={() => setToolsOpen((v) => !v)}
                 initial={false}
-                style={{
-                  color: hovered === "Tools" || toolsOpen ? "var(--nav-hover)" : "var(--nav-link)",
-                }}
+                style={{ color: hovered === "Tools" || toolsOpen ? "var(--nav-hover)" : "var(--nav-link)" }}
                 whileHover={prefersReduced ? {} : { y: -1 }}
                 transition={{ duration: 0.22 }}
               >
                 <Zap size={16} />
                 <span className="nav-label">Tools</span>
                 {!auth.isAuthed && <Lock size={14} className="ml-1 opacity-70" />}
-                <ChevronDown
-                  size={16}
-                  className={`ml-1 transition-transform ${toolsOpen ? "rotate-180" : ""}`}
-                />
+                <ChevronDown size={16} className={`ml-1 transition-transform ${toolsOpen ? "rotate-180" : ""}`} />
               </motion.button>
 
               <AnimatePresence>
@@ -787,11 +752,7 @@ const go = useCallback((to) => {
                     exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
                     className="absolute left-0 mt-3 w-[380px] rounded-2xl shadow-xl overflow-hidden"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      zIndex: 4,
-                    }}
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
                   >
                     {/* Header with search */}
                     <div className="p-4 border-b" style={{ borderColor: "var(--border)" }}>
@@ -813,11 +774,7 @@ const go = useCallback((to) => {
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="w-full pl-10 pr-3 py-2 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                          style={{
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text)",
-                          }}
+                          style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
                         />
                       </div>
                     </div>
@@ -847,6 +804,7 @@ const go = useCallback((to) => {
                               onClick={() => {
                                 setToolsOpen(false);
                                 setSearchQuery("");
+                                closeAllMenus();
                               }}
                               aria-label={allowed ? t.name : `${t.name} (login required)`}
                             >
@@ -885,7 +843,10 @@ const go = useCallback((to) => {
                           to="/login"
                           className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white"
                           style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
-                          onClick={() => setToolsOpen(false)}
+                          onClick={() => {
+                            setToolsOpen(false);
+                            closeAllMenus();
+                          }}
                         >
                           Login to unlock all tools
                           <ArrowRight size={16} />
@@ -907,10 +868,7 @@ const go = useCallback((to) => {
                   <motion.button
                     onClick={() => setNotifOpen(v => !v)}
                     className="hidden md:flex p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] relative"
-                    style={{
-                      background: notifOpen ? "var(--surface-alt)" : "transparent",
-                      color: "var(--text)",
-                    }}
+                    style={{ background: notifOpen ? "var(--surface-alt)" : "transparent", color: "var(--text)" }}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
                     whileHover={prefersReduced ? {} : { scale: 1.04 }}
                     whileTap={{ scale: 0.96 }}
@@ -933,22 +891,14 @@ const go = useCallback((to) => {
                         animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
                         exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
                         className="absolute right-0 mt-3 w-[320px] rounded-2xl shadow-xl overflow-hidden"
-                        style={{
-                          background: "var(--surface)",
-                          border: "1px solid var(--border)",
-                          zIndex: 4,
-                        }}
+                        style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
                       >
                         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
                           <div className="font-semibold" style={{ color: "var(--text)" }}>
                             Notifications
                           </div>
                           {notifications.length > 0 && (
-                            <button
-                              onClick={clearAll}
-                              className="text-xs underline"
-                              style={{ color: "var(--text-muted)" }}
-                            >
+                            <button onClick={clearAll} className="text-xs underline" style={{ color: "var(--text-muted)" }}>
                               Clear all
                             </button>
                           )}
@@ -991,10 +941,7 @@ const go = useCallback((to) => {
                   <motion.button
                     onClick={() => setUserMenuOpen(v => !v)}
                     className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                    style={{
-                      background: userMenuOpen ? "var(--surface-alt)" : "var(--surface-alt)",
-                      border: "1px solid var(--border)"
-                    }}
+                    style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
                     whileHover={prefersReduced ? {} : { scale: 1.02 }}
                     whileTap={prefersReduced ? {} : { scale: 0.98 }}
                   >
@@ -1008,10 +955,7 @@ const go = useCallback((to) => {
                     <span className="text-sm font-medium max-w-[100px] truncate" style={{ color: "var(--text)" }}>
                       {auth.firstName || auth.email || "Account"}
                     </span>
-                    <ChevronDown
-                      size={14}
-                      className={`transition-transform ${userMenuOpen ? "rotate-180" : ""}`}
-                    />
+                    <ChevronDown size={14} className={`transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
                   </motion.button>
 
                   <AnimatePresence>
@@ -1021,11 +965,7 @@ const go = useCallback((to) => {
                         animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
                         exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
                         className="absolute right-0 mt-3 w-[280px] rounded-2xl shadow-xl overflow-hidden"
-                        style={{
-                          background: "var(--surface)",
-                          border: "1px solid var(--border)",
-                          zIndex: 4,
-                        }}
+                        style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
                       >
                         {/* User info */}
                         <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
@@ -1059,7 +999,7 @@ const go = useCallback((to) => {
                         <div className="py-2">
                           <Link
                             to="/studio"
-                            onClick={() => setUserMenuOpen(false)}
+                            onClick={() => { setUserMenuOpen(false); closeAllMenus(); }}
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium focus:outline-none"
                             style={{ color: "var(--text)" }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
@@ -1071,7 +1011,7 @@ const go = useCallback((to) => {
 
                           <Link
                             to="/profile"
-                            onClick={() => setUserMenuOpen(false)}
+                            onClick={() => { setUserMenuOpen(false); closeAllMenus(); }}
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium focus:outline-none"
                             style={{ color: "var(--text)" }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
@@ -1083,7 +1023,7 @@ const go = useCallback((to) => {
 
                           <Link
                             to="/settings"
-                            onClick={() => setUserMenuOpen(false)}
+                            onClick={() => { setUserMenuOpen(false); closeAllMenus(); }}
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium focus:outline-none"
                             style={{ color: "var(--text)" }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
@@ -1096,7 +1036,7 @@ const go = useCallback((to) => {
                           {role === "admin" && (
                             <Link
                               to="/admin"
-                              onClick={() => setUserMenuOpen(false)}
+                              onClick={() => { setUserMenuOpen(false); closeAllMenus(); }}
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium focus:outline-none"
                               style={{ color: "var(--text)" }}
                               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
@@ -1131,6 +1071,7 @@ const go = useCallback((to) => {
                   to="/studio"
                   className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                   style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  onClick={closeAllMenus}
                 >
                   Studio
                 </Link>
@@ -1141,15 +1082,16 @@ const go = useCallback((to) => {
                   to="/login"
                   className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                   style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                  onClick={closeAllMenus}
                 >
                   Login
                 </Link>
                 <motion.div className="hidden md:inline-flex gap-2">
-                  {/* Sign Up removed as requested */}
                   <Link
                     to="/login"
                     className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                     style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
+                    onClick={closeAllMenus}
                   >
                     Login
                   </Link>
@@ -1191,175 +1133,169 @@ const go = useCallback((to) => {
         </nav>
 
         {/* mobile menu */}
-<AnimatePresence>
-  {isMenuOpen && (
-    <motion.aside
-      id="mobile-menu"
-      ref={menuPanelRef}
-      initial={prefersReduced ? {} : { opacity: 0, y: -8 }}
-      animate={prefersReduced ? {} : { opacity: 1, y: 0 }}
-      exit={prefersReduced ? {} : { opacity: 0, y: -8 }}
-      className="md:hidden fixed left-0 right-0"
-      style={{
-        top: `var(--header-h, ${headerH}px)`,
-        height: "calc(100dvh - var(--header-h, 76px))",
-        background: "var(--surface)",
-        borderTop: "1px solid var(--border)",
-        zIndex: 60,
-        overflowY: "auto",
-        WebkitOverflowScrolling: "touch",
-        overscrollBehavior: "contain",
-        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Main menu"
-    >
-      <nav className="px-4 py-3">
-        {/* Search */}
-        <div className="mb-4">
-          <div className="relative">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: "var(--text-muted)" }}
-            />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search tools..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.aside
+              id="mobile-menu"
+              ref={menuPanelRef}
+              initial={prefersReduced ? {} : { opacity: 0, y: -8 }}
+              animate={prefersReduced ? {} : { opacity: 1, y: 0 }}
+              exit={prefersReduced ? {} : { opacity: 0, y: -8 }}
+              className="md:hidden fixed left-0 right-0"
               style={{
-                background: "var(--surface-alt)",
-                border: "1px solid var(--border)",
-                color: "var(--text)",
+                top: `var(--header-h, ${headerH}px)`,
+                height: "calc(100dvh - var(--header-h, 76px))",
+                background: "var(--surface)",
+                borderTop: "1px solid var(--border)",
+                zIndex: 60,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                overscrollBehavior: "contain",
+                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
               }}
-            />
-          </div>
-        </div>
-
-        {/* Main nav links */}
-        <ul className="flex flex-col gap-2">
-          <li>
-            <button
-              onClick={() => go("/")}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main menu"
             >
-              <Home size={20} style={{ color: "var(--orange)" }} /> Home
-            </button>
-          </li>
-
-          <li>
-            <button
-              onClick={() => go("/#services")}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-            >
-              <Briefcase size={20} style={{ color: "var(--orange)" }} /> Services
-            </button>
-          </li>
-
-          {/* Work accordion — whole row toggles */}
-          <li>
-            <button
-              type="button"
-              className="flex items-center justify-between w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-              aria-expanded={workOpen}
-              aria-controls="mobile-work-accordion"
-              onClick={() => setWorkOpen(v => !v)}
-            >
-              <span className="flex items-center gap-3">
-                <BarChart3 size={20} style={{ color: "var(--orange)" }} />
-                Work
-              </span>
-              <ChevronDown size={18} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            <AnimatePresence initial={false}>
-              {workOpen && (
-                <motion.div
-                  id="mobile-work-accordion"
-                  initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
-                  exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
-                  className="overflow-hidden mt-2 ml-2"
-                >
-                  {/* GFX subgroup */}
-                  <div className="mb-2">
-                    <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
-                      GFX
-                    </div>
-                    <div className="grid gap-2">
-                      <button
-                        onClick={() => go("/gfx/thumbnails")}
-                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-                      >
-                        Thumbnails <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </button>
-                      <button
-                        onClick={() => go("/gfx/branding")}
-                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-                      >
-                        Logo / Banner / Overlays (3-in-1) <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </button>
-                    </div>
+              <nav className="px-4 py-3">
+                {/* Search */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search
+                      size={18}
+                      className="absolute left-3 top-1/2 -translate-y-1/2"
+                      style={{ color: "var(--text-muted)" }}
+                    />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder="Search tools..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                      style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    />
                   </div>
+                </div>
 
-                  {/* Videos subgroup */}
-                  <div className="mb-1">
-                    <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
-                      Videos
-                    </div>
-                    <div className="grid gap-2">
-                      <button
-                        onClick={() => go("/videos/shorts")}
-                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-                      >
-                        Shorts <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </button>
-                      <button
-                        onClick={() => go("/videos/long")}
-                        className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
-                        style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-                      >
-                        Long Videos <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </li>
+                {/* Main nav links */}
+                <ul className="flex flex-col gap-2">
+                  <li>
+                    <button
+                      onClick={() => go("/")}
+                      className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+                      style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                    >
+                      <Home size={20} style={{ color: "var(--orange)" }} /> Home
+                    </button>
+                  </li>
 
-          <li>
-            <button
-              onClick={() => go("/#contact")}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
-              style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-            >
-              <Mail size={20} style={{ color: "var(--orange)" }} /> Contact
-            </button>
-          </li>
-        </ul>
-      </nav>
-    </motion.aside>
-  )}
-</AnimatePresence>
+                  <li>
+                    <button
+                      onClick={() => go("/#services")}
+                      className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+                      style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                    >
+                      <Briefcase size={20} style={{ color: "var(--orange)" }} /> Services
+                    </button>
+                  </li>
 
+                  {/* Work accordion */}
+                  <li>
+                    <button
+                      type="button"
+                      className="flex items-center justify-between w-full rounded-xl px-4 py-3 text-base font-medium"
+                      style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                      aria-expanded={workOpen}
+                      aria-controls="mobile-work-accordion"
+                      onClick={() => setWorkOpen(v => !v)}
+                    >
+                      <span className="flex items-center gap-3">
+                        <BarChart3 size={20} style={{ color: "var(--orange)" }} />
+                        Work
+                      </span>
+                      <ChevronDown size={18} className={`transition-transform ${workOpen ? "rotate-180" : ""}`} />
+                    </button>
 
+                    <AnimatePresence initial={false}>
+                      {workOpen && (
+                        <motion.div
+                          id="mobile-work-accordion"
+                          initial={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                          animate={prefersReduced ? {} : { height: "auto", opacity: 1 }}
+                          exit={prefersReduced ? {} : { height: 0, opacity: 0 }}
+                          className="overflow-hidden mt-2 ml-2"
+                        >
+                          {/* GFX subgroup */}
+                          <div className="mb-2">
+                            <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+                              GFX
+                            </div>
+                            <div className="grid gap-2">
+                              <button
+                                onClick={() => go("/gfx/thumbnails")}
+                                className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                                style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                              >
+                                Thumbnails <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                              </button>
+                              <button
+                                onClick={() => go("/gfx/branding")}
+                                className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                                style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                              >
+                                Logo / Banner / Overlays (3-in-1) <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                              </button>
+                            </div>
+                          </div>
 
+                          {/* Videos subgroup */}
+                          <div className="mb-1">
+                            <div className="px-3 py-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+                              Videos
+                            </div>
+                            <div className="grid gap-2">
+                              <button
+                                onClick={() => go("/videos/shorts")}
+                                className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                                style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                              >
+                                Shorts <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                              </button>
+                              <button
+                                onClick={() => go("/videos/long")}
+                                className="flex items-center justify-between px-4 py-2 rounded-lg text-sm"
+                                style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                              >
+                                Long Videos <ArrowRight size={14} style={{ color: "var(--orange)" }} />
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </li>
 
+                  <li>
+                    <button
+                      onClick={() => go("/#contact")}
+                      className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-base font-medium"
+                      style={{ color: "var(--text)", background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+                    >
+                      <Mail size={20} style={{ color: "var(--orange)" }} /> Contact
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* Trust Bar under header on every page */}
         <TrustBar items={trustItems} prefersReduced={prefersReduced} />
       </motion.header>
 
-      {/* Keyboard shortcuts help - Show on Cmd+? */}
+      {/* Keyboard shortcuts help (Cmd+K etc.) */}
       <AnimatePresence>
         {showSearch && (
           <motion.div
@@ -1372,10 +1308,7 @@ const go = useCallback((to) => {
           >
             <motion.div
               className="w-full max-w-2xl rounded-2xl overflow-hidden"
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-              }}
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
               initial={prefersReduced ? {} : { scale: 0.98, y: -10 }}
               animate={prefersReduced ? {} : { scale: 1, y: 0 }}
               exit={prefersReduced ? {} : { scale: 0.98, y: -10 }}
@@ -1398,11 +1331,7 @@ const go = useCallback((to) => {
                           <kbd
                             key={ki}
                             className="px-2 py-1 rounded text-xs font-mono"
-                            style={{
-                              background: "var(--surface-alt)",
-                              border: "1px solid var(--border)",
-                              color: "var(--text)",
-                            }}
+                            style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
                           >
                             {key}
                           </kbd>
@@ -1417,495 +1346,6 @@ const go = useCallback((to) => {
         )}
       </AnimatePresence>
     </motion.div>
-  );
-};
-
-/* ---------------- Trust Bar (iOS-Fixed & Enhanced) ---------------- */
-const TrustBar = ({ items, prefersReduced }) => {
-  const elements = items || [];
-  const trackRef = useRef(null);
-  const containerRef = useRef(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
-  const [isIOS, setIsIOS] = useState(false);
-  const animationFrameRef = useRef(null);
-
-  // Memoize duplicated items for better performance
-  const duplicatedItems = useMemo(() => [...elements, ...elements, ...elements], [elements]);
-
-  // Detect iOS
-  useEffect(() => {
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    setIsIOS(iOS);
-  }, []);
-
-  // iOS-specific: Ensure animation starts properly
-  useEffect(() => {
-    if (!prefersReduced && trackRef.current && isIOS) {
-      const track = trackRef.current;
-      
-      // Multiple strategies to ensure iOS animation works
-      const startAnimation = () => {
-        // Strategy 1: Remove and re-add animation
-        track.style.animation = 'none';
-        track.offsetHeight; // Force reflow
-        track.style.animation = '';
-        
-        // Strategy 2: Force GPU layer creation
-        track.style.transform = 'translate3d(0, 0, 0)';
-        track.style.webkitTransform = 'translate3d(0, 0, 0)';
-        
-        // Strategy 3: Trigger animation via class
-        track.classList.remove('animate');
-        void track.offsetWidth; // Force reflow
-        track.classList.add('animate');
-      };
-
-      // Initial start
-      const timer1 = setTimeout(startAnimation, 100);
-      
-      // Backup start (in case iOS is slow)
-      const timer2 = setTimeout(startAnimation, 500);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
-  }, [prefersReduced, isIOS]);
-
-  // Pause animation when tab is not visible (performance boost)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      const visible = !document.hidden;
-      setIsVisible(visible);
-      
-      // On iOS, restart animation when tab becomes visible
-      if (visible && isIOS && trackRef.current) {
-        const track = trackRef.current;
-        track.style.animation = 'none';
-        track.offsetHeight;
-        track.style.animation = '';
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isIOS]);
-
-  // Enhanced touch handling for iOS - prevents animation stop
-  const handleTouchStart = (e) => {
-    setIsPaused(true);
-  };
-
-  const handleTouchEnd = (e) => {
-    setIsPaused(false);
-    
-    // Restart animation on iOS after touch
-    if (isIOS && trackRef.current) {
-      const track = trackRef.current;
-      requestAnimationFrame(() => {
-        track.style.animation = 'none';
-        track.offsetHeight;
-        track.style.animation = '';
-      });
-    }
-  };
-
-  // Handle mouse events
-  const handleMouseEnter = () => {
-    if (!isIOS) {
-      setIsPaused(true);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (!isIOS) {
-      setIsPaused(false);
-    }
-  };
-
-  return (
-    <div
-      className="w-full trustbar"
-      style={{
-        background: "var(--header-bg)",
-        boxShadow: "inset 0 1px 0 var(--border)",
-        position: "relative",
-        zIndex: 2,
-        overflow: "hidden",
-        WebkitOverflowScrolling: "touch",
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      {prefersReduced ? (
-        // Static version for users who prefer reduced motion
-        <div 
-          className="static-trust-bar"
-          style={{ 
-            padding: "0.625rem 1rem", 
-            display: "flex", 
-            gap: "1.5rem", 
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {elements.map((item, i) => (
-            <div 
-              key={`static-${i}`} 
-              style={{ 
-                whiteSpace: "nowrap", 
-                fontSize: "0.75rem", 
-                color: "var(--text)", 
-                display: "inline-flex", 
-                gap: "0.5rem", 
-                alignItems: "center",
-                flexShrink: 0,
-              }}
-            >
-              {item.icon && <item.icon size={14} style={{ color: "var(--orange)", flexShrink: 0 }} />}
-              <span>{item.text}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        // Animated marquee version
-        <div
-          ref={containerRef}
-          className="marquee-container"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          style={{
-            position: "relative",
-            overflow: "hidden",
-            cursor: "default",
-            WebkitUserSelect: "none",
-            userSelect: "none",
-          }}
-        >
-          {/* Gradient masks for smooth fade */}
-          <div
-            className="marquee-mask-left"
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: "clamp(20px, 8%, 60px)",
-              background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            className="marquee-mask-right"
-            style={{
-              position: "absolute",
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: "clamp(20px, 8%, 60px)",
-              background: "linear-gradient(90deg, transparent 0%, var(--header-bg) 100%)",
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Scrolling content */}
-          <div
-            ref={trackRef}
-            className={`marquee-track animate ${isPaused ? 'paused' : ''} ${!isVisible ? 'hidden-tab' : ''} ${isIOS ? 'ios-track' : ''}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "2rem",
-              padding: "0.625rem 0",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {duplicatedItems.map((item, i) => (
-              <span 
-                key={`item-${i}`} 
-                className="marquee-item"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "clamp(0.6875rem, 1.5vw, 0.875rem)",
-                  lineHeight: 1.2,
-                  color: "var(--text)",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
-              >
-                {item.icon && (
-                  <item.icon 
-                    size={14} 
-                    style={{ 
-                      color: "var(--orange)", 
-                      flexShrink: 0,
-                      minWidth: "14px",
-                      minHeight: "14px",
-                    }} 
-                  />
-                )}
-                <span>{item.text}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        /* Base styles */
-        .trustbar {
-          --marquee-duration: 45s;
-          user-select: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Hide scrollbar for static version */
-        .static-trust-bar::-webkit-scrollbar {
-          display: none;
-        }
-
-        /* iOS-optimized marquee animation with hardware acceleration */
-        @keyframes marquee-scroll {
-          0% {
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            transform: translate3d(-33.333%, 0, 0);
-          }
-        }
-
-        @-webkit-keyframes marquee-scroll {
-          0% {
-            -webkit-transform: translate3d(0, 0, 0);
-            transform: translate3d(0, 0, 0);
-          }
-          100% {
-            -webkit-transform: translate3d(-33.333%, 0, 0);
-            transform: translate3d(-33.333%, 0, 0);
-          }
-        }
-
-        /* Base track styles with GPU acceleration */
-        .marquee-track {
-          will-change: transform;
-          transform: translate3d(0, 0, 0);
-          -webkit-transform: translate3d(0, 0, 0);
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-          perspective: 1000px;
-          -webkit-perspective: 1000px;
-          transform-style: preserve-3d;
-          -webkit-transform-style: preserve-3d;
-        }
-
-        /* Animation application */
-        .marquee-track.animate {
-          animation: marquee-scroll var(--marquee-duration) linear infinite;
-          -webkit-animation: marquee-scroll var(--marquee-duration) linear infinite;
-        }
-
-        /* iOS-specific enhancements */
-        .marquee-track.ios-track {
-          -webkit-font-smoothing: subpixel-antialiased;
-          font-smoothing: subpixel-antialiased;
-          -webkit-transform: translate3d(0, 0, 0.01px);
-          transform: translate3d(0, 0, 0.01px);
-        }
-
-        .marquee-track.ios-track.animate {
-          animation-timing-function: linear;
-          animation-fill-mode: forwards;
-          -webkit-animation-timing-function: linear;
-          -webkit-animation-fill-mode: forwards;
-        }
-
-        /* Pause states */
-        .marquee-track.paused {
-          animation-play-state: paused !important;
-          -webkit-animation-play-state: paused !important;
-        }
-
-        .marquee-track.hidden-tab {
-          animation-play-state: paused;
-          -webkit-animation-play-state: paused;
-        }
-
-        /* Responsive speeds */
-        @media (max-width: 640px) {
-          .trustbar {
-            --marquee-duration: 35s;
-          }
-        }
-
-        @media (min-width: 641px) and (max-width: 1024px) {
-          .trustbar {
-            --marquee-duration: 40s;
-          }
-        }
-
-        @media (min-width: 1025px) {
-          .trustbar {
-            --marquee-duration: 50s;
-          }
-        }
-
-        /* Reduced motion support */
-        @media (prefers-reduced-motion: reduce) {
-          .marquee-track {
-            animation: none !important;
-            -webkit-animation: none !important;
-          }
-        }
-
-        /* Container optimizations */
-        .marquee-container {
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          -webkit-transform: translateZ(0);
-          transform: translateZ(0);
-          isolation: isolate;
-        }
-
-        /* Item rendering optimization */
-        .marquee-item {
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-          transform: translate3d(0, 0, 0);
-          -webkit-transform: translate3d(0, 0, 0);
-          -webkit-font-smoothing: subpixel-antialiased;
-        }
-
-        /* iOS Safari specific fixes */
-        @supports (-webkit-touch-callout: none) {
-          .marquee-track {
-            -webkit-transform: translate3d(0, 0, 0);
-            -webkit-perspective: 1000px;
-            -webkit-backface-visibility: hidden;
-            transform-style: preserve-3d;
-            -webkit-transform-style: preserve-3d;
-          }
-          
-          .marquee-track.animate {
-            animation-name: marquee-scroll;
-            -webkit-animation-name: marquee-scroll;
-          }
-          
-          .marquee-container {
-            -webkit-overflow-scrolling: touch;
-            isolation: isolate;
-            contain: layout style paint;
-          }
-
-          /* Force GPU acceleration on iOS */
-          .marquee-item {
-            -webkit-transform: translateZ(0) scale(1.0001);
-            transform: translateZ(0) scale(1.0001);
-          }
-
-          /* Fix for iOS bounce during animation */
-          body {
-            overscroll-behavior-x: none;
-          }
-        }
-
-        /* iPad specific optimizations */
-        @media only screen 
-          and (min-device-width: 768px) 
-          and (max-device-width: 1024px) 
-          and (-webkit-min-device-pixel-ratio: 2) {
-          .marquee-track {
-            -webkit-transform: translate3d(0, 0, 0.001px);
-            transform: translate3d(0, 0, 0.001px);
-          }
-        }
-
-        /* iPhone specific optimizations */
-        @media only screen 
-          and (max-device-width: 896px) 
-          and (-webkit-min-device-pixel-ratio: 2) {
-          .marquee-track.animate {
-            animation-duration: calc(var(--marquee-duration) * 0.9);
-            -webkit-animation-duration: calc(var(--marquee-duration) * 0.9);
-          }
-        }
-
-        /* High contrast mode support */
-        @media (prefers-contrast: high) {
-          .marquee-mask-left,
-          .marquee-mask-right {
-            display: none;
-          }
-        }
-
-        /* Fix for iOS 15+ animation bug */
-        @supports (hanging-punctuation: first) and (font: -apple-system-body) {
-          .marquee-track.animate {
-            animation-timing-function: linear;
-            animation-fill-mode: forwards;
-            animation-iteration-count: infinite;
-            -webkit-animation-timing-function: linear;
-            -webkit-animation-fill-mode: forwards;
-            -webkit-animation-iteration-count: infinite;
-          }
-        }
-
-        /* Prevent iOS text selection during animation */
-        .marquee-container * {
-          -webkit-user-select: none;
-          -webkit-touch-callout: none;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Force hardware acceleration on all items */
-        .marquee-track > * {
-          transform: translateZ(0);
-          -webkit-transform: translateZ(0);
-        }
-
-        /* Smooth rendering across all browsers */
-        @supports (animation-timeline: scroll()) {
-          .marquee-track {
-            animation-composition: replace;
-          }
-        }
-
-        /* Fix for Safari 14+ */
-        @supports (backdrop-filter: blur(1px)) {
-          .marquee-track {
-            -webkit-backface-visibility: hidden;
-            -webkit-perspective: 1000;
-            -webkit-transform: translate3d(0, 0, 0);
-          }
-        }
-
-        /* Performance optimization for low-end devices */
-        @media (prefers-reduced-data: reduce) {
-          .trustbar {
-            --marquee-duration: 60s;
-          }
-        }
-
-        /* Dark mode optimization */
-        @media (prefers-color-scheme: dark) {
-          .marquee-item {
-            -webkit-font-smoothing: antialiased;
-          }
-        }
-      `}</style>
-    </div>
   );
 };
 

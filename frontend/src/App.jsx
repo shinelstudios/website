@@ -7,10 +7,13 @@ import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 
+/* ▶️ Hash-action router (generic handlers for ALL #/... links) */
+import { startHashActionRouter, registerHashAction, routeHash } from "./lib/hashActions";
+
 /* Pages (lazy) */
 const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
 const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
-const GFX = React.lazy(() => import("./components/GFX.jsx"));
+const Branding = React.lazy(() => import("./components/Branding.jsx")); // ✅ replaced GFX
 const Thumbnails = React.lazy(() => import("./components/Thumbnails.jsx"));
 const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
 const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
@@ -31,30 +34,69 @@ function ScrollToHash() {
   const { pathname, hash } = useLocation();
 
   React.useEffect(() => {
-    const tryScroll = () => {
-      if (hash) {
-        const el = document.getElementById(hash.replace("#", ""));
-        if (el) {
-          const headerH =
-            parseInt(getComputedStyle(document.documentElement).getPropertyValue("--header-h")) || 76;
-          const offset = el.getBoundingClientRect().top + window.scrollY - headerH - 8;
-          window.scrollTo({ top: offset, behavior: "smooth" });
-          return true;
-        }
-        return false;
+    let cancelled = false;
+
+    const routeToId = () => {
+      const p = pathname.replace(/\/+$/, "");
+      switch (p) {
+        case "/":
+          return (hash && hash.replace("#", "")) || "home";
+        case "/branding":
+        case "/gfx/branding":
+          return "branding";
+        case "/gfx/thumbnails":
+        case "/thumbnails":
+          return "thumbnails";
+        case "/videos/shorts":
+        case "/shorts":
+          return "top";
+        case "/videos/long":
+        case "/video-editing":
+          return "top";
+        default:
+          if (hash) return hash.replace("#", "");
+          return null;
+      }
+    };
+
+    const getHeaderH = () => {
+      const css = getComputedStyle(document.documentElement).getPropertyValue("--header-h");
+      const parsed = parseInt(css);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 76;
+    };
+
+    const doScroll = () => {
+      if (cancelled) return true;
+      const id = routeToId();
+      if (id) {
+        const el = document.getElementById(id);
+        if (!el) return false;
+        const offset = el.getBoundingClientRect().top + window.scrollY - getHeaderH() - 8;
+        window.scrollTo({ top: offset, behavior: "instant" in window ? "instant" : "auto" });
+        requestAnimationFrame(() => {
+          if (!cancelled) window.scrollTo({ top: offset, behavior: "smooth" });
+        });
+        return true;
       } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+        requestAnimationFrame(() => {
+          if (!cancelled) window.scrollTo({ top: 0, behavior: "smooth" });
+        });
         return true;
       }
     };
 
     let tries = 0;
-    const maxTries = 20;
-    const interval = setInterval(() => {
-      const done = tryScroll();
-      if (done || ++tries >= maxTries) clearInterval(interval);
-    }, 80);
-    return () => clearInterval(interval);
+    const maxTries = 40;
+    const t = setInterval(() => {
+      const done = doScroll();
+      if (done || ++tries >= maxTries) clearInterval(t);
+    }, 60);
+
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
   }, [pathname, hash]);
 
   return null;
@@ -71,22 +113,29 @@ function Layout() {
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
 
-  // ✅ Recalculate header height on resize and route changes (fix mobile padding)
   const location = useLocation();
   React.useEffect(() => {
-    const updateHeaderHeight = () => {
-      const header = document.querySelector("header");
-      if (header) {
-        const h = Math.round(header.getBoundingClientRect().height) || 76;
+    const headerEl = () => document.querySelector("header");
+    const setHeaderVar = () => {
+      const hEl = headerEl();
+      if (hEl) {
+        const h = Math.round(hEl.getBoundingClientRect().height) || 76;
         document.documentElement.style.setProperty("--header-h", `${h}px`);
       }
     };
-    updateHeaderHeight();
-    window.addEventListener("resize", updateHeaderHeight);
-    return () => window.removeEventListener("resize", updateHeaderHeight);
+    requestAnimationFrame(setHeaderVar);
+    window.addEventListener("resize", setHeaderVar);
+    const ro = "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;
+    if (ro && headerEl()) ro.observe(headerEl());
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => requestAnimationFrame(setHeaderVar)).catch(() => {});
+    }
+    return () => {
+      window.removeEventListener("resize", setHeaderVar);
+      if (ro && headerEl()) ro.unobserve(headerEl());
+    };
   }, [location.pathname]);
 
-  // ✅ Sync theme icons and meta
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
@@ -100,13 +149,6 @@ function Layout() {
         document.head.appendChild(metaTheme);
       }
       metaTheme.setAttribute("content", isDark ? "#0F0F0F" : "#FFFFFF");
-
-      const lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
-      const darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
-      if (lightIcon && darkIcon) {
-        lightIcon.disabled = !!isDark;
-        darkIcon.disabled = !isDark;
-      }
     });
   }, [isDark]);
 
@@ -155,43 +197,45 @@ function Logout() {
 export default function App() {
   const location = useLocation();
 
+  React.useEffect(() => {
+    startHashActionRouter();
+    registerHashAction(/^#\/shorts\/(\w+)$/, ([, id]) => {
+      window.dispatchEvent(new CustomEvent("open:short", { detail: { id } }));
+    });
+    registerHashAction(/^#\/videos\/(\w+)$/, ([, id]) => {
+      window.dispatchEvent(new CustomEvent("open:video", { detail: { id } }));
+    });
+    registerHashAction(/^#\/contact$/, () => {
+      window.dispatchEvent(new Event("open:contact"));
+    });
+    registerHashAction(/^#\/tools$/, () => {
+      window.dispatchEvent(new Event("open:tools"));
+    });
+    routeHash();
+  }, []);
+
   return (
     <React.Suspense fallback={<LoadingScreen />}>
       <Routes key={location.pathname}>
         <Route element={<Layout />}>
-          {/* Public */}
           <Route index element={<ShinelStudiosHomepage />} />
           <Route path="/video-editing" element={<VideoEditing />} />
-          <Route path="/gfx" element={<GFX />} />
+          <Route path="/branding" element={<Branding />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
-
-          {/* Aliases */}
-          <Route path="/live-templates" element={<Navigate to="/gaming-thumbnail-templates" replace />} />
-          <Route path="/gaming-thumbnail-templates" element={<LiveTemplates />} />
-
-          {/* Nested Submenus */}
-          <Route path="/gfx/thumbnails" element={<Thumbnails />} />
-          <Route path="/gfx/branding" element={<GFX />} />
-          <Route path="/videos/shorts" element={<Shorts />} />
           <Route path="/videos/long" element={<VideoEditing />} />
-
-          {/* Auth */}
+          <Route path="/videos/shorts" element={<Shorts />} />
+          <Route path="/gfx/branding" element={<Branding />} />
+          <Route path="/gfx/thumbnails" element={<Thumbnails />} />
           <Route path="/login" element={<RedirectIfAuthed><LoginPage /></RedirectIfAuthed>} />
           <Route path="/logout" element={<Logout />} />
-
-          {/* Studio + Tools */}
           <Route path="/studio" element={<ProtectedRoute><AIStudioPage /></ProtectedRoute>} />
-          <Route path="/tools" element={<ProtectedRoute requireRole={["admin", "editor", "client"]}><ToolsIndex /></ProtectedRoute>} />
-          <Route path="/tools/srt" element={<ProtectedRoute requireRole={["admin", "editor", "client"]}><AutoSRTTool /></ProtectedRoute>} />
-          <Route path="/tools/seo" element={<ProtectedRoute requireRole={["admin", "editor", "client"]}><SeoTool /></ProtectedRoute>} />
-          <Route path="/tools/thumbnail-ideation" element={<ProtectedRoute requireRole={["admin", "editor", "client"]}><ThumbnailIdeation /></ProtectedRoute>} />
-          <Route path="/tools/custom-ais" element={<ProtectedRoute requireRole="admin"><CustomAIs /></ProtectedRoute>} />
-
-          {/* Admin */}
-          <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><AdminUsersPage /></ProtectedRoute>} />
-
-          {/* Fallback */}
+          <Route path="/tools" element={<ProtectedRoute><ToolsIndex /></ProtectedRoute>} />
+          <Route path="/tools/srt" element={<ProtectedRoute><AutoSRTTool /></ProtectedRoute>} />
+          <Route path="/tools/seo" element={<ProtectedRoute><SeoTool /></ProtectedRoute>} />
+          <Route path="/tools/thumbnail-ideation" element={<ProtectedRoute><ThumbnailIdeation /></ProtectedRoute>} />
+          <Route path="/tools/custom-ais" element={<ProtectedRoute><CustomAIs /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

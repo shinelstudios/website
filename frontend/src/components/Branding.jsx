@@ -1,30 +1,38 @@
-// frontend/src/components/Thumbnails.jsx
+// frontend/src/components/Branding.jsx
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 
-/* ---------- fallback demo data (used when no data file is present) ---------- */
+/* ---------- fallback demo (used if no external data present) ---------- */
 const FALLBACK = [
   {
-    id: 1,
-    title: "Sample Gaming Thumbnail",
-    desc: "High-CTR thumbnail designed for gaming creators.",
-    category: "GAMING",
-    image: "https://placehold.co/1200x800?text=Gaming+Thumbnail",
-    tags: ["Gaming", "YouTube"],
+    id: "l1",
+    title: "Esports Logo — Nova Wolves",
+    desc: "Bold crest-style logo optimized for avatars and stickers.",
+    category: "LOGO",
+    image: "https://placehold.co/1200x1200?text=Esports+Logo",
+    tags: ["Logo", "Esports", "Mascot"],
+    ratio: "1/1",
   },
   {
-    id: 2,
-    title: "Lifestyle Vlog Preview",
-    desc: "Clean and vibrant lifestyle thumbnail example.",
-    category: "VLOG",
-    image: "https://placehold.co/1200x800?text=Vlog+Thumbnail",
-    tags: ["Vlog", "Travel"],
+    id: "b1",
+    title: "YouTube Channel Banner — TravelDaily",
+    desc: "Clean banner with smart safe-area composition.",
+    category: "BANNER",
+    image: "https://placehold.co/2048x1152?text=YouTube+Banner",
+    tags: ["Banner", "YouTube", "Travel"],
+    ratio: "16/9",
+  },
+  {
+    id: "o1",
+    title: "Stream Overlay Pack — JustChatting",
+    desc: "Alerts, lower-thirds, webcam frames, BRB and offline screens.",
+    category: "OVERLAY",
+    image: "https://placehold.co/1920x1080?text=Overlay+Pack",
+    tags: ["Overlay", "Twitch", "Pack"],
+    ratio: "16/9",
   },
 ];
 
 /* ---------- helpers ---------- */
-const norm = (s = "") => String(s).toLowerCase();
-
-/** Infer a category dynamically if not provided */
 const inferCategory = (item = {}) => {
   if (item.category) return String(item.category).toUpperCase();
   const z = [
@@ -37,17 +45,23 @@ const inferCategory = (item = {}) => {
     .join(" | ")
     .toLowerCase();
 
-  if (/\blive|stream\b/.test(z)) return "LIVE";
-  if (/\bgaming|bgmi|valorant|pubg\b/.test(z)) return "GAMING";
-  if (/\bvlog\b/.test(z)) return "VLOG";
-  if (/\bdoc(umentary)?\b/.test(z)) return "DOCUMENTARY";
-  if (/\bedu(cation|tutorial|guide)\b/.test(z)) return "EDUCATION";
-  if (/\btech|review|unboxing\b/.test(z)) return "TECH";
-  if (/\bclient|brand\b/.test(z)) return "CLIENT WORK";
+  if (/\blogo|brandmark|wordmark|mascot|avatar\b/.test(z)) return "LOGO";
+  if (/\bbanner|cover|header\b/.test(z)) return "BANNER";
+  if (/\boverlay|alerts|lower-?thirds|stinger|offline\b/.test(z)) return "OVERLAY";
+  if (/\bpack|bundle|kit\b/.test(z)) return "PACKAGE";
   return "OTHER";
 };
 
-/* ---------- small UI atoms ---------- */
+const ratioStyle = (r) => {
+  if (!r) return { aspectRatio: "16 / 9" };
+  if (r.includes("/")) {
+    const [w, h] = r.split("/").map(Number);
+    if (w && h) return { aspectRatio: `${w} / ${h}` };
+  }
+  return { aspectRatio: "16 / 9" };
+};
+
+/* ---------- tiny UI atoms ---------- */
 const FilterChip = ({ children, active, onClick }) => (
   <button
     type="button"
@@ -80,33 +94,29 @@ const Tag = ({ children }) => (
   </span>
 );
 
-/* ---------- Thumbnail Card (entire card clickable via hash) ---------- */
-const ThumbCard = ({ t }) => (
+/* ---------- Card (full-card anchor + modal via hash) ---------- */
+const BrandCard = ({ item }) => (
   <article
     className="group rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl transition-all relative"
     style={{ background: "var(--surface)", borderColor: "var(--border)" }}
   >
-    {/* Full-cover anchor to open modal via hash */}
     <a
-      href={`#/thumbs/${t.id}`}
+      href={`#/branding/${item.id}`}
       className="absolute inset-0 z-[1]"
-      aria-label={`Open ${t.title}`}
+      aria-label={`Open ${item.title}`}
     />
 
-    <div className="relative w-full aspect-[16/10] bg-black/5">
-      {t.image ? (
+    <div className="relative w-full bg-black/5" style={ratioStyle(item.ratio)}>
+      {item.image ? (
         <img
-          src={t.image}
-          alt={t.title}
+          src={item.image}
+          alt={item.title}
           className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           loading="lazy"
-          onError={(e) => {
-            // hide broken image gracefully
-            e.currentTarget.style.display = "none";
-          }}
+          onError={(e) => (e.currentTarget.style.display = "none")}
         />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+        <div className="absolute inset-0 grid place-items-center text-sm text-gray-400">
           No Image
         </div>
       )}
@@ -126,32 +136,27 @@ const ThumbCard = ({ t }) => (
           border: "1px solid rgba(255,255,255,.15)",
         }}
       >
-        {t.category}
+        {item.category}
       </div>
     </div>
 
     <div className="p-4 sm:p-5 relative z-[2]">
-      <h3
-        className="text-base sm:text-lg font-semibold mb-1 line-clamp-2"
-        style={{ color: "var(--text)" }}
-      >
-        {t.title}
+      <h3 className="text-base sm:text-lg font-semibold mb-1 line-clamp-2" style={{ color: "var(--text)" }}>
+        {item.title}
       </h3>
       <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
-        {t.desc}
+        {item.desc}
       </p>
-
-      {t.tags?.length > 0 && (
+      {item.tags?.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {t.tags.map((x, i) => (
-            <Tag key={i}>{x}</Tag>
+          {item.tags.map((t, i) => (
+            <Tag key={i}>{t}</Tag>
           ))}
         </div>
       )}
-
       <div className="mt-4">
         <a
-          href={`#/thumbs/${t.id}`}
+          href={`#/branding/${item.id}`}
           className="inline-block px-3 py-1.5 rounded-lg text-white text-xs sm:text-sm"
           style={{ background: "var(--orange)" }}
         >
@@ -162,104 +167,76 @@ const ThumbCard = ({ t }) => (
   </article>
 );
 
-/* ---------- Main Page ---------- */
-export default function Thumbnails() {
-  const [rawData, setRawData] = useState(null);
+/* ---------- Page ---------- */
+export default function Branding() {
+  const [raw, setRaw] = useState(null);
 
-  // Load data at runtime (no build-time import)
+  // Load data (optional JSON / global) then fallback
   useEffect(() => {
     let cancelled = false;
-
-    const load = async () => {
-      // 1) JSON file (optional)
+    (async () => {
       try {
-        const res = await fetch("/data/thumbnailProjects.json", { cache: "no-store" });
+        const res = await fetch("/data/brandingProjects.json", { cache: "no-store" });
         if (res.ok) {
           const arr = await res.json();
-          if (!cancelled) {
-            setRawData(Array.isArray(arr) ? arr : []);
-            return;
-          }
+          if (!cancelled) { setRaw(Array.isArray(arr) ? arr : []); return; }
         }
       } catch {}
-
-      // 2) Global variable (optional)
       try {
-        const globalArr = window.__THUMBNAIL_PROJECTS__;
-        if (!cancelled && Array.isArray(globalArr)) {
-          setRawData(globalArr);
-          return;
-        }
+        const g = window.__BRANDING_PROJECTS__;
+        if (!cancelled && Array.isArray(g)) { setRaw(g); return; }
       } catch {}
-
-      // 3) Fallback
-      if (!cancelled) setRawData(FALLBACK);
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+      if (!cancelled) setRaw(FALLBACK);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  // Normalize & infer categories when data is available
+  // Normalize
   const items = useMemo(() => {
-    const src = Array.isArray(rawData) ? rawData : [];
-    return src.map((it, idx) => {
-      const cat = inferCategory(it);
-      return {
-        id: String(it.id ?? idx + 1),
-        title: it.title || `Thumbnail ${idx + 1}`,
-        desc: it.desc || it.subtitle || "Eye-catching, brand-true thumbnail.",
-        image: it.image || it.src || "",
-        category: cat,
-        tags: Array.isArray(it.tags) ? it.tags : [],
-      };
-    });
-  }, [rawData]);
+    const src = Array.isArray(raw) ? raw : [];
+    return src.map((it, i) => ({
+      id: String(it.id ?? i + 1),
+      title: it.title || `Brand Asset ${i + 1}`,
+      desc: it.desc || it.subtitle || "Crafted for clarity and recognizability across platforms.",
+      image: it.image || it.src || "",
+      category: inferCategory(it),
+      tags: Array.isArray(it.tags) ? it.tags : [],
+      ratio: it.ratio || (inferCategory(it) === "LOGO" ? "1/1" : "16/9"),
+    }));
+  }, [raw]);
 
+  // Filters
   const categories = useMemo(() => {
-    const base = [
-      "ALL",
-      "LIVE",
-      "GAMING",
-      "VLOG",
-      "DOCUMENTARY",
-      "EDUCATION",
-      "TECH",
-      "CLIENT WORK",
-      "OTHER",
-    ];
+    const base = ["ALL", "LOGO", "BANNER", "OVERLAY", "PACKAGE", "OTHER"];
     const set = new Set(base);
     items.forEach((p) => set.add((p.category || "OTHER").toUpperCase()));
     return ["ALL", ...Array.from(set).filter((c) => c !== "ALL")];
   }, [items]);
 
   const [selected, setSelected] = useState("ALL");
+  const filtered = useMemo(
+    () => (selected === "ALL" ? items : items.filter((x) => (x.category || "OTHER").toUpperCase() === selected)),
+    [items, selected]
+  );
 
-  const filtered = useMemo(() => {
-    if (selected === "ALL") return items;
-    return items.filter((x) => (x.category || "OTHER").toUpperCase() === selected);
-  }, [items, selected]);
-
-  // Fix for header overlap
+  // header offset
   useEffect(() => {
     const header = document.querySelector("header");
-    const updateHeight = () => {
+    const update = () => {
       if (header) {
         const h = Math.round(header.getBoundingClientRect().height);
         document.documentElement.style.setProperty("--header-h", `${h}px`);
       }
     };
-    updateHeight();
-    window.addEventListener("resize", updateHeight);
-    return () => window.removeEventListener("resize", updateHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   // decorative dots
   const dots = useMemo(
     () =>
-      Array.from({ length: 20 }).map((_, i) => ({
+      Array.from({ length: 18 }).map((_, i) => ({
         id: i,
         left: `${Math.random() * 100}%`,
         top: `${Math.random() * 100}%`,
@@ -269,59 +246,56 @@ export default function Thumbnails() {
     []
   );
 
-  /* ---------------- Modal + hash routing (generic) ---------------- */
+  /* --------------- Modal + hash routing (generic) --------------- */
   const [openId, setOpenId] = useState(null);
 
-  // helper: open (push hash + emit global event)
   const openById = useCallback((id, push = true) => {
     if (!id) return;
-    if (push && location.hash !== `#/thumbs/${id}`) {
-      history.pushState({}, "", `#/thumbs/${id}`);
+    if (push && location.hash !== `#/branding/${id}`) {
+      history.pushState({}, "", `#/branding/${id}`);
     }
-    // fire the global action so ANY listener can react
-    window.dispatchEvent(new CustomEvent("open:thumb", { detail: { id } }));
+    window.dispatchEvent(new CustomEvent("open:branding", { detail: { id } }));
   }, []);
 
   const closeModal = useCallback(() => {
     setOpenId(null);
-    if (/^#\/thumbs\/\w+/.test(location.hash)) {
+    if (/^#\/branding\/\w+/.test(location.hash)) {
       history.pushState({}, "", location.pathname + location.search);
     }
   }, []);
 
-  // listen to global hash-action event
+  // global action listener
   useEffect(() => {
     const onOpen = (e) => setOpenId(e.detail.id);
-    window.addEventListener("open:thumb", onOpen);
-    return () => window.removeEventListener("open:thumb", onOpen);
+    window.addEventListener("open:branding", onOpen);
+    return () => window.removeEventListener("open:branding", onOpen);
   }, []);
 
-  // deep link on load & back/forward
+  // deep link + back/forward
   useEffect(() => {
-    const match = location.hash.match(/^#\/thumbs\/(\w+)/);
-    if (match) setOpenId(match[1]);
+    const m = location.hash.match(/^#\/branding\/(\w+)/);
+    if (m) setOpenId(m[1]);
     const onPop = () => {
-      const m = location.hash.match(/^#\/thumbs\/(\w+)/);
-      setOpenId(m ? m[1] : null);
+      const mm = location.hash.match(/^#\/branding\/(\w+)/);
+      setOpenId(mm ? mm[1] : null);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // delegate clicks on the grid to anchors with href="#/thumbs/:id"
+  // delegate clicks anywhere in grid
   const gridRef = useRef(null);
   const onGridClick = useCallback(
     (e) => {
-      const a = e.target.closest('a[href^="#/thumbs/"]');
+      const a = e.target.closest('a[href^="#/branding/"]');
       if (!a) return;
-      e.preventDefault(); // prevent navigation to /
-      const m = a.getAttribute("href").match(/^#\/thumbs\/(\w+)/);
+      e.preventDefault();
+      const m = a.getAttribute("href").match(/^#\/branding\/(\w+)/);
       if (m) openById(m[1]);
     },
     [openById]
   );
 
-  // resolve currently open item
   const current = useMemo(
     () => items.find((x) => String(x.id) === String(openId)) || null,
     [items, openId]
@@ -329,26 +303,26 @@ export default function Thumbnails() {
 
   return (
     <div className="min-h-screen">
-      <title>Thumbnails | Shinel Studios</title>
+      <title>Logo / Banner / Overlays (3-in-1) | Shinel Studios</title>
       <meta
         name="description"
-        content="High-CTR thumbnails designed for clicks and retention — crafted to match your brand."
+        content="Custom logos, channel banners, and stream overlays — a cohesive brand system that looks sharp everywhere."
       />
 
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="pt-28 pb-10 relative text-center" style={{ background: "var(--hero-bg)" }}>
         <div className="container mx-auto px-4">
           <h1
             className="text-3xl sm:text-5xl md:text-6xl font-extrabold font-['Poppins']"
             style={{ color: "var(--text)" }}
           >
-            Thumbnail <span style={{ color: "var(--orange)" }}>Gallery</span>
+            Logo / Banner / <span style={{ color: "var(--orange)" }}>Overlays</span> (3-in-1)
           </h1>
           <p
             className="mt-4 text-base sm:text-lg md:text-xl max-w-3xl mx-auto"
             style={{ color: "var(--text-muted)" }}
           >
-            Designed for clicks, optimized for retention — crafted to match your brand.
+            Cohesive brand kits that scale from avatars to stream scenes and YouTube channel art.
           </p>
 
           <div className="mt-6 flex flex-wrap justify-center gap-2 px-2 sm:px-0">
@@ -379,16 +353,16 @@ export default function Thumbnails() {
         </div>
       </section>
 
-      {/* Grid Section */}
+      {/* Grid */}
       <section className="py-12 sm:py-14" style={{ background: "var(--surface)" }}>
         <div className="container mx-auto px-3 sm:px-4">
-          {!rawData ? (
+          {!raw ? (
             <p className="text-center text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
               Loading…
             </p>
           ) : filtered.length === 0 ? (
             <p className="text-center text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
-              No thumbnails available yet.
+              No brand assets yet.
             </p>
           ) : (
             <div
@@ -396,20 +370,20 @@ export default function Thumbnails() {
               onClick={onGridClick}
               className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
             >
-              {filtered.map((t) => (
-                <ThumbCard key={t.id} t={t} />
+              {filtered.map((it) => (
+                <BrandCard key={it.id} item={it} />
               ))}
             </div>
           )}
 
-          {/* CTA Row */}
+          {/* CTA */}
           <div
             className="mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl p-5"
             style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
           >
             <div className="flex items-center gap-3" style={{ color: "var(--text)" }}>
               <span className="inline-block h-5 w-5 rounded-full" style={{ background: "var(--orange)" }} />
-              <p className="font-medium">Need a thumbnail sprint for your next launch?</p>
+              <p className="font-medium">Want a unified brand kit in under a week?</p>
             </div>
             <div className="flex items-center gap-3">
               <a
@@ -450,8 +424,7 @@ export default function Thumbnails() {
               ✕
             </button>
 
-            {/* Large image preview */}
-            <div className="w-full bg-black/5" style={{ aspectRatio: "16 / 10" }}>
+            <div className="w-full bg-black/5" style={ratioStyle(current.ratio)}>
               {current.image ? (
                 <img
                   src={current.image}

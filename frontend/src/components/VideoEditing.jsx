@@ -1,5 +1,5 @@
 // src/components/VideoEditing.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { Play } from "lucide-react";
 import gamingVideos from "../data/gamingVideos.js";
 
@@ -56,69 +56,58 @@ const Tag = ({ children }) => (
   </span>
 );
 
-/* ---------- smart YouTube player ---------- */
-const YouTubeSmartPlayer = ({ youtubeId, title, thumb }) => {
-  const [playing, setPlaying] = useState(false);
-
-  if (playing) {
-    return (
-      <iframe
-        className="w-full h-full"
-        src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
-        title={title}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        referrerPolicy="strict-origin-when-cross-origin"
-        allowFullScreen
-      />
-    );
-  }
-
-  const src = thumb || ytThumb(youtubeId);
-
+/* ---------- modal YouTube player (auto-plays) ---------- */
+const YouTubeModalPlayer = ({ youtubeId, title }) => {
   return (
-    <button
-      type="button"
-      className="group relative w-full h-full overflow-hidden"
-      onClick={() => setPlaying(true)}
-      aria-label={`Play ${title}`}
-    >
-      <img
-        src={src}
-        alt={title}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-        loading="lazy"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent opacity-90" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-lg transition-all group-hover:shadow-xl">
-          <Play size={18} className="text-black" />
-          <span className="text-sm font-semibold text-black">Play</span>
-        </div>
-      </div>
-    </button>
+    <iframe
+      className="w-full h-full"
+      src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
+      title={title}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
+    />
   );
 };
 
-/* ---------- video card ---------- */
+/* ---------- video card (opens modal via hash route) ---------- */
 const VideoCard = ({ v }) => {
   const cat = inferCategory(v);
+  const cover = v.thumb || (v.type === "youtube" ? ytThumb(v.youtubeId) : undefined);
+
   return (
     <article
-      className="rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl transition-all"
+      className="group rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl transition-all relative"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
-      <div className="relative w-full aspect-video bg-black">
-        {v.type === "youtube" ? (
-          <YouTubeSmartPlayer youtubeId={v.youtubeId} title={v.title} thumb={v.thumb} />
+      {/* Full-cover anchor makes the entire card clickable */}
+      <a href={`#/videos/${v.id}`} className="absolute inset-0 z-[1]" aria-label={`Open ${v.title}`} />
+
+      <div className="relative w-full aspect-video bg-black/5">
+        {/* Poster image / preview layer */}
+        {cover ? (
+          <>
+            <img
+              src={cover}
+              alt={v.title}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+          </>
         ) : (
-          <video
-            className="w-full h-full"
-            src={v.src}
-            poster={v.thumb}
-            controls
-            preload="metadata"
-          />
+          <div className="absolute inset-0 grid place-items-center text-white/90">
+            No preview
+          </div>
         )}
+
+        {/* Play pill */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-lg transition-all group-hover:shadow-xl">
+            <Play size={18} className="text-black" />
+            <span className="text-sm font-semibold text-black">Play</span>
+          </div>
+        </div>
 
         {/* category badge */}
         <div
@@ -133,7 +122,7 @@ const VideoCard = ({ v }) => {
         </div>
       </div>
 
-      <div className="p-4 sm:p-5">
+      <div className="p-4 sm:p-5 relative z-[2]">
         <h3
           className="text-base sm:text-lg font-semibold mb-1 line-clamp-2"
           style={{ color: "var(--text)" }}
@@ -151,6 +140,16 @@ const VideoCard = ({ v }) => {
             ))}
           </div>
         )}
+
+        <div className="mt-4">
+          <a
+            href={`#/videos/${v.id}`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm"
+            style={{ background: "var(--orange)" }}
+          >
+            <Play size={16} /> View
+          </a>
+        </div>
       </div>
     </article>
   );
@@ -197,6 +196,60 @@ export default function VideoEditing() {
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
+  /* ---------------- Modal + hash routing (generic) ---------------- */
+  const [openId, setOpenId] = useState(null);
+
+  // helper: open (push hash + emit global event)
+  const openById = useCallback((id, push = true) => {
+    if (!id) return;
+    if (push && location.hash !== `#/videos/${id}`) {
+      history.pushState({}, "", `#/videos/${id}`);
+    }
+    // fire the global action so ANY listener can react
+    window.dispatchEvent(new CustomEvent("open:video", { detail: { id } }));
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setOpenId(null);
+    if (/^#\/videos\/\w+/.test(location.hash)) {
+      history.pushState({}, "", location.pathname + location.search);
+    }
+  }, []);
+
+  // listen to global hash-action event
+  useEffect(() => {
+    const onOpen = (e) => setOpenId(e.detail.id);
+    window.addEventListener("open:video", onOpen);
+    return () => window.removeEventListener("open:video", onOpen);
+  }, []);
+
+  // deep link on load & back/forward
+  useEffect(() => {
+    const match = location.hash.match(/^#\/videos\/(\w+)/);
+    if (match) setOpenId(match[1]);
+    const onPop = () => {
+      const m = location.hash.match(/^#\/videos\/(\w+)/);
+      setOpenId(m ? m[1] : null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // delegate clicks to anchors with href="#/videos/:id"
+  const onGridClick = useCallback((e) => {
+    const a = e.target.closest('a[href^="#/videos/"]');
+    if (!a) return;
+    e.preventDefault(); // prevent navigation to /
+    const m = a.getAttribute("href").match(/^#\/videos\/(\w+)/);
+    if (m) openById(m[1]);
+  }, [openById]);
+
+  // resolve currently open video
+  const current = useMemo(
+    () => gamingVideos.find((v) => String(v.id) === String(openId)) || null,
+    [openId]
+  );
+
   return (
     <div className="min-h-screen">
       {/* Meta tags */}
@@ -229,8 +282,8 @@ export default function VideoEditing() {
             className="mt-4 text-base sm:text-lg md:text-xl max-w-3xl mx-auto"
             style={{ color: "var(--text-muted)" }}
           >
-            High-impact edits, cinematic montages, trailers and shorts crafted for creators &
-            brands. Optimized for YouTube, TikTok & Reels.
+            High-impact edits, cinematic montages, trailers and shorts crafted for creators &amp;
+            brands. Optimized for YouTube, TikTok &amp; Reels.
           </p>
 
           {/* Category filters */}
@@ -247,13 +300,67 @@ export default function VideoEditing() {
       {/* Video Grid */}
       <section className="py-12 sm:py-14" style={{ background: "var(--surface)" }}>
         <div className="container mx-auto px-3 sm:px-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+          <div
+            onClick={onGridClick}
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
+          >
             {filtered.map((v) => (
               <VideoCard key={v.id} v={v} />
             ))}
           </div>
         </div>
       </section>
+
+      {/* Modal player */}
+      {openId && current && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 p-6 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
+          <div className="relative w-[min(960px,96vw)] rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-soft)] overflow-hidden">
+            <button
+              onClick={closeModal}
+              className="icon-btn absolute right-3 top-3 border border-[var(--border)] bg-[var(--surface-alt)] z-10"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            <div className="relative w-full bg-black" style={{ aspectRatio: "16 / 9" }}>
+              {current.type === "youtube" ? (
+                <YouTubeModalPlayer youtubeId={current.youtubeId} title={current.title} />
+              ) : (
+                <video
+                  className="w-full h-full"
+                  src={current.src}
+                  poster={current.thumb}
+                  controls
+                  autoPlay
+                  preload="metadata"
+                />
+              )}
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <h3 className="text-base sm:text-lg font-semibold mb-1" style={{ color: "var(--text)" }}>
+                {current.title}
+              </h3>
+              <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
+                {current.creator} • {inferCategory(current)} • {current.duration}
+              </p>
+              {current.tags?.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {current.tags.map((t, i) => (
+                    <Tag key={i}>{t}</Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

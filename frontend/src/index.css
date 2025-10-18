@@ -36,6 +36,9 @@
     --header-h:72px;                /* updated dynamically by header via ResizeObserver */
     --radius-xl:16px;
     --shadow-soft:0 8px 24px rgba(0,0,0,.10);
+
+    /* NEW: help form controls & UA styles pick correct palette */
+    color-scheme: light;
   }
 
   .dark{
@@ -63,6 +66,9 @@
     --nav-hover:#FFB48A;
 
     --shadow-soft:0 8px 24px rgba(0,0,0,.30);
+
+    /* NEW */
+    color-scheme: dark;
   }
 
   /* Sparkles theme (driven by .dark on <html>) */
@@ -82,19 +88,20 @@
     transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .5;
   }
 
-  :root.dark .ss-sparkle {
+  /* CHANGED: keep selector consistent with Tailwind's .dark on <html> */
+  .dark .ss-sparkle {
     background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,147,87,.95) 45%, rgba(255,147,87,0) 70%);
     filter: drop-shadow(0 2px 12px rgba(232,80,2,.35));
     mix-blend-mode: screen;
   }
-  :root.dark .ss-sparkle::before,
-  :root.dark .ss-sparkle::after {
+  .dark .ss-sparkle::before,
+  .dark .ss-sparkle::after {
     content: ""; position: absolute; left: 50%; top: 50%;
     width: calc(var(--s,12px) * 1.8); height: 2px; border-radius: 2px;
     transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent); opacity: .85;
   }
-  :root.dark .ss-sparkle::after {
+  .dark .ss-sparkle::after {
     transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .75;
   }
 
@@ -118,8 +125,11 @@
   @media (min-width:1440px){.container{max-width:1180px}}
   @media (min-width:1680px){.container{max-width:1280px}}
 
-  /* Gentle theme transitions (auto-disabled in reduced motion) */
-  *{transition:color .15s linear, background-color .15s linear, border-color .15s linear;}
+  /* CHANGED: limit transitions to color props only (avoid layout jank) */
+  *{
+    transition-property: color, background-color, border-color, fill, stroke;
+    transition-duration:.15s; transition-timing-function: linear;
+  }
 
   /* Reduced motion: calm everything */
   @media (prefers-reduced-motion: reduce){
