@@ -5,9 +5,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /**
  * Props:
  *  - items?: Array<{ text: string, icon?: React.FC<{ size?: number, style?: React.CSSProperties }> }>
- *  - prefersReduced?: boolean  // optional; if omitted we'll detect via matchMedia
+ *  - prefersReduced?: boolean    // optional; if omitted we'll detect via matchMedia
+ *  - forceMotion?: boolean       // NEW: force marquee even if reduced motion is on (useful for iOS)
+ *  - speed?: number              // NEW: seconds per loop (default 45)
+ *  - direction?: "rtl" | "ltr"   // NEW: scroll direction (default "rtl" → right→left)
+ *  - gapRem?: number             // NEW: gap between items in rem (default 2)
+ *  - maskWidth?: string          // NEW: CSS width for fade masks (default "clamp(20px, 8%, 60px)")
  */
-const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
+const TrustBar = ({
+  items,
+  prefersReduced: prefersReducedProp,
+  forceMotion = false,
+  speed = 45,
+  direction = "rtl",
+  gapRem = 2,
+  maskWidth = "clamp(20px, 8%, 60px)",
+}) => {
   const elements = Array.isArray(items) ? items : [];
   const trackRef = useRef(null);
   const containerRef = useRef(null);
@@ -15,6 +28,8 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isIOS, setIsIOS] = useState(false);
+
+  // Reduced-motion preference (live-updating unless explicitly provided)
   const [prefersReduced, setPrefersReduced] = useState(() => {
     if (typeof prefersReducedProp === "boolean") return prefersReducedProp;
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -25,7 +40,6 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
     return false;
   });
 
-  // Keep prefers-reduced-motion in sync if not explicitly provided as a prop
   useEffect(() => {
     if (typeof prefersReducedProp === "boolean") {
       setPrefersReduced(prefersReducedProp);
@@ -37,7 +51,6 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
     try {
       m.addEventListener?.("change", handler);
     } catch {
-      // Safari < 14 fallback
       m.addListener?.(handler);
     }
     return () => {
@@ -49,7 +62,7 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
     };
   }, [prefersReducedProp]);
 
-  // Duplicate the list 3× to allow a seamless loop
+  // Duplicate list for seamless loop (3× is plenty and light)
   const duplicatedItems = useMemo(
     () => [...elements, ...elements, ...elements],
     [elements]
@@ -63,69 +76,96 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
     setIsIOS(iOS);
   }, []);
 
-  // (iOS) Kick/re-kick the CSS animation so Safari always starts it
-  useEffect(() => {
-    if (prefersReduced || !isIOS || !trackRef.current) return;
+  // Helper: kick / re-kick the CSS animation (iOS Safari)
+  const kick = () => {
     const track = trackRef.current;
+    if (!track) return;
+    track.style.animation = "none";
+    // force reflow
+    // eslint-disable-next-line no-unused-expressions
+    track.offsetHeight;
+    track.style.animation = "";
+    track.classList.remove("animate");
+    // eslint-disable-next-line no-unused-expressions
+    track.offsetWidth;
+    track.classList.add("animate");
+    // ensure GPU layer
+    track.style.transform = "translate3d(0,0,0)";
+    track.style.webkitTransform = "translate3d(0,0,0)";
+  };
 
-    const startAnimation = () => {
-      track.style.animation = "none";
-      // force reflow
-      // eslint-disable-next-line no-unused-expressions
-      track.offsetHeight;
-      track.style.animation = "";
-      // also flip the class for good measure
-      track.classList.remove("animate");
-      // eslint-disable-next-line no-unused-expressions
-      track.offsetWidth;
-      track.classList.add("animate");
-      // ensure GPU layer
-      track.style.transform = "translate3d(0,0,0)";
-      track.style.webkitTransform = "translate3d(0,0,0)";
-    };
-
-    const t1 = setTimeout(startAnimation, 120);
-    const t2 = setTimeout(startAnimation, 480);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [prefersReduced, isIOS]);
-
-  // Pause when tab hidden; on iOS, restart on visibility gain
+  // Begin animation on mount and when toggles change (iOS is picky)
   useEffect(() => {
-    const onVis = () => {
+    // If reduced motion is requested and we are NOT forcing motion, do nothing
+    const shouldAnimate = !(prefersReduced && !forceMotion);
+    if (!shouldAnimate) return;
+
+    // Kick on iOS (and as a harmless no-op elsewhere)
+    if (trackRef.current) {
+      const t1 = setTimeout(kick, 120);
+      const t2 = setTimeout(kick, 480);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [prefersReduced, forceMotion]);
+
+  // Extra reliability hooks for WebKit/iOS (tab hidden, BFCache restore, etc.)
+  useEffect(() => {
+    const onVisibility = () => {
       const visible = !document.hidden;
       setIsVisible(visible);
-      if (visible && isIOS && trackRef.current) {
-        const track = trackRef.current;
-        track.style.animation = "none";
-        // eslint-disable-next-line no-unused-expressions
-        track.offsetHeight;
-        track.style.animation = "";
-      }
+      if (visible && trackRef.current) kick();
     };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [isIOS]);
+    const onPageShow = (e) => {
+      // Fire on BFCache restore
+      if (e.persisted && trackRef.current) kick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, []);
+
+  // Intersection observer: only run when visible in viewport (battery-friendly)
+  useEffect(() => {
+    if (!trackRef.current || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            setIsPaused(true);
+          } else {
+            setIsPaused(false);
+            // iOS sometimes needs a kick when re-entering
+            kick();
+          }
+        });
+      },
+      { root: null, threshold: 0.01 }
+    );
+    io.observe(trackRef.current);
+    return () => io.disconnect();
+  }, []);
 
   // Input handlers (touch = pause; unpause & re-kick on iOS)
   const handleTouchStart = () => setIsPaused(true);
   const handleTouchEnd = () => {
     setIsPaused(false);
-    if (isIOS && trackRef.current) {
-      requestAnimationFrame(() => {
-        const track = trackRef.current;
-        track.style.animation = "none";
-        // eslint-disable-next-line no-unused-expressions
-        track.offsetHeight;
-        track.style.animation = "";
-      });
-    }
+    // restart after touch (especially on iOS)
+    if (trackRef.current) requestAnimationFrame(kick);
   };
-
   const handleMouseEnter = () => !isIOS && setIsPaused(true);
   const handleMouseLeave = () => !isIOS && setIsPaused(false);
+
+  // Decide final animation enablement
+  const showStatic = prefersReduced && !forceMotion;
+
+  // CSS direction: rtl (right→left) by default
+  const translatePercent = direction === "rtl" ? "-33.333%" : "33.333%";
 
   return (
     <div
@@ -138,16 +178,21 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
         overflow: "hidden",
         WebkitOverflowScrolling: "touch",
         WebkitTapHighlightColor: "transparent",
+        // Expose runtime tunables as CSS vars
+        ["--marquee-duration"]: `${speed}s`,
+        ["--marquee-distance"]: translatePercent,
+        ["--marquee-gap"]: `${gapRem}rem`,
+        ["--marquee-mask"]: maskWidth,
       }}
     >
-      {prefersReduced ? (
+      {showStatic ? (
         /* Static, scrollable list for reduced motion users */
         <div
           className="static-trust-bar"
           style={{
             padding: "0.625rem 1rem",
             display: "flex",
-            gap: "1.5rem",
+            gap: "var(--marquee-gap)",
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -168,7 +213,7 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
               }}
             >
               {item.icon && (
-                <item.icon size={14} style={{ color: "var(--orange)", flexShrink: 0 }} />
+                <item.icon size={14} style={{ color: "var(--orange),", flexShrink: 0 }} />
               )}
               <span>{item.text}</span>
             </div>
@@ -199,7 +244,7 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
               left: 0,
               top: 0,
               bottom: 0,
-              width: "clamp(20px, 8%, 60px)",
+              width: "var(--marquee-mask)",
               background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
               zIndex: 1,
               pointerEvents: "none",
@@ -212,7 +257,7 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
               right: 0,
               top: 0,
               bottom: 0,
-              width: "clamp(20px, 8%, 60px)",
+              width: "var(--marquee-mask)",
               background: "linear-gradient(90deg, transparent 0%, var(--header-bg) 100%)",
               zIndex: 1,
               pointerEvents: "none",
@@ -227,7 +272,7 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "2rem",
+              gap: "var(--marquee-gap)",
               padding: "0.625rem 0",
               whiteSpace: "nowrap",
             }}
@@ -253,8 +298,8 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
                     style={{
                       color: "var(--orange)",
                       flexShrink: 0,
-                      minWidth: "14px",
-                      minHeight: "14px",
+                      minWidth: 14,
+                      minHeight: 14,
                     }}
                   />
                 )}
@@ -268,11 +313,8 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
       {/* Component-scoped CSS (kept inline for portability) */}
       <style>{`
         .trustbar {
-          --marquee-duration: 45s;
           user-select: none;
           -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
           -webkit-tap-highlight-color: transparent;
         }
         .static-trust-bar::-webkit-scrollbar { display: none; }
@@ -280,8 +322,13 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
         /* Smooth, GPU-accelerated translate for continuous scroll */
         @keyframes marquee-scroll {
           0%   { transform: translate3d(0,0,0); }
-          100% { transform: translate3d(-33.333%,0,0); }
+          100% { transform: translate3d(var(--marquee-distance),0,0); }
         }
+        @-webkit-keyframes marquee-scroll {
+          0%   { -webkit-transform: translate3d(0,0,0); transform: translate3d(0,0,0); }
+          100% { -webkit-transform: translate3d(var(--marquee-distance),0,0); transform: translate3d(var(--marquee-distance),0,0); }
+        }
+
         .marquee-track {
           will-change: transform;
           transform: translate3d(0,0,0);
@@ -314,18 +361,28 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
           -webkit-animation-play-state: paused !important;
         }
 
-        /* Speed by viewport */
-        @media (max-width: 640px) { .trustbar { --marquee-duration: 35s; } }
-        @media (min-width: 641px) and (max-width: 1024px) { .trustbar { --marquee-duration: 40s; } }
-        @media (min-width: 1025px) { .trustbar { --marquee-duration: 50s; } }
+        /* Speed by viewport (kept consistent with your previous values) */
+        @media (max-width: 640px) {
+          .trustbar { --marquee-duration: calc(${speed}s * 0.78); }
+        }
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .trustbar { --marquee-duration: calc(${speed}s * 0.89); }
+        }
+        @media (min-width: 1025px) {
+          .trustbar { --marquee-duration: ${speed}s; }
+        }
 
-        /* Respect reduced motion */
+        /* Respect reduced motion (unless forceMotion=true was set by parent) */
         @media (prefers-reduced-motion: reduce) {
           .marquee-track { animation: none !important; -webkit-animation: none !important; }
         }
 
         /* Rendering tweaks */
-        .marquee-container { -webkit-font-smoothing: antialiased; transform: translateZ(0); isolation: isolate; }
+        .marquee-container {
+          -webkit-font-smoothing: antialiased;
+          transform: translateZ(0);
+          isolation: isolate;
+        }
         .marquee-item {
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
@@ -333,11 +390,13 @@ const TrustBar = ({ items, prefersReduced: prefersReducedProp }) => {
           -webkit-transform: translate3d(0,0,0);
         }
 
-        /* iOS/Safari extras & accessibility helpers */
+        /* iOS/Safari extras */
         @supports (-webkit-touch-callout: none) {
           .marquee-container { -webkit-overflow-scrolling: touch; contain: layout style paint; }
           .marquee-track > * { transform: translateZ(0); -webkit-transform: translateZ(0); }
         }
+
+        /* Accessibility: hide masks in high-contrast modes */
         @media (prefers-contrast: high) {
           .marquee-mask-left, .marquee-mask-right { display: none; }
         }

@@ -8,7 +8,7 @@ import {
   Shield, Zap, ArrowRight, ExternalLink, Home, Briefcase, Mail,
   BarChart3, Video
 } from "lucide-react";
-import TrustBar from "./Trustbar.jsx"; // ✅ use your new component
+import TrustBar from "./Trustbar.jsx"; // ✅ your new iOS-fixed marquee
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 
@@ -126,17 +126,14 @@ function useNotifications() {
 function useKeyboardShortcuts(handlers) {
   useEffect(() => {
     const onKeyDown = (e) => {
-      // Cmd/Ctrl + K: Search/Tools
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         handlers.openTools?.();
       }
-      // Cmd/Ctrl + /: Toggle theme
       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault();
         handlers.toggleTheme?.();
       }
-      // Esc: Close all menus
       if (e.key === 'Escape') {
         handlers.closeAll?.();
       }
@@ -240,7 +237,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   useEffect(() => setFaviconForTheme(isDark), [isDark]);
 
-  // ✅ Close EVERYTHING — moved INSIDE component (fixes Rules of Hooks)
+  // ✅ Close EVERYTHING (safe on iOS/Android)
   const closeAllMenus = useCallback(() => {
     setToolsOpen(false);
     setWorkOpen(false);
@@ -380,7 +377,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     };
   }, [workOpen, toolsOpen, userMenuOpen, notifOpen, closeAllMenus]);
 
-  // lock scroll when mobile menu open
+  // lock scroll when mobile menu open (prevents page behind from moving)
   useEffect(() => {
     const lock = (v) => {
       document.documentElement.style.overflow = v ? "hidden" : "";
@@ -409,10 +406,21 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     navigate("/");
   }, [navigate]);
 
-  // helper: close mobile menu and navigate programmatically
+  // helper: robust navigate (also handles hash paths) for mobile buttons
   const go = useCallback((to) => {
     setIsMenuOpen(false);
-    setTimeout(() => navigate(to), 0);
+    // Unmount the sheet first; iOS WebKit sometimes swallows tap if route changes mid-transition
+    setTimeout(() => {
+      if (to.startsWith("/#")) {
+        // let the router keep us on the same page and update the hash
+        const [path, hash] = to.split("#");
+        if (path && path !== "/") navigate(path, { replace: false });
+        // use native hash so ScrollToHash runs and offsets by header
+        window.location.hash = `#${hash}`;
+      } else {
+        navigate(to);
+      }
+    }, 0);
   }, [navigate]);
 
   // tool search filter
@@ -428,6 +436,20 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   const NavLink = ({ label, to, icon: Icon }) => {
     const isActive = active === label;
     const reduced = prefersReduced;
+
+    // Handle hash links with an onClick so iOS navigates reliably
+    const isHash = to.includes("#");
+    const onClick = isHash
+      ? (e) => {
+          e.preventDefault();
+          closeAllMenus();
+          const [path, hash] = to.split("#");
+          if (path && path !== location.pathname) navigate(path, { replace: false });
+          // Use native update: App’s ScrollToHash will offset correctly
+          window.location.hash = `#${hash}`;
+        }
+      : closeAllMenus;
+
     return (
       <motion.div whileHover={reduced ? {} : { y: -1 }} transition={{ duration: 0.14 }}>
         <Link
@@ -437,7 +459,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           onMouseEnter={() => setHovered(label)}
           onMouseLeave={() => setHovered(null)}
           style={{ color: isActive ? "var(--nav-hover)" : "var(--nav-link)" }}
-          onClick={closeAllMenus}
+          onClick={onClick}
         >
           {Icon && <Icon size={16} />}
           <span
@@ -1292,7 +1314,13 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         </AnimatePresence>
 
         {/* Trust Bar under header on every page */}
-        <TrustBar items={trustItems} prefersReduced={prefersReduced} />
+        <TrustBar
+          items={trustItems}
+          prefersReduced={prefersReduced}
+          forceMotion   // ✅ ensure iOS always animates the marquee
+          speed={45}
+          direction="rtl"
+        />
       </motion.header>
 
       {/* Keyboard shortcuts help (Cmd+K etc.) */}
