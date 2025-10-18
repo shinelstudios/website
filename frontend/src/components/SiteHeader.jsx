@@ -1317,7 +1317,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         <TrustBar
           items={trustItems}
           prefersReduced={prefersReduced}
-          forceMotion   // ✅ ensure iOS always animates the marquee
+          forceMotion={true}
           speed={45}
           direction="rtl"
         />
