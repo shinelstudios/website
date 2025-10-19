@@ -1,27 +1,8 @@
 // src/components/ExitIntentLeadModal.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-// ⬇️ Update this import path if your QuickLeadForm file is elsewhere
 import QuickLeadForm from "./QuickLeadForm.jsx";
 
-/**
- * ExitIntentLeadModal
- *
- * Triggers:
- *  - Desktop exit-intent (mouse leaves at the top edge)
- *  - Inactivity/dwell timer: shows after dwellMs (default 10 min)
- *
- * Suppression:
- *  - Only once per session (sessionStorage). Optionally "once per user" cool-down (localStorage)
- *  - Suppress when navigating inside the site (internal links / router transitions)
- *
- * Props:
- *  - dwellMs?: number (default 600_000 = 10 min)
- *  - onceMode?: "session" | "user"  (default "session")
- *  - userCooldownDays?: number      (default 7, only if onceMode="user")
- *  - mountGuardMs?: number          (ignore triggers for first X ms; default 4000)
- *  - zIndex?: number (default 1000)
- */
 const ExitIntentLeadModal = ({
   dwellMs = 600_000,
   onceMode = "session",
@@ -31,14 +12,14 @@ const ExitIntentLeadModal = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [eligible, setEligible] = useState(false);
+  const [isCoarse, setIsCoarse] = useState(false);
 
   const mountAt = useRef(Date.now());
   const suppressUntil = useRef(0);
   const dwellTimer = useRef(null);
 
-  // --- Util: flags
   const SESSION_KEY = "ss_exit_offer_shown";
-  const USER_KEY = "ss_exit_offer_shown_at"; // timestamp (ms)
+  const USER_KEY = "ss_exit_offer_shown_at";
 
   const now = () => Date.now();
 
@@ -63,11 +44,9 @@ const ExitIntentLeadModal = ({
     try { localStorage.setItem(USER_KEY, String(now())); } catch {}
   };
 
-  // --- Internal: open modal (respect flags)
   const tryOpen = (reason) => {
     if (open) return;
-    const withinMountGuard = now() - mountAt.current < mountGuardMs;
-    if (withinMountGuard) return;
+    if (now() - mountAt.current < mountGuardMs) return;
     if (now() < suppressUntil.current) return;
     if (isShownThisSession()) return;
     if (isShownInCooldown()) return;
@@ -75,47 +54,37 @@ const ExitIntentLeadModal = ({
     setOpen(true);
     markShownThisSession();
     markShownForUser();
-    // Optional: analytics ping
     try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "exit_intent_open", reason } })); } catch {}
   };
 
   const close = () => {
     setOpen(false);
-    // Briefly suppress re-triggers (e.g., if user hovers out again)
     suppressUntil.current = now() + 10_000;
     try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "exit_intent_close" } })); } catch {}
   };
 
-  // --- Eligibility (pointer/hover-capable devices mostly considered "desktop")
+  // detect coarse pointer (mobile/tablet)
   useEffect(() => {
-    let isCoarse = false;
-    try {
-      isCoarse = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
-    } catch {}
-    // We still allow dwell fallback on any device; exit-intent is for non-coarse pointers.
-    setEligible(true);
+    let coarse = false;
+    try { coarse = window.matchMedia?.("(pointer: coarse)")?.matches ?? false; } catch {}
+    setIsCoarse(coarse);
+    setEligible(true); // both desktop and mobile eligible (mobile uses dwell only)
   }, []);
 
-  // --- Exit-intent (desktop): mouse leaving at top edge, ignore internal navigations
+  // exit-intent (desktop/top leave)
   useEffect(() => {
-    if (!eligible) return;
-
+    if (!eligible || isCoarse) return;
     const onMouseOut = (e) => {
-      // Only when pointer leaves document at top
-      const rel = e.relatedTarget;
-      if (rel) return; // moving into another element — not leaving page
-      const y = e.clientY;
-      if (y > 0) return;
-      // Avoid when we recently clicked an internal link
+      if (e.relatedTarget) return;
+      if (e.clientY > 0) return;
       if (now() < suppressUntil.current) return;
       tryOpen("mouse_exit_top");
     };
-
     document.addEventListener("mouseout", onMouseOut);
     return () => document.removeEventListener("mouseout", onMouseOut);
-  }, [eligible]);
+  }, [eligible, isCoarse]);
 
-  // --- Dwell timer (any device): show after dwellMs once per session
+  // dwell (all devices)
   useEffect(() => {
     if (!eligible) return;
     if (isShownThisSession() || isShownInCooldown()) return;
@@ -123,67 +92,55 @@ const ExitIntentLeadModal = ({
     return () => window.clearTimeout(dwellTimer.current);
   }, [eligible, dwellMs]);
 
-  // --- Suppress when navigating internally (anchor clicks / router links)
+  // suppress when clicking internal links
   useEffect(() => {
-    const isInternalClick = (ev) => {
-      // capture <a> clicks that stay on same origin
-      const a = ev
-        .composedPath()
-        .find((n) => n?.tagName === "A" && n.href) ?? null;
-      if (!a) return false;
+    const onClickCapture = (ev) => {
+      const a = ev.composedPath().find((n) => n?.tagName === "A" && n.href);
+      if (!a) return;
       try {
         const url = new URL(a.href);
-        return url.origin === window.location.origin;
-      } catch {
-        return false;
-      }
-    };
-    const onClickCapture = (ev) => {
-      if (isInternalClick(ev)) {
-        // Suppress exit-intent for a short grace period after internal navigation
-        suppressUntil.current = now() + 5_000;
-      }
+        if (url.origin === window.location.origin) {
+          suppressUntil.current = now() + 5_000;
+        }
+      } catch {}
     };
     document.addEventListener("click", onClickCapture, true);
     return () => document.removeEventListener("click", onClickCapture, true);
   }, []);
 
-  // --- Also suppress during route transitions (React Router users)
-  // If you use react-router, you can pass a location key via a prop and watch it here
-  // For a zero-dep approach, we also listen to BFCache restore and visibility.
+  // briefly suppress around tab visibility/history nav
   useEffect(() => {
     const onVisibility = () => {
-      // If user switches tabs and returns, don't immediately pop the modal.
       if (document.visibilityState === "hidden") {
         suppressUntil.current = now() + 3_000;
       }
     };
-    const onPopState = () => {
-      // Navigating within app via history/back/forward — suppress briefly
-      suppressUntil.current = now() + 3_000;
-    };
+    const onPop = () => { suppressUntil.current = now() + 3_000; };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("popstate", onPopState);
+    window.addEventListener("popstate", onPop);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("popstate", onPop);
     };
   }, []);
 
-  // --- Prevent background scroll when open
+  // iOS-safe scroll lock (use body)
   useEffect(() => {
     if (!open) return;
-    const prev = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    return () => { document.documentElement.style.overflow = prev; };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   if (!eligible) return null;
+
+  const sheet = isCoarse; // bottom sheet on mobile
 
   return (
     <AnimatePresence>
       {open && (
         <>
+          {/* Simple RGBA overlay (no backdrop-filter) */}
           <motion.div
             key="exit-backdrop"
             initial={{ opacity: 0 }}
@@ -192,60 +149,43 @@ const ExitIntentLeadModal = ({
             transition={{ duration: 0.18 }}
             className="fixed inset-0"
             aria-hidden="true"
-            style={{
-              zIndex,
-              background: "rgba(0,0,0,0.5)",
-              backdropFilter: "blur(2px)",
-            }}
+            style={{ zIndex, background: "rgba(0,0,0,0.55)" }}
             onClick={close}
           />
+          {/* Center modal (desktop) or bottom sheet (mobile) */}
           <motion.div
             key="exit-modal"
             role="dialog"
             aria-modal="true"
             aria-label="Get a quick quote"
-            initial={{ opacity: 0, y: -14, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -14, scale: 0.98 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="fixed left-1/2 top-10 -translate-x-1/2 w-[min(92vw,860px)] max-h-[88vh] overflow-auto rounded-2xl shadow-2xl"
+            initial={sheet ? { y: "100%", opacity: 1 } : { y: -14, opacity: 0.0, scale: 0.98 }}
+            animate={sheet ? { y: 0, opacity: 1 } : { y: 0, opacity: 1, scale: 1 }}
+            exit={sheet ? { y: "100%", opacity: 1 } : { y: -14, opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+            className={sheet
+              ? "fixed left-0 right-0 bottom-0 w-full max-h-[85vh] overflow-auto rounded-t-2xl shadow-2xl"
+              : "fixed left-1/2 top-10 -translate-x-1/2 w-[min(92vw,860px)] max-h-[88vh] overflow-auto rounded-2xl shadow-2xl"
+            }
             style={{
               zIndex: zIndex + 1,
               background: "var(--surface)",
               border: "1px solid var(--border)",
             }}
           >
-            {/* Header */}
             <div
-              className="sticky top-0 flex items-center justify-between px-4 md:px-6 py-3"
-              style={{
-                background: "color-mix(in oklab, var(--surface) 92%, transparent)",
-                borderBottom: "1px solid var(--border)",
-              }}
+              className={sheet ? "sticky top-0 px-4 py-3 flex items-center justify-between" : "sticky top-0 px-4 md:px-6 py-3 flex items-center justify-between"}
+              style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}
             >
               <div className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: "var(--orange)" }}
-                  aria-hidden="true"
-                />
+                <span className="w-2 h-2 rounded-full" style={{ background: "var(--orange)" }} />
                 <span className="text-sm md:text-base font-semibold" style={{ color: "var(--text)" }}>
                   Before you go — want a quick quote?
                 </span>
               </div>
-
-              <button
-                onClick={close}
-                className="rounded-lg px-2 py-1 text-sm"
-                style={{ color: "var(--text)" }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
+              <button onClick={close} className="rounded-lg px-2 py-1 text-sm" style={{ color: "var(--text)" }} aria-label="Close">✕</button>
             </div>
 
-            {/* Body: your existing form */}
-            <div className="px-4 md:px-6 py-4 md:py-6">
+            <div className={sheet ? "px-4 py-4" : "px-4 md:px-6 py-4 md:py-6"}>
               <QuickLeadForm />
               <p className="mt-3 text-[11px] text-center" style={{ color: "var(--text-muted)" }}>
                 We’ll show this only once {onceMode === "user" ? "every few visits" : "this session"}.

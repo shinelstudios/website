@@ -2,7 +2,28 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
+/** Detect compact (mobile-ish) screens safely (SSR-friendly) */
+function useCompact() {
+  const [compact, setCompact] = React.useState(false);
+  React.useEffect(() => {
+    const mm = [
+      window.matchMedia?.("(max-width: 640px)"),
+      window.matchMedia?.("(pointer: coarse)"),
+    ].filter(Boolean);
+
+    const compute = () =>
+      mm.some((m) => (m?.matches ? true : false));
+
+    setCompact(compute());
+    mm.forEach((m) => m?.addEventListener?.("change", () => setCompact(compute())));
+    return () => mm.forEach((m) => m?.removeEventListener?.("change", () => setCompact(compute())));
+  }, []);
+  return compact;
+}
+
 const QuickLeadForm = () => {
+  const isCompact = useCompact();
+
   const [name, setName] = React.useState("");
   const [handle, setHandle] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -45,6 +66,7 @@ const QuickLeadForm = () => {
       return on ? prev.filter((x) => x !== label) : [...prev, label];
     });
 
+  // UTM capture
   const getUTM = () => {
     try { return JSON.parse(localStorage.getItem("utm") || "{}"); } catch { return {}; }
   };
@@ -78,6 +100,7 @@ const QuickLeadForm = () => {
     return `${base}?text=${encodeURIComponent(text)}`;
   };
 
+  // Restore autosave
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem("ss_lead");
@@ -92,11 +115,13 @@ const QuickLeadForm = () => {
     } catch {}
   }, []);
 
+  // Autosave
   React.useEffect(() => {
     const payload = { name, handle, email, selected, msg, contactMethod };
     try { localStorage.setItem("ss_lead", JSON.stringify(payload)); } catch {}
   }, [name, handle, email, selected, msg, contactMethod]);
 
+  // Hide sticky mobile CTA while typing
   React.useEffect(() => {
     const el = formRef.current;
     if (!el) return;
@@ -157,14 +182,35 @@ const QuickLeadForm = () => {
     }
   };
 
+  /** ---------- Layout variants ---------- **/
+  const containerClasses = isCompact
+    ? "container mx-auto px-4 max-w-[94vw]"
+    : "container mx-auto px-4 sm:px-6 lg:px-8 max-w-[90vw] md:max-w-2xl lg:max-w-3xl";
+
+  const gridClasses = isCompact
+    ? "grid grid-cols-1 gap-3"
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3";
+
+  const inputClasses = isCompact
+    ? "w-full h-12 rounded-2xl px-4 outline-none text-base"
+    : "w-full h-12 rounded-2xl px-4 outline-none text-sm sm:text-base";
+
+  const ctaWrapClasses = isCompact
+    ? "flex flex-col gap-2 pt-1"
+    : "flex flex-col sm:flex-row gap-3 pt-1";
+
+  const headingSize = isCompact ? "text-2xl" : "text-3xl md:text-4xl";
+  const subHeadingSize = isCompact ? "text-sm" : "text-base md:text-lg";
+
   return (
     <section
       id="leadform-section"
-      className="py-14"
+      className={isCompact ? "py-8" : "py-14"}
       style={{ background: "var(--surface-alt)" }}
       aria-labelledby="leadform-heading"
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[90vw] md:max-w-2xl lg:max-w-3xl relative" ref={formRef}>
+      <div className={`${containerClasses} relative`} ref={formRef}>
+        {/* Toast */}
         <AnimatePresence>
           {toast && (
             <motion.div
@@ -189,21 +235,31 @@ const QuickLeadForm = () => {
           )}
         </AnimatePresence>
 
-        <div className="text-center mb-8">
+        {/* Heading */}
+        <div className={isCompact ? "text-center mb-6" : "text-center mb-8"}>
           <h3
             id="leadform-heading"
-            className="text-3xl md:text-4xl font-bold font-['Poppins']"
+            className={`${headingSize} font-bold font-['Poppins']`}
             style={{ color: "var(--text)" }}
           >
             Get a Quick Quote
           </h3>
-          <p className="mt-2 text-base md:text-lg" style={{ color: "var(--text-muted)" }}>
+          <p className={`mt-2 ${subHeadingSize}`} style={{ color: "var(--text-muted)" }}>
             Tell us where you post — we'll reply within 24 hours.
           </p>
-          <div className="mt-3 flex items-center justify-center gap-3 text-xs flex-wrap" style={{ color: "var(--text-muted)" }}>
-            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>No spam</span>
-            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>Consent-first AI</span>
-            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>Reply in 24h</span>
+          <div
+            className={`mt-3 flex items-center justify-center gap-2 ${isCompact ? "text-[11px]" : "text-xs"} flex-wrap`}
+            style={{ color: "var(--text-muted)" }}
+          >
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>
+              No spam
+            </span>
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>
+              Consent-first AI
+            </span>
+            <span className="px-2 py-1 rounded-full border" style={{ borderColor: "var(--border)" }}>
+              Reply in 24h
+            </span>
           </div>
         </div>
 
@@ -222,7 +278,8 @@ const QuickLeadForm = () => {
 
         {/* Form */}
         <form onSubmit={onSubmit} noValidate className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Top row */}
+          <div className={gridClasses}>
             <div>
               <label htmlFor="lead-name" className="block text-sm mb-1" style={{ color: "var(--text)" }}>
                 Your Name *
@@ -231,7 +288,7 @@ const QuickLeadForm = () => {
                 id="lead-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-12 rounded-2xl px-4 outline-none text-sm sm:text-base"
+                className={inputClasses}
                 style={inputStyle}
                 placeholder="Alex from Daily Vlogs"
                 autoComplete="name"
@@ -247,7 +304,7 @@ const QuickLeadForm = () => {
                 id="lead-handle"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
-                className="w-full h-12 rounded-2xl px-4 outline-none text-sm sm:text-base"
+                className={inputClasses}
                 style={inputStyle}
                 placeholder="@gaminglegend or youtube.com/yourchannel"
                 autoComplete="off"
@@ -264,7 +321,7 @@ const QuickLeadForm = () => {
                 inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 rounded-2xl px-4 outline-none text-sm sm:text-base"
+                className={inputClasses}
                 style={inputStyle}
                 placeholder="creator@email.com"
                 autoComplete="email"
@@ -277,8 +334,11 @@ const QuickLeadForm = () => {
             </div>
           </div>
 
+          {/* Preferred contact */}
           <fieldset className="mt-1">
-            <legend className="text-sm mb-2" style={{ color: "var(--text)" }}>How should we contact you?</legend>
+            <legend className="text-sm mb-2" style={{ color: "var(--text)" }}>
+              How should we contact you?
+            </legend>
             <div className="flex gap-3">
               {[
                 { k: "email", label: "Email" },
@@ -298,6 +358,7 @@ const QuickLeadForm = () => {
             </div>
           </fieldset>
 
+          {/* Interest chips */}
           <div>
             <div className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
               What are you most interested in?
@@ -327,6 +388,7 @@ const QuickLeadForm = () => {
             </div>
           </div>
 
+          {/* Notes */}
           <div>
             <label htmlFor="lead-note" className="block text-sm mb-1" style={{ color: "var(--text)" }}>
               Anything specific you want us to know? (optional)
@@ -336,7 +398,7 @@ const QuickLeadForm = () => {
                 id="lead-note"
                 value={msg}
                 onChange={(e) => setMsg(e.target.value)}
-                rows={6}
+                rows={isCompact ? 5 : 6}
                 maxLength={400}
                 className="w-full rounded-2xl px-4 py-3 resize-y outline-none"
                 style={inputStyle}
@@ -348,14 +410,15 @@ const QuickLeadForm = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-1">
+          {/* CTAs */}
+          <div className={ctaWrapClasses}>
             <motion.button
               type="submit"
               disabled={!valid || sending}
-              className="flex-1 rounded-xl py-3 font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed"
+              className={`rounded-xl py-3 font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed ${isCompact ? "" : "flex-1"}`}
               style={{
                 background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                boxShadow: "0 4px 12px rgba(232,80,2,0.25)"
+                boxShadow: "0 4px 12px rgba(232,80,2,0.25)",
               }}
               whileHover={!sending ? { y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" } : {}}
               whileTap={!sending ? { scale: 0.98 } : {}}
@@ -368,23 +431,25 @@ const QuickLeadForm = () => {
               href={whatsappURL()}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 flex items-center justify-center rounded-xl py-3 font-semibold"
+              className={`flex items-center justify-center rounded-xl py-3 font-semibold ${isCompact ? "" : "flex-1"}`}
               style={{
                 border: "2px solid var(--orange)",
                 color: "var(--orange)",
-                background: "rgba(232,80,2,0.05)"
+                background: "rgba(232,80,2,0.05)",
               }}
               whileHover={{ y: -2, background: "rgba(232,80,2,0.1)" }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
-                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "leadform" } })); } catch {}
+                try {
+                  window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "leadform" } }));
+                } catch {}
               }}
             >
               Message on WhatsApp
             </motion.a>
           </div>
 
-          <p className="mt-2 text-xs text-center md:text-left" style={{ color: "var(--text-muted)" }}>
+          <p className={`mt-2 ${isCompact ? "text-[11px] text-center" : "text-xs text-center md:text-left"}`} style={{ color: "var(--text-muted)" }}>
             By contacting us, you agree to receive a one-time reply on your email or WhatsApp. We don't send newsletters from this form.
           </p>
         </form>
