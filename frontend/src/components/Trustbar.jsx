@@ -1,29 +1,52 @@
-// frontend/src/components/TrustBar.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
+/**
+ * Reusable, responsive, auto-scrolling trust/logo bar.
+ * - [NEW] Uses a pixels-per-second (speedPps) prop for responsive, consistent speed.
+ * - [NEW] Auto-measures content and adjusts duration dynamically.
+ * - [FIX] Replaced all CSS 'gap' properties with 'margin-left' for broad iOS support.
+ * - [FIX] Simplified animation logic; removed 'kick()' function for better stability.
+ * - [FIX] Removed 'drag-to-scrub' feature to prevent jank on touch devices.
+ * - Pauses on hover/touch and when off-screen (IntersectionObserver).
+ * - Respects prefers-reduced-motion.
+ *
+ * Props:
+ * - items: Array<{icon: React.ComponentType, text: string}>
+ * - prefersReduced: boolean (optional override)
+ * - forceMotion: boolean (ignore reduced-motion)
+ * - speedPps: number (pixels per second, default 40)
+ * - direction: "rtl" | "ltr" (default "rtl")
+ * - gapRem: number (gap between items in rem, default 2)
+ * - maskWidth: string (CSS value for fade mask, default "clamp(20px, 8%, 60px)")
+ * - boostOnHover: boolean (speed boost on hover/press)
+ * - boostFactor: number (lower = faster, default 0.6)
+ */
 const TrustBar = ({
   items,
   prefersReduced: prefersReducedProp,
   forceMotion = false,
-  speed = 45,                 // seconds per loop
-  direction = "rtl",          // "rtl" or "ltr"
+  speedPps = 40, // [MODIFIED] Changed to pixels-per-second
+  direction = "rtl",
   gapRem = 2,
   maskWidth = "clamp(20px, 8%, 60px)",
-  boostOnHover = true,        // speed boost on hover/press
-  boostFactor = 0.6,          // lower = faster (duration * factor)
-  enableScrub = true,         // drag to scrub on touch
+  boostOnHover = true,
+  boostFactor = 0.6,
 }) => {
   const elements = Array.isArray(items) ? items : [];
-  const trackRef = useRef(null);
+  if (elements.length === 0) return null;
+
+  const segmentRef = useRef(null); // Ref to measure the first segment
+  const trackRef = useRef(null);   // Ref for the track containing both segments
   const containerRef = useRef(null);
 
   const [isPaused, setIsPaused] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isIOS, setIsIOS] = useState(false);
   const [isBoosted, setIsBoosted] = useState(false);
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubStartX, setScrubStartX] = useState(0);
-  const [scrubOffsetX, setScrubOffsetX] = useState(0);
+
+  // Animation state
+  const [animationDuration, setAnimationDuration] = useState("60s"); // Default duration
+  const [animationDistance, setAnimationDistance] = useState("0px");
 
   const [prefersReduced, setPrefersReduced] = useState(() => {
     if (typeof prefersReducedProp === "boolean") return prefersReducedProp;
@@ -47,10 +70,9 @@ const TrustBar = ({
     return () => m.removeEventListener?.("change", handler);
   }, [prefersReducedProp]);
 
-  // Triple the items so we can loop seamlessly
-  const duplicatedItems = useMemo(() => [...elements, ...elements, ...elements], [elements]);
+  // [NEW] We only need two copies for a seamless loop
+  const duplicatedItems = useMemo(() => [...elements, ...elements], [elements]);
 
-  // iOS detection (for subtle behavior tweaks)
   useEffect(() => {
     try {
       const iOS =
@@ -60,129 +82,92 @@ const TrustBar = ({
     } catch {}
   }, []);
 
-  // Kick/restart animation
-  const kick = () => {
-    const track = trackRef.current;
-    if (!track) return;
-    track.style.animation = "none";
-    // reflow
-    // eslint-disable-next-line no-unused-expressions
-    track.offsetHeight;
-    track.style.animation = "";
-    track.classList.remove("animate");
-    // reflow
-    // eslint-disable-next-line no-unused-expressions
-    track.offsetWidth;
-    track.classList.add("animate");
-    // ensure GPU acceleration
-    track.style.transform = "translate3d(0,0,0)";
-    track.style.webkitTransform = "translate3d(0,0,0)";
-  };
-
-  // Start/keep the animation alive
+  // [NEW] Measure segment width and calculate animation properties
   useEffect(() => {
-    const shouldAnimate = !(prefersReduced && !forceMotion);
-    if (!shouldAnimate) return;
-    if (trackRef.current) {
-      const t1 = setTimeout(kick, 120);
-      const t2 = setTimeout(kick, 480);
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
+    const gapPx = { current: 0 };
+
+    const updateMarqueeMetrics = () => {
+      const seg = segmentRef.current;
+      if (!seg || typeof window === 'undefined') return;
+
+      // Calculate gap in pixels based on root font size
+      gapPx.current = parseFloat(getComputedStyle(document.documentElement).fontSize) * gapRem;
+      
+      const segmentWidth = seg.scrollWidth;
+      // Total distance to travel = width of segment + gap between segments
+      const totalDistance = segmentWidth + gapPx.current; 
+      
+      const pxPerSec = Math.max(10, Number(speedPps) || 40);
+      const durationSec = totalDistance / pxPerSec;
+
+      setAnimationDuration(`${durationSec.toFixed(3)}s`);
+      setAnimationDistance(`${totalDistance.toFixed(2)}px`); 
+    };
+
+    // Initial calculation on mount, after layout
+    const rafId = requestAnimationFrame(updateMarqueeMetrics);
+
+    let ro;
+    if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
+      ro = new ResizeObserver(updateMarqueeMetrics);
+      if (segmentRef.current) {
+        ro.observe(segmentRef.current);
+      }
     }
-  }, [prefersReduced, forceMotion, direction, speed, elements.length]);
+    
+    // Always add resize listener for fallback and to catch rem/font-size changes
+    window.addEventListener('resize', updateMarqueeMetrics);
 
-  // Handle tab/page visibility
-  useEffect(() => {
-    const onVisibility = () => {
-      const visible = !document.hidden;
-      setIsVisible(visible);
-      if (visible && trackRef.current) kick();
-    };
-    const onPageShow = (e) => {
-      if (e.persisted && trackRef.current) kick();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pageshow", onPageShow);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pageshow", onPageShow);
-    };
-  }, []);
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', updateMarqueeMetrics);
+    }
+  }, [speedPps, gapRem, elements.length]); // Recalc if these change
 
-  // Pause when not on screen
+
+  // [MODIFIED] Pause when not on screen (simplified)
   useEffect(() => {
-    if (!trackRef.current || !("IntersectionObserver" in window)) return;
+    if (!containerRef.current || !("IntersectionObserver" in window)) return;
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) {
-            setIsPaused(true);
-          } else {
-            setIsPaused(false);
-            kick();
-          }
-        });
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting); // Just set visibility state
       },
       { root: null, threshold: 0.01 }
     );
-    io.observe(trackRef.current);
+    io.observe(containerRef.current);
     return () => io.disconnect();
   }, []);
 
-  // Hover / touch pause + speed boost
-  const handleTouchStart = (e) => {
+  // [MODIFIED] Simplified event handlers (no scrub)
+  const handleTouchStart = useCallback(() => {
     setIsPaused(true);
     if (boostOnHover) setIsBoosted(true);
-    if (enableScrub) {
-      setIsScrubbing(true);
-      setScrubStartX(e.touches?.[0]?.clientX ?? 0);
-      setScrubOffsetX(0);
-    }
-  };
-  const handleTouchMove = (e) => {
-    if (!isScrubbing || !enableScrub) return;
-    const x = e.touches?.[0]?.clientX ?? 0;
-    const delta = x - scrubStartX;
-    setScrubOffsetX(delta);
-    // apply a manual translate during scrub
-    const track = trackRef.current;
-    if (track) {
-      track.style.transition = "none";
-      track.style.transform = `translate3d(${delta}px,0,0)`;
-    }
-  };
-  const handleTouchEnd = () => {
+  }, [boostOnHover]);
+
+  const handleTouchEnd = useCallback(() => {
     setIsPaused(false);
     if (boostOnHover) setIsBoosted(false);
-    if (enableScrub) {
-      setIsScrubbing(false);
-      setScrubOffsetX(0);
-      // resume CSS animation from clean state
-      if (trackRef.current) {
-        trackRef.current.style.transition = "";
-        trackRef.current.style.transform = "translate3d(0,0,0)";
-        requestAnimationFrame(kick);
-      }
-    }
-  };
-  const handleMouseEnter = () => {
+  }, [boostOnHover]);
+
+  const handleMouseEnter = useCallback(() => {
     if (!isIOS) {
       setIsPaused(true);
       if (boostOnHover) setIsBoosted(true);
     }
-  };
-  const handleMouseLeave = () => {
+  }, [isIOS, boostOnHover]);
+
+  const handleMouseLeave = useCallback(() => {
     if (!isIOS) {
       setIsPaused(false);
       if (boostOnHover) setIsBoosted(false);
     }
-  };
+  }, [isIOS, boostOnHover]);
+
 
   const showStatic = prefersReduced && !forceMotion;
   const animateDir = direction === "rtl" ? "rtl" : "ltr";
-  const baseDuration = Math.max(4, Number(speed) || 45); // clamp sane min
+  const baseDuration = parseFloat(animationDuration) || 60;
   const boostedDuration = Math.max(2, baseDuration * boostFactor);
   const effectiveDuration = isBoosted ? boostedDuration : baseDuration;
 
@@ -198,10 +183,13 @@ const TrustBar = ({
         WebkitOverflowScrolling: "touch",
         WebkitTapHighlightColor: "transparent",
         ["--marquee-duration"]: `${effectiveDuration}s`,
-        ["--marquee-gap"]: `${gapRem}rem`,
+        ["--marquee-boost-duration"]: `${boostedDuration}s`, // For transitions
+        ["--marquee-gap-rem"]: `${gapRem}`,
+        ["--marquee-gap"]: `calc(var(--marquee-gap-rem) * 1rem)`,
         ["--marquee-mask"]: maskWidth,
+        ["--animation-duration"]: `${effectiveDuration}s`,
+        ["--animation-distance"]: animationDistance,
       }}
-      aria-live="off"
     >
       {showStatic ? (
         <div
@@ -209,7 +197,7 @@ const TrustBar = ({
           style={{
             padding: "0.625rem 1rem",
             display: "flex",
-            gap: "var(--marquee-gap)",
+            // [FIX] No 'gap', use margin fallback (see CSS)
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -219,12 +207,13 @@ const TrustBar = ({
           {elements.map((item, i) => (
             <div
               key={`static-${i}`}
+              className="static-trust-item"
               style={{
                 whiteSpace: "nowrap",
-                fontSize: "0.75rem",
+                fontSize: "clamp(0.6875rem, 1.5vw, 0.875rem)", // [FIX] Consistent font size
                 color: "var(--text)",
                 display: "inline-flex",
-                gap: "0.5rem",
+                gap: "0.5rem", // 'gap' inside item is fine
                 alignItems: "center",
                 flexShrink: 0,
               }}
@@ -241,12 +230,12 @@ const TrustBar = ({
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd} // [FIX] Handle touch cancel
           style={{
             position: "relative",
             overflow: "hidden",
-            cursor: enableScrub ? "ew-resize" : "default",
+            cursor: "default", // [FIX] No 'ew-resize'
             WebkitUserSelect: "none",
             userSelect: "none",
           }}
@@ -256,9 +245,7 @@ const TrustBar = ({
             className="marquee-mask-left"
             style={{
               position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
+              left: 0, top: 0, bottom: 0,
               width: "var(--marquee-mask)",
               background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
               zIndex: 1,
@@ -269,52 +256,58 @@ const TrustBar = ({
             className="marquee-mask-right"
             style={{
               position: "absolute",
-              right: 0,
-              top: 0,
-              bottom: 0,
+              right: 0, top: 0, bottom: 0,
               width: "var(--marquee-mask)",
-              background: "linear-gradient(90deg, transparent 0%, var(--header-bg) 100%)",
+              background: "linear-gradient(270deg, var(--header-bg) 0%, transparent 100%)", // [FIX] Corrected gradient direction
               zIndex: 1,
               pointerEvents: "none",
             }}
           />
 
+          {/* [MODIFIED] New track structure */}
           <div
             ref={trackRef}
-            className={`marquee-track animate ${isPaused ? "paused" : ""} ${!isVisible ? "hidden-tab" : ""} ${isIOS ? "ios-track" : ""}`}
+            className={`marquee-track ${isPaused || !isVisible ? "paused" : ""}`}
             style={{
-              display: "inline-flex",
+              display: "flex", // Use flex for the track
+              width: "max-content",
               alignItems: "center",
-              gap: "var(--marquee-gap)",
-              padding: "0.625rem 0",
-              whiteSpace: "nowrap",
               willChange: "transform",
+              transform: "translate3d(0,0,0)",
+              animation: "marquee-scroll var(--animation-duration) linear infinite",
+              animationDirection: animateDir === 'rtl' ? 'normal' : 'reverse',
+              animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
+              transition: "animation-duration 0.3s ease-out", // Smooth speed boost
             }}
           >
-            {duplicatedItems.map((item, i) => (
-              <span
-                key={`item-${i}`}
-                className="marquee-item"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "clamp(0.6875rem, 1.5vw, 0.875rem)",
-                  lineHeight: 1.2,
-                  color: "var(--text)",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
-              >
-                {item.icon && (
-                  <item.icon
-                    size={14}
-                    style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
-                  />
-                )}
-                <span>{item.text}</span>
-              </span>
-            ))}
+            {/* Segment A (Measured) */}
+            <ul ref={segmentRef} className="marquee-segment">
+              {elements.map((item, i) => (
+                <li key={`item-a-${i}`} className="marquee-item">
+                  {item.icon && (
+                    <item.icon
+                      size={14}
+                      style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
+                    />
+                  )}
+                  <span>{item.text}</span>
+                </li>
+              ))}
+            </ul>
+            {/* Segment B (Clone) */}
+            <ul className="marquee-segment" aria-hidden="true">
+              {elements.map((item, i) => (
+                <li key={`item-b-${i}`} className="marquee-item">
+                  {item.icon && (
+                    <item.icon
+                      size={14}
+                      style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
+                    />
+                  )}
+                  <span>{item.text}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
@@ -322,54 +315,65 @@ const TrustBar = ({
       <style>{`
 /* =============== TrustBar Scoped Styles & Animations =============== */
 
-.trustbar .marquee-track.animate {
-  animation-duration: var(--marquee-duration);
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  animation-name: marquee-rtl; /* default; overridden by container dir class */
+/* [NEW] Keyframes driven by CSS vars */
+@keyframes marquee-scroll {
+  from { transform: translate3d(0,0,0); }
+  to   { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
 }
 
-.trustbar .dir-ltr .marquee-track.animate {
-  animation-name: marquee-ltr;
-}
-
-/* Pause states */
-.trustbar .marquee-track.paused,
-.trustbar .marquee-track.hidden-tab {
+.trustbar .marquee-track.paused {
   animation-play-state: paused !important;
 }
 
-/* iOS-specific smoothing */
-.trustbar .marquee-track.ios-track {
-  transform: translate3d(0,0,0);
-  -webkit-transform: translate3d(0,0,0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  perspective: 1000;
-  -webkit-perspective: 1000;
+/* [NEW] Segment styling */
+.trustbar .marquee-segment {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.625rem 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  /* 'gap' replaced by margin on items */
 }
 
-/* Keyframes:
-   We tripled the content; moving by -33.333% (or +33.333% for LTR) yields a seamless loop.
-*/
-@keyframes marquee-rtl {
-  from { transform: translate3d(0,0,0); }
-  to   { transform: translate3d(-33.333%, 0, 0); }
-}
-@keyframes marquee-ltr {
-  from { transform: translate3d(0,0,0); }
-  to   { transform: translate3d(33.333%, 0, 0); }
+/* [NEW] Margin fallback for gap between segments */
+.trustbar .marquee-segment:not(:first-child) {
+  margin-left: var(--marquee-gap);
 }
 
-/* Hide default scrollbars for static mode on WebKit */
+/* [NEW] Item styling */
+.trustbar .marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem; /* gap inside item is fine */
+  font-size: clamp(0.6875rem, 1.5vw, 0.875rem);
+  line-height: 1.2;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-inline: 0.1rem; /* Slight touch target increase */
+}
+
+/* [NEW] Margin fallback for gap between items */
+.trustbar .marquee-segment > .marquee-item:not(:first-child) {
+  margin-left: var(--marquee-gap);
+}
+
+
+/* --- Static (Reduced Motion) Fallback --- */
+
+/* [FIX] Margin fallback for static list */
+.trustbar .static-trust-item:not(:first-child) {
+  margin-left: var(--marquee-gap);
+}
+
+/* Hide default scrollbars for static mode */
 .trustbar .static-trust-bar::-webkit-scrollbar { display: none; }
+.trustbar .static-trust-bar { scrollbar-width: none; -ms-overflow-style: none; }
 
-/* Slight accessibility tuning: increase touch target affordance */
-.trustbar .marquee-item { padding-inline: 0.1rem; }
-
-/* Optional hover boost cursor feedback (desktop) */
-@media (hover:hover) and (pointer:fine) {
-  .trustbar .marquee-container { cursor: ${enableScrub ? 'ew-resize' : 'default'}; }
+/* iOS-specific smoothing (still useful) */
+.trustbar .marquee-track {
+  -webkit-backface-visibility: hidden;
+  -webkit-perspective: 1000;
 }
       `}</style>
     </div>

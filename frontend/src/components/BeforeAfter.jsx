@@ -1,7 +1,10 @@
-// src/components/BeforeAfter.jsx
-
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  animate,
+} from "framer-motion";
 
 /* ===================== Enhanced Before/After (keyboard + drag + animations) ===================== */
 const BeforeAfter = ({
@@ -13,12 +16,18 @@ const BeforeAfter = ({
   width = 1280,
   height = 720,
 }) => {
+  // [NEW] Use MotionValue for performant, non-React-rerender updates
+  const vPct = useMotionValue(50);
+
+  // [NEW] Keep a separate React state *only* for ARIA attributes
+  // This syncs from the MotionValue but doesn't drive the animation
   const [v, setV] = useState(50);
+  useEffect(() => vPct.on("change", setV), [vPct]);
+
   const [isHovering, setIsHovering] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const wrapRef = useRef(null);
   const dragging = useRef(false);
-  const animationFrameRef = useRef(null);
 
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -27,15 +36,16 @@ const BeforeAfter = ({
 
   const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
+  // [MODIFIED] setFromClientX now updates the MotionValue directly
   const setFromClientX = (clientX) => {
     const el = wrapRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const pct = ((clientX - rect.left) / rect.width) * 100;
-    setV(clamp(pct, 0, 100));
+    vPct.set(clamp(pct, 0, 100)); // Use .set() for a direct update
   };
 
-  // Pointer handlers with iOS optimization
+  // Pointer handlers
   useEffect(() => {
     const onMove = (e) => {
       if (!dragging.current) return;
@@ -51,7 +61,6 @@ const BeforeAfter = ({
       setIsDragging(false);
     };
 
-    // iOS-friendly event listeners
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
     document.addEventListener("touchmove", onMove, { passive: false });
@@ -65,14 +74,12 @@ const BeforeAfter = ({
       document.removeEventListener("touchend", onUp);
       document.removeEventListener("touchcancel", onUp);
     };
-  }, []);
+  }, [vPct]); // [MODIFIED] Add vPct to dependency array
 
-  // Auto-play demo on first view with iOS optimization
+  // Auto-play demo on first view
   const [hasPlayed, setHasPlayed] = useState(false);
-  
   useEffect(() => {
     if (hasPlayed || reduceMotion) return;
-    
     const el = wrapRef.current;
     if (!el || !("IntersectionObserver" in window)) return;
 
@@ -80,28 +87,15 @@ const BeforeAfter = ({
       ([entry]) => {
         if (entry.isIntersecting && !hasPlayed) {
           setHasPlayed(true);
-          // Smooth auto-slide demo with iOS optimization
-          let start = null;
-          const duration = 2000;
           
-          const animate = (timestamp) => {
-            if (!start) start = timestamp;
-            const progress = Math.min((timestamp - start) / duration, 1);
-            
-            if (progress < 1) {
-              // Ease in-out
-              const eased = progress < 0.5
-                ? 2 * progress * progress
-                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-              setV(50 + (eased * 50 - 25));
-              animationFrameRef.current = requestAnimationFrame(animate);
-            } else {
-              setV(50);
-              animationFrameRef.current = null;
-            }
-          };
+          // [MODIFIED] Use Framer Motion's animate utility for performant auto-play
+          const controls = animate(vPct, [50, 75, 25, 50], {
+            duration: 2,
+            ease: "easeInOut",
+          });
           
-          animationFrameRef.current = requestAnimationFrame(animate);
+          // Store controls to stop them on unmount
+          el.animationControls = controls;
         }
       },
       { threshold: 0.3, rootMargin: "0px" }
@@ -110,11 +104,15 @@ const BeforeAfter = ({
     io.observe(el);
     return () => {
       io.disconnect();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (el.animationControls) {
+        el.animationControls.stop();
       }
     };
-  }, [hasPlayed, reduceMotion]);
+  }, [hasPlayed, reduceMotion, vPct]);
+
+  // [NEW] Create transform MotionValues
+  const clip = useTransform(vPct, (latest) => `inset(0 ${100 - latest}% 0 0)`);
+  const left = useTransform(vPct, (latest) => `${latest}%`);
 
   return (
     <figure className="w-full max-w-4xl mx-auto" role="group" aria-labelledby="ba-caption">
@@ -181,11 +179,12 @@ const BeforeAfter = ({
         </div>
 
         {/* BEFORE image (revealed by clipPath) */}
-        <div
+        {/* [MODIFIED] Converted to motion.div and using style={clip} */}
+        <motion.div
           className="absolute inset-0"
           style={{
-            clipPath: `inset(0 ${100 - v}% 0 0)`,
-            WebkitClipPath: `inset(0 ${100 - v}% 0 0)`,
+            clipPath: clip,
+            WebkitClipPath: clip,
           }}
         >
           <img
@@ -210,18 +209,20 @@ const BeforeAfter = ({
               willChange: "transform, opacity",
             }}
             initial={reduceMotion ? {} : { opacity: 0, x: -10 }}
+            // [MODIFIED] Driven by React state `v` which is synced from MotionValue
             animate={reduceMotion ? {} : { opacity: v > 15 ? 1 : 0, x: 0 }}
             transition={{ delay: 0.3 }}
           >
             📷 Before
           </motion.div>
-        </div>
+        </motion.div>
 
         {/* Enhanced divider line with glow */}
-        <div
+        {/* [MODIFIED] Converted to motion.div and using style={left} */}
+        <motion.div
           className="absolute top-0 bottom-0 pointer-events-none"
           style={{
-            left: `${v}%`,
+            left: left, // Using MotionValue
             width: 3,
             background: "linear-gradient(to bottom, rgba(232,80,2,0), var(--orange), rgba(232,80,2,0))",
             boxShadow: isDragging
@@ -229,35 +230,39 @@ const BeforeAfter = ({
               : "0 0 10px rgba(232,80,2,0.5)",
             transition: "box-shadow 0.2s ease",
             willChange: "transform",
-            transform: "translate3d(0, 0, 0)",
+            transform: "translate3d(0, 0, 0)", // Keep GPU acceleration
           }}
           aria-hidden="true"
         />
 
         {/* Handle with enhanced design */}
+        {/* [MODIFIED] Converted to motion.button and using style={left} */}
         <motion.button
           type="button"
           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-12 w-12 rounded-full shadow-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-[var(--orange)] z-10"
           style={{
-            left: `${v}%`,
+            left: left, // Using MotionValue
             background: "linear-gradient(135deg, var(--orange), #ff9357)",
             color: "#fff",
             border: "3px solid rgba(255,255,255,0.9)",
             cursor: isDragging ? "grabbing" : "grab",
             willChange: "transform",
-            transform: "translate3d(-50%, -50%, 0)",
+            transform: "translate3d(-50%, -50%, 0)", // Keep GPU acceleration
             WebkitTapHighlightColor: "transparent",
           }}
-          aria-label={`Reveal slider: ${Math.round(v)} percent`}
+          // [MODIFIED] Updated ARIA label and valuenow
+          aria-label={`${label}: ${Math.round(v)} percent. Use arrow keys to adjust.`}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(v)}
           role="slider"
           onKeyDown={(e) => {
-            if (e.key === "ArrowLeft") setV((p) => clamp(p - 2, 0, 100));
-            if (e.key === "ArrowRight") setV((p) => clamp(p + 2, 0, 100));
-            if (e.key === "Home") setV(0);
-            if (e.key === "End") setV(100);
+            // [MODIFIED] Update MotionValue directly
+            const current = vPct.get();
+            if (e.key === "ArrowLeft") vPct.set(clamp(current - 2, 0, 100));
+            if (e.key === "ArrowRight") vPct.set(clamp(current + 2, 0, 100));
+            if (e.key === "Home") vPct.set(0);
+            if (e.key === "End") vPct.set(100);
           }}
           onMouseDown={() => {
             dragging.current = true;
@@ -272,9 +277,7 @@ const BeforeAfter = ({
           whileTap={reduceMotion ? {} : { scale: 0.95 }}
           animate={
             !reduceMotion && !isDragging && isHovering
-              ? {
-                  scale: [1, 1.05, 1],
-                }
+              ? { scale: [1, 1.05, 1] }
               : {}
           }
           transition={{ duration: 2, repeat: Infinity }}
@@ -348,21 +351,7 @@ const BeforeAfter = ({
           </motion.div>
         )}
 
-        {/* Visually-hidden range input */}
-        <label htmlFor="ba-range" className="sr-only">
-          Drag to compare {beforeAlt} and {afterAlt}
-        </label>
-        <input
-          id="ba-range"
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={v}
-          onChange={(e) => setV(+e.target.value)}
-          className="sr-only"
-          aria-hidden="false"
-        />
+        {/* [REMOVED] Visually-hidden range input is no longer needed */}
       </div>
 
       {/* Enhanced caption */}

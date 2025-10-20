@@ -1,37 +1,116 @@
-// frontend/src/components/CreatorsWorkedWithMarquee.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
+// [NEW] Imported new icons for social proof
+import { CheckCircle2, Users, TrendingUp } from "lucide-react";
 
 /**
  * Reusable, responsive, auto-scrolling marquee for "Creators Worked With".
- * - Auto-measures content and adjusts duration dynamically.
- * - Pauses on hover/touch and when off-screen (IntersectionObserver).
- * - Respects prefers-reduced-motion unless forceMotion is true.
+ * - [NEW] Upgraded copy for better conversion and SEO.
+ * - [NEW] Added staggered animations to the header.
+ * - [NEW] Added whileInView animation to the marquee container.
+ * - [Fix] Only animates if content overflows the container.
+ * - [Fix] Pauses on hover, touch, and keyboard focus.
+ * - [Fix] Uses margin-left fallback for 'gap' for better iOS < 14.1 support.
+ * - [Fix] Adds onTouchCancel handler.
+ * - [A11y] Improved ARIA roles with aria-labelledby.
+ * - [Perf] Memoized event handlers with useCallback.
  *
  * Props:
  * - isDark?: boolean
- * - creators?: Array<{name, key, url, category, color, subs?: number}>
+ * - creators?: Array<{name, key, url, category, color, subs?: number, href?: string}>
  * - speedPps?: number  // pixels per second (default 60)
- * - gap?: number       // rem gap between items (default 1.0)
+ * - gap?: number      // rem gap between items (default 1.0)
  * - forceMotion?: boolean // ignore reduced-motion (default false)
+ * - direction?: 'left' | 'right' // scroll direction (default 'left')
  */
 
+// Helper to find asset URL from a glob map
 function findAssetByBase(base, globMap) {
   const needle = base.toLowerCase();
-  // Try exact filename match first (basenames only)
   for (const path in globMap) {
     const file = path.split("/").pop().toLowerCase();
     const noExt = file.replace(/\.(png|jpg|jpeg|webp|svg)$/, "");
-    if (noExt === needle) return globMap[path];
-  }
-  // Fallback: startsWith
-  for (const path in globMap) {
-    const file = path.split("/").pop().toLowerCase();
-    const noExt = file.replace(/\.(png|jpg|jpeg|webp|svg)$/, "");
-    if (noExt.startsWith(needle)) return globMap[path];
+    if (noExt === needle || noExt.startsWith(needle)) return globMap[path];
   }
   return null;
 }
+
+// Format subscriber count
+function formatSubs(n) {
+  if (n == null) return "";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 ? 1 : 0)}K`;
+  return String(n);
+}
+
+// Creator badge component (pure component for better performance)
+const CreatorBadge = React.memo(({ creator, isHovered }) => {
+  return (
+    <>
+      <span className="cw-avatar">
+        <img
+          src={creator.url}
+          alt={`${creator.name} logo`}
+          loading="lazy"
+          decoding="async"
+          style={{ filter: isHovered ? "grayscale(0)" : undefined }}
+        />
+        <span className="cw-ring" style={{ borderColor: isHovered ? creator.color : "transparent" }} />
+        <span className="cw-badge" aria-label="Verified client">
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M20 6L9 17l-5-5"
+              stroke="white"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </span>
+
+      <span className="inline-flex flex-col gap-1 min-w-0">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="cw-title truncate">{creator.name}</span>
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+            style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
+          >
+            {creator.category}
+          </span>
+        </span>
+        {creator.subs != null && (
+          <span className="cw-meta">{formatSubs(creator.subs)} subscribers</span>
+        )}
+      </span>
+    </>
+  );
+});
+
+
+// [NEW] Animation variants for staggered header
+const headerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariant = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.4,
+      ease: "easeOut",
+    },
+  },
+};
+
 
 const CreatorsWorkedWithMarquee = ({
   isDark,
@@ -39,41 +118,58 @@ const CreatorsWorkedWithMarquee = ({
   speedPps = 60,
   gap = 1.0,
   forceMotion = false,
+  direction = 'left',
 }) => {
   const prefersReduced =
     typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // State
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredKey, setHoveredKey] = useState(null);
   const [isVisible, setIsVisible] = useState(true);
-  const [segmentWidth, setSegmentWidth] = useState(0); // width of one logical list (before duplication)
-  const [containerWidth, setContainerWidth] = useState(0);
+  const [shouldAnimate, setShouldAnimate] = useState(false);
 
+  // Refs
   const containerRef = useRef(null);
   const trackRef = useRef(null);
   const segmentRef = useRef(null);
 
-  // Default creators (can be overridden via props)
-  const LOGOS =
-    creatorsProp
-      ? null
-      : import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", {
-          eager: true,
-          query: "?url",
-          import: "default",
-        });
+  // Animation state
+  const [animationDuration, setAnimationDuration] = useState('30s');
+  const [animationDistance, setAnimationDistance] = useState('0px');
 
+  // Memoized handlers
+  const handleMouseEnter = useCallback((key) => {
+    setHoveredKey(key);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredKey(null);
+  }, []);
+
+  // Load creator logos
+  const LOGOS = useMemo(() => {
+    if (creatorsProp) return null;
+    return import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    });
+  }, [creatorsProp]);
+
+  // Global subscriber data
   const SUBS = (typeof window !== "undefined" && window.SS_SUBS) || {};
 
+  // Memoized default creators
   const defaultCreators = useMemo(() => {
     if (!LOGOS) return [];
     const base = [
-      { name: "Kamz Inkzone", key: "kamz", category: "Gaming", color: "#ff6b6b" },
+      { name: "Kamz Inkzone", key: "kamz", category: "Lifestyle", color: "#ff6b6b" },
       { name: "Deadlox Gaming", key: "deadlox", category: "Gaming", color: "#4ecdc4" },
       { name: "Kundan Parashar", key: "kundan", category: "Devotional", color: "#f7b731" },
-      { name: "Aish is Live", key: "aish", category: "Lifestyle", color: "#45b7d1" },
+      { name: "Aish is Live", key: "aish", category: "Gaming", color: "#45b7d1" },
       { name: "Gamer Mummy", key: "gamermummy", category: "Gaming", color: "#5f27cd" },
       { name: "Gamify Anchit", key: "anchit", category: "Gaming", color: "#ff9ff3" },
       { name: "Maggie Live", key: "maggie", category: "Lifestyle", color: "#ee5a6f" },
@@ -86,40 +182,74 @@ const CreatorsWorkedWithMarquee = ({
         return url ? { ...c, url, subs: SUBS[c.key] } : null;
       })
       .filter(Boolean);
-  }, [LOGOS]);
+  }, [LOGOS, SUBS]);
 
-  const creators = creatorsProp && creatorsProp.length ? creatorsProp : defaultCreators;
-  if (!creators || creators.length === 0) return null;
+  // Determine the final list of creators
+  const finalCreators = creatorsProp && creatorsProp.length ? creatorsProp : defaultCreators;
+  if (!finalCreators || finalCreators.length === 0) return null;
 
-  // For stats display
-  const fmt = (n) => {
+  // Calculate total combined reach for display
+  const totalSubs = useMemo(() =>
+    finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0),
+    [finalCreators]
+  );
+  const fmt = useCallback((n) => {
     if (n == null) return null;
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 ? 1 : 0)}K`;
     return `${n}`;
-  };
-  const totalSubs = creators.reduce((sum, c) => sum + (c.subs || 0), 0);
-
-  // Duplicate once for seamless loop (two segments)
-  const loop = useMemo(() => [...creators, ...creators], [creators]);
-
-  // Measure segment and container widths to compute duration dynamically
-  useEffect(() => {
-    const ro = new ResizeObserver(() => {
-      const container = containerRef.current;
-      const seg = segmentRef.current;
-      if (!container || !seg) return;
-      setContainerWidth(container.clientWidth);
-      setSegmentWidth(seg.scrollWidth);
-    });
-    if (containerRef.current) ro.observe(containerRef.current);
-    if (segmentRef.current) ro.observe(segmentRef.current);
-    return () => ro.disconnect();
   }, []);
+
+  const gapRem = Math.max(0.25, Number(gap));
+
+  // Measure segment width AND container width
+  useEffect(() => {
+    const gapPx = { current: 0 };
+
+    const updateMarqueeMetrics = () => {
+      const seg = segmentRef.current;
+      const cont = containerRef.current;
+      if (!seg || !cont || typeof window === 'undefined') return;
+
+      const segmentWidth = seg.scrollWidth;
+      const containerWidth = cont.clientWidth;
+      const isOverflowing = segmentWidth > containerWidth;
+      setShouldAnimate(isOverflowing);
+
+      gapPx.current = parseFloat(getComputedStyle(document.documentElement).fontSize) * gapRem;
+      
+      const totalDistance = segmentWidth + gapPx.current; 
+      const pxPerSec = Math.max(20, Number(speedPps) || 60);
+      const durationSec = totalDistance / pxPerSec;
+
+      setAnimationDuration(`${durationSec.toFixed(3)}s`);
+      setAnimationDistance(`${totalDistance.toFixed(2)}px`); 
+    };
+
+    const rafId = requestAnimationFrame(updateMarqueeMetrics);
+
+    let ro;
+    if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
+      ro = new ResizeObserver(updateMarqueeMetrics);
+      if (segmentRef.current) ro.observe(segmentRef.current);
+      if (containerRef.current) ro.observe(containerRef.current);
+    }
+    
+    window.addEventListener('resize', updateMarqueeMetrics);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', updateMarqueeMetrics);
+    }
+  }, [speedPps, gapRem]);
+
 
   // Pause when scrolled out of view
   useEffect(() => {
-    if (!trackRef.current || !("IntersectionObserver" in window)) return;
+    if (!trackRef.current || typeof window === 'undefined' || !("IntersectionObserver" in window)) {
+      return;
+    }
     const io = new IntersectionObserver(
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
@@ -130,183 +260,233 @@ const CreatorsWorkedWithMarquee = ({
     return () => io.disconnect();
   }, []);
 
-  // Calculate animation duration (seconds): distance / pixelsPerSecond
-  // Distance to travel = width of one segment
-  const distancePx = Math.max(1, segmentWidth);
-  const pxPerSec = Math.max(20, Number(speedPps) || 60);
-  const durationSec = distancePx / pxPerSec;
 
-  // Prefer reduced motion unless forced
+  // Determine animation states
   const showStatic = prefersReduced && !forceMotion;
-
-  // Styles
-  const gapRem = Math.max(0.25, Number(gap));
-  const paused = isPaused || !isVisible;
+  const enableAnimation = !showStatic && shouldAnimate;
+  const animationIsPaused = isPaused || !isVisible;
 
   return (
     <section
       className="relative py-20 overflow-hidden"
       style={{ background: "var(--surface)" }}
-      aria-label="Creators we’ve worked with"
+      aria-labelledby="marquee-heading"
     >
       <div className="container mx-auto px-4 relative z-10 max-w-7xl">
-        {/* Header */}
+        {/* [MODIFIED] Header with stagger animation */}
         <motion.div
           className="text-center mb-10"
-          initial={showStatic ? {} : { opacity: 0, y: 16 }}
-          whileInView={showStatic ? {} : { opacity: 1, y: 0 }}
+          initial={showStatic ? {} : "hidden"}
+          whileInView={showStatic ? {} : "visible"}
+          variants={headerVariants}
           viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
         >
+          {/* [MODIFIED] Social proof pills */}
           <motion.div
-            className="inline-flex items-center gap-4 px-5 py-2 rounded-full mb-5"
+            className="inline-flex flex-wrap justify-center items-center gap-4 px-5 py-2 rounded-full mb-5"
             style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
-            whileHover={showStatic ? {} : { scale: 1.02 }}
+            variants={itemVariant}
           >
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--orange)" }} />
+              <CheckCircle2 size={14} style={{ color: "var(--orange)" }} />
               <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                {creators.length}+ Active Clients
+                Proven Results
               </span>
             </div>
-            <span className="h-3 w-px" style={{ background: "var(--border)" }} />
+            <span className="h-3 w-px hidden sm:inline-block" style={{ background: "var(--border)" }} />
             <div className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"
-                  stroke="var(--orange)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <Users size={14} style={{ color: "var(--orange)" }} />
+              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                {finalCreators.length}+ Creators
+              </span>
+            </div>
+            <span className="h-3 w-px hidden sm:inline-block" style={{ background: "var(--border)" }} />
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} style={{ color: "var(--orange)" }} />
               <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>
                 {fmt(totalSubs)}+ Combined Reach
               </span>
             </div>
           </motion.div>
 
-          <h2
+          <motion.h2
+            id="marquee-heading"
             className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-3"
             style={{ color: "var(--text)" }}
+            variants={itemVariant}
           >
-            Trusted by Creators Across Genres
-          </h2>
-          <p className="text-base md:text-lg max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
-            From <strong style={{ color: "var(--text)" }}>Gaming</strong> to{" "}
-            <strong style={{ color: "var(--text)" }}>Lifestyle</strong> to{" "}
-            <strong style={{ color: "var(--text)" }}>Devotional</strong> — we adapt to your niche
-          </p>
+            The Visual Engine for Top-Tier Creators
+          </motion.h2>
+          <motion.p
+            className="text-base md:text-lg max-w-2xl mx-auto"
+            style={{ color: "var(--text-muted)" }}
+            variants={itemVariant}
+          >
+            We craft the visuals that stop the scroll, build your brand, and
+            turn viewers into loyal fans. We speak your niche.
+          </motion.p>
         </motion.div>
 
-        {/* Marquee */}
-        <div
-          ref={containerRef}
-          className="relative select-none"
-          role="region"
-          aria-roledescription="carousel"
-          aria-label="Creator logos scrolling"
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => setIsPaused(false)}
-          onTouchStart={() => setIsPaused(true)}
-          onTouchEnd={() => setIsPaused(false)}
-          style={{
-            maskImage:
-              "linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
-          }}
+        {/* [NEW] Marquee container wrapped in motion.div for fade-in */}
+        <motion.div
+          initial={showStatic ? {} : { opacity: 0, y: 20 }}
+          whileInView={showStatic ? {} : { opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
         >
-          {/* Edge gradient masks (visual only; mask handles fade on Safari too) */}
           <div
-            className="pointer-events-none absolute left-0 top-0 bottom-0 z-10"
+            ref={containerRef}
+            className="relative select-none"
+            role="region"
+            aria-roledescription="carousel"
+            aria-label="Scrolling creator logos"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onTouchStart={() => setIsPaused(true)}
+            onTouchEnd={() => setIsPaused(false)}
+            onTouchCancel={() => setIsPaused(false)}
+            onFocus={() => setIsPaused(true)}
+            onBlur={() => setIsPaused(false)}
             style={{
-              width: "clamp(16px, 8vw, 64px)",
-              background: "linear-gradient(90deg, var(--surface) 0%, transparent 100%)",
-            }}
-            aria-hidden="true"
-          />
-          <div
-            className="pointer-events-none absolute right-0 top-0 bottom-0 z-10"
-            style={{
-              width: "clamp(16px, 8vw, 64px)",
-              background: "linear-gradient(270deg, var(--surface) 0%, transparent 100%)",
-            }}
-            aria-hidden="true"
-          />
-
-          {/* Track (2x segments for seamless loop) */}
-          <div
-            ref={trackRef}
-            className={`cw-track ${showStatic ? "" : "animate"} ${paused ? "paused" : ""}`}
-            style={{
-              "--gap-rem": `${gapRem}`,
-              "--duration": `${durationSec.toFixed(3)}s`,
-              "--distance": `${distancePx}px`,
+              maskImage:
+                "linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
+              WebkitMaskImage:
+                "-webkit-linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
             }}
           >
-            {/* Segment A (measured) */}
-            <ul
-              ref={segmentRef}
-              className="cw-segment"
-              style={{ gap: "calc(var(--gap-rem) * 1rem)" }}
+            {/* Edge gradient overlays */}
+            <div
+              className="pointer-events-none absolute left-0 top-0 bottom-0 z-10"
+              style={{
+                width: "8vw",
+                minWidth: "16px",
+                maxWidth: "64px",
+                background: "linear-gradient(90deg, var(--surface) 0%, transparent 100%)",
+              }}
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute right-0 top-0 bottom-0 z-10"
+              style={{
+                width: "8vw",
+                minWidth: "16px",
+                maxWidth: "64px",
+                background: "linear-gradient(270deg, var(--surface) 0%, transparent 100%)",
+              }}
+              aria-hidden="true"
+            />
+
+            {/* Track (2x segments for seamless loop) */}
+            <div
+              ref={trackRef}
+              className={`cw-track ${
+                enableAnimation ? "cw-animated" : "cw-static"
+              } ${animationIsPaused ? "paused" : ""} ${
+                direction === 'right' ? 'direction-right' : ''
+              }`}
+              style={{
+                "--gap-rem": `${gapRem}`,
+                "--animation-duration": animationDuration,
+                "--animation-distance": animationDistance,
+              }}
             >
-              {creators.map((c, i) => {
-                const key = `${c.key}-a-${i}`;
-                const isHovered = hoveredKey === key;
-                return (
-                  <motion.li
-                    key={key}
-                    className="cw-item"
-                    onMouseEnter={() => setHoveredKey(key)}
-                    onMouseLeave={() => setHoveredKey(null)}
-                    whileHover={showStatic ? {} : { y: -4, scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                    style={{
-                      background: isHovered ? "var(--surface-alt)" : "transparent",
-                      border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
-                    }}
-                  >
-                    <CreatorBadge c={c} isHovered={isHovered} />
-                  </motion.li>
-                );
-              })}
-            </ul>
+              {/* Segment A (measured) */}
+              <ul
+                ref={segmentRef}
+                className="cw-segment"
+              >
+                {finalCreators.map((creator) => {
+                  const key = `${creator.key}-a`;
+                  const isHovered = hoveredKey === key;
+                  return (
+                    <motion.li
+                      key={key}
+                      className="cw-item"
+                      onMouseEnter={() => handleMouseEnter(key)}
+                      onMouseLeave={handleMouseLeave}
+                      whileHover={!showStatic ? { y: -4, scale: 1.01 } : {}}
+                      transition={{ duration: 0.2 }}
+                      style={{
+                        background: isHovered ? "var(--surface-alt)" : "transparent",
+                        border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
+                      }}
+                    >
+                      {creator.href ? (
+                        <a
+                          href={creator.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="cw-item-link"
+                          aria-label={`Visit ${creator.name}`}
+                        >
+                          <CreatorBadge creator={creator} isHovered={isHovered} />
+                        </a>
+                      ) : (
+                        <div className="cw-item-link" role="presentation">
+                          <CreatorBadge creator={creator} isHovered={isHovered} />
+                        </div>
+                      )}
+                    </motion.li>
+                  );
+                })}
+              </ul>
 
-            {/* Segment B (clone) */}
-            <ul className="cw-segment" style={{ gap: "calc(var(--gap-rem) * 1rem)" }}>
-              {creators.map((c, i) => {
-                const key = `${c.key}-b-${i}`;
-                const isHovered = hoveredKey === key;
-                return (
-                  <motion.li
-                    key={key}
-                    className="cw-item"
-                    onMouseEnter={() => setHoveredKey(key)}
-                    onMouseLeave={() => setHoveredKey(null)}
-                    whileHover={showStatic ? {} : { y: -4, scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                    style={{
-                      background: isHovered ? "var(--surface-alt)" : "transparent",
-                      border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
-                    }}
-                  >
-                    <CreatorBadge c={c} isHovered={isHovered} />
-                  </motion.li>
-                );
-              })}
-            </ul>
+              {/* Segment B (clone) */}
+              {enableAnimation && (
+                <ul 
+                  className="cw-segment"
+                  aria-hidden="true" // Clone is decorative
+                >
+                  {finalCreators.map((creator) => {
+                    const key = `${creator.key}-b`;
+                    const isHovered = hoveredKey === key;
+                    return (
+                      <motion.li
+                        key={key}
+                        className="cw-item"
+                        onMouseEnter={() => handleMouseEnter(key)}
+                        onMouseLeave={handleMouseLeave}
+                        whileHover={!showStatic ? { y: -4, scale: 1.01 } : {}}
+                        transition={{ duration: 0.2 }}
+                        style={{
+                          background: isHovered ? "var(--surface-alt)" : "transparent",
+                          border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
+                        }}
+                      >
+                        {creator.href ? (
+                          <a
+                            href={creator.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="cw-item-link"
+                            aria-label={`Visit ${creator.name}`}
+                          >
+                            <CreatorBadge creator={creator} isHovered={isHovered} />
+                          </a>
+                        ) : (
+                          <div className="cw-item-link" role="presentation">
+                            <CreatorBadge creator={creator} isHovered={isHovered} />
+                          </div>
+                        )}
+                      </motion.li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
-        </div>
+        </motion.div>
 
-        {!showStatic && (
+        {enableAnimation && (
           <motion.p
             className="text-center mt-6 text-xs"
             style={{ color: "var(--text-muted)" }}
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 0.6 }}
             viewport={{ once: true }}
+            transition={{ delay: 0.5 }} // Delay to appear after marquee
           >
-            Hover / touch to pause
+            Hover / touch / focus to pause
           </motion.p>
         )}
       </div>
@@ -317,15 +497,28 @@ const CreatorsWorkedWithMarquee = ({
           display: flex;
           align-items: center;
           width: max-content;
-          gap: calc(var(--gap-rem) * 1rem);
           will-change: transform;
           transform: translate3d(0,0,0);
         }
-        .cw-track.animate {
-          animation: cw-marquee var(--duration) linear infinite;
+        .cw-track.cw-animated {
+          animation: cw-marquee var(--animation-duration) linear infinite;
         }
-        .cw-track.animate.paused {
+        .cw-track.cw-animated.direction-right {
+          animation-direction: reverse;
+        }
+        .cw-track.cw-animated.paused {
           animation-play-state: paused !important;
+        }
+
+        .cw-track.cw-static {
+            justify-content: center;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+        
+        /* Fallback for 'gap' on segments */
+        .cw-track > .cw-segment:not(:first-child) {
+          margin-left: calc(var(--gap-rem) * 1rem);
         }
 
         .cw-segment {
@@ -333,16 +526,46 @@ const CreatorsWorkedWithMarquee = ({
           align-items: center;
           white-space: nowrap;
           padding: 0.5rem 0;
+          flex-shrink: 0;
+        }
+        
+        /* Static mode segment styling */
+        .cw-track.cw-static .cw-segment {
+           white-space: normal;
+           gap: calc(var(--gap-rem) * 0.5rem) calc(var(--gap-rem) * 1rem);
+           display: flex;
+           flex-wrap: wrap;
+           justify-content: center;
+        }
+
+        /* Fallback for 'gap' on items */
+        .cw-track:not(.cw-static) .cw-segment > .cw-item:not(:first-child) {
+          margin-left: calc(var(--gap-rem) * 1rem);
         }
 
         .cw-item {
+          display: block;
+          border-radius: 14px;
+          transition: background 180ms ease, border 180ms ease, transform 180ms ease;
+          outline: 2px solid transparent;
+          outline-offset: 2px;
+          transition: outline-color 0.2s ease;
+          will-change: transform; /* [NEW] Hint for hover animation */
+        }
+        .cw-item:focus-within {
+          outline-color: var(--orange);
+        }
+
+        .cw-item-link {
           display: inline-flex;
           align-items: center;
           gap: 0.75rem;
-          border-radius: 14px;
           padding: 0.625rem 0.875rem;
           min-width: max-content;
-          transition: background 180ms ease, border 180ms ease, transform 180ms ease;
+          text-decoration: none;
+          color: inherit;
+          border-radius: inherit;
+          outline: none;
         }
 
         .cw-avatar {
@@ -384,68 +607,17 @@ const CreatorsWorkedWithMarquee = ({
         .cw-title { color: var(--text); font-weight: 600; font-size: 0.9375rem; line-height: 1; }
         .cw-meta  { color: var(--text-muted); font-size: 0.6875rem; }
 
-        /* Keyframes: travel by exactly one segment (dynamic via CSS var) */
         @keyframes cw-marquee {
           from { transform: translate3d(0,0,0); }
-          to   { transform: translate3d(calc(var(--distance) * -1), 0, 0); }
+          to   { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
         }
 
-        /* Reduced motion: disable animation entirely */
         @media (prefers-reduced-motion: reduce) {
-          .cw-track.animate { animation: none !important; }
+          .cw-track.cw-animated { animation: none !important; }
         }
       `}</style>
     </section>
   );
 };
-
-const CreatorBadge = ({ c, isHovered }) => {
-  return (
-    <>
-      <span className="cw-avatar">
-        <img
-          src={c.url}
-          alt={`${c.name} logo`}
-          loading="lazy"
-          style={{ filter: isHovered ? "grayscale(0)" : undefined }}
-        />
-        <span className="cw-ring" style={{ borderColor: isHovered ? c.color : "transparent" }} />
-        <span className="cw-badge" aria-label="Verified client">
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M20 6L9 17l-5-5"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </span>
-      </span>
-
-      <span className="inline-flex flex-col gap-1 min-w-0">
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="cw-title truncate">{c.name}</span>
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-            style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
-          >
-            {c.category}
-          </span>
-        </span>
-        {c.subs != null && (
-          <span className="cw-meta">{formatSubs(c.subs)} subscribers</span>
-        )}
-      </span>
-    </>
-  );
-};
-
-function formatSubs(n) {
-  if (n == null) return "";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 ? 1 : 0)}K`;
-  return String(n);
-}
 
 export default CreatorsWorkedWithMarquee;
