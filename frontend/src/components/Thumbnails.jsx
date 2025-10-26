@@ -14,6 +14,10 @@ const FALLBACK = [
 const PUBLIC_BASE = (import.meta?.env?.BASE_URL ?? "/").replace(/\/+$/, "/");
 const url = (file) => encodeURI(`${PUBLIC_BASE}thumbnails/${file}`);
 
+// YouTube API Key - Replace this with your actual API key from Google Cloud Console
+// Get it from: https://console.cloud.google.com/apis/credentials
+const YOUTUBE_API_KEY = "AIzaSyD6p-nyJ7N9ZFfvFCQQJDC4V9hcAIRGvXw";
+
 /* ---------- Helpers ---------- */
 const titleFromFile = (name = "") => name.replace(/\.(png|jpe?g|webp)$/i, "");
 const variantFromFile = (name = "") =>
@@ -48,6 +52,64 @@ function deriveCat(title = "") {
     }
   }
   return { category: "OTHER" };
+}
+
+/* ---------- YouTube Functions ---------- */
+// Extract video ID from YouTube URL
+function extractVideoId(url) {
+  if (!url) return null;
+  
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+    /youtube\.com\/embed\/([^&\n?#]+)/,
+    /youtube\.com\/v\/([^&\n?#]+)/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  
+  return null;
+}
+
+// Format view count with K, M suffixes
+function formatViews(count) {
+  if (!count || count === 0) return null;
+  
+  if (count >= 1000000) {
+    return (count / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  }
+  if (count >= 1000) {
+    return (count / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+  }
+  return count.toString();
+}
+
+// Fetch views from YouTube API
+async function fetchYouTubeViews(videoId) {
+  if (!videoId || YOUTUBE_API_KEY === "YOUR_API_KEY_HERE") {
+    return null;
+  }
+  
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
+    );
+    
+    if (!response.ok) throw new Error("Failed to fetch");
+    
+    const data = await response.json();
+    if (data.items && data.items.length > 0) {
+      const viewCount = parseInt(data.items[0].statistics.viewCount, 10);
+      return viewCount;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching YouTube views:", error);
+    return null;
+  }
 }
 
 /* ---------- Check for reduced motion ---------- */
@@ -189,6 +251,7 @@ const Chip = ({ children, active, onClick }) => {
 /* ---------- Thumbnail Card ---------- */
 const ThumbCard = ({ t, onOpen, onBroken, gridSize, views }) => {
   const reducedMotion = prefersReducedMotion();
+  const formattedViews = formatViews(views);
 
   return (
     <article
@@ -228,14 +291,14 @@ const ThumbCard = ({ t, onOpen, onBroken, gridSize, views }) => {
           {t.variant}
         </div>
 
-        {/* Views badge */}
-        {views > 0 && (
+        {/* Views badge - only show if we have views */}
+        {formattedViews && (
           <div className="absolute right-3 bottom-3 z-10 px-2 py-1 rounded-md text-[10px] backdrop-blur-sm bg-black/70 text-white border border-white/15 flex items-center gap-1">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
-            {views}
+            {formattedViews}
           </div>
         )}
       </div>
@@ -502,37 +565,43 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
               </svg>
             </button>
 
-            {/* Fullscreen */}
+            {/* Fullscreen button */}
             <button
               onClick={toggleFullscreen}
-              className="icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white transition-colors"
+              className="hidden sm:block icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white transition-colors"
               title="Fullscreen (F)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {isFullscreen ? (
-                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+                  <>
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
+                  </>
                 ) : (
-                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  <>
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                  </>
                 )}
               </svg>
             </button>
 
-            {/* Close */}
+            {/* Close button */}
             <button
               onClick={onClose}
               className="icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-red-600 hover:text-white transition-colors"
               title="Close (Esc)"
             >
-              ✕
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
 
-        {/* Image container */}
-        <div className="relative w-full bg-black overflow-auto" style={{ aspectRatio: "16 / 10" }}>
+        {/* Image area */}
+        <div className="relative bg-black flex items-center justify-center overflow-hidden" style={{ height: "75vh" }}>
           <div
-            className="w-full h-full flex items-center justify-center transition-transform duration-200"
-            style={{ transform: `scale(${zoom})` }}
+            className="relative max-w-full max-h-full"
+            style={{ transform: `scale(${zoom})`, transition: "transform 0.2s ease-out" }}
           >
             <ProtectedImg
               src={currentItem.image}
@@ -541,53 +610,47 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
             />
           </div>
 
-          {/* Navigation arrows */}
+          {/* Navigation buttons */}
           {currentIndex > 0 && (
             <button
-              onClick={() => {
-                onNavigate(items[currentIndex - 1].id);
-                setZoom(1);
-              }}
-              className={`absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full backdrop-blur-md bg-black/70 text-white border border-white/10 transition-all touch-target ${
-                reducedMotion ? "!transition-none" : "hover:bg-[var(--orange)] hover:scale-110"
-              }`}
+              onClick={() => { onNavigate(items[currentIndex - 1].id); setZoom(1); }}
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 icon-btn-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-20"
               title="Previous (←)"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M15 18l-6-6 6-6" />
+                <path d="m15 18-6-6 6-6" />
               </svg>
             </button>
           )}
 
           {currentIndex < items.length - 1 && (
             <button
-              onClick={() => {
-                onNavigate(items[currentIndex + 1].id);
-                setZoom(1);
-              }}
-              className={`absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full backdrop-blur-md bg-black/70 text-white border border-white/10 transition-all touch-target ${
-                reducedMotion ? "!transition-none" : "hover:bg-[var(--orange)] hover:scale-110"
-              }`}
+              onClick={() => { onNavigate(items[currentIndex + 1].id); setZoom(1); }}
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 icon-btn-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-20"
               title="Next (→)"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 18l6-6-6-6" />
+                <path d="m9 18 6-6-6-6" />
               </svg>
             </button>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-alt)] text-xs sm:text-sm text-[var(--text-muted)]">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <span className="font-medium text-[var(--text)]">
+        {/* Info footer */}
+        <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-alt)]">
+          <div className="flex items-center justify-between text-xs sm:text-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="chip-soft">
                 {currentItem.category}
               </span>
-              {currentItem.subcategory && <span> • {currentItem.subcategory}</span>}
+              {currentItem.subcategory && (
+                <span className="chip-soft">
+                  {currentItem.subcategory}
+                </span>
+              )}
             </div>
-            <div className="text-[10px] hidden md:block">
-              Use ← → to navigate • +/- to zoom • F for fullscreen • Esc to close
+            <div className="text-[var(--text-muted)] hidden sm:block">
+              Use arrow keys or swipe to navigate
             </div>
           </div>
         </div>
@@ -598,80 +661,91 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
 
 /* ---------- Pagination Component ---------- */
 const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
-  const pages = [];
-  const maxVisible = 5;
-
-  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-
-  if (endPage - startPage + 1 < maxVisible) {
-    startPage = Math.max(1, endPage - maxVisible + 1);
-  }
-
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(i);
-  }
-
+  const reducedMotion = prefersReducedMotion();
+  
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
-      <div className="text-xs sm:text-sm text-[var(--text-muted)]">
-        Showing {startItem}-{endItem} of {totalItems} thumbnails
+    <div className="mt-12 flex flex-col items-center gap-4">
+      <div className="text-sm text-[var(--text-muted)]">
+        Showing {startItem} - {endItem} of {totalItems} thumbnails
       </div>
-
-      <div className="flex items-center gap-2">
+      
+      <div className="flex items-center gap-2 flex-wrap justify-center">
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:border-[var(--orange)] touch-target ring-focus"
+          className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
+            ${currentPage === 1 
+              ? 'opacity-40 cursor-not-allowed' 
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
+            } transition-all`}
+          aria-label="Previous page"
         >
           Previous
         </button>
-
-        {startPage > 1 && (
-          <>
+        
+        {getPageNumbers().map((page, index) => (
+          page === '...' ? (
+            <span key={`ellipsis-${index}`} className="px-2 text-[var(--text-muted)]">
+              ...
+            </span>
+          ) : (
             <button
-              onClick={() => onPageChange(1)}
-              className="w-10 h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm transition-colors hover:border-[var(--orange)] touch-target ring-focus"
+              key={page}
+              onClick={() => onPageChange(page)}
+              className={`min-w-[2.5rem] px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                ${page === currentPage
+                  ? 'bg-[var(--orange)] text-white border border-[var(--orange)]'
+                  : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
+                }`}
+              aria-label={`Page ${page}`}
+              aria-current={page === currentPage ? 'page' : undefined}
             >
-              1
+              {page}
             </button>
-            {startPage > 2 && <span className="text-[var(--text-muted)]">...</span>}
-          </>
-        )}
-
-        {pages.map((page) => (
-          <button
-            key={page}
-            onClick={() => onPageChange(page)}
-            className={`w-10 h-10 rounded-lg border text-sm transition-colors touch-target ring-focus ${
-              page === currentPage
-                ? "bg-[var(--orange)] text-white border-[var(--orange)] font-semibold"
-                : "bg-[var(--surface)] text-[var(--text)] border-[var(--border)] hover:border-[var(--orange)]"
-            }`}
-          >
-            {page}
-          </button>
+          )
         ))}
-
-        {endPage < totalPages && (
-          <>
-            {endPage < totalPages - 1 && <span className="text-[var(--text-muted)]">...</span>}
-            <button
-              onClick={() => onPageChange(totalPages)}
-              className="w-10 h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm transition-colors hover:border-[var(--orange)] touch-target ring-focus"
-            >
-              {totalPages}
-            </button>
-          </>
-        )}
-
+        
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:border-[var(--orange)] touch-target ring-focus"
+          className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
+            ${currentPage === totalPages 
+              ? 'opacity-40 cursor-not-allowed' 
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
+            } transition-all`}
+          aria-label="Next page"
         >
           Next
         </button>
@@ -680,13 +754,66 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
   );
 };
 
-/* ---------- File list ---------- */
+/* ---------- Thumbnails data ---------- */
+// ADD YOUR YOUTUBE LINKS HERE!
+// Format: { filename: "file.jpg", youtubeUrl: "https://youtube.com/watch?v=VIDEO_ID" }
+const YOUTUBE_LINKS = {
+  // Example:
+  // "Anchit-Valorant-1-Live.jpg": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+  // "Anchit-Valorant-2-Live.jpg": "https://youtube.com/watch?v=abc123xyz",
+  // Add your links here...
+  "Kamzinkzone-Vlog-1-Video.jpg": "https://youtu.be/ZCBB66w13JA",
+};
+
 const FILENAMES = [
-  ...Array.from({ length: 11 }, (_, i) => `Anchit-Valorant-${i + 1}-Live.jpg`),
-  ...Array.from({ length: 11 }, (_, i) => `Anchit-Valorant-${i + 1}-Video.jpg`),
-  ...Array.from({ length: 6 }, (_, i) => `Maggie-Valorant-${i + 1}-Video.jpg`),
-  "Maggie-Valorant-6-Live.jpg",
+  // Anchit - Valorant
+  "Anchit-Valorant-1-Live.jpg",
+  "Anchit-Valorant-2-Live.jpg",
+  "Anchit-Valorant-3-Live.jpg",
+  "Anchit-Valorant-4-Live.jpg",
+  "Anchit-Valorant-5-Video.jpg",
+  "Anchit-Valorant-6-Live.jpg",
+  "Anchit-Valorant-7-Video.jpg",
+  "Anchit-Valorant-8-Video.jpg",
+  "Anchit-Valorant-9-Video.jpg",
+  "Anchit-Valorant-10-Live.jpg",
+  "Anchit-Valorant-11-Live.jpg",
+
+  // BGMI Creator
+  "Divya-Bgmi-1-Live.jpg",
+  "Payal-Bgmi-1-Live.jpg",
+
+  // Cuttie - BGMI
+  "Cutie-Bgmi-1-Live.jpg",
+
+  // Deadlox - Once Human
+  "Deadlox-Once Human-1-Video.jpg",
+  "Deadlox-Once Human-2-Video.jpg",
+  "Deadlox-Once Human-3-Video.jpg",
+
+  // Divya - BGMI
+  "Divya-Bgmi-1-Live.jpg",
+
+  // Kamzinkzone - Vlogs
   "Kamzinkzone-Vlog-1-Video.jpg",
+  "Kamzinkzone-Vlog-2-Video.jpg",
+  "Kamzinkzone-Vlog-3-Video.jpg",
+  "Kamzinkzone-Vlog-4-Video.jpg",
+  "Kamzinkzone-Vlog-5-Video.jpg",
+  "Kamzinkzone-Vlog-6-Video.jpg",
+  "Kamzinkzone-Vlog-7-Video.jpg",
+
+  // Kundan - Music & Bhajans
+  "Kundan-MusicandBhajan-1-Video.jpg",
+  "Kundan-MusicandBhajan-2-Video.jpg",
+
+  // Maggie - Valorant
+  "Maggie-Valorant-1-Video.jpg",
+  "Maggie-Valorant-2-Video.jpg",
+  "Maggie-Valorant-3-Video.jpg",
+  "Maggie-Valorant-4-Video.jpg",
+  "Maggie-Valorant-5-Video.jpg",
+  "Maggie-Valorant-6-Live.jpg",
 ];
 
 /* ---------- Build items ---------- */
@@ -694,6 +821,8 @@ function buildItems() {
   return FILENAMES.map((file, i) => {
     const title = titleFromFile(file);
     const { category, subcategory } = deriveCat(title);
+    const youtubeUrl = YOUTUBE_LINKS[file] || null;
+    
     return {
       id: `thumb-${i + 1}`,
       image: url(file),
@@ -702,7 +831,8 @@ function buildItems() {
       variant: variantFromFile(file),
       filename: file,
       title,
-      views: Math.floor(Math.random() * 1000) + 50,
+      youtubeUrl,
+      views: null, // Will be populated from YouTube
       dateAdded: new Date(2024, 0, 1 + i).toISOString(),
     };
   });
@@ -734,9 +864,29 @@ export default function Thumbnails() {
     return () => window.removeEventListener("resize", updateItemsPerPage);
   }, [gridSize]);
 
+  // Fetch YouTube views for all items on mount
   useEffect(() => {
     const all = buildItems();
     setItems(all.length ? all : FALLBACK);
+    
+    // Fetch views for items with YouTube links
+    const fetchViews = async () => {
+      const updatedItems = await Promise.all(
+        all.map(async (item) => {
+          if (item.youtubeUrl) {
+            const videoId = extractVideoId(item.youtubeUrl);
+            if (videoId) {
+              const views = await fetchYouTubeViews(videoId);
+              return { ...item, views };
+            }
+          }
+          return item;
+        })
+      );
+      setItems(updatedItems);
+    };
+
+    fetchViews();
     
     const params = new URLSearchParams(window.location.search);
     const thumbId = params.get("thumbnail");
@@ -802,7 +952,7 @@ export default function Thumbnails() {
           x.category.toLowerCase().includes(query) ||
           x.subcategory?.toLowerCase().includes(query) ||
           x.variant.toLowerCase().includes(query) ||
-          x.title?.toLowerCase().includes(query)
+          x.filename.toLowerCase().includes(query)
         );
       });
     }
@@ -813,16 +963,18 @@ export default function Thumbnails() {
       list = [...list].sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
     } else if (sortBy === "category") {
       list = [...list].sort((a, b) => {
-        if (a.category !== b.category) {
-          return a.category.localeCompare(b.category);
-        }
-        if (a.subcategory && b.subcategory) {
-          return a.subcategory.localeCompare(b.subcategory);
-        }
-        return 0;
+        const catCompare = a.category.localeCompare(b.category);
+        if (catCompare !== 0) return catCompare;
+        return (a.subcategory || "").localeCompare(b.subcategory || "");
       });
     } else if (sortBy === "popular") {
-      list = [...list].sort((a, b) => b.views - a.views);
+      // Sort by views, putting items without views at the end
+      list = [...list].sort((a, b) => {
+        if (a.views === null && b.views === null) return 0;
+        if (a.views === null) return 1;
+        if (b.views === null) return -1;
+        return b.views - a.views;
+      });
     }
 
     return list;
