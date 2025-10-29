@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { CloudflareViewStorage } from "./cloudflare-storage";
 
 /* ---------- Fallback ---------- */
 const FALLBACK = [
@@ -17,6 +18,223 @@ const url = (file) => encodeURI(`${PUBLIC_BASE}thumbnails/${file}`);
 // YouTube API Key - Replace this with your actual API key from Google Cloud Console
 // Get it from: https://console.cloud.google.com/apis/credentials
 const YOUTUBE_API_KEY = "AIzaSyD6p-nyJ7N9ZFfvFCQQJDC4V9hcAIRGvXw";
+
+// Cache configuration
+const CACHE_KEY = "youtube_views_cache";
+const PERMANENT_STORAGE_KEY = "youtube_views_permanent"; // Permanent storage
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const DAILY_UPDATE_HOUR = 3; // Update at 3 AM daily (adjust as needed)
+
+/* ---------- Permanent Storage Manager ---------- */
+class PermanentViewStorage {
+  constructor() {
+    this.storage = this.loadStorage();
+  }
+
+  loadStorage() {
+    try {
+      const stored = localStorage.getItem(PERMANENT_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+      console.error("Error loading permanent storage:", error);
+      return {};
+    }
+  }
+
+  saveStorage() {
+    try {
+      localStorage.setItem(PERMANENT_STORAGE_KEY, JSON.stringify(this.storage));
+    } catch (error) {
+      console.error("Error saving permanent storage:", error);
+    }
+  }
+
+  // Get permanent view count (never expires)
+  get(videoId) {
+    return this.storage[videoId] || null;
+  }
+
+  // Store view count permanently
+  set(videoId, views) {
+    // Only update if new view count is higher (to handle deleted videos)
+    const existing = this.storage[videoId];
+    if (!existing || views > existing.views) {
+      this.storage[videoId] = {
+        views: views,
+        lastUpdated: Date.now(),
+        status: "active"
+      };
+      this.saveStorage();
+    }
+  }
+
+  // Mark video as deleted but keep the last known views
+  markDeleted(videoId) {
+    if (this.storage[videoId]) {
+      this.storage[videoId].status = "deleted";
+      this.storage[videoId].deletedAt = Date.now();
+      this.saveStorage();
+    }
+  }
+
+  // Get all stored data
+  getAll() {
+    return this.storage;
+  }
+
+  // Export data as JSON (for backup)
+  export() {
+    return JSON.stringify(this.storage, null, 2);
+  }
+
+  // Import data from JSON
+  import(jsonString) {
+    try {
+      const imported = JSON.parse(jsonString);
+      this.storage = { ...this.storage, ...imported };
+      this.saveStorage();
+      return true;
+    } catch (error) {
+      console.error("Error importing data:", error);
+      return false;
+    }
+  }
+
+  // Clear all permanent storage
+  clear() {
+    this.storage = {};
+    localStorage.removeItem(PERMANENT_STORAGE_KEY);
+  }
+
+  // Get statistics
+  getStats() {
+    const videos = Object.keys(this.storage);
+    const active = videos.filter(id => this.storage[id].status === "active").length;
+    const deleted = videos.filter(id => this.storage[id].status === "deleted").length;
+    
+    return {
+      total: videos.length,
+      active,
+      deleted,
+      totalViews: videos.reduce((sum, id) => sum + (this.storage[id].views || 0), 0)
+    };
+  }
+}
+
+/* ---------- Cache Management ---------- */
+class ViewsCache {
+  constructor() {
+    this.cache = this.loadCache();
+  }
+
+  loadCache() {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : {};
+    } catch (error) {
+      console.error("Error loading cache:", error);
+      return {};
+    }
+  }
+
+  saveCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(this.cache));
+    } catch (error) {
+      console.error("Error saving cache:", error);
+    }
+  }
+
+  get(videoId) {
+    const entry = this.cache[videoId];
+    if (!entry) return null;
+
+    const now = Date.now();
+    const age = now - entry.timestamp;
+
+    // Check if cache is still valid
+    if (age < CACHE_DURATION) {
+      return entry.views;
+    }
+
+    // Check if we should wait for the daily update time
+    if (this.shouldWaitForDailyUpdate(entry.timestamp)) {
+      return entry.views; // Return cached value, will update at scheduled time
+    }
+
+    return null; // Cache expired, needs refresh
+  }
+
+  shouldWaitForDailyUpdate(lastUpdate) {
+    const now = new Date();
+    const lastUpdateDate = new Date(lastUpdate);
+    
+    // If last update was today, don't update again
+    if (
+      now.getFullYear() === lastUpdateDate.getFullYear() &&
+      now.getMonth() === lastUpdateDate.getMonth() &&
+      now.getDate() === lastUpdateDate.getDate()
+    ) {
+      return true;
+    }
+
+    // Check if we've passed the scheduled update hour today
+    const todayUpdateTime = new Date();
+    todayUpdateTime.setHours(DAILY_UPDATE_HOUR, 0, 0, 0);
+
+    // If current time is before today's update time, wait for it
+    if (now < todayUpdateTime) {
+      return true;
+    }
+
+    return false;
+  }
+
+  set(videoId, views) {
+    this.cache[videoId] = {
+      views: views,
+      timestamp: Date.now(),
+    };
+    this.saveCache();
+  }
+
+  needsUpdate(videoId) {
+    return this.get(videoId) === null;
+  }
+
+  getAll() {
+    return this.cache;
+  }
+
+  clear() {
+    this.cache = {};
+    localStorage.removeItem(CACHE_KEY);
+  }
+
+  // Get statistics about cache
+  getStats() {
+    const entries = Object.keys(this.cache);
+    const now = Date.now();
+    let fresh = 0;
+    let stale = 0;
+
+    entries.forEach(videoId => {
+      const entry = this.cache[videoId];
+      const age = now - entry.timestamp;
+      if (age < CACHE_DURATION) {
+        fresh++;
+      } else {
+        stale++;
+      }
+    });
+
+    return {
+      total: entries.length,
+      fresh,
+      stale,
+    };
+  }
+}
 
 /* ---------- Helpers ---------- */
 const titleFromFile = (name = "") => name.replace(/\.(png|jpe?g|webp)$/i, "");
@@ -86,10 +304,10 @@ function formatViews(count) {
   return count.toString();
 }
 
-// Fetch views from YouTube API
+// Fetch views from YouTube API with rate limiting
 async function fetchYouTubeViews(videoId) {
   if (!videoId || YOUTUBE_API_KEY === "YOUR_API_KEY_HERE") {
-    return null;
+    return { views: null, error: "No API key" };
   }
   
   try {
@@ -97,19 +315,83 @@ async function fetchYouTubeViews(videoId) {
       `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
     );
     
-    if (!response.ok) throw new Error("Failed to fetch");
+    if (!response.ok) {
+      if (response.status === 403) {
+        console.warn("YouTube API quota exceeded or invalid API key");
+        return { views: null, error: "quota_exceeded" };
+      }
+      if (response.status === 404) {
+        return { views: null, error: "video_not_found" };
+      }
+      throw new Error("Failed to fetch");
+    }
     
     const data = await response.json();
     if (data.items && data.items.length > 0) {
       const viewCount = parseInt(data.items[0].statistics.viewCount, 10);
-      return viewCount;
+      return { views: viewCount, error: null };
     }
     
-    return null;
+    // Video exists but no views data (might be deleted or private)
+    return { views: null, error: "video_deleted" };
   } catch (error) {
     console.error("Error fetching YouTube views:", error);
-    return null;
+    return { views: null, error: error.message };
   }
+}
+
+// Batch fetch multiple video views with delay between requests
+async function batchFetchViews(videoIds, cache, permanentStorage, onProgress) {
+  const results = {};
+  const DELAY_BETWEEN_REQUESTS = 100; // 100ms delay to respect rate limits
+  
+  for (let i = 0; i < videoIds.length; i++) {
+    const videoId = videoIds[i];
+    
+    // Check cache first
+    const cachedViews = cache.get(videoId);
+    if (cachedViews !== null) {
+      results[videoId] = { views: cachedViews, fromCache: true };
+      if (onProgress) onProgress(i + 1, videoIds.length, true);
+      continue;
+    }
+
+    // Fetch from API
+    const result = await fetchYouTubeViews(videoId);
+    
+    if (result.views !== null) {
+      // Update both cache and permanent storage
+      cache.set(videoId, result.views);
+      permanentStorage.set(videoId, result.views);
+      results[videoId] = { views: result.views, fromCache: false };
+    } else if (result.error === "video_deleted" || result.error === "video_not_found") {
+      // Video deleted - mark in permanent storage
+      permanentStorage.markDeleted(videoId);
+      // Use last known view count from permanent storage
+      const lastKnown = permanentStorage.get(videoId);
+      results[videoId] = { 
+        views: lastKnown ? lastKnown.views : null, 
+        fromCache: false,
+        deleted: true
+      };
+    } else {
+      // Other error - use permanent storage if available
+      const lastKnown = permanentStorage.get(videoId);
+      results[videoId] = { 
+        views: lastKnown ? lastKnown.views : null, 
+        fromCache: false 
+      };
+    }
+    
+    if (onProgress) onProgress(i + 1, videoIds.length, false);
+    
+    // Add delay between requests to avoid rate limiting
+    if (i < videoIds.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_REQUESTS));
+    }
+  }
+  
+  return results;
 }
 
 /* ---------- Check for reduced motion ---------- */
@@ -249,7 +531,7 @@ const Chip = ({ children, active, onClick }) => {
 };
 
 /* ---------- Thumbnail Card ---------- */
-const ThumbCard = ({ t, onOpen, onBroken, gridSize, views }) => {
+const ThumbCard = ({ t, onOpen, onBroken, gridSize, views, isDeleted }) => {
   const reducedMotion = prefersReducedMotion();
   const formattedViews = formatViews(views);
 
@@ -293,12 +575,15 @@ const ThumbCard = ({ t, onOpen, onBroken, gridSize, views }) => {
 
         {/* Views badge - only show if we have views */}
         {formattedViews && (
-          <div className="absolute right-3 bottom-3 z-10 px-2 py-1 rounded-md text-[10px] backdrop-blur-sm bg-black/70 text-white border border-white/15 flex items-center gap-1">
+          <div className={`absolute right-3 bottom-3 z-10 px-2 py-1 rounded-md text-[10px] backdrop-blur-sm text-white border border-white/15 flex items-center gap-1 ${
+            isDeleted ? "bg-gray-600/90" : "bg-black/70"
+          }`}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
             {formattedViews}
+            {isDeleted && <span className="ml-1 opacity-70">*</span>}
           </div>
         )}
       </div>
@@ -754,6 +1039,31 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
   );
 };
 
+/* ---------- Loading Indicator ---------- */
+const LoadingIndicator = ({ current, total, cached }) => {
+  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+  
+  return (
+    <div className="fixed bottom-4 right-4 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-xl p-4 z-50 min-w-[200px]">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-[var(--orange)] border-t-transparent"></div>
+        <span className="text-xs font-medium text-[var(--text)]">
+          Loading views...
+        </span>
+      </div>
+      <div className="text-xs text-[var(--text-muted)] mb-1">
+        {current} / {total} videos {cached > 0 && `(${cached} cached)`}
+      </div>
+      <div className="w-full bg-[var(--surface-alt)] rounded-full h-2 overflow-hidden">
+        <div 
+          className="bg-[var(--orange)] h-full transition-all duration-300 rounded-full"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
 /* ---------- Thumbnails data ---------- */
 // ADD YOUR YOUTUBE LINKS HERE!
 // Format: { filename: "file.jpg", youtubeUrl: "https://youtube.com/watch?v=VIDEO_ID" }
@@ -832,7 +1142,8 @@ function buildItems() {
       filename: file,
       title,
       youtubeUrl,
-      views: null, // Will be populated from YouTube
+      views: null, // Will be populated from storage
+      deleted: false, // Will be set if video is deleted
       dateAdded: new Date(2024, 0, 1 + i).toISOString(),
     };
   });
@@ -842,6 +1153,11 @@ function buildItems() {
 export default function Thumbnails() {
   const [items, setItems] = useState([]);
   const [brokenIds, setBrokenIds] = useState(new Set());
+  const [isLoadingViews, setIsLoadingViews] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, cached: 0 });
+  const cacheRef = useRef(new ViewsCache());
+  const CLOUDFLARE_WORKER_URL = "https://video-views-api.shinelstudioofficial.workers.dev/";
+  const permanentStorageRef = useRef(new CloudflareViewStorage(CLOUDFLARE_WORKER_URL));
 
   const [openId, setOpenId] = useState(null);
   const [shareItem, setShareItem] = useState(null);
@@ -864,30 +1180,113 @@ export default function Thumbnails() {
     return () => window.removeEventListener("resize", updateItemsPerPage);
   }, [gridSize]);
 
-  // Fetch YouTube views for all items on mount
+  // Initialize items and fetch views with permanent storage
   useEffect(() => {
-    const all = buildItems();
-    setItems(all.length ? all : FALLBACK);
-    
-    // Fetch views for items with YouTube links
-    const fetchViews = async () => {
-      const updatedItems = await Promise.all(
-        all.map(async (item) => {
+    const initializeItems = async () => {
+      const cache = cacheRef.current;
+      const permanentStorage = permanentStorageRef.current;
+      const all = buildItems();
+      
+      if (all.length === 0) {
+        setItems(FALLBACK);
+        return;
+      }
+
+      // First, set items with permanent storage (instant display)
+      const itemsWithStoredViews = all.map(item => {
+        if (item.youtubeUrl) {
+          const videoId = extractVideoId(item.youtubeUrl);
+          if (videoId) {
+            // Check permanent storage first
+            const storedData = permanentStorage.get(videoId);
+            if (storedData) {
+              return { 
+                ...item, 
+                views: storedData.views,
+                deleted: storedData.status === "deleted"
+              };
+            }
+            // Fall back to cache
+            const cachedViews = cache.get(videoId);
+            if (cachedViews !== null) {
+              return { ...item, views: cachedViews };
+            }
+          }
+        }
+        return item;
+      });
+      
+      setItems(itemsWithStoredViews);
+
+      // Collect video IDs that need updating
+      const videoIdsToUpdate = [];
+      all.forEach(item => {
+        if (item.youtubeUrl) {
+          const videoId = extractVideoId(item.youtubeUrl);
+          if (videoId && cache.needsUpdate(videoId)) {
+            videoIdsToUpdate.push(videoId);
+          }
+        }
+      });
+
+      // If there are videos to update, fetch them
+      if (videoIdsToUpdate.length > 0) {
+        setIsLoadingViews(true);
+        setLoadingProgress({ current: 0, total: videoIdsToUpdate.length, cached: 0 });
+        
+        console.log(`Fetching views for ${videoIdsToUpdate.length} videos...`);
+        
+        const viewsData = await batchFetchViews(
+          videoIdsToUpdate, 
+          cache,
+          permanentStorage,
+          (current, total, fromCache) => {
+            setLoadingProgress(prev => ({
+              current,
+              total,
+              cached: fromCache ? prev.cached + 1 : prev.cached
+            }));
+          }
+        );
+
+        // Update items with fetched views
+        const updatedItems = all.map(item => {
           if (item.youtubeUrl) {
             const videoId = extractVideoId(item.youtubeUrl);
             if (videoId) {
-              const views = await fetchYouTubeViews(videoId);
-              return { ...item, views };
+              if (viewsData[videoId]) {
+                return { 
+                  ...item, 
+                  views: viewsData[videoId].views,
+                  deleted: viewsData[videoId].deleted || false
+                };
+              }
+              // Use permanent storage if available
+              const storedData = permanentStorage.get(videoId);
+              if (storedData) {
+                return { 
+                  ...item, 
+                  views: storedData.views,
+                  deleted: storedData.status === "deleted"
+                };
+              }
             }
           }
           return item;
-        })
-      );
-      setItems(updatedItems);
+        });
+
+        setItems(updatedItems);
+        setIsLoadingViews(false);
+        
+        console.log('Views fetching complete');
+        console.log('Cache stats:', cache.getStats());
+        console.log('Permanent storage stats:', permanentStorage.getStats());
+      }
     };
 
-    fetchViews();
+    initializeItems();
     
+    // Check URL for direct thumbnail link
     const params = new URLSearchParams(window.location.search);
     const thumbId = params.get("thumbnail");
     if (thumbId) {
@@ -1010,6 +1409,12 @@ export default function Thumbnails() {
     setCurrentPage(page);
     scrollToTop();
   };
+
+  // Expose storage management to console for debugging
+  useEffect(() => {
+    window.viewsCache = cacheRef.current;
+    window.permanentStorage = permanentStorageRef.current;
+  }, []);
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
@@ -1169,6 +1574,7 @@ export default function Thumbnails() {
                         onBroken={markBroken}
                         gridSize={gridSize}
                         views={t.views}
+                        isDeleted={t.deleted}
                       />
                     </div>
                   ))}
@@ -1188,6 +1594,15 @@ export default function Thumbnails() {
             )}
           </div>
         </section>
+
+        {/* Loading indicator */}
+        {isLoadingViews && (
+          <LoadingIndicator
+            current={loadingProgress.current}
+            total={loadingProgress.total}
+            cached={loadingProgress.cached}
+          />
+        )}
 
         {/* Modal */}
         {openId && (
