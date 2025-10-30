@@ -1,5 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { CloudflareViewStorage } from "./cloudflare-storage";
+import { CloudflareThumbnailStorage } from './cloudflare-thumbnail-storage';
+
+const THUMBNAILS_WORKER_URL = import.meta.env.VITE_THUMBNAILS_WORKER_URL || '';
+const thumbnailStorage = new CloudflareThumbnailStorage(THUMBNAILS_WORKER_URL);
 
 /* ---------- Fallback ---------- */
 const FALLBACK = [
@@ -1064,94 +1068,34 @@ const LoadingIndicator = ({ current, total, cached }) => {
   );
 };
 
-/* ---------- Thumbnails data ---------- */
-// ADD YOUR YOUTUBE LINKS HERE!
-// Format: { filename: "file.jpg", youtubeUrl: "https://youtube.com/watch?v=VIDEO_ID" }
-const YOUTUBE_LINKS = {
-  // Example:
-  // "Anchit-Valorant-1-Live.jpg": "https://youtube.com/watch?v=dQw4w9WgXcQ",
-  // "Anchit-Valorant-2-Live.jpg": "https://youtube.com/watch?v=abc123xyz",
-  // Add your links here...
-  "Kamzinkzone-Vlog-1-Video.jpg": "https://youtu.be/ZCBB66w13JA",
-};
-
-const FILENAMES = [
-  // Anchit - Valorant
-  "Anchit-Valorant-1-Live.jpg",
-  "Anchit-Valorant-2-Live.jpg",
-  "Anchit-Valorant-3-Live.jpg",
-  "Anchit-Valorant-4-Live.jpg",
-  "Anchit-Valorant-5-Video.jpg",
-  "Anchit-Valorant-6-Live.jpg",
-  "Anchit-Valorant-7-Video.jpg",
-  "Anchit-Valorant-8-Video.jpg",
-  "Anchit-Valorant-9-Video.jpg",
-  "Anchit-Valorant-10-Live.jpg",
-  "Anchit-Valorant-11-Live.jpg",
-
-  // BGMI Creator
-  "Divya-Bgmi-1-Live.jpg",
-  "Payal-Bgmi-1-Live.jpg",
-
-  // Cuttie - BGMI
-  "Cutie-Bgmi-1-Live.jpg",
-
-  // Deadlox - Once Human
-  "Deadlox-Once Human-1-Video.jpg",
-  "Deadlox-Once Human-2-Video.jpg",
-  "Deadlox-Once Human-3-Video.jpg",
-
-  // Divya - BGMI
-  "Divya-Bgmi-1-Live.jpg",
-
-  // Kamzinkzone - Vlogs
-  "Kamzinkzone-Vlog-1-Video.jpg",
-  "Kamzinkzone-Vlog-2-Video.jpg",
-  "Kamzinkzone-Vlog-3-Video.jpg",
-  "Kamzinkzone-Vlog-4-Video.jpg",
-  "Kamzinkzone-Vlog-5-Video.jpg",
-  "Kamzinkzone-Vlog-6-Video.jpg",
-  "Kamzinkzone-Vlog-7-Video.jpg",
-
-  // Kundan - Music & Bhajans
-  "Kundan-MusicandBhajan-1-Video.jpg",
-  "Kundan-MusicandBhajan-2-Video.jpg",
-
-  // Maggie - Valorant
-  "Maggie-Valorant-1-Video.jpg",
-  "Maggie-Valorant-2-Video.jpg",
-  "Maggie-Valorant-3-Video.jpg",
-  "Maggie-Valorant-4-Video.jpg",
-  "Maggie-Valorant-5-Video.jpg",
-  "Maggie-Valorant-6-Live.jpg",
-];
-
-/* ---------- Build items ---------- */
-function buildItems() {
-  return FILENAMES.map((file, i) => {
-    const title = titleFromFile(file);
-    const { category, subcategory } = deriveCat(title);
-    const youtubeUrl = YOUTUBE_LINKS[file] || null;
+async function buildItems() {
+  try {
+    const thumbnails = await thumbnailStorage.getAll();
     
-    return {
-      id: `thumb-${i + 1}`,
-      image: url(file),
-      category,
-      subcategory,
-      variant: variantFromFile(file),
-      filename: file,
-      title,
-      youtubeUrl,
-      views: null, // Will be populated from storage
-      deleted: false, // Will be set if video is deleted
-      dateAdded: new Date(2024, 0, 1 + i).toISOString(),
-    };
-  });
+    // Transform to match existing format
+    return thumbnails.map((t, i) => ({
+      id: t.id || `thumb-${i + 1}`,
+      image: t.imageUrl || url(t.filename), // Use imageUrl if provided, else construct from filename
+      category: t.category || 'OTHER',
+      subcategory: t.subcategory || null,
+      variant: t.variant || 'VIDEO',
+      filename: t.filename,
+      title: titleFromFile(t.filename),
+      youtubeUrl: t.youtubeUrl || null,
+      views: null, // Will be populated from view storage
+      deleted: false,
+      dateAdded: t.dateAdded || new Date().toISOString(),
+    }));
+  } catch (error) {
+    console.error('Error loading thumbnails from Cloudflare:', error);
+    return FALLBACK; // Return fallback if Cloudflare fails
+  }
 }
 
 /* ---------- Main Component ---------- */
 export default function Thumbnails() {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [brokenIds, setBrokenIds] = useState(new Set());
   const [isLoadingViews, setIsLoadingViews] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, cached: 0 });
@@ -1169,6 +1113,16 @@ export default function Thumbnails() {
   const [sortBy, setSortBy] = useState("default");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
+
+  useEffect(() => {
+    async function loadThumbnails() {
+      setLoading(true);
+      const data = await buildItems();
+      setItems(data);
+      setLoading(false);
+    }
+    loadThumbnails();
+  }, []);
 
   useEffect(() => {
     const updateItemsPerPage = () => {

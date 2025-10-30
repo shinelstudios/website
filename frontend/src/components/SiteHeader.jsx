@@ -6,7 +6,7 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Lock, Wand2, Search, Languages,
   Lightbulb, Brain, UserCog, Bell, Settings, LogOut, User,
   Shield, Zap, ArrowRight, ExternalLink, Home, Briefcase, Mail,
-  BarChart3, Video
+  BarChart3, Video, Image as ImageIcon
 } from "lucide-react";
 import TrustBar from "./Trustbar.jsx";
 import logoLight from "../assets/logo_light.png";
@@ -814,119 +814,140 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 </div>
 
                 {/* User menu */}
-                <div className="relative" ref={userMenuRef}>
-                  <button
-                    onClick={() => setUserMenuOpen(v => !v)}
-                    className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-transform duration-150"
-                    style={{
-                      background: "var(--surface-alt)",
-                      border: "1px solid var(--border)",
-                      transform: !prefersReduced && userMenuOpen ? 'scale(1.02)' : 'scale(1)'
-                    }}
-                  >
-                    <div
-                      className="h-7 w-7 rounded-full grid place-items-center text-[11px] font-bold"
-                      style={{ background: "var(--orange)", color: "#fff" }}
-                      title={`${auth.firstName || ""} ${auth.lastName || ""}`.trim() || auth.email || ""}
-                    >
-                      {initials}
-                    </div>
-                    <span className="text-sm font-medium max-w-[100px] truncate" style={{ color: "var(--text)" }}>
-                      {auth.firstName || auth.email || "Account"}
-                    </span>
-                    <ChevronDown size={14} className={`transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`} />
-                  </button>
+<div className="relative" ref={userMenuRef}>
+  <button
+    onClick={() => setUserMenuOpen(v => !v)}
+    className="hidden md:flex items-center gap-2 px-2 py-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-transform duration-150"
+    style={{
+      background: "var(--surface-alt)",
+      border: "1px solid var(--border)",
+      transform: !prefersReduced && userMenuOpen ? 'scale(1.02)' : 'scale(1)'
+    }}
+  >
+    <div
+      className="h-7 w-7 rounded-full grid place-items-center text-[11px] font-bold"
+      style={{ background: "var(--orange)", color: "#fff" }}
+      title={`${auth.firstName || ""} ${auth.lastName || ""}`.trim() || auth.email || ""}
+    >
+      {initials}
+    </div>
+    <span className="text-sm font-medium max-w-[100px] truncate" style={{ color: "var(--text)" }}>
+      {auth.firstName || auth.email || "Account"}
+    </span>
+    <ChevronDown size={14} className={`transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`} />
+  </button>
 
-                  <AnimatePresence>
-                    {userMenuOpen && (
-                      <motion.div
-                        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-                        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
-                        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-                        className="absolute right-0 mt-3 w-[280px] rounded-2xl shadow-xl overflow-hidden"
-                        style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
-                      >
-                        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="h-10 w-10 rounded-full grid place-items-center text-sm font-bold"
-                              style={{ background: "var(--orange)", color: "#fff" }}
-                            >
-                              {initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold truncate" style={{ color: "var(--text)" }}>
-                                {`${auth.firstName || ""} ${auth.lastName || ""}`.trim() || "User"}
-                              </div>
-                              <div className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                                {auth.email}
-                              </div>
-                              {role && (
-                                <span
-                                  className="inline-block mt-1 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
-                                  style={{ background: "rgba(232,80,2,0.15)", color: "var(--orange)" }}
-                                >
-                                  {role}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+  <AnimatePresence>
+    {userMenuOpen && (
+      <motion.div
+        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
+        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+        className="absolute right-0 mt-3 w-[280px] rounded-2xl shadow-xl overflow-hidden"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
+      >
+        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-3">
+            <div
+              className="h-10 w-10 rounded-full grid place-items-center text-sm font-bold"
+              style={{ background: "var(--orange)", color: "#fff" }}
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold truncate" style={{ color: "var(--text)" }}>
+                {`${auth.firstName || ""} ${auth.lastName || ""}`.trim() || "User"}
+              </div>
+              <div className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                {auth.email}
+              </div>
+              {role && (
+                <span
+                  className="inline-block mt-1 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(232,80,2,0.15)", color: "var(--orange)" }}
+                >
+                  {role}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
-                        <div className="py-2">
-                          <Link
-                            to="/studio"
-                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                            style={{ color: "var(--text)", background: "transparent" }}
-                          >
-                            <Briefcase size={18} style={{ color: "var(--orange)" }} />
-                            <span>Studio</span>
-                          </Link>
+        <div className="py-2">
+          <Link
+            to="/studio"
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+            style={{ color: "var(--text)", background: "transparent" }}
+          >
+            <Briefcase size={18} style={{ color: "var(--orange)" }} />
+            <span>Studio</span>
+          </Link>
 
-                          <Link
-                            to="/profile"
-                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                            style={{ color: "var(--text)" }}
-                          >
-                            <User size={18} style={{ color: "var(--orange)" }} />
-                            <span>Profile</span>
-                          </Link>
+          <Link
+            to="/profile"
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+            style={{ color: "var(--text)" }}
+          >
+            <User size={18} style={{ color: "var(--orange)" }} />
+            <span>Profile</span>
+          </Link>
 
-                          <Link
-                            to="/settings"
-                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                            style={{ color: "var(--text)" }}
-                          >
-                            <Settings size={18} style={{ color: "var(--orange)" }} />
-                            <span>Settings</span>
-                          </Link>
+          <Link
+            to="/settings"
+            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+            style={{ color: "var(--text)" }}
+          >
+            <Settings size={18} style={{ color: "var(--orange)" }} />
+            <span>Settings</span>
+          </Link>
 
-                          {role === "admin" && (
-                            <Link
-                              to="/admin"
-                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <Shield size={18} style={{ color: "var(--orange)" }} />
-                              <span>Admin Panel</span>
-                            </Link>
-                          )}
-                        </div>
+          {role === "admin" && (
+            <>
+              <Link
+                to="/admin"
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                style={{ color: "var(--text)" }}
+              >
+                <Shield size={18} style={{ color: "var(--orange)" }} />
+                <span>Admin Panel</span>
+              </Link>
 
-                        <div className="border-t px-2 py-2" style={{ borderColor: "var(--border)" }}>
-                          <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-colors duration-150"
-                            style={{ color: "var(--text)" }}
-                          >
-                            <LogOut size={18} style={{ color: "var(--orange)" }} />
-                            <span>Logout</span>
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+              <Link
+                to="/admin/users"
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                style={{ color: "var(--text)" }}
+              >
+                <UserCog size={18} style={{ color: "var(--orange)" }} />
+                <span>Users</span>
+              </Link>
+
+              <Link
+                to="/admin/thumbnails"
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                style={{ color: "var(--text)" }}
+              >
+                <ImageIcon size={18} style={{ color: "var(--orange)" }} />
+                <span>Thumbnails</span>
+              </Link>
+            </>
+          )}
+        </div>
+
+        <div className="border-t px-2 py-2" style={{ borderColor: "var(--border)" }}>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-colors duration-150"
+            style={{ color: "var(--text)" }}
+          >
+            <LogOut size={18} style={{ color: "var(--orange)" }} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
+
 
                 {/* quick access for small screens */}
                 <Link

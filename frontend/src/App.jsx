@@ -6,6 +6,7 @@ import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
+import AdminThumbnailsPage from './components/AdminThumbnailsPage';
 
 import { startHashActionRouter, registerHashAction, routeHash } from "./lib/hashActions";
 
@@ -174,6 +175,7 @@ export default function App() {
           <Route path="/tools/thumbnail-ideation" element={<ProtectedRoute><ThumbnailIdeation /></ProtectedRoute>} />
           <Route path="/tools/custom-ais" element={<ProtectedRoute><CustomAIs /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} />
+          <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
