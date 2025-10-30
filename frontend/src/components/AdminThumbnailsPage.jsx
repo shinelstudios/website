@@ -111,9 +111,10 @@ export default function AdminThumbnailsPage() {
       }
       
       if (data.details) {
-        alert(`Video found!\nTitle: ${data.details.title}\nViews: ${data.details.views.toLocaleString()}`);
+        const viewsText = data.details.views ? `\nViews: ${data.details.views.toLocaleString()}` : '';
+        alert(`✅ Video found!\n\nTitle: ${data.details.title}${viewsText}\n\nThis info will be saved with the thumbnail.`);
       } else {
-        alert(`Video ID: ${data.videoId}\n(Set YouTube API key to fetch title & views)`);
+        alert(`Video ID: ${data.videoId}\n\n⚠️ Set YOUTUBE_API_KEY in your worker environment to fetch title & views automatically.`);
       }
     } catch (e) {
       setErr(e.message || "Error fetching video");
@@ -551,6 +552,7 @@ export default function AdminThumbnailsPage() {
                 <th className="text-left p-3">Filename</th>
                 <th className="text-left p-3">Category</th>
                 <th className="text-left p-3">YouTube</th>
+                <th className="text-left p-3">Views</th>
                 <th className="text-left p-3">Added</th>
                 <th className="text-left p-3">Actions</th>
               </tr>
@@ -598,6 +600,15 @@ export default function AdminThumbnailsPage() {
                       <span className="text-xs opacity-40">—</span>
                     )}
                   </td>
+                  <td className="p-3">
+                    {t.youtubeViews ? (
+                      <div className="text-sm">
+                        {t.youtubeViews.toLocaleString()}
+                      </div>
+                    ) : (
+                      <span className="text-xs opacity-40">—</span>
+                    )}
+                  </td>
                   <td className="p-3 text-xs opacity-60">
                     {new Date(t.dateAdded).toLocaleDateString()}
                   </td>
@@ -625,7 +636,7 @@ export default function AdminThumbnailsPage() {
               ))}
               {!thumbnails.length && (
                 <tr>
-                  <td className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }} colSpan={6}>
+                  <td className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }} colSpan={7}>
                     No thumbnails yet. Add your first thumbnail above!
                   </td>
                 </tr>
