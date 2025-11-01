@@ -2,6 +2,9 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from "react"
 
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.shinelstudioofficial.workers.dev";
 
+// Client cache key for warm render
+const STORAGE_KEY = "thumbnailsCacheV1";
+
 /* ---------- Fallback ---------- */
 const FALLBACK = [
   {
@@ -76,7 +79,7 @@ const SkeletonCard = () => (
 );
 
 /* ---------- Protected Image Component ---------- */
-function ProtectedImg({ src, alt, onError, onLoad, className = "" }) {
+function ProtectedImg({ src, alt, onError, onLoad, className = "", fetchpriority = "auto" }) {
   return (
     <img
       src={src}
@@ -88,6 +91,7 @@ function ProtectedImg({ src, alt, onError, onLoad, className = "" }) {
       onLoad={onLoad}
       loading="lazy"
       decoding="async"
+      fetchpriority={fetchpriority}
     />
   );
 }
@@ -116,7 +120,7 @@ const Chip = ({ children, active, onClick }) => {
 };
 
 /* ---------- Thumbnail Card ---------- */
-const ThumbCard = ({ t, onOpen, onBroken, gridSize }) => {
+const ThumbCard = ({ t, onOpen, onBroken, gridSize, fetchPriority = "auto" }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const formattedViews = formatViews(t.views);
   const isDeleted = t.viewStatus === 'deleted';
@@ -136,6 +140,7 @@ const ThumbCard = ({ t, onOpen, onBroken, gridSize }) => {
           alt={`${t.category} ${t.subcategory || ""}`}
           onError={() => onBroken?.(t.id)}
           onLoad={() => setImageLoaded(true)}
+          fetchpriority={fetchPriority}
           className={`w-full h-full object-cover transition-opacity duration-300 ${
             imageLoaded ? "opacity-100" : "opacity-0"
           }`}
@@ -364,7 +369,6 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
 
     // Prevent screenshot keys
     const preventScreenshot = (e) => {
-      // Print Screen, Cmd+Shift+3/4, Windows+Shift+S
       if (e.key === 'PrintScreen' || 
           (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) ||
           (e.metaKey && e.shiftKey && e.key === 's')) {
@@ -593,7 +597,7 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
         </div>
 
         {/* Info footer */}
-        <div className="px-4 py-3 border-b order-[var(--border)] bg-[var(--surface-alt)]">
+        <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-alt)]">
           <div className="flex items-center justify-between text-xs sm:text-sm flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-1 rounded-md text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30">
@@ -667,8 +671,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
             ${currentPage === 1 
               ? 'opacity-40 cursor-not-allowed' 
-              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
-            } transition-all`}
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`}
+            transition-all`}
         >
           Previous
         </button>
@@ -685,8 +689,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
               className={`min-w-[2.5rem] px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                 ${page === currentPage
                   ? 'bg-[var(--orange)] text-white border border-[var(--orange)]'
-                  : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
-                }`}
+                  : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`}`}
             >
               {page}
             </button>
@@ -699,8 +702,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
             ${currentPage === totalPages 
               ? 'opacity-40 cursor-not-allowed' 
-              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
-            } transition-all`}
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`}
+            transition-all`}
         >
           Next
         </button>
@@ -726,47 +729,63 @@ export default function Thumbnails() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
 
-  // Fetch thumbnails from worker
+  // Fetch thumbnails from worker with warm render + background revalidation
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchThumbnails() {
-      setLoading(true);
+      // 1) Warm paint from sessionStorage if available
       try {
-        const response = await fetch(`${AUTH_BASE}/thumbnails`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        const cached = sessionStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length) {
+            setItems(parsed);
+            setLoading(false);
+          }
         }
-        
+      } catch {}
+
+      // 2) Fetch fresh in background
+      try {
+        if (controller.signal.aborted) return;
+        // Only show skeletons if nothing warm-painted
+        setLoading((prev) => (items.length ? false : true));
+
+        const response = await fetch(`${AUTH_BASE}/thumbnails`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        
-        if (data.thumbnails && Array.isArray(data.thumbnails)) {
-          const thumbnails = data.thumbnails.map(t => ({
-            id: t.id,
-            filename: t.filename,
-            category: t.category || 'OTHER',
-            subcategory: t.subcategory || '',
-            variant: t.variant || 'VIDEO',
-            youtubeUrl: t.youtubeUrl,
-            youtubeTitle: t.youtubeTitle,
-            imageUrl: t.imageUrl,
-            image: t.imageUrl,
-            videoId: t.videoId,
-            views: t.youtubeViews,
-            viewStatus: t.viewStatus,
-            lastViewUpdate: t.lastViewUpdate,
-            dateAdded: t.dateAdded,
-            lastUpdated: t.lastUpdated,
-          }));
-          
+
+        const arr = Array.isArray(data?.thumbnails) ? data.thumbnails : [];
+        const thumbnails = (arr.length ? arr : FALLBACK).map(t => ({
+          id: t.id,
+          filename: t.filename,
+          category: t.category || 'OTHER',
+          subcategory: t.subcategory || '',
+          variant: t.variant || 'VIDEO',
+          youtubeUrl: t.youtubeUrl,
+          youtubeTitle: t.youtubeTitle,
+          imageUrl: t.imageUrl,
+          image: t.imageUrl,
+          videoId: t.videoId,
+          views: t.youtubeViews,
+          viewStatus: t.viewStatus,
+          lastViewUpdate: t.lastViewUpdate,
+          dateAdded: t.dateAdded,
+          lastUpdated: t.lastUpdated,
+        }));
+
+        if (!controller.signal.aborted) {
           setItems(thumbnails);
-        } else {
-          setItems(FALLBACK);
+          try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(thumbnails)); } catch {}
         }
       } catch (error) {
-        console.error('Error fetching thumbnails:', error);
-        setItems(FALLBACK);
+        if (error.name !== "AbortError") {
+          console.error('Error fetching thumbnails:', error);
+          if (!controller.signal.aborted) setItems(prev => prev.length ? prev : FALLBACK);
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     
@@ -777,6 +796,10 @@ export default function Thumbnails() {
     if (thumbId) {
       setOpenId(thumbId);
     }
+
+    return () => controller.abort();
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1068,6 +1091,7 @@ export default function Thumbnails() {
                         onOpen={setOpenId}
                         onBroken={markBroken}
                         gridSize={gridSize}
+                        fetchPriority={index < 6 ? "high" : "auto"}
                       />
                     </div>
                   ))}

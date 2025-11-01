@@ -1,5 +1,5 @@
 // src/components/AdminUsersPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle } from "lucide-react";
 
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
@@ -43,20 +43,47 @@ export default function AdminUsersPage() {
   // banner threshold (warn when <= 14 days)
   const showExpiringBanner = role === "admin" && Number.isFinite(daysLeft) && daysLeft <= 14;
 
-  async function loadUsers() {
-    setBusy(true);
+  // stable headers + abort controller
+  const authHeaders = useMemo(
+    () => ({ authorization: `Bearer ${localStorage.getItem("token") || ""}` }),
+    []
+  );
+  const abortRef = useRef(null);
+
+  async function loadUsers({ warm = false } = {}) {
     setErr("");
+    // If we already have a warm cache, show it instantly on mount
+    if (warm) {
+      try {
+        const cached = sessionStorage.getItem("adminUsersCache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) setUsers(parsed);
+        }
+      } catch {}
+    }
+
+    // Abort any in-flight request before issuing a new one
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setBusy(true);
     try {
       const res = await fetch(`${AUTH_BASE}/admin/users`, {
-        headers: { authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: authHeaders,
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to load users");
-      setUsers(data.users || []);
+      const list = data.users || [];
+      setUsers(list);
+      // persist warm cache for instant next paint
+      sessionStorage.setItem("adminUsersCache", JSON.stringify(list));
     } catch (e) {
-      setErr(e.message || "Error");
+      if (e.name !== "AbortError") setErr(e.message || "Error");
     } finally {
-      setBusy(false);
+      if (!controller.signal.aborted) setBusy(false);
     }
   }
 
@@ -69,14 +96,14 @@ export default function AdminUsersPage() {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          ...authHeaders,
         },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to create user");
       setForm({ firstName: "", lastName: "", email: "", role: "client", password: "" });
-      await loadUsers();
+      await loadUsers(); // refresh list
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -91,11 +118,11 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch(`${AUTH_BASE}/admin/users/${encodeURIComponent(email)}`, {
         method: "DELETE",
-        headers: { authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+        headers: authHeaders,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to delete");
-      await loadUsers();
+      await loadUsers(); // refresh list
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -125,7 +152,18 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    loadUsers();
+    // warm paint from cache, then network in parallel
+    loadUsers({ warm: true });
+
+    // on token/role refresh elsewhere, reload users
+    const onAuthChanged = () => loadUsers();
+    window.addEventListener("auth:changed", onAuthChanged);
+
+    return () => {
+      window.removeEventListener("auth:changed", onAuthChanged);
+      if (abortRef.current) abortRef.current.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -161,9 +199,8 @@ export default function AdminUsersPage() {
           >
             <AlertTriangle size={18} style={{ color: "var(--orange)" }} />
             <div className="text-sm">
-              <b>Heads up:</b> your admin session expires in <b>{daysLeft} days</b>.
-              Auto-refresh is enabled, but if your browser is closed for very long periods,
-              you can tap <i>Refresh session</i> above to roll it forward.
+              <b>Heads up:</b> your admin session expires in <b>{daysLeft} days</b>. Auto-refresh is enabled, but if
+              your browser is closed for very long periods, you can tap <i>Refresh session</i> above to roll it forward.
             </div>
           </div>
         )}
@@ -175,21 +212,24 @@ export default function AdminUsersPage() {
         )}
 
         {/* Create user */}
-        <form onSubmit={createUser} className="rounded-2xl p-4 border mb-6"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+        <form
+          onSubmit={createUser}
+          className="rounded-2xl p-4 border mb-6"
+          style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}
+        >
           <div className="text-base font-semibold mb-3" style={{ color: "var(--text)" }}>
             Create user
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <Input label="First name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} />
-            <Input label="Last name"  value={form.lastName}  onChange={(v) => setForm({ ...form, lastName: v })} />
-            <Input label="Email"      value={form.email}     onChange={(v) => setForm({ ...form, email: v })} type="email" />
+            <Input label="Last name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} />
+            <Input label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} type="email" />
             <Select
               label="Role"
               value={form.role}
               onChange={(v) => setForm({ ...form, role: v })}
               options={[
-                { value: "admin",  label: "Admin" },
+                { value: "admin", label: "Admin" },
                 { value: "editor", label: "Editor" },
                 { value: "client", label: "Client" },
               ]}
@@ -199,7 +239,7 @@ export default function AdminUsersPage() {
           <div className="mt-3">
             <button
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-white"
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
             >
               <Plus size={16} /> Create
@@ -208,8 +248,10 @@ export default function AdminUsersPage() {
         </form>
 
         {/* Users table */}
-        <div className="rounded-2xl border overflow-x-auto"
-             style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+        <div
+          className="rounded-2xl border overflow-x-auto"
+          style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}
+        >
           <table className="w-full text-sm">
             <thead style={{ color: "var(--text-muted)" }}>
               <tr>
@@ -240,14 +282,13 @@ export default function AdminUsersPage() {
               {!users.length && (
                 <tr>
                   <td className="p-3 text-center text-sm text-[var(--text-muted)]" colSpan={4}>
-                    No users yet.
+                    {busy ? "Loading users…" : "No users yet."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-
       </div>
     </section>
   );
