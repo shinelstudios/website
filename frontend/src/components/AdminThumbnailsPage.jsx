@@ -1,6 +1,6 @@
 // src/components/AdminThumbnailsPage.jsx
 import React, { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, Upload, Download, ExternalLink, Eye, RefreshCw, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Edit2, Upload, Download, ExternalLink, Eye, RefreshCw, Image as ImageIcon, AlertCircle } from "lucide-react";
 
 // Use the same auth worker URL - thumbnail endpoints are now part of it
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.your-account.workers.dev";
@@ -13,6 +13,8 @@ export default function AdminThumbnailsPage() {
   const [err, setErr] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [refreshingId, setRefreshingId] = useState(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   const [form, setForm] = useState({
     filename: "",
@@ -112,7 +114,8 @@ export default function AdminThumbnailsPage() {
       
       if (data.details) {
         const viewsText = data.details.views ? `\nViews: ${data.details.views.toLocaleString()}` : '';
-        alert(`✅ Video found!\n\nTitle: ${data.details.title}${viewsText}\n\nThis info will be saved with the thumbnail.`);
+        const lastUpdated = data.details.lastUpdated ? `\n\nLast updated: ${new Date(data.details.lastUpdated).toLocaleString()}` : '';
+        alert(`✅ Video found!\n\nTitle: ${data.details.title}${viewsText}${lastUpdated}\n\nView counts are cached and refreshed weekly.`);
       } else {
         alert(`Video ID: ${data.videoId}\n\n⚠️ Set YOUTUBE_API_KEY in your worker environment to fetch title & views automatically.`);
       }
@@ -120,6 +123,63 @@ export default function AdminThumbnailsPage() {
       setErr(e.message || "Error fetching video");
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Refresh view count for a single video
+  const refreshSingleView = async (videoId, thumbnailId) => {
+    setRefreshingId(thumbnailId);
+    try {
+      const res = await fetch(`${AUTH_BASE}/views/refresh/${videoId}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${getToken()}` }
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to refresh");
+      }
+      
+      // Reload thumbnails to show updated data
+      await loadThumbnails();
+      
+      const status = data.status === 'deleted' ? ' (Video Deleted)' : '';
+      alert(`✅ Refreshed!\n\nViews: ${data.views.toLocaleString()}${status}`);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
+  // Refresh all view counts
+  const refreshAllViews = async () => {
+    if (!confirm("This will refresh view counts for all videos that are older than 7 days. Continue?")) {
+      return;
+    }
+    
+    setRefreshingAll(true);
+    try {
+      const res = await fetch(`${AUTH_BASE}/views/refresh`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${getToken()}` }
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to refresh");
+      }
+      
+      // Reload thumbnails to show updated data
+      await loadThumbnails();
+      
+      alert(`✅ ${data.message}`);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setRefreshingAll(false);
     }
   };
 
@@ -208,7 +268,7 @@ export default function AdminThumbnailsPage() {
 
   // Delete thumbnail
   const deleteThumbnail = async (id, filename) => {
-    if (!confirm(`Delete thumbnail "${filename}"?`)) return;
+    if (!confirm(`Delete thumbnail "${filename}"?\n\nNote: View count data will be preserved in storage.`)) return;
     
     setBusy(true);
     setErr("");
@@ -336,6 +396,28 @@ export default function AdminThumbnailsPage() {
     loadStats();
   }, []);
 
+  // Format time ago
+  const timeAgo = (timestamp) => {
+    if (!timestamp) return 'Never';
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    const intervals = {
+      year: 31536000,
+      month: 2592000,
+      week: 604800,
+      day: 86400,
+      hour: 3600,
+      minute: 60
+    };
+    
+    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+      const interval = Math.floor(seconds / secondsInUnit);
+      if (interval >= 1) {
+        return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
+      }
+    }
+    return 'Just now';
+  };
+
   return (
     <section className="min-h-screen" style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 py-10 max-w-6xl">
@@ -345,6 +427,16 @@ export default function AdminThumbnailsPage() {
             Admin · Thumbnails Manager
           </h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={refreshAllViews}
+              disabled={refreshingAll || busy}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white"
+              style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", opacity: refreshingAll ? 0.6 : 1 }}
+              title="Refresh view counts (7+ days old)"
+            >
+              <RefreshCw size={16} className={refreshingAll ? "animate-spin" : ""} />
+              {refreshingAll ? "Refreshing..." : "Refresh Views"}
+            </button>
             <button
               onClick={exportData}
               disabled={busy || !thumbnails.length}
@@ -370,8 +462,18 @@ export default function AdminThumbnailsPage() {
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
               title="Refresh"
             >
-              <RefreshCw size={16} /> Refresh
+              <RefreshCw size={16} /> Reload
             </button>
+          </div>
+        </div>
+
+        {/* Info Banner */}
+        <div className="mb-4 rounded-lg p-3 text-sm flex items-start gap-2" 
+             style={{ background: "rgba(232,80,2,0.1)", color: "var(--text)", border: "1px solid rgba(232,80,2,0.2)" }}>
+          <AlertCircle size={16} style={{ color: "var(--orange)", marginTop: "2px", flexShrink: 0 }} />
+          <div>
+            <strong>View Count System:</strong> View counts are cached and refreshed automatically once per week to save API quota. 
+            Use "Refresh Views" to manually update counts older than 7 days. Deleted videos show their last known view count.
           </div>
         </div>
 
@@ -553,7 +655,7 @@ export default function AdminThumbnailsPage() {
                 <th className="text-left p-3">Category</th>
                 <th className="text-left p-3">YouTube</th>
                 <th className="text-left p-3">Views</th>
-                <th className="text-left p-3">Added</th>
+                <th className="text-left p-3">Last Updated</th>
                 <th className="text-left p-3">Actions</th>
               </tr>
             </thead>
@@ -602,18 +704,38 @@ export default function AdminThumbnailsPage() {
                   </td>
                   <td className="p-3">
                     {t.youtubeViews ? (
-                      <div className="text-sm">
-                        {t.youtubeViews.toLocaleString()}
+                      <div>
+                        <div className="text-sm font-medium">
+                          {t.youtubeViews.toLocaleString()}
+                        </div>
+                        {t.viewStatus === 'deleted' && (
+                          <div className="text-xs" style={{ color: "#ff9500" }}>
+                            ⚠️ Deleted
+                          </div>
+                        )}
                       </div>
+                    ) : t.youtubeUrl ? (
+                      <span className="text-xs opacity-40">Pending</span>
                     ) : (
                       <span className="text-xs opacity-40">—</span>
                     )}
                   </td>
                   <td className="p-3 text-xs opacity-60">
-                    {new Date(t.dateAdded).toLocaleDateString()}
+                    {t.lastViewUpdate ? timeAgo(t.lastViewUpdate) : '—'}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-2">
+                      {t.videoId && (
+                        <button
+                          onClick={() => refreshSingleView(t.videoId, t.id)}
+                          disabled={refreshingId === t.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                          style={{ borderColor: "var(--border)", color: "var(--orange)" }}
+                          title="Refresh view count"
+                        >
+                          <RefreshCw size={12} className={refreshingId === t.id ? "animate-spin" : ""} />
+                        </button>
+                      )}
                       <button
                         onClick={() => editThumbnail(t)}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
