@@ -34,20 +34,22 @@ export default function AdminThumbnailsPage() {
     "authorization": `Bearer ${getToken()}`
   });
 
-  // Extract video ID from YouTube URL
-  const extractVideoId = (url) => {
-    if (!url) return null;
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-      /youtube\.com\/embed\/([^&\n?#]+)/,
-      /youtube\.com\/v\/([^&\n?#]+)/,
-    ];
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match && match[1]) return match[1];
-    }
-    return null;
-  };
+  // Extract video ID from YouTube URL (supports live links too)
+const extractVideoId = (url) => {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,  // ✅ NEW: support live URLs
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+  return null;
+};
+
 
   // Convert file to base64
   const fileToBase64 = (file) => {
