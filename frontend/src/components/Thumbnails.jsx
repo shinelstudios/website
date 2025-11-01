@@ -1,9 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { CloudflareViewStorage } from "./cloudflare-storage";
-import { CloudflareThumbnailStorage } from './cloudflare-thumbnail-storage';
 
-const THUMBNAILS_WORKER_URL = import.meta.env.VITE_THUMBNAILS_WORKER_URL || '';
-const thumbnailStorage = new CloudflareThumbnailStorage(THUMBNAILS_WORKER_URL);
+const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.shinelstudioofficial.workers.dev";
 
 /* ---------- Fallback ---------- */
 const FALLBACK = [
@@ -16,286 +13,7 @@ const FALLBACK = [
   },
 ];
 
-const PUBLIC_BASE = (import.meta?.env?.BASE_URL ?? "/").replace(/\/+$/, "/");
-const url = (file) => encodeURI(`${PUBLIC_BASE}thumbnails/${file}`);
-
-// YouTube API Key - Replace this with your actual API key from Google Cloud Console
-// Get it from: https://console.cloud.google.com/apis/credentials
-const YOUTUBE_API_KEY = "AIzaSyD6p-nyJ7N9ZFfvFCQQJDC4V9hcAIRGvXw";
-
-// Cache configuration
-const CACHE_KEY = "youtube_views_cache";
-const PERMANENT_STORAGE_KEY = "youtube_views_permanent"; // Permanent storage
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-const DAILY_UPDATE_HOUR = 3; // Update at 3 AM daily (adjust as needed)
-
-/* ---------- Permanent Storage Manager ---------- */
-class PermanentViewStorage {
-  constructor() {
-    this.storage = this.loadStorage();
-  }
-
-  loadStorage() {
-    try {
-      const stored = localStorage.getItem(PERMANENT_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-      console.error("Error loading permanent storage:", error);
-      return {};
-    }
-  }
-
-  saveStorage() {
-    try {
-      localStorage.setItem(PERMANENT_STORAGE_KEY, JSON.stringify(this.storage));
-    } catch (error) {
-      console.error("Error saving permanent storage:", error);
-    }
-  }
-
-  // Get permanent view count (never expires)
-  get(videoId) {
-    return this.storage[videoId] || null;
-  }
-
-  // Store view count permanently
-  set(videoId, views) {
-    // Only update if new view count is higher (to handle deleted videos)
-    const existing = this.storage[videoId];
-    if (!existing || views > existing.views) {
-      this.storage[videoId] = {
-        views: views,
-        lastUpdated: Date.now(),
-        status: "active"
-      };
-      this.saveStorage();
-    }
-  }
-
-  // Mark video as deleted but keep the last known views
-  markDeleted(videoId) {
-    if (this.storage[videoId]) {
-      this.storage[videoId].status = "deleted";
-      this.storage[videoId].deletedAt = Date.now();
-      this.saveStorage();
-    }
-  }
-
-  // Get all stored data
-  getAll() {
-    return this.storage;
-  }
-
-  // Export data as JSON (for backup)
-  export() {
-    return JSON.stringify(this.storage, null, 2);
-  }
-
-  // Import data from JSON
-  import(jsonString) {
-    try {
-      const imported = JSON.parse(jsonString);
-      this.storage = { ...this.storage, ...imported };
-      this.saveStorage();
-      return true;
-    } catch (error) {
-      console.error("Error importing data:", error);
-      return false;
-    }
-  }
-
-  // Clear all permanent storage
-  clear() {
-    this.storage = {};
-    localStorage.removeItem(PERMANENT_STORAGE_KEY);
-  }
-
-  // Get statistics
-  getStats() {
-    const videos = Object.keys(this.storage);
-    const active = videos.filter(id => this.storage[id].status === "active").length;
-    const deleted = videos.filter(id => this.storage[id].status === "deleted").length;
-    
-    return {
-      total: videos.length,
-      active,
-      deleted,
-      totalViews: videos.reduce((sum, id) => sum + (this.storage[id].views || 0), 0)
-    };
-  }
-}
-
-/* ---------- Cache Management ---------- */
-class ViewsCache {
-  constructor() {
-    this.cache = this.loadCache();
-  }
-
-  loadCache() {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      return cached ? JSON.parse(cached) : {};
-    } catch (error) {
-      console.error("Error loading cache:", error);
-      return {};
-    }
-  }
-
-  saveCache() {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(this.cache));
-    } catch (error) {
-      console.error("Error saving cache:", error);
-    }
-  }
-
-  get(videoId) {
-    const entry = this.cache[videoId];
-    if (!entry) return null;
-
-    const now = Date.now();
-    const age = now - entry.timestamp;
-
-    // Check if cache is still valid
-    if (age < CACHE_DURATION) {
-      return entry.views;
-    }
-
-    // Check if we should wait for the daily update time
-    if (this.shouldWaitForDailyUpdate(entry.timestamp)) {
-      return entry.views; // Return cached value, will update at scheduled time
-    }
-
-    return null; // Cache expired, needs refresh
-  }
-
-  shouldWaitForDailyUpdate(lastUpdate) {
-    const now = new Date();
-    const lastUpdateDate = new Date(lastUpdate);
-    
-    // If last update was today, don't update again
-    if (
-      now.getFullYear() === lastUpdateDate.getFullYear() &&
-      now.getMonth() === lastUpdateDate.getMonth() &&
-      now.getDate() === lastUpdateDate.getDate()
-    ) {
-      return true;
-    }
-
-    // Check if we've passed the scheduled update hour today
-    const todayUpdateTime = new Date();
-    todayUpdateTime.setHours(DAILY_UPDATE_HOUR, 0, 0, 0);
-
-    // If current time is before today's update time, wait for it
-    if (now < todayUpdateTime) {
-      return true;
-    }
-
-    return false;
-  }
-
-  set(videoId, views) {
-    this.cache[videoId] = {
-      views: views,
-      timestamp: Date.now(),
-    };
-    this.saveCache();
-  }
-
-  needsUpdate(videoId) {
-    return this.get(videoId) === null;
-  }
-
-  getAll() {
-    return this.cache;
-  }
-
-  clear() {
-    this.cache = {};
-    localStorage.removeItem(CACHE_KEY);
-  }
-
-  // Get statistics about cache
-  getStats() {
-    const entries = Object.keys(this.cache);
-    const now = Date.now();
-    let fresh = 0;
-    let stale = 0;
-
-    entries.forEach(videoId => {
-      const entry = this.cache[videoId];
-      const age = now - entry.timestamp;
-      if (age < CACHE_DURATION) {
-        fresh++;
-      } else {
-        stale++;
-      }
-    });
-
-    return {
-      total: entries.length,
-      fresh,
-      stale,
-    };
-  }
-}
-
 /* ---------- Helpers ---------- */
-const titleFromFile = (name = "") => name.replace(/\.(png|jpe?g|webp)$/i, "");
-const variantFromFile = (name = "") =>
-  /[-_]live\.(jpg|jpeg|png|webp)$/i.test(name) ? "LIVE" : "VIDEO";
-
-function deriveCat(title = "") {
-  const lower = title.toLowerCase();
-  if (lower.includes("vlog")) return { category: "VLOG" };
-  if (lower.includes("bhajan") || lower.includes("music"))
-    return { category: "MUSIC & BHAJANS" };
-
-  const gamingKeys = [
-    "bgmi",
-    "valorant",
-    "once human",
-    "pubg",
-    "codm",
-    "free fire",
-    "minecraft",
-    "roblox",
-    "fortnite",
-  ];
-  for (const key of gamingKeys) {
-    if (lower.includes(key)) {
-      return {
-        category: "GAMING",
-        subcategory:
-          key === "once human"
-            ? "Once Human"
-            : key.replace(/\b\w/g, (m) => m.toUpperCase()).replace("Codm", "CODM"),
-      };
-    }
-  }
-  return { category: "OTHER" };
-}
-
-/* ---------- YouTube Functions ---------- */
-// Extract video ID from YouTube URL
-function extractVideoId(url) {
-  if (!url) return null;
-  
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
-    /youtube\.com\/embed\/([^&\n?#]+)/,
-    /youtube\.com\/v\/([^&\n?#]+)/,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) return match[1];
-  }
-  
-  return null;
-}
-
-// Format view count with K, M suffixes
 function formatViews(count) {
   if (!count || count === 0) return null;
   
@@ -305,97 +23,7 @@ function formatViews(count) {
   if (count >= 1000) {
     return (count / 1000).toFixed(1).replace(/\.0$/, "") + "K";
   }
-  return count.toString();
-}
-
-// Fetch views from YouTube API with rate limiting
-async function fetchYouTubeViews(videoId) {
-  if (!videoId || YOUTUBE_API_KEY === "YOUR_API_KEY_HERE") {
-    return { views: null, error: "No API key" };
-  }
-  
-  try {
-    const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
-    );
-    
-    if (!response.ok) {
-      if (response.status === 403) {
-        console.warn("YouTube API quota exceeded or invalid API key");
-        return { views: null, error: "quota_exceeded" };
-      }
-      if (response.status === 404) {
-        return { views: null, error: "video_not_found" };
-      }
-      throw new Error("Failed to fetch");
-    }
-    
-    const data = await response.json();
-    if (data.items && data.items.length > 0) {
-      const viewCount = parseInt(data.items[0].statistics.viewCount, 10);
-      return { views: viewCount, error: null };
-    }
-    
-    // Video exists but no views data (might be deleted or private)
-    return { views: null, error: "video_deleted" };
-  } catch (error) {
-    console.error("Error fetching YouTube views:", error);
-    return { views: null, error: error.message };
-  }
-}
-
-// Batch fetch multiple video views with delay between requests
-async function batchFetchViews(videoIds, cache, permanentStorage, onProgress) {
-  const results = {};
-  const DELAY_BETWEEN_REQUESTS = 100; // 100ms delay to respect rate limits
-  
-  for (let i = 0; i < videoIds.length; i++) {
-    const videoId = videoIds[i];
-    
-    // Check cache first
-    const cachedViews = cache.get(videoId);
-    if (cachedViews !== null) {
-      results[videoId] = { views: cachedViews, fromCache: true };
-      if (onProgress) onProgress(i + 1, videoIds.length, true);
-      continue;
-    }
-
-    // Fetch from API
-    const result = await fetchYouTubeViews(videoId);
-    
-    if (result.views !== null) {
-      // Update both cache and permanent storage
-      cache.set(videoId, result.views);
-      permanentStorage.set(videoId, result.views);
-      results[videoId] = { views: result.views, fromCache: false };
-    } else if (result.error === "video_deleted" || result.error === "video_not_found") {
-      // Video deleted - mark in permanent storage
-      permanentStorage.markDeleted(videoId);
-      // Use last known view count from permanent storage
-      const lastKnown = permanentStorage.get(videoId);
-      results[videoId] = { 
-        views: lastKnown ? lastKnown.views : null, 
-        fromCache: false,
-        deleted: true
-      };
-    } else {
-      // Other error - use permanent storage if available
-      const lastKnown = permanentStorage.get(videoId);
-      results[videoId] = { 
-        views: lastKnown ? lastKnown.views : null, 
-        fromCache: false 
-      };
-    }
-    
-    if (onProgress) onProgress(i + 1, videoIds.length, false);
-    
-    // Add delay between requests to avoid rate limiting
-    if (i < videoIds.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_REQUESTS));
-    }
-  }
-  
-  return results;
+  return count.toLocaleString();
 }
 
 /* ---------- Check for reduced motion ---------- */
@@ -428,85 +56,39 @@ function getItemsPerPage(gridSize) {
   return 12;
 }
 
+/* ---------- Skeleton Loader ---------- */
+const SkeletonCard = () => (
+  <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
+    <div className="w-full aspect-[16/9] bg-gray-700/30"></div>
+    <div className="p-3 sm:p-4 space-y-2.5">
+      <div className="flex gap-2">
+        <div className="h-5 bg-gray-700/30 rounded w-20"></div>
+        <div className="h-5 bg-gray-700/30 rounded w-14"></div>
+      </div>
+      <div className="h-8 bg-gray-700/30 rounded w-3/4"></div>
+      <div className="flex items-center gap-3">
+        <div className="h-4 bg-gray-700/30 rounded w-16"></div>
+        <div className="h-4 bg-gray-700/30 rounded flex-1"></div>
+      </div>
+      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
+    </div>
+  </div>
+);
+
 /* ---------- Protected Image Component ---------- */
-function ProtectedImg({ src, alt, onError, className = "" }) {
-  const handleContextMenu = (e) => {
-    e.preventDefault();
-    return false;
-  };
-
-  const handleDragStart = (e) => {
-    e.preventDefault();
-    return false;
-  };
-
+function ProtectedImg({ src, alt, onError, onLoad, className = "" }) {
   return (
     <img
       src={src}
       alt={alt}
-      className={`select-none pointer-events-none ${className}`}
-      onContextMenu={handleContextMenu}
-      onDragStart={handleDragStart}
+      className={`select-none ${className}`}
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
       onError={onError}
+      onLoad={onLoad}
       loading="lazy"
       decoding="async"
     />
-  );
-}
-
-/* ---------- Enhanced Lazy Image ---------- */
-function LazyImg({ src, alt, onError }) {
-  const [visible, setVisible] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const ref = useRef(null);
-  const reducedMotion = prefersReducedMotion();
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-
-    if ("loading" in HTMLImageElement.prototype) {
-      setVisible(true);
-      return;
-    }
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisible(true);
-            obs.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin: "240px" }
-    );
-    obs.observe(node);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <div ref={ref} className="absolute inset-0 bg-black/10">
-      {visible && (
-        <ProtectedImg
-          src={src}
-          alt={alt}
-          onError={onError}
-          className={`absolute inset-0 w-full h-full object-cover transition-all duration-400 ${
-            loaded ? "opacity-100 scale-100" : "opacity-0 scale-105"
-          } ${reducedMotion ? "!transition-none" : ""}`}
-        />
-      )}
-      {visible && (
-        <img
-          src={src}
-          alt=""
-          onLoad={() => setLoaded(true)}
-          className="hidden"
-        />
-      )}
-    </div>
   );
 }
 
@@ -519,14 +101,13 @@ const Chip = ({ children, active, onClick }) => {
       type="button"
       onClick={onClick}
       className={`
-        text-xs sm:text-sm px-4 py-2 rounded-full border font-medium whitespace-nowrap select-none touch-target
+        text-xs sm:text-sm px-4 py-2 rounded-full border font-medium whitespace-nowrap select-none
         transition-all duration-200
         ${active 
           ? "bg-[var(--orange)] text-white border-[var(--orange)]" 
           : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
         }
         ${reducedMotion ? "!transition-none" : "hover:scale-105"}
-        ring-focus
       `}
     >
       {children}
@@ -535,66 +116,96 @@ const Chip = ({ children, active, onClick }) => {
 };
 
 /* ---------- Thumbnail Card ---------- */
-const ThumbCard = ({ t, onOpen, onBroken, gridSize, views, isDeleted }) => {
-  const reducedMotion = prefersReducedMotion();
-  const formattedViews = formatViews(views);
-
+const ThumbCard = ({ t, onOpen, onBroken, gridSize }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const formattedViews = formatViews(t.views);
+  const isDeleted = t.viewStatus === 'deleted';
+  
   return (
-    <article
-      className={`
-        group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface)]
-        cursor-pointer touch-target
-        transition-all duration-200
-        ${reducedMotion ? "!transition-none" : "hover:-translate-y-1 hover:shadow-xl hover:border-[var(--orange)]/50"}
-      `}
+    <article 
+      className="group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:border-[var(--orange)]"
       onClick={() => onOpen(t.id)}
     >
-      {/* Media area */}
-      <div className="relative w-full aspect-[16/10] bg-black/5">
-        <LazyImg
-          src={t.image}
+      {/* Media area - CLEAN, NO OVERLAYS */}
+      <div className="relative w-full aspect-[16/9] bg-gray-900 overflow-hidden">
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-gray-700/30 animate-pulse"></div>
+        )}
+        <ProtectedImg
+          src={t.imageUrl || t.image}
           alt={`${t.category} ${t.subcategory || ""}`}
           onError={() => onBroken?.(t.id)}
+          onLoad={() => setImageLoaded(true)}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
         />
-
-        {/* Protection overlay */}
-        <div
-          className="absolute inset-0 z-[1]"
-          onContextMenu={(e) => e.preventDefault()}
-          onDragStart={(e) => e.preventDefault()}
-        />
-
-        {/* Category badge */}
-        <div className="absolute left-3 top-3 z-10 px-2 py-1 rounded-md text-[11px] font-semibold backdrop-blur-sm bg-black/70 text-white border border-white/15">
-          {t.category}
-          {t.subcategory && t.category === "GAMING" && ` • ${t.subcategory}`}
-        </div>
-
-        {/* Variant badge */}
-        <div className={`absolute right-3 top-3 z-10 px-2 py-[2px] rounded-md text-[10px] font-bold tracking-wide backdrop-blur-sm text-white border border-white/15 ${
-          t.variant === "LIVE" ? "bg-red-600/90" : "bg-black/70"
-        }`}>
-          {t.variant}
-        </div>
-
-        {/* Views badge - only show if we have views */}
-        {formattedViews && (
-          <div className={`absolute right-3 bottom-3 z-10 px-2 py-1 rounded-md text-[10px] backdrop-blur-sm text-white border border-white/15 flex items-center gap-1 ${
-            isDeleted ? "bg-gray-600/90" : "bg-black/70"
-          }`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            {formattedViews}
-            {isDeleted && <span className="ml-1 opacity-70">*</span>}
-          </div>
-        )}
       </div>
 
-      {/* Footer */}
-      <div className="p-4">
-        <button className="btn-brand w-full text-xs sm:text-sm">
+      {/* All info BELOW the thumbnail */}
+      <div className="p-3 sm:p-4 space-y-2.5">
+        {/* Badges row - Category, Variant, YouTube */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            {t.category}
+            {t.subcategory && <span className="opacity-70">• {t.subcategory}</span>}
+          </span>
+          
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${
+            t.variant === "LIVE" 
+              ? "bg-red-600/20 text-red-400 border-red-500/30 animate-pulse" 
+              : "bg-gray-700/30 text-gray-300 border-gray-600/30"
+          }`}>
+            {t.variant}
+          </span>
+
+          {t.youtubeUrl && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-red-600/20 text-red-400 border border-red-500/30">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              YouTube
+            </span>
+          )}
+        </div>
+
+        {/* Video title */}
+        {t.youtubeTitle ? (
+          <h3 className="text-[var(--text)] text-xs sm:text-sm font-semibold line-clamp-2 min-h-[2.5rem] leading-tight">
+            {t.youtubeTitle}
+          </h3>
+        ) : (
+          <div className="min-h-[2.5rem]"></div>
+        )}
+        
+        {/* Stats row */}
+        <div className="flex items-center justify-between gap-3 text-[10px] sm:text-xs text-[var(--text-muted)]">
+          {formattedViews && (
+            <div className={`flex items-center gap-1.5 ${isDeleted ? 'opacity-60' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span className="font-medium">{formattedViews}</span>
+              {isDeleted && <span title="Video deleted">⚠</span>}
+            </div>
+          )}
+          
+          {t.dateAdded && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <span className="font-medium">{new Date(t.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          )}
+        </div>
+
+        {/* View button */}
+        <button className="w-full text-xs sm:text-sm font-semibold py-2 sm:py-2.5 rounded-lg bg-[var(--orange)] text-white hover:opacity-90 transition-all duration-300 group-hover:scale-105">
           View Full Size
         </button>
       </div>
@@ -606,6 +217,7 @@ const ThumbCard = ({ t, onOpen, onBroken, gridSize, views, isDeleted }) => {
 const ShareModal = ({ item, onClose }) => {
   const [copied, setCopied] = useState(false);
   const shareUrl = `${window.location.origin}${window.location.pathname}?thumbnail=${item.id}`;
+  const shareText = item.youtubeTitle || `Check out this ${item.category} thumbnail`;
 
   const copyLink = () => {
     navigator.clipboard.writeText(shareUrl).then(() => {
@@ -623,14 +235,38 @@ const ShareModal = ({ item, onClose }) => {
         className="bg-[var(--surface)] rounded-xl p-6 max-w-md w-full border border-[var(--border)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold mb-4 text-[var(--text)]">
-          Share Thumbnail
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-[var(--text)]">
+            Share Thumbnail
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Preview - Protected */}
+          <div 
+            className="relative aspect-video rounded-lg overflow-hidden border border-[var(--border)] select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+          >
+            <img 
+              src={item.imageUrl || item.image} 
+              alt={item.youtubeTitle || 'Thumbnail'}
+              className="w-full h-full object-cover pointer-events-none"
+              draggable="false"
+            />
+          </div>
+
           {/* Copy Link */}
           <div>
-            <label className="text-xs mb-1 block text-[var(--text-muted)]">
+            <label className="text-xs mb-2 block text-[var(--text-muted)] font-medium">
               Copy Link
             </label>
             <div className="flex gap-2">
@@ -638,7 +274,7 @@ const ShareModal = ({ item, onClose }) => {
                 type="text"
                 value={shareUrl}
                 readOnly
-                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text)] text-sm ring-focus"
+                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text)] text-sm"
               />
               <button
                 onClick={copyLink}
@@ -646,45 +282,56 @@ const ShareModal = ({ item, onClose }) => {
                   copied ? "bg-green-600" : "bg-[var(--orange)] hover:opacity-90"
                 }`}
               >
-                {copied ? "Copied!" : "Copy"}
+                {copied ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                )}
               </button>
             </div>
           </div>
 
           {/* Social Share Buttons */}
           <div>
-            <label className="text-xs mb-2 block text-[var(--text-muted)]">
+            <label className="text-xs mb-2 block text-[var(--text-muted)] font-medium">
               Share on Social Media
             </label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
-                onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}`, "_blank")}
-                className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#1DA1F2] hover:opacity-90 transition-opacity"
+                onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, "_blank")}
+                className="px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#1DA1F2] hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
               >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23 3a10.9 10.9 0 01-3.14 1.53 4.48 4.48 0 00-7.86 3v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5a4.5 4.5 0 00-.08-.83A7.72 7.72 0 0023 3z"></path>
+                </svg>
                 Twitter
               </button>
               <button
                 onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank")}
-                className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#4267B2] hover:opacity-90 transition-opacity"
+                className="px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#4267B2] hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
               >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"></path>
+                </svg>
                 Facebook
               </button>
               <button
-                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(shareUrl)}`, "_blank")}
-                className="flex-1 px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#25D366] hover:opacity-90 transition-opacity"
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, "_blank")}
+                className="px-3 py-2 rounded-lg text-white text-sm font-medium bg-[#25D366] hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
               >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"></path>
+                </svg>
                 WhatsApp
               </button>
             </div>
           </div>
         </div>
-
-        <button
-          onClick={onClose}
-          className="btn-ghost mt-4 w-full"
-        >
-          Close
-        </button>
       </div>
     </div>
   );
@@ -694,23 +341,50 @@ const ShareModal = ({ item, onClose }) => {
 const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
   const currentIndex = items.findIndex((x) => x.id === currentId);
   const currentItem = items[currentIndex];
-  const reducedMotion = prefersReducedMotion();
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const modalRef = useRef(null);
+  const imageContainerRef = useRef(null);
 
+  // Disable context menu and screenshots
   useEffect(() => {
     const preventActions = (e) => {
       e.preventDefault();
       return false;
     };
 
+    // Add class to body to prevent screenshots
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    
     document.addEventListener("contextmenu", preventActions);
     document.addEventListener("dragstart", preventActions);
+    document.addEventListener("copy", preventActions);
+    document.addEventListener("cut", preventActions);
+
+    // Prevent screenshot keys
+    const preventScreenshot = (e) => {
+      // Print Screen, Cmd+Shift+3/4, Windows+Shift+S
+      if (e.key === 'PrintScreen' || 
+          (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) ||
+          (e.metaKey && e.shiftKey && e.key === 's')) {
+        e.preventDefault();
+        return false;
+      }
+    };
+    
+    document.addEventListener("keyup", preventScreenshot);
+    document.addEventListener("keydown", preventScreenshot);
 
     return () => {
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
       document.removeEventListener("contextmenu", preventActions);
       document.removeEventListener("dragstart", preventActions);
+      document.removeEventListener("copy", preventActions);
+      document.removeEventListener("cut", preventActions);
+      document.removeEventListener("keyup", preventScreenshot);
+      document.removeEventListener("keydown", preventScreenshot);
     };
   }, []);
 
@@ -742,28 +416,22 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
     return () => window.removeEventListener("keydown", handleKey);
   }, [currentIndex, items, onClose, onNavigate]);
 
-  const touchStart = useRef({ x: 0, y: 0 });
-  const handleTouchStart = (e) => {
-    touchStart.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-  };
-
-  const handleTouchEnd = (e) => {
-    const deltaX = e.changedTouches[0].clientX - touchStart.current.x;
-    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStart.current.y);
-
-    if (deltaY < 50 && Math.abs(deltaX) > 50) {
-      if (deltaX > 0 && currentIndex > 0) {
-        onNavigate(items[currentIndex - 1].id);
-        setZoom(1);
-      } else if (deltaX < 0 && currentIndex < items.length - 1) {
-        onNavigate(items[currentIndex + 1].id);
-        setZoom(1);
+  // Mouse wheel zoom
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setZoom((z) => Math.min(Math.max(z + delta, 0.5), 3));
       }
+    };
+
+    const container = imageContainerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+      return () => container.removeEventListener('wheel', handleWheel);
     }
-  };
+  }, []);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -780,28 +448,21 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
   return (
     <div
       ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-black/95 backdrop-blur-lg"
-      role="dialog"
-      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-black/95 backdrop-blur-lg select-none"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <div className="relative w-full max-w-6xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-alt)]">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs sm:text-sm font-medium text-[var(--text)]">
               {currentIndex + 1} / {items.length}
             </span>
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              currentItem.variant === "LIVE" 
-                ? "bg-red-600/20 text-red-500" 
-                : "bg-[var(--surface)] text-[var(--text-muted)]"
-            }`}>
-              {currentItem.variant}
+            <span className="text-xs text-[var(--text-muted)]">
+              Zoom: {Math.round(zoom * 100)}%
             </span>
           </div>
 
@@ -810,40 +471,37 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
             <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
               <button
                 onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
-                className="icon-btn text-[var(--text)]"
-                title="Zoom out (-)"
+                className="p-1.5 rounded hover:bg-[var(--surface-alt)] text-[var(--text)] transition-colors"
+                title="Zoom out (- or Ctrl+Scroll)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8" />
                   <path d="m21 21-4.35-4.35M8 11h6" />
                 </svg>
               </button>
-              <span className="text-xs px-1 text-[var(--text-muted)]">
-                {Math.round(zoom * 100)}%
-              </span>
+              <button
+                onClick={() => setZoom(1)}
+                className="px-2 py-1 text-xs rounded hover:bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                title="Reset (0)"
+              >
+                100%
+              </button>
               <button
                 onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
-                className="icon-btn text-[var(--text)]"
-                title="Zoom in (+)"
+                className="p-1.5 rounded hover:bg-[var(--surface-alt)] text-[var(--text)] transition-colors"
+                title="Zoom in (+ or Ctrl+Scroll)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8" />
                   <path d="m21 21-4.35-4.35M11 8v6M8 11h6" />
                 </svg>
               </button>
-              <button
-                onClick={() => setZoom(1)}
-                className="text-xs px-2 text-[var(--text-muted)] hover:text-[var(--text)]"
-                title="Reset zoom (0)"
-              >
-                Reset
-              </button>
             </div>
 
             {/* Share button */}
             <button
               onClick={() => onShare(currentItem)}
-              className="icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-[var(--orange)] transition-colors text-[var(--text)] hover:text-white"
               title="Share"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -857,18 +515,14 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
             {/* Fullscreen button */}
             <button
               onClick={toggleFullscreen}
-              className="hidden sm:block icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white transition-colors"
+              className="hidden sm:block p-2 rounded-lg hover:bg-[var(--orange)] transition-colors text-[var(--text)] hover:text-white"
               title="Fullscreen (F)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {isFullscreen ? (
-                  <>
-                    <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
-                  </>
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" />
                 ) : (
-                  <>
-                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                  </>
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                 )}
               </svg>
             </button>
@@ -876,7 +530,7 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
             {/* Close button */}
             <button
               onClick={onClose}
-              className="icon-btn bg-[var(--surface)] text-[var(--text)] hover:bg-red-600 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-red-600 transition-colors text-[var(--text)] hover:text-white"
               title="Close (Esc)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -887,23 +541,36 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
         </div>
 
         {/* Image area */}
-        <div className="relative bg-black flex items-center justify-center overflow-hidden" style={{ height: "75vh" }}>
+        <div 
+          ref={imageContainerRef}
+          className="relative bg-black flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing" 
+          style={{ height: "75vh" }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
           <div
-            className="relative max-w-full max-h-full"
-            style={{ transform: `scale(${zoom})`, transition: "transform 0.2s ease-out" }}
+            className="relative max-w-full max-h-full transition-transform duration-200"
+            style={{ transform: `scale(${zoom})` }}
           >
             <ProtectedImg
-              src={currentItem.image}
+              src={currentItem.imageUrl || currentItem.image}
               alt={`${currentItem.category} ${currentItem.subcategory || ""}`}
-              className="max-w-full max-h-full object-contain"
+              className="max-w-full max-h-full object-contain pointer-events-none"
             />
           </div>
+
+          {/* Protection overlay */}
+          <div className="absolute inset-0 pointer-events-none select-none" 
+               style={{ 
+                 background: 'repeating-linear-gradient(transparent, transparent 50px, rgba(0,0,0,0.001) 50px, rgba(0,0,0,0.001) 51px)',
+                 mixBlendMode: 'multiply'
+               }} 
+          />
 
           {/* Navigation buttons */}
           {currentIndex > 0 && (
             <button
               onClick={() => { onNavigate(items[currentIndex - 1].id); setZoom(1); }}
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 icon-btn-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-20"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-10"
               title="Previous (←)"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -915,7 +582,7 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
           {currentIndex < items.length - 1 && (
             <button
               onClick={() => { onNavigate(items[currentIndex + 1].id); setZoom(1); }}
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 icon-btn-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-20"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-lg bg-black/60 hover:bg-[var(--orange)] text-white transition-all backdrop-blur-sm z-10"
               title="Next (→)"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -926,20 +593,23 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
         </div>
 
         {/* Info footer */}
-        <div className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-alt)]">
-          <div className="flex items-center justify-between text-xs sm:text-sm">
+        <div className="px-4 py-3 border-b order-[var(--border)] bg-[var(--surface-alt)]">
+          <div className="flex items-center justify-between text-xs sm:text-sm flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="chip-soft">
+              <span className="px-2 py-1 rounded-md text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30">
                 {currentItem.category}
               </span>
               {currentItem.subcategory && (
-                <span className="chip-soft">
+                <span className="px-2 py-1 rounded-md text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30">
                   {currentItem.subcategory}
                 </span>
               )}
+              {currentItem.youtubeTitle && (
+                <span className="text-[var(--text)] font-medium max-w-md truncate">{currentItem.youtubeTitle}</span>
+              )}
             </div>
-            <div className="text-[var(--text-muted)] hidden sm:block">
-              Use arrow keys or swipe to navigate
+            <div className="text-[var(--text-muted)] hidden sm:block text-xs">
+              ← → to navigate • F for fullscreen • +/- or Ctrl+Scroll to zoom
             </div>
           </div>
         </div>
@@ -999,7 +669,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
               ? 'opacity-40 cursor-not-allowed' 
               : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
             } transition-all`}
-          aria-label="Previous page"
         >
           Previous
         </button>
@@ -1018,8 +687,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
                   ? 'bg-[var(--orange)] text-white border border-[var(--orange)]'
                   : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
                 }`}
-              aria-label={`Page ${page}`}
-              aria-current={page === currentPage ? 'page' : undefined}
             >
               {page}
             </button>
@@ -1034,7 +701,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
               ? 'opacity-40 cursor-not-allowed' 
               : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? '' : 'hover:scale-105'}`
             } transition-all`}
-          aria-label="Next page"
         >
           Next
         </button>
@@ -1043,65 +709,11 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
   );
 };
 
-/* ---------- Loading Indicator ---------- */
-const LoadingIndicator = ({ current, total, cached }) => {
-  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
-  
-  return (
-    <div className="fixed bottom-4 right-4 bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-xl p-4 z-50 min-w-[200px]">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="animate-spin rounded-full h-4 w-4 border-2 border-[var(--orange)] border-t-transparent"></div>
-        <span className="text-xs font-medium text-[var(--text)]">
-          Loading views...
-        </span>
-      </div>
-      <div className="text-xs text-[var(--text-muted)] mb-1">
-        {current} / {total} videos {cached > 0 && `(${cached} cached)`}
-      </div>
-      <div className="w-full bg-[var(--surface-alt)] rounded-full h-2 overflow-hidden">
-        <div 
-          className="bg-[var(--orange)] h-full transition-all duration-300 rounded-full"
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-};
-
-async function buildItems() {
-  try {
-    const thumbnails = await thumbnailStorage.getAll();
-    
-    // Transform to match existing format
-    return thumbnails.map((t, i) => ({
-      id: t.id || `thumb-${i + 1}`,
-      image: t.imageUrl || url(t.filename), // Use imageUrl if provided, else construct from filename
-      category: t.category || 'OTHER',
-      subcategory: t.subcategory || null,
-      variant: t.variant || 'VIDEO',
-      filename: t.filename,
-      title: titleFromFile(t.filename),
-      youtubeUrl: t.youtubeUrl || null,
-      views: null, // Will be populated from view storage
-      deleted: false,
-      dateAdded: t.dateAdded || new Date().toISOString(),
-    }));
-  } catch (error) {
-    console.error('Error loading thumbnails from Cloudflare:', error);
-    return FALLBACK; // Return fallback if Cloudflare fails
-  }
-}
-
 /* ---------- Main Component ---------- */
 export default function Thumbnails() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [brokenIds, setBrokenIds] = useState(new Set());
-  const [isLoadingViews, setIsLoadingViews] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, cached: 0 });
-  const cacheRef = useRef(new ViewsCache());
-  const CLOUDFLARE_WORKER_URL = "https://video-views-api.shinelstudioofficial.workers.dev/";
-  const permanentStorageRef = useRef(new CloudflareViewStorage(CLOUDFLARE_WORKER_URL));
 
   const [openId, setOpenId] = useState(null);
   const [shareItem, setShareItem] = useState(null);
@@ -1114,14 +726,57 @@ export default function Thumbnails() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
 
+  // Fetch thumbnails from worker
   useEffect(() => {
-    async function loadThumbnails() {
+    async function fetchThumbnails() {
       setLoading(true);
-      const data = await buildItems();
-      setItems(data);
-      setLoading(false);
+      try {
+        const response = await fetch(`${AUTH_BASE}/thumbnails`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.thumbnails && Array.isArray(data.thumbnails)) {
+          const thumbnails = data.thumbnails.map(t => ({
+            id: t.id,
+            filename: t.filename,
+            category: t.category || 'OTHER',
+            subcategory: t.subcategory || '',
+            variant: t.variant || 'VIDEO',
+            youtubeUrl: t.youtubeUrl,
+            youtubeTitle: t.youtubeTitle,
+            imageUrl: t.imageUrl,
+            image: t.imageUrl,
+            videoId: t.videoId,
+            views: t.youtubeViews,
+            viewStatus: t.viewStatus,
+            lastViewUpdate: t.lastViewUpdate,
+            dateAdded: t.dateAdded,
+            lastUpdated: t.lastUpdated,
+          }));
+          
+          setItems(thumbnails);
+        } else {
+          setItems(FALLBACK);
+        }
+      } catch (error) {
+        console.error('Error fetching thumbnails:', error);
+        setItems(FALLBACK);
+      } finally {
+        setLoading(false);
+      }
     }
-    loadThumbnails();
+    
+    fetchThumbnails();
+    
+    const params = new URLSearchParams(window.location.search);
+    const thumbId = params.get("thumbnail");
+    if (thumbId) {
+      setOpenId(thumbId);
+    }
   }, []);
 
   useEffect(() => {
@@ -1133,120 +788,6 @@ export default function Thumbnails() {
     window.addEventListener("resize", updateItemsPerPage);
     return () => window.removeEventListener("resize", updateItemsPerPage);
   }, [gridSize]);
-
-  // Initialize items and fetch views with permanent storage
-  useEffect(() => {
-    const initializeItems = async () => {
-      const cache = cacheRef.current;
-      const permanentStorage = permanentStorageRef.current;
-      const all = buildItems();
-      
-      if (all.length === 0) {
-        setItems(FALLBACK);
-        return;
-      }
-
-      // First, set items with permanent storage (instant display)
-      const itemsWithStoredViews = all.map(item => {
-        if (item.youtubeUrl) {
-          const videoId = extractVideoId(item.youtubeUrl);
-          if (videoId) {
-            // Check permanent storage first
-            const storedData = permanentStorage.get(videoId);
-            if (storedData) {
-              return { 
-                ...item, 
-                views: storedData.views,
-                deleted: storedData.status === "deleted"
-              };
-            }
-            // Fall back to cache
-            const cachedViews = cache.get(videoId);
-            if (cachedViews !== null) {
-              return { ...item, views: cachedViews };
-            }
-          }
-        }
-        return item;
-      });
-      
-      setItems(itemsWithStoredViews);
-
-      // Collect video IDs that need updating
-      const videoIdsToUpdate = [];
-      all.forEach(item => {
-        if (item.youtubeUrl) {
-          const videoId = extractVideoId(item.youtubeUrl);
-          if (videoId && cache.needsUpdate(videoId)) {
-            videoIdsToUpdate.push(videoId);
-          }
-        }
-      });
-
-      // If there are videos to update, fetch them
-      if (videoIdsToUpdate.length > 0) {
-        setIsLoadingViews(true);
-        setLoadingProgress({ current: 0, total: videoIdsToUpdate.length, cached: 0 });
-        
-        console.log(`Fetching views for ${videoIdsToUpdate.length} videos...`);
-        
-        const viewsData = await batchFetchViews(
-          videoIdsToUpdate, 
-          cache,
-          permanentStorage,
-          (current, total, fromCache) => {
-            setLoadingProgress(prev => ({
-              current,
-              total,
-              cached: fromCache ? prev.cached + 1 : prev.cached
-            }));
-          }
-        );
-
-        // Update items with fetched views
-        const updatedItems = all.map(item => {
-          if (item.youtubeUrl) {
-            const videoId = extractVideoId(item.youtubeUrl);
-            if (videoId) {
-              if (viewsData[videoId]) {
-                return { 
-                  ...item, 
-                  views: viewsData[videoId].views,
-                  deleted: viewsData[videoId].deleted || false
-                };
-              }
-              // Use permanent storage if available
-              const storedData = permanentStorage.get(videoId);
-              if (storedData) {
-                return { 
-                  ...item, 
-                  views: storedData.views,
-                  deleted: storedData.status === "deleted"
-                };
-              }
-            }
-          }
-          return item;
-        });
-
-        setItems(updatedItems);
-        setIsLoadingViews(false);
-        
-        console.log('Views fetching complete');
-        console.log('Cache stats:', cache.getStats());
-        console.log('Permanent storage stats:', permanentStorage.getStats());
-      }
-    };
-
-    initializeItems();
-    
-    // Check URL for direct thumbnail link
-    const params = new URLSearchParams(window.location.search);
-    const thumbId = params.get("thumbnail");
-    if (thumbId) {
-      setOpenId(thumbId);
-    }
-  }, []);
 
   const markBroken = useCallback((id) => {
     setBrokenIds((prev) => new Set(prev).add(id));
@@ -1305,7 +846,8 @@ export default function Thumbnails() {
           x.category.toLowerCase().includes(query) ||
           x.subcategory?.toLowerCase().includes(query) ||
           x.variant.toLowerCase().includes(query) ||
-          x.filename.toLowerCase().includes(query)
+          x.filename.toLowerCase().includes(query) ||
+          x.youtubeTitle?.toLowerCase().includes(query)
         );
       });
     }
@@ -1321,7 +863,6 @@ export default function Thumbnails() {
         return (a.subcategory || "").localeCompare(b.subcategory || "");
       });
     } else if (sortBy === "popular") {
-      // Sort by views, putting items without views at the end
       list = [...list].sort((a, b) => {
         if (a.views === null && b.views === null) return 0;
         if (a.views === null) return 1;
@@ -1348,9 +889,9 @@ export default function Thumbnails() {
   }, [cat]);
 
   const gridClasses = {
-    small: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3",
-    medium: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6",
-    large: "grid-cols-1 sm:grid-cols-2 gap-8",
+    small: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3",
+    medium: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6",
+    large: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8",
   };
 
   const reducedMotion = prefersReducedMotion();
@@ -1363,12 +904,6 @@ export default function Thumbnails() {
     setCurrentPage(page);
     scrollToTop();
   };
-
-  // Expose storage management to console for debugging
-  useEffect(() => {
-    window.viewsCache = cacheRef.current;
-    window.permanentStorage = permanentStorageRef.current;
-  }, []);
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
@@ -1384,7 +919,7 @@ export default function Thumbnails() {
       >
         {/* Hero */}
         <section className="pt-28 pb-12 text-center bg-hero">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-3 sm:px-4 md:px-6">
             <h1 className={`text-4xl sm:text-6xl font-extrabold text-[var(--text)] ${reducedMotion ? "" : "animate-in fade-in duration-600"}`}>
               Thumbnail <span className="text-[var(--orange)]">Gallery</span>
             </h1>
@@ -1400,7 +935,7 @@ export default function Thumbnails() {
                   placeholder="Search thumbnails..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 pl-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] outline-none ring-focus placeholder:text-[var(--text-muted)]"
+                  className="w-full px-4 py-2 pl-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
                 />
                 <svg
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -1452,7 +987,7 @@ export default function Thumbnails() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs sm:text-sm outline-none cursor-pointer ring-focus"
+                className="px-3 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs sm:text-sm outline-none cursor-pointer"
               >
                 <option value="default">Sort: Default</option>
                 <option value="newest">Sort: Newest</option>
@@ -1462,7 +997,7 @@ export default function Thumbnails() {
               </select>
 
               {/* Results count */}
-              <span className="chip-soft">
+              <span className="px-3 py-1 rounded-full text-xs bg-[var(--surface-alt)] text-[var(--text)] border border-[var(--border)]">
                 {filtered.length} result{filtered.length !== 1 ? "s" : ""}
               </span>
             </div>
@@ -1503,8 +1038,14 @@ export default function Thumbnails() {
 
         {/* Grid */}
         <section className="py-12 bg-[var(--surface)]">
-          <div className="container mx-auto px-4">
-            {paginatedItems.length === 0 ? (
+          <div className="container mx-auto px-3 sm:px-4 md:px-6">
+            {loading ? (
+              <div className={`grid ${gridClasses[gridSize]}`}>
+                {Array.from({ length: itemsPerPage }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : paginatedItems.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-lg mb-2 text-[var(--text)]">
                   No thumbnails found
@@ -1527,8 +1068,6 @@ export default function Thumbnails() {
                         onOpen={setOpenId}
                         onBroken={markBroken}
                         gridSize={gridSize}
-                        views={t.views}
-                        isDeleted={t.deleted}
                       />
                     </div>
                   ))}
@@ -1548,15 +1087,6 @@ export default function Thumbnails() {
             )}
           </div>
         </section>
-
-        {/* Loading indicator */}
-        {isLoadingViews && (
-          <LoadingIndicator
-            current={loadingProgress.current}
-            total={loadingProgress.total}
-            cached={loadingProgress.cached}
-          />
-        )}
 
         {/* Modal */}
         {openId && (
