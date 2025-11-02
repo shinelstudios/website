@@ -34,13 +34,9 @@ import { createThumbnailStorage } from "./cloudflare-thumbnail-storage";
 
 /**
  * Admin · Thumbnails Manager (KV-only, no R2)
- * Improvements:
- *  • Strong validation (Filename, Category, Variant, Thumbnail are mandatory)
- *  • Prevent base64 thumbnail submits (must be a URL to avoid KV 25MB limit)
- *  • Deterministic progress bars (upload/create, update, delete, bulk delete)
- *  • Better error surfacing + retry, plus friendlier messages
- *  • Delete now force-reloads list & stats to keep counts consistent
- *  • Keeps all previous features (search, filters, presets, import/export)
+ * - Image uploads go straight to the Worker (KV) via /thumbnails/upload
+ * - No manual "Thumbnail URL" field — the URL is returned by the Worker
+ * - Strong validation + deterministic progress bars + resumable import
  */
 
 const AUTH_BASE =
@@ -50,8 +46,8 @@ const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || "";
 
 const LS_TOKEN_KEY = "token";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
-const LS_PRESETS_KEY = "thumbs-presets"; // { category:[], subcategory:[], variants:[], filenameTemplates:[] }
-const LS_IMPORT_CHECKPOINT = "thumbs-import-checkpoint"; // { fileName, index, chunkSize, replace, total }
+const LS_PRESETS_KEY = "thumbs-presets";
+const LS_IMPORT_CHECKPOINT = "thumbs-import-checkpoint";
 
 const TIMEOUTS = {
   read: 70000,
@@ -77,16 +73,19 @@ const DEFAULT_FORM = {
   category: "GAMING",
   subcategory: "",
   variant: "VIDEO",
-  imageUrl: "",      // must be a URL (not data:)
-  _file: null,       // local file for preview only
-  _imageMeta: null,  // preview info
+  imageUrl: "", // set automatically after upload
+  _file: null, // local file for preview only
+  _imageMeta: null, // preview info
 };
 
 // ---------- Utilities ----------
 const getToken = () => localStorage.getItem(LS_TOKEN_KEY) || "";
 const getAuthHeaders = (isJSON = true) =>
   isJSON
-    ? { "Content-Type": "application/json", authorization: `Bearer ${getToken()}` }
+    ? {
+        "Content-Type": "application/json",
+        authorization: `Bearer ${getToken()}`,
+      }
     : { authorization: `Bearer ${getToken()}` };
 
 // Only used by non-helper endpoints (e.g., fetch-youtube)
@@ -314,11 +313,7 @@ export default function AdminThumbnailsPage() {
       const rows = await store.getAll();
       startTransition(() => setThumbnails(rows || []));
     } catch (e) {
-      surfaceError(
-        e.message || "Error loading thumbnails",
-        e,
-        loadThumbnails
-      );
+      surfaceError(e.message || "Error loading thumbnails", e, loadThumbnails);
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -374,18 +369,10 @@ export default function AdminThumbnailsPage() {
           `Video ID: ${data.videoId}\n\nSet YOUTUBE_API_KEY in your worker to fetch title & views automatically.`
         );
       } else {
-        toast(
-          "warning",
-          "Requested. If the worker queued it, results will appear after refresh."
-        );
+        toast("warning", "Requested. If queued, results appear after refresh.");
       }
     } catch (e) {
-      surfaceError(
-        e.message || "Error fetching video",
-        e.data,
-        fetchYouTubeDetails,
-        [url]
-      );
+      surfaceError(e.message || "Error fetching video", e.data, fetchYouTubeDetails, [url]);
       toast("error", e.message || "Error fetching video");
     } finally {
       setBusy(false);
@@ -400,20 +387,15 @@ export default function AdminThumbnailsPage() {
       const data = await store.refreshOne(videoId);
       await pollJob(data?.jobId);
       await loadThumbnails();
-      const status =
-        data?.status === "deleted" ? " (Video Deleted)" : "";
+      const status = data?.status === "deleted" ? " (Video Deleted)" : "";
       const views =
-        data?.views != null
-          ? `\n\nViews: ${Number(data.views).toLocaleString()}`
-          : "";
+        data?.views != null ? `\n\nViews: ${Number(data.views).toLocaleString()}` : "";
       toast("success", `Refreshed!${views}${status}`);
     } catch (e) {
-      surfaceError(
-        e.message || "Failed to refresh",
-        e,
-        refreshSingleView,
-        [videoId, thumbnailId]
-      );
+      surfaceError(e.message || "Failed to refresh", e, refreshSingleView, [
+        videoId,
+        thumbnailId,
+      ]);
       toast("error", e.message || "Failed to refresh");
     } finally {
       setRefreshingId(null);
@@ -421,8 +403,7 @@ export default function AdminThumbnailsPage() {
   };
 
   const refreshAllViews = async () => {
-    if (!confirm("Refresh view counts for all videos older than 7 days?"))
-      return;
+    if (!confirm("Refresh view counts for all videos older than 7 days?")) return;
     setRefreshingAll(true);
     setBusyLabel("Refreshing all views...");
     try {
@@ -439,7 +420,29 @@ export default function AdminThumbnailsPage() {
     }
   };
 
-  // ----------- Image handling (Preview only; submit requires URL) -----------
+  // ----------- Upload to Worker (KV) -----------
+  async function uploadThumbnailToWorker(file, setPct) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setPct?.(10, "Uploading…");
+
+    const res = await fetch(`${AUTH_BASE}/thumbnails/upload`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.imageUrl) {
+      throw new Error(data?.error || `Upload failed (${res.status})`);
+    }
+
+    setPct?.(95, "Finalizing…");
+    return data.imageUrl; // public URL served by the Worker
+  }
+
+  // ----------- Image handling (Preview + auto-upload) -----------
   const validateImageFile = (file) => {
     if (!file) return "No file selected";
     const okTypes = ["image/png", "image/jpeg"];
@@ -463,14 +466,6 @@ export default function AdminThumbnailsPage() {
       img.src = URL.createObjectURL(file);
     });
 
-  const fileToDataURL = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
   async function makePreviewDataURL(file, maxSide = 480) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -484,10 +479,7 @@ export default function AdminThumbnailsPage() {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         const isPng = (file.type || "").includes("png");
         resolve(
-          canvas.toDataURL(
-            isPng ? "image/png" : "image/jpeg",
-            isPng ? undefined : 0.85
-          )
+          canvas.toDataURL(isPng ? "image/png" : "image/jpeg", isPng ? undefined : 0.85)
         );
       };
       img.onerror = () => resolve(null);
@@ -505,8 +497,10 @@ export default function AdminThumbnailsPage() {
 
     setBusy(true);
     setBusyLabel("Preparing image...");
+    const setPct = (pct, note) => setOp({ kind: "upload", pct, note });
+
     try {
-      // We only prepare a preview; we DO NOT submit data URLs.
+      // Local preview
       const smallPreview = await makePreviewDataURL(file, 480);
       const meta = await readImageMeta(file);
       setForm((f) => ({
@@ -515,14 +509,23 @@ export default function AdminThumbnailsPage() {
         _imageMeta: meta,
       }));
       setImagePreview(smallPreview || "");
-      toast("success", "Image preview ready ✨");
       clearError();
+
+      // Upload to Worker (returns public URL)
+      setPct(20, "Validating…");
+      setBusyLabel("Uploading thumbnail…");
+      const imageUrl = await uploadThumbnailToWorker(file, setPct);
+
+      setForm((f) => ({ ...f, imageUrl }));
+      setPct(100, "Done");
+      toast("success", "Thumbnail uploaded ✓");
     } catch (e) {
-      surfaceError("Failed to process image", e?.message || e);
-      toast("error", e.message || "Failed to process image");
+      surfaceError("Failed to upload image", e?.message || e);
+      toast("error", e.message || "Failed to upload image");
     } finally {
       setBusy(false);
       setBusyLabel("");
+      setTimeout(() => setOp(null), 600);
     }
   };
 
@@ -584,14 +587,9 @@ export default function AdminThumbnailsPage() {
     if (!payload.category?.trim()) errs.category = "Category is required";
     if (!payload.variant?.trim()) errs.variant = "Variant is required";
 
-    // Thumbnail is mandatory
-    // Must be a non-data URL (your Worker rejects base64 and the KV limit would 413)
+    // Image must be uploaded (imageUrl provided by Worker)
     if (!payload.imageUrl?.trim()) {
-      errs.imageUrl =
-        "Thumbnail image is required (provide a URL, not a pasted/base64 image).";
-    } else if (payload.imageUrl.startsWith("data:")) {
-      errs.imageUrl =
-        "Base64 images are not allowed. Upload to storage and paste the URL.";
+      errs.imageUrl = "Please upload a thumbnail image.";
     } else {
       try {
         const u = new URL(payload.imageUrl);
@@ -622,7 +620,8 @@ export default function AdminThumbnailsPage() {
     }
 
     // Deterministic staged progress: Validate (20) → Save (100)
-    const setPct = (pct, note) => setOp({ kind: editingId ? "update" : "create", pct, note });
+    const setPct = (pct, note) =>
+      setOp({ kind: editingId ? "update" : "create", pct, note });
 
     try {
       setPct(20, "Validated");
@@ -645,9 +644,10 @@ export default function AdminThumbnailsPage() {
       await Promise.all([loadThumbnails(), loadStats()]);
       setPct(100, "Done");
 
-      const flash = saved?.id || saved?._id
-        ? String(saved.id || saved._id)
-        : `${payload.filename}|${payload.youtubeUrl || ""}|${payload.category}|${payload.variant}`;
+      const flash =
+        saved?.id || saved?._id
+          ? String(saved.id || saved._id)
+          : `${payload.filename}|${payload.youtubeUrl || ""}|${payload.category}|${payload.variant}`;
       setFlashKey(flash);
       setTimeout(() => setFlashKey(""), 2500);
       toast("success", editingId ? "Updated ✓" : "Uploaded ✓");
@@ -673,12 +673,7 @@ export default function AdminThumbnailsPage() {
       setEditingId(null);
       setImagePreview("");
     } catch (e) {
-      surfaceError(
-        e.message || "Error saving thumbnail",
-        e,
-        saveThumbnail,
-        []
-      );
+      surfaceError(e.message || "Error saving thumbnail", e, saveThumbnail, []);
       toast("error", e.message || "Error saving thumbnail");
     } finally {
       setBusy(false);
@@ -710,18 +705,16 @@ export default function AdminThumbnailsPage() {
       await store.delete(id);
 
       setOp({ kind: "delete", pct: 75, note: "Refreshing…" });
-      await Promise.all([loadThumbnails(), loadStats()]); // <— keeps counts correct
+      await Promise.all([loadThumbnails(), loadStats()]);
 
       setOp({ kind: "delete", pct: 100, note: "Done" });
       toast("success", "Deleted");
     } catch (e) {
       setThumbnails(prev);
-      surfaceError(
-        e.message || "Error deleting thumbnail",
-        e,
-        deleteThumbnail,
-        [id, filename]
-      );
+      surfaceError(e.message || "Error deleting thumbnail", e, deleteThumbnail, [
+        id,
+        filename,
+      ]);
       toast("error", e.message || "Error deleting thumbnail");
     } finally {
       setBusy(false);
@@ -739,7 +732,7 @@ export default function AdminThumbnailsPage() {
       category: t.category,
       subcategory: t.subcategory || "",
       variant: t.variant,
-      imageUrl: t.imageUrl || "", // NOTE: must be a URL
+      imageUrl: t.imageUrl || "", // URL we already host
     });
     setImagePreview(t.imageUrl || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -754,7 +747,7 @@ export default function AdminThumbnailsPage() {
       category: t.category,
       subcategory: t.subcategory || "",
       variant: t.variant,
-      imageUrl: t.imageUrl || "", // still a URL
+      imageUrl: t.imageUrl || "",
     });
     setImagePreview(t.imageUrl || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -774,9 +767,7 @@ export default function AdminThumbnailsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `thumbnails-export-${
-      new Date().toISOString().split("T")[0]
-    }.json`;
+    link.download = `thumbnails-export-${new Date().toISOString().split("T")[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
     toast("success", "Exported JSON");
@@ -799,9 +790,7 @@ export default function AdminThumbnailsPage() {
     if (!cp) return false;
     if (
       !confirm(
-        `Resume importing "${cp.fileName}" from item ${cp.index + 1} of ${
-          cp.total
-        }?`
+        `Resume importing "${cp.fileName}" from item ${cp.index + 1} of ${cp.total}?`
       )
     ) {
       _clearCheckpoint();
@@ -830,7 +819,6 @@ export default function AdminThumbnailsPage() {
     setBusyLabel(isResume ? "Resuming import..." : "Importing...");
     clearError();
 
-    // import progress
     const total = payloadAll.length;
     const updatePct = (done) =>
       setOp({
@@ -840,7 +828,6 @@ export default function AdminThumbnailsPage() {
       });
 
     try {
-      // If replacing, do a single initial replace call
       if (!isResume && replace) {
         await store.bulkImport([], true);
       }
@@ -849,15 +836,13 @@ export default function AdminThumbnailsPage() {
       for (let i = startIndex; i < payloadAll.length; i += chunkSize) {
         const chunk = payloadAll.slice(i, i + chunkSize);
         setBusyLabel(
-          `Importing ${Math.min(i + chunk.length, payloadAll.length)} / ${
-            payloadAll.length
-          }...`
+          `Importing ${Math.min(i + chunk.length, payloadAll.length)} / ${payloadAll.length}...`
         );
         _writeCheckpoint({
           fileName,
           index: i,
           chunkSize,
-          replace: false, // replace already handled
+          replace: false,
           total: payloadAll.length,
           payloadAll,
         });
@@ -899,14 +884,7 @@ export default function AdminThumbnailsPage() {
         const replace = confirm(
           `Import ${data.length} thumbnails?\n\nClick OK to REPLACE all existing thumbnails.\nClick Cancel to ADD to existing thumbnails.`
         );
-        await _runImport(
-          data,
-          replace,
-          0,
-          IMPORT_CHUNK_SIZE,
-          file.name,
-          false
-        );
+        await _runImport(data, replace, 0, IMPORT_CHUNK_SIZE, file.name, false);
       } catch (e) {
         surfaceError(e.message || "Error importing data", e);
         toast("error", e.message || "Error importing data");
@@ -1322,54 +1300,41 @@ export default function AdminThumbnailsPage() {
               <LabeledCompactSelect
                 label="Category"
                 value={filters.category}
-                onChange={(v) =>
-                  setFilters((f) => ({ ...f, category: v }))
-                }
+                onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
                 options={["ALL", "GAMING", "VLOG", "MUSIC & BHAJANS", "OTHER"]}
               />
 
               <LabeledCompactSelect
                 label="Variant"
                 value={filters.variant}
-                onChange={(v) =>
-                  setFilters((f) => ({ ...f, variant: v }))
-                }
+                onChange={(v) => setFilters((f) => ({ ...f, variant: v }))}
                 options={variantFilterOptions}
               />
 
               <LabeledCompactSelect
                 label="YouTube"
                 value={filters.onlyYT}
-                onChange={(v) =>
-                  setFilters((f) => ({ ...f, onlyYT: v }))
-                }
+                onChange={(v) => setFilters((f) => ({ ...f, onlyYT: v }))}
                 options={["ALL", "YES", "NO"]}
               />
             </div>
 
             {/* Sort group */}
             <div className="flex items-end gap-2 ml-auto">
-              <span
-                className="text-xs mb-1"
-                style={{ color: "var(--text-muted)" }}
-              >
+              <span className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
                 Sort
               </span>
               <SortBtn
                 active={sort.key === "filename"}
                 dir={sort.dir}
-                onClick={() =>
-                  setSort((s) => ({ key: "filename", dir: s.dir }))
-                }
+                onClick={() => setSort((s) => ({ key: "filename", dir: s.dir }))}
               >
                 Filename
               </SortBtn>
               <SortBtn
                 active={sort.key === "updated"}
                 dir={sort.dir}
-                onClick={() =>
-                  setSort((s) => ({ key: "updated", dir: s.dir }))
-                }
+                onClick={() => setSort((s) => ({ key: "updated", dir: s.dir }))}
               >
                 Last Updated
               </SortBtn>
@@ -1516,7 +1481,7 @@ export default function AdminThumbnailsPage() {
               error={vErrs.category}
             />
 
-            {/* Subcategory textbox with memory */}
+            {/* Subcategory */}
             <ComboboxInput
               label="Subcategory"
               value={form.subcategory}
@@ -1525,7 +1490,7 @@ export default function AdminThumbnailsPage() {
               placeholder="e.g., Valorant, BGMI"
             />
 
-            {/* Variant textbox with memory */}
+            {/* Variant */}
             <ComboboxInput
               label="Variant *"
               value={form.variant}
@@ -1541,27 +1506,13 @@ export default function AdminThumbnailsPage() {
               error={vErrs.variant}
             />
 
-            {/* Image URL (REQUIRED) */}
-            <Input
-              label="Thumbnail URL *"
-              value={form.imageUrl}
-              onChange={(v) => {
-                setForm({ ...form, imageUrl: v.trim() });
-                setVErrs((e) => ({ ...e, imageUrl: "" }));
-              }}
-              placeholder="Paste an https:// URL to your uploaded image"
-              required
-              error={vErrs.imageUrl}
-            />
-
-            {/* Drag & Drop (Preview only) */}
+            {/* Drag & Drop (Preview + Auto-upload) */}
             <div className="block col-span-full md:col-span-2 lg:col-span-3">
               <span
                 className="block text-sm mb-1"
                 style={{ color: "var(--text)" }}
               >
-                Optional: Preview an image (drag & drop or choose) — submit still
-                requires a URL above.
+                Thumbnail Image (auto-upload to storage)
               </span>
               <div
                 ref={dropRef}
@@ -1576,7 +1527,9 @@ export default function AdminThumbnailsPage() {
               >
                 <div className="flex items-center gap-2 py-2">
                   <ImageIcon size={16} />
-                  <span className="text-sm">Choose Image / Drop here</span>
+                  <span className="text-sm">
+                    Choose Image / Drop here (PNG/JPG)
+                  </span>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -1585,7 +1538,7 @@ export default function AdminThumbnailsPage() {
                   onChange={handleImageInputChange}
                   className="hidden"
                 />
-                <span className="text-xs opacity-70">PNG/JPG · Max 25MB</span>
+                <span className="text-xs opacity-70">Max 25MB</span>
               </div>
               {form._imageMeta && (
                 <div
@@ -1596,6 +1549,27 @@ export default function AdminThumbnailsPage() {
                   {bytes(form._imageMeta.size)} · {form._imageMeta.type}
                 </div>
               )}
+              {form.imageUrl && (
+                <div
+                  className="text-xs mt-1"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Uploaded:{" "}
+                  <a
+                    href={form.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "var(--orange)" }}
+                  >
+                    {new URL(form.imageUrl).pathname.split("/").pop()}
+                  </a>
+                </div>
+              )}
+              {vErrs.imageUrl ? (
+                <div className="text-xs mt-1" style={{ color: "#dc2626" }}>
+                  {vErrs.imageUrl}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -1638,7 +1612,7 @@ export default function AdminThumbnailsPage() {
                     disabled={!form.imageUrl || form.imageUrl.startsWith("data:")}
                     title={
                       form.imageUrl?.startsWith("data:")
-                        ? "Set a URL above to download original"
+                        ? "Upload will set a URL first"
                         : "Download current URL"
                     }
                   >
@@ -1763,17 +1737,13 @@ export default function AdminThumbnailsPage() {
                 filtered.map((t, i) => {
                   const stableKey = String(
                     t.id ||
-                      `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${
-                        t.variant
-                      }|${i}`
+                      `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}|${i}`
                   );
                   const isFlash =
                     flashKey &&
                     (flashKey === String(t.id) ||
                       flashKey ===
-                        `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${
-                          t.variant
-                        }`);
+                        `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}`);
 
                   return (
                     <Row
@@ -1820,9 +1790,7 @@ export default function AdminThumbnailsPage() {
             />
             <StatCard
               label="Live/Video"
-              value={`${stats.byVariant?.LIVE || 0} / ${
-                stats.byVariant?.VIDEO || 0
-              }`}
+              value={`${stats.byVariant?.LIVE || 0} / ${stats.byVariant?.VIDEO || 0}`}
             />
           </div>
         )}
@@ -1856,7 +1824,15 @@ export default function AdminThumbnailsPage() {
 }
 
 // ---------- Helpers ----------
-function Input({ label, value, onChange, placeholder, type = "text", required = false, error }) {
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required = false,
+  error,
+}) {
   return (
     <label className="block">
       <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
@@ -1907,9 +1883,7 @@ function ComboboxInput({
   const filtered = useMemo(() => {
     const s = (q || "").toLowerCase();
     if (!s) return suggestions.slice(0, 10);
-    return suggestions
-      .filter((v) => v.toLowerCase().includes(s))
-      .slice(0, 10);
+    return suggestions.filter((v) => v.toLowerCase().includes(s)).slice(0, 10);
   }, [q, suggestions]);
 
   return (
@@ -1967,7 +1941,13 @@ function InputWithPresets({ label, value, onChange, placeholder, recent = [], er
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <Input label={label} value={value} onChange={onChange} placeholder={placeholder} error={error} />
+      <Input
+        label={label}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        error={error}
+      />
       {recent?.length > 0 && (
         <button
           type="button"
