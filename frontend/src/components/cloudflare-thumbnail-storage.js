@@ -1,262 +1,341 @@
 /**
- * Cloudflare Thumbnail Storage Helper
- * 
- * Usage:
- * import { CloudflareThumbnailStorage } from './cloudflare-thumbnail-storage';
- * 
- * const storage = new CloudflareThumbnailStorage('https://your-worker.workers.dev');
+ * Cloudflare Workers · Thumbnail Storage Helper (Worker-compatible)
+ * -----------------------------------------------------------------
+ * Endpoints used:
+ *  - GET    /thumbnails
+ *  - GET    /stats
+ *  - POST   /thumbnails            (admin)
+ *  - PUT    /thumbnails/:id        (admin)
+ *  - DELETE /thumbnails/:id        (admin)
+ *  - POST   /bulk-import           (admin)
+ *  - POST   /views/refresh         (admin)
+ *  - POST   /views/refresh/:id     (admin)
+ *
+ * For admin endpoints, pass a Bearer token via constructor or setToken().
+ * Includes a tiny ETag cache for GETs and optional job polling passthrough.
  */
 
 export class CloudflareThumbnailStorage {
-  constructor(workerUrl) {
-    if (!workerUrl) {
-      throw new Error('Worker URL is required');
+  /**
+   * @param {string} workerUrl
+   * @param {string | (() => string)} [tokenOrGetter] - Bearer token or getter fn
+   * @param {Object} [opts]
+   * @param {number} [opts.timeoutMs]
+   * @param {number} [opts.retries]
+   * @param {number} [opts.baseRetryDelayMs]
+   * @param {boolean} [opts.enableEtagCache]
+   * @param {boolean} [opts.forceAuthForReads]  // include Authorization on GETs if true
+   */
+  constructor(workerUrl, tokenOrGetter = null, opts = {}) {
+    if (!workerUrl || typeof workerUrl !== "string") {
+      throw new Error("Worker URL is required");
     }
-    this.workerUrl = workerUrl.replace(/\/$/, ''); // Remove trailing slash
+    this.workerUrl = workerUrl.replace(/\/$/, "");
+    this._tokenGetter =
+      typeof tokenOrGetter === "function"
+        ? tokenOrGetter
+        : () => (typeof tokenOrGetter === "string" ? tokenOrGetter : "");
+
+    this._opts = {
+      timeoutMs: opts.timeoutMs ?? 70000,
+      retries: opts.retries ?? 2,
+      baseRetryDelayMs: opts.baseRetryDelayMs ?? 450,
+      enableEtagCache: opts.enableEtagCache ?? true,
+      forceAuthForReads: opts.forceAuthForReads ?? false,
+    };
+
+    this._etags = new Map(); // url -> { etag, payload }
   }
 
-  /**
-   * Get all thumbnails
-   * @returns {Promise<Array>} Array of thumbnail objects
-   */
+  setToken(token) {
+    this._tokenGetter = () => token || "";
+  }
+
+  clearCache() {
+    this._etags.clear();
+  }
+
+  // ---------- internals ----------
+  _authHeaders(json = true) {
+    const h = {};
+    const token = this._tokenGetter?.() || "";
+    if (token) h.authorization = `Bearer ${token}`;
+    if (json) h["content-type"] = "application/json";
+    return h;
+  }
+
+  _sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  _calcBackoff(attempt) {
+    const base = this._opts.baseRetryDelayMs;
+    const expo = base * Math.pow(2, attempt - 1);
+    const jitter = Math.floor(Math.random() * 150);
+    return expo + jitter;
+  }
+
+  async _fetchWithTimeout(url, init = {}, { timeoutMs } = {}) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs ?? this._opts.timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async _requestJSON(method, path, body, { useAuth = true, timeoutMs, retries } = {}) {
+    const url = `${this.workerUrl}${path}`;
+    const maxRetries = retries ?? this._opts.retries;
+
+    let lastErr;
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+      try {
+        const res = await this._fetchWithTimeout(
+          url,
+          {
+            method,
+            headers: useAuth
+              ? this._authHeaders(Boolean(body))
+              : (body ? { "content-type": "application/json" } : undefined),
+            body: body ? JSON.stringify(body) : undefined,
+          },
+          { timeoutMs }
+        );
+
+        if (!res.ok) {
+          const status = res.status;
+          let msg = `HTTP ${status}`;
+          let data = null;
+          try { data = await res.json(); } catch {}
+          if (data?.error) msg = data.error;
+          if (data?.message) msg = data.message;
+
+          if ((status === 429 || (status >= 500 && status < 600)) && attempt <= maxRetries) {
+            const ra = res.headers.get("Retry-After");
+            const delay = ra ? Math.min(15000, (Number(ra) || 0) * 1000) : this._calcBackoff(attempt);
+            await this._sleep(delay);
+            continue;
+          }
+
+          const err = new Error(msg);
+          err.status = status;
+          err.data = data;
+          throw err;
+        }
+
+        const text = await res.text();
+        let parsed = null;
+        try { parsed = text ? JSON.parse(text) : null; } catch { parsed = { raw: text }; }
+        return parsed;
+      } catch (e) {
+        lastErr = e?.name === "AbortError" ? new Error("Network timeout — the server took too long to respond.") : e;
+
+        const retriable =
+          lastErr?.name === "AbortError" ||
+          lastErr?.status === 429 ||
+          (lastErr?.status >= 500 && lastErr?.status < 600) ||
+          (!lastErr?.status && attempt <= maxRetries);
+
+        if (attempt <= maxRetries && retriable) {
+          await this._sleep(this._calcBackoff(attempt));
+          continue;
+        }
+        throw lastErr;
+      }
+    }
+    throw lastErr || new Error("Unknown network error");
+  }
+
+  async _getWithEtag(path, { timeoutMs } = {}) {
+    const url = `${this.workerUrl}${path}`;
+    const known = this._etags.get(url);
+
+    // Build headers with optional auth + If-None-Match
+    const headers = new Headers();
+    if (this._opts.forceAuthForReads) {
+      const token = this._tokenGetter?.() || "";
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    }
+    if (this._opts.enableEtagCache && known?.etag) {
+      headers.set("If-None-Match", known.etag);
+    }
+
+    const res = await this._fetchWithTimeout(url, { headers }, { timeoutMs });
+
+    if (res.status === 304 && known?.payload) {
+      return known.payload;
+    }
+    if (!res.ok) {
+      let msg = `HTTP ${res.status} for GET ${path}`;
+      try {
+        const j = await res.json();
+        if (j?.error) msg = j.error;
+        if (j?.message) msg = j.message;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const text = await res.text();
+    let payload = null;
+    try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
+
+    if (this._opts.enableEtagCache) {
+      const etag = res.headers.get("ETag");
+      if (etag) this._etags.set(url, { etag, payload });
+    }
+    return payload;
+  }
+
+  async _pollJobIfAny(result, { onProgress, timeoutMs = 15000 } = {}) {
+    if (typeof onProgress === "function") {
+      try { onProgress({ status: "queued-or-done" }); } catch {}
+    }
+    return result;
+  }
+
+  // ---------- reads ----------
   async getAll() {
-    try {
-      const response = await fetch(`${this.workerUrl}/thumbnails`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-      return data.thumbnails || [];
-    } catch (error) {
-      console.error('Error getting thumbnails:', error);
-      return [];
-    }
+    const data = await this._getWithEtag("/thumbnails");
+    return Array.isArray(data?.thumbnails) ? data.thumbnails : [];
   }
 
-  /**
-   * Add a new thumbnail
-   * @param {Object} thumbnail - Thumbnail data
-   * @returns {Promise<Object>} Result object
-   */
-  async add(thumbnail) {
-    try {
-      const response = await fetch(`${this.workerUrl}/thumbnails`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(thumbnail)
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      return { success: true, data: result.thumbnail };
-    } catch (error) {
-      console.error('Error adding thumbnail:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Update a thumbnail
-   * @param {string} id - Thumbnail ID
-   * @param {Object} updates - Fields to update
-   * @returns {Promise<Object>} Result object
-   */
-  async update(id, updates) {
-    try {
-      const response = await fetch(`${this.workerUrl}/thumbnails/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
-      }
-      
-      const result = await response.json();
-      return { success: true, data: result.thumbnail };
-    } catch (error) {
-      console.error(`Error updating thumbnail ${id}:`, error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Delete a thumbnail
-   * @param {string} id - Thumbnail ID
-   * @returns {Promise<Object>} Result object
-   */
-  async delete(id) {
-    try {
-      const response = await fetch(`${this.workerUrl}/thumbnails/${id}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error(`Error deleting thumbnail ${id}:`, error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Get storage statistics
-   * @returns {Promise<Object>} Stats object
-   */
   async getStats() {
-    try {
-      const response = await fetch(`${this.workerUrl}/stats`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting stats:', error);
-      return { 
-        total: 0,
-        withYouTube: 0,
-        byCategory: {},
-        byVariant: {}
-      };
-    }
+    return this._getWithEtag("/stats");
+  }
+
+  // ---------- writes (admin) ----------
+  async add(thumbnail) {
+    const res = await this._requestJSON("POST", "/thumbnails", thumbnail, { useAuth: true });
+    await this._pollJobIfAny(res);
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return { success: true, data: res?.thumbnail ?? res };
+  }
+
+  async update(id, updates) {
+    const res = await this._requestJSON("PUT", `/thumbnails/${encodeURIComponent(id)}`, updates, { useAuth: true });
+    await this._pollJobIfAny(res);
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return { success: true, data: res?.thumbnail ?? res };
+  }
+
+  async delete(id) {
+    const res = await this._requestJSON("DELETE", `/thumbnails/${encodeURIComponent(id)}`, undefined, { useAuth: true });
+    await this._pollJobIfAny(res);
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return { success: true, data: res ?? null };
   }
 
   /**
-   * Fetch YouTube video details
-   * @param {string} youtubeUrl - YouTube video URL
-   * @param {string} apiKey - Optional YouTube API key
-   * @returns {Promise<Object>} Video details
+   * Simple bulk import (server handles replace/add mechanics)
+   * @param {Array<object>} thumbnails
+   * @param {boolean} replace
+   * @param {{ onProgress?: (p: {done:number, total:number}) => void }} [opts]
    */
-  async fetchYouTubeDetails(youtubeUrl, apiKey = '') {
-    try {
-      const response = await fetch(`${this.workerUrl}/thumbnails/fetch-youtube`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ youtubeUrl, apiKey })
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching YouTube details:', error);
-      return { success: false, error: error.message };
+  async bulkImport(thumbnails, replace = false, { onProgress } = {}) {
+    const res = await this._requestJSON("POST", "/bulk-import", { thumbnails, replace }, { useAuth: true });
+    await this._pollJobIfAny(res, { onProgress });
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    if (typeof onProgress === "function") {
+      try { onProgress({ done: thumbnails.length, total: thumbnails.length }); } catch {}
     }
+    return res;
   }
 
   /**
-   * Bulk import thumbnails
-   * @param {Array} thumbnails - Array of thumbnail objects
-   * @param {boolean} replace - Whether to replace existing data
-   * @returns {Promise<Object>} Result object
+   * Client-side chunked import helper (optional)
+   * Does NOT persist checkpoints; caller can do so if needed.
+   * @param {Array<object>} thumbnails
+   * @param {{
+   *   replace?: boolean,
+   *   chunkSize?: number,
+   *   onProgress?: (p: {done:number,total:number,phase:"replace"|"append"}) => void
+   * }} [opts]
    */
-  async bulkImport(thumbnails, replace = false) {
-    try {
-      const response = await fetch(`${this.workerUrl}/bulk-import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thumbnails, replace })
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error bulk importing:', error);
-      return { success: false, error: error.message };
+  async bulkImportChunked(thumbnails, opts = {}) {
+    const { replace = false, chunkSize = 50, onProgress } = opts;
+    const total = thumbnails.length;
+
+    if (replace) {
+      await this._requestJSON("POST", "/bulk-import", { thumbnails: [], replace: true }, { useAuth: true });
+      if (typeof onProgress === "function") onProgress({ done: 0, total, phase: "replace" });
     }
+
+    for (let i = 0; i < thumbnails.length; i += chunkSize) {
+      const chunk = thumbnails.slice(i, i + chunkSize);
+      await this._requestJSON("POST", "/bulk-import", { thumbnails: chunk, replace: false }, { useAuth: true });
+      if (typeof onProgress === "function") onProgress({ done: Math.min(i + chunk.length, total), total, phase: "append" });
+    }
+
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return { success: true, imported: total, replace };
   }
 
-  /**
-   * Export all thumbnails as JSON
-   * @returns {Promise<string>} JSON string
-   */
+  // ---------- view refresh helpers (admin) ----------
+  async refreshAll({ onProgress } = {}) {
+    const res = await this._requestJSON("POST", "/views/refresh", undefined, { useAuth: true, timeoutMs: 180000 });
+    await this._pollJobIfAny(res, { onProgress });
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return res;
+  }
+
+  async refreshOne(videoId) {
+    const res = await this._requestJSON("POST", `/views/refresh/${encodeURIComponent(videoId)}`, undefined, { useAuth: true, timeoutMs: 70000 });
+    await this._pollJobIfAny(res);
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    return res;
+  }
+
+  // ---------- convenience ----------
   async export() {
-    try {
-      const thumbnails = await this.getAll();
-      return JSON.stringify(thumbnails, null, 2);
-    } catch (error) {
-      console.error('Error exporting thumbnails:', error);
-      return '[]';
-    }
+    const list = await this.getAll();
+    return JSON.stringify(list, null, 2);
   }
 
-  /**
-   * Test connection to worker
-   * @returns {Promise<boolean>} True if connection successful
-   */
   async testConnection() {
     try {
-      const response = await fetch(`${this.workerUrl}/stats`);
-      return response.ok;
-    } catch (error) {
-      console.error('Connection test failed:', error);
+      const headers = new Headers();
+      if (this._opts.forceAuthForReads) {
+        const token = this._tokenGetter?.() || "";
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+      }
+      const r = await this._fetchWithTimeout(`${this.workerUrl}/stats`, { headers }, { timeoutMs: 5000 });
+      return r.ok;
+    } catch {
       return false;
     }
   }
 
-  /**
-   * Get detailed health check
-   * @returns {Promise<Object>} Health status
-   */
   async healthCheck() {
     try {
-      const startTime = Date.now();
+      const start = Date.now();
       const stats = await this.getStats();
-      const responseTime = Date.now() - startTime;
-      
       return {
-        status: 'healthy',
-        responseTime: responseTime,
-        stats: stats,
-        timestamp: new Date().toISOString()
+        status: "healthy",
+        responseTime: Date.now() - start,
+        stats,
+        timestamp: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (e) {
       return {
-        status: 'unhealthy',
-        error: error.message,
-        timestamp: new Date().toISOString()
+        status: "unhealthy",
+        error: e.message,
+        timestamp: new Date().toISOString(),
       };
     }
   }
 }
 
-/**
- * Helper function to create CloudflareThumbnailStorage with validation
- * @param {string} workerUrl - Cloudflare Worker URL
- * @returns {CloudflareThumbnailStorage} Storage instance
- */
-export function createThumbnailStorage(workerUrl) {
-  if (!workerUrl || typeof workerUrl !== 'string') {
-    throw new Error('Invalid worker URL provided');
-  }
-  
-  if (!workerUrl.startsWith('http://') && !workerUrl.startsWith('https://')) {
-    throw new Error('Worker URL must start with http:// or https://');
-  }
-  
-  if (!workerUrl.includes('workers.dev') && !workerUrl.includes('workers.cloudflare.com')) {
-    console.warn('URL does not appear to be a Cloudflare Worker URL');
-  }
-  
-  return new CloudflareThumbnailStorage(workerUrl);
+export function createThumbnailStorage(workerUrl, tokenOrGetter, opts) {
+  return new CloudflareThumbnailStorage(workerUrl, tokenOrGetter, opts);
 }
 
-// Export default for convenience
 export default CloudflareThumbnailStorage;

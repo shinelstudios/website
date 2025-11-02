@@ -1,438 +1,815 @@
 // src/components/AdminThumbnailsPage.jsx
-import React, { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, Upload, Download, ExternalLink, Eye, RefreshCw, Image as ImageIcon, AlertCircle } from "lucide-react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  memo,
+  useCallback,
+} from "react";
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Upload,
+  Download,
+  ExternalLink,
+  Eye,
+  RefreshCw,
+  Image as ImageIcon,
+  AlertCircle,
+  Filter,
+  Search,
+  Copy,
+  Check,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Info,
+  ChevronRight,
+} from "lucide-react";
+import { createThumbnailStorage } from "./cloudflare-thumbnail-storage";
 
-// Use the same auth worker URL - thumbnail endpoints are now part of it
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.your-account.workers.dev";
+/**
+ * Admin · Thumbnails Manager (KV-only, no R2)
+ * - ETag memory for GET /thumbnails & /stats (via helper)
+ * - Debounced search, memoized rows
+ * - Concurrency-limited bulk delete
+ * - Resumable JSON import (chunked with checkpoint)
+ * - Presets memory for Category / Subcategory / Variant / Filename templates
+ * - Friendly timeouts + readable errors
+ * - Registers SW (/sw-thumbnails.js) for instant repeat loads
+ */
+
+const AUTH_BASE =
+  import.meta.env.VITE_AUTH_BASE ||
+  "https://shinel-auth.your-account.workers.dev";
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || "";
 
-export default function AdminThumbnailsPage() {
-  const [thumbnails, setThumbnails] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const [refreshingId, setRefreshingId] = useState(null);
-  const [refreshingAll, setRefreshingAll] = useState(false);
+const LS_TOKEN_KEY = "token";
+const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
+const LS_PRESETS_KEY = "thumbs-presets"; // { category:[], subcategory:[], variants:[], filenameTemplates:[] }
+const LS_IMPORT_CHECKPOINT = "thumbs-import-checkpoint"; // { fileName, index, chunkSize, replace, total }
 
-  const [form, setForm] = useState({
-    filename: "",
-    youtubeUrl: "",
-    category: "GAMING",
-    subcategory: "",
-    variant: "VIDEO",
-    imageUrl: "",
+const TIMEOUTS = {
+  read: 70000,
+  fetchYT: 70000,
+  save: 70000,
+  singleRefresh: 70000,
+  bulkRefresh: 180000,
+  upload: 180000,
+  jobPoll: 15000,
+};
+
+// Helper store (gets token from localStorage)
+const store = createThumbnailStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));
+
+// how many items per import request
+const IMPORT_CHUNK_SIZE = 50;
+
+const DEFAULT_FORM = {
+  filename: "",
+  youtubeUrl: "",
+  category: "GAMING",
+  subcategory: "",
+  variant: "VIDEO",
+  imageUrl: "",
+  _file: null,
+  _imageMeta: null,
+};
+
+// ---------- Utilities ----------
+const getToken = () => localStorage.getItem(LS_TOKEN_KEY) || "";
+const getAuthHeaders = (isJSON = true) =>
+  isJSON
+    ? { "Content-Type": "application/json", authorization: `Bearer ${getToken()}` }
+    : { authorization: `Bearer ${getToken()}` };
+
+// Only used by non-helper endpoints (e.g., fetch-youtube)
+async function fetchJSON(
+  url,
+  options = {},
+  {
+    retries = 1,
+    timeoutMs = 0,
+    idempotent = true,
+    retryOnAbort = true,
+  } = {}
+) {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const res = await fetch(url, { signal: controller?.signal, ...options });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+
+    if (!res.ok) {
+      const msg = data?.error || data?.message || `Request failed (${res.status})`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  } catch (err) {
+    const isAbort = err?.name === "AbortError";
+    if (isAbort) {
+      const prettified = new Error("Network timeout — the server took too long to respond.");
+      prettified.code = "TIMEOUT";
+      if (retries > 0 && retryOnAbort && idempotent) {
+        await new Promise((r) => setTimeout(r, 600));
+        return fetchJSON(url, options, { retries: retries - 1, timeoutMs, idempotent, retryOnAbort });
+      }
+      throw prettified;
+    }
+    const retriable = err?.status === 429 || (err?.status >= 500 && err?.status < 600);
+    if (retries > 0 && (retriable || (idempotent && !err?.status))) {
+      await new Promise((r) => setTimeout(r, 700));
+      return fetchJSON(url, options, { retries: retries - 1, timeoutMs, idempotent, retryOnAbort });
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+const fileToDataURL = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+async function makePreviewDataURL(file, maxSide = 480) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.min(1, maxSide / Math.max(w, h));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const isPng = (file.type || "").includes("png");
+      resolve(canvas.toDataURL(isPng ? "image/png" : "image/jpeg", isPng ? undefined : 0.85));
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
   });
+}
 
-  // Get auth token
-  const getToken = () => localStorage.getItem("token") || "";
-
-  // Get auth headers
-  const getAuthHeaders = () => ({
-    "Content-Type": "application/json",
-    "authorization": `Bearer ${getToken()}`
-  });
-
-  // Extract video ID from YouTube URL (supports live links too)
 const extractVideoId = (url) => {
   if (!url) return null;
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
     /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
     /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,  // ✅ NEW: support live URLs
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
   ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match && match[1]) return match[1];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m?.[1]) return m[1];
   }
   return null;
 };
 
+const bytes = (n) => {
+  if (n == null) return "-";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+};
 
-  // Convert file to base64
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+const timeAgo = (ts) => {
+  if (!ts) return "Never";
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  const map = { year:31536000, month:2592000, week:604800, day:86400, hour:3600, minute:60 };
+  for (const [unit, len] of Object.entries(map)) {
+    const n = Math.floor(seconds / len);
+    if (n >= 1) return `${n} ${unit}${n > 1 ? "s" : ""} ago`;
+  }
+  return "Just now";
+};
+
+function useToasts() {
+  const [toasts, setToasts] = useState([]);
+  const add = (type, message, ttl = 3500) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, type, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
   };
+  return { toasts, add };
+}
 
-  // Handle image file selection
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setErr("Please select an image file");
-      return;
+async function runWithConcurrency(items, worker, concurrency = 5) {
+  const results = [];
+  let i = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      try { results[idx] = await worker(items[idx], idx); }
+      catch (e) { results[idx] = e; }
     }
+  });
+  await Promise.all(runners);
+  return results;
+}
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      setErr("Image size must be less than 5MB");
-      return;
-    }
+// ---------- Component ----------
+export default function AdminThumbnailsPage() {
+  const [thumbnails, setThumbnails] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
+  const [err, setErr] = useState("");
+  const [errDetails, setErrDetails] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [refreshingId, setRefreshingId] = useState(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
+  // just-created/updated row highlight
+  const [flashKey, setFlashKey] = useState("");
+
+  // form & presets
+  const [form, setForm] = useState(() => {
+    const draft = localStorage.getItem(LS_FORM_DRAFT_KEY);
+    try { return draft ? { ...DEFAULT_FORM, ...JSON.parse(draft) } : { ...DEFAULT_FORM }; }
+    catch { return { ...DEFAULT_FORM }; }
+  });
+
+  const [presets, setPresets] = useState(() => {
     try {
-      setBusy(true);
-      const base64 = await fileToBase64(file);
-      setForm({ ...form, imageUrl: base64 });
-      setImagePreview(base64);
-      setErr("");
-    } catch (error) {
-      setErr("Failed to process image");
-      console.error(error);
-    } finally {
-      setBusy(false);
+      const parsed = JSON.parse(localStorage.getItem(LS_PRESETS_KEY)) || {};
+      return {
+        category: parsed.category || [],
+        subcategory: parsed.subcategory || [],
+        variants: parsed.variants || ["VIDEO", "LIVE"],
+        filenameTemplates: parsed.filenameTemplates || [],
+      };
+    } catch {
+      return { category: [], subcategory: [], variants: ["VIDEO", "LIVE"], filenameTemplates: [] };
     }
+  });
+
+  const { toasts, add: toast } = useToasts();
+
+  // list controls
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filters, setFilters] = useState({ category: "ALL", variant: "ALL", onlyYT: "ALL" });
+
+  // SIMPLIFIED SORT
+  const [sort, setSort] = useState({ key: "updated", dir: "desc" });
+
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [copyOkId, setCopyOkId] = useState(null);
+
+  const fileInputRef = useRef(null);
+  const dropRef = useRef(null);
+  const lastRetryRef = useRef({ fn: null, args: [] });
+
+  // error helpers
+  const surfaceError = (message, details = "", retryFn = null, retryArgs = []) => {
+    setErr(message);
+    setErrDetails(typeof details === "string" ? details : JSON.stringify(details, null, 2));
+    lastRetryRef.current = { fn: retryFn, args: retryArgs };
+  };
+  const clearError = () => {
+    setErr(""); setErrDetails(""); lastRetryRef.current = { fn: null, args: [] };
   };
 
-  // Fetch YouTube video details
+  // ----------- Data loaders (helper) -----------
+  const loadThumbnails = useCallback(async () => {
+    setBusy(true); setBusyLabel("Loading thumbnails..."); clearError();
+    try {
+      const rows = await store.getAll();
+      startTransition(() => setThumbnails(rows || []));
+    } catch (e) {
+      surfaceError(e.message || "Error loading thumbnails", e, loadThumbnails);
+    } finally {
+      setBusy(false); setBusyLabel("");
+    }
+  }, []);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await store.getStats();
+      setStats(data || null);
+    } catch (e) {
+      console.error("Failed to load stats:", e);
+    }
+  }, []);
+
+  // ----------- Jobs (placeholder) -----------
+  const pollJob = async (_jobId, _onProgress) => {
+    return { status: "done" };
+  };
+
+  // ----------- YouTube ops (non-helper endpoint) -----------
   const fetchYouTubeDetails = async (url) => {
     if (!url) return;
-    
-    setBusy(true);
-    setErr("");
-    
+    setBusy(true); setBusyLabel("Fetching YouTube details..."); clearError();
     try {
-      const res = await fetch(`${AUTH_BASE}/thumbnails/fetch-youtube`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ youtubeUrl: url, apiKey: YOUTUBE_API_KEY }),
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Authentication required. Please login.");
-        throw new Error(data?.error || "Failed to fetch video details");
-      }
-      
-      if (data.details) {
-        const viewsText = data.details.views ? `\nViews: ${data.details.views.toLocaleString()}` : '';
-        const lastUpdated = data.details.lastUpdated ? `\n\nLast updated: ${new Date(data.details.lastUpdated).toLocaleString()}` : '';
-        alert(`✅ Video found!\n\nTitle: ${data.details.title}${viewsText}${lastUpdated}\n\nView counts are cached and refreshed weekly.`);
+      const data = await fetchJSON(
+        `${AUTH_BASE}/thumbnails/fetch-youtube`,
+        { method: "POST", headers: getAuthHeaders(true), body: JSON.stringify({ youtubeUrl: url, apiKey: YOUTUBE_API_KEY }) },
+        { timeoutMs: TIMEOUTS.fetchYT, retries: 1, idempotent: true }
+      );
+      if (data?.details) {
+        const viewsText = data.details.views ? `\nViews: ${Number(data.details.views).toLocaleString()}` : "";
+        const lastUpdated = data.details.lastUpdated ? `\n\nLast updated: ${new Date(data.details.lastUpdated).toLocaleString()}` : "";
+        toast("success", `Video found!\n\nTitle: ${data.details.title}${viewsText}${lastUpdated}\n\nView counts are cached and refreshed weekly.`);
+      } else if (data?.videoId) {
+        toast("warning", `Video ID: ${data.videoId}\n\nSet YOUTUBE_API_KEY in your worker to fetch title & views automatically.`);
       } else {
-        alert(`Video ID: ${data.videoId}\n\n⚠️ Set YOUTUBE_API_KEY in your worker environment to fetch title & views automatically.`);
+        toast("warning", "Requested. If the worker queued it, results will appear after refresh.");
       }
     } catch (e) {
-      setErr(e.message || "Error fetching video");
+      surfaceError(e.message || "Error fetching video", e.data, fetchYouTubeDetails, [url]);
+      toast("error", e.message || "Error fetching video");
     } finally {
-      setBusy(false);
+      setBusy(false); setBusyLabel("");
     }
   };
 
-  // Refresh view count for a single video
+  // ----------- Refresh (helper) -----------
   const refreshSingleView = async (videoId, thumbnailId) => {
     setRefreshingId(thumbnailId);
     try {
-      const res = await fetch(`${AUTH_BASE}/views/refresh/${videoId}`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${getToken()}` }
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to refresh");
-      }
-      
-      // Reload thumbnails to show updated data
+      const data = await store.refreshOne(videoId);
+      await pollJob(data?.jobId);
       await loadThumbnails();
-      
-      const status = data.status === 'deleted' ? ' (Video Deleted)' : '';
-      alert(`✅ Refreshed!\n\nViews: ${data.views.toLocaleString()}${status}`);
+      const status = data?.status === "deleted" ? " (Video Deleted)" : "";
+      const views = data?.views != null ? `\n\nViews: ${Number(data.views).toLocaleString()}` : "";
+      toast("success", `Refreshed!${views}${status}`);
     } catch (e) {
-      alert(`Error: ${e.message}`);
+      surfaceError(e.message || "Failed to refresh", e, refreshSingleView, [videoId, thumbnailId]);
+      toast("error", e.message || "Failed to refresh");
     } finally {
       setRefreshingId(null);
     }
   };
 
-  // Refresh all view counts
   const refreshAllViews = async () => {
-    if (!confirm("This will refresh view counts for all videos that are older than 7 days. Continue?")) {
-      return;
-    }
-    
-    setRefreshingAll(true);
+    if (!confirm("Refresh view counts for all videos older than 7 days?")) return;
+    setRefreshingAll(true); setBusyLabel("Refreshing all views...");
     try {
-      const res = await fetch(`${AUTH_BASE}/views/refresh`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${getToken()}` }
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to refresh");
-      }
-      
-      // Reload thumbnails to show updated data
+      const data = await store.refreshAll();
+      await pollJob(data?.jobId);
       await loadThumbnails();
-      
-      alert(`✅ ${data.message}`);
+      toast("success", data?.message || "Refreshed!");
     } catch (e) {
-      alert(`Error: ${e.message}`);
+      surfaceError(e.message || "Failed to refresh", e, refreshAllViews);
+      toast("error", e.message || "Failed to refresh");
     } finally {
-      setRefreshingAll(false);
+      setRefreshingAll(false); setBusyLabel("");
     }
   };
 
-  // Load all thumbnails
-  const loadThumbnails = async () => {
-    setBusy(true);
-    setErr("");
+  // ----------- Image handling (BASE64 path only) -----------
+  const validateImageFile = (file) => {
+    if (!file) return "No file selected";
+    const okTypes = ["image/png", "image/jpeg"];
+    if (!okTypes.includes(file.type)) return "Please choose a PNG or JPG image";
+    const max = 25 * 1024 * 1024;
+    if (file.size > max) return "Image size must be less than 25MB";
+    return null;
+  };
+
+  const readImageMeta = (file) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight, size: file.size, type: file.type });
+      img.onerror = () => resolve(null);
+      img.src = URL.createObjectURL(file);
+    });
+
+  const handleImageSelected = async (file) => {
+    const msg = validateImageFile(file);
+    if (msg) { surfaceError(msg); toast("error", msg); return; }
+
+    setBusy(true); setBusyLabel("Preparing image...");
     try {
-      const res = await fetch(`${AUTH_BASE}/thumbnails`, {
-        headers: { authorization: `Bearer ${getToken()}` }
-      });
-      const data = await res.json();
-      
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Authentication required. Please login.");
-        throw new Error(data?.error || "Failed to load thumbnails");
+      const fullDataUrl = await fileToDataURL(file);
+      const smallPreview = await makePreviewDataURL(file, 480);
+
+      const meta = await readImageMeta(file);
+      setForm((f) => ({ ...f, imageUrl: fullDataUrl, _file: file, _imageMeta: meta }));
+      setImagePreview(smallPreview || fullDataUrl);
+
+      toast("success", "Image ready ✨");
+      clearError();
+    } catch (e) {
+      surfaceError("Failed to process image", e?.message || e);
+      toast("error", e.message || "Failed to process image");
+    } finally {
+      setBusy(false); setBusyLabel("");
+    }
+  };
+
+  const handleImageInputChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleImageSelected(file);
+  };
+
+  useEffect(() => {
+    const el = dropRef.current; if (!el) return;
+    const prevent = (e) => { e.preventDefault(); e.stopPropagation(); };
+    const onDrop = (e) => { prevent(e); const file = e.dataTransfer?.files?.[0]; if (file) handleImageSelected(file); };
+    ["dragenter","dragover","dragleave","drop"].forEach((evt) => el.addEventListener(evt, prevent));
+    el.addEventListener("drop", onDrop);
+    return () => {
+      ["dragenter","dragover","dragleave","drop"].forEach((evt) => el.removeEventListener(evt, prevent));
+      el.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
+  const downloadImage = async (url, suggestedName = "thumbnail") => {
+    try {
+      if (!url) throw new Error("No image to download");
+      let blob;
+      if (url.startsWith("data:")) {
+        const res = await fetch(url); blob = await res.blob();
+      } else {
+        const res = await fetch(url, { headers: getAuthHeaders(false) });
+        if (!res.ok) throw new Error("Download failed");
+        blob = await res.blob();
       }
-      
-      setThumbnails(data.thumbnails || []);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      const ext = blob.type.split("/")[1] || "png";
+      a.download = `${suggestedName}.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      toast("success", "Download started");
     } catch (e) {
-      setErr(e.message || "Error loading thumbnails");
-    } finally {
-      setBusy(false);
+      surfaceError(e.message || "Failed to download image", e);
+      toast("error", e.message || "Failed to download image");
     }
   };
 
-  // Load statistics
-  const loadStats = async () => {
-    try {
-      const res = await fetch(`${AUTH_BASE}/stats`, {
-        headers: { authorization: `Bearer ${getToken()}` }
-      });
-      const data = await res.json();
-      if (res.ok) setStats(data);
-    } catch (e) {
-      console.error("Failed to load stats:", e);
-    }
-  };
-
-  // Create or update thumbnail
+  // ----------- CRUD (helper) -----------
   const saveThumbnail = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr("");
-
+    e?.preventDefault?.();
+    setBusy(true); setBusyLabel(editingId ? "Updating thumbnail..." : "Creating thumbnail..."); clearError();
     try {
-      const url = editingId 
-        ? `${AUTH_BASE}/thumbnails/${editingId}`
-        : `${AUTH_BASE}/thumbnails`;
-      
-      const method = editingId ? "PUT" : "POST";
+      const payload = { ...form }; delete payload._file; delete payload._imageMeta;
 
-      const res = await fetch(url, {
-        method,
-        headers: getAuthHeaders(),
-        body: JSON.stringify(form),
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Authentication required. Please login.");
-        throw new Error(data?.error || `Failed to ${editingId ? 'update' : 'create'} thumbnail`);
+      let saved = null;
+      if (editingId) {
+        const out = await store.update(editingId, payload);
+        saved = out?.data || null;
+      } else {
+        const out = await store.add(payload);
+        saved = out?.data || null;
       }
 
-      // Reset form
-      setForm({
-        filename: "",
-        youtubeUrl: "",
-        category: "GAMING",
-        subcategory: "",
-        variant: "VIDEO",
-        imageUrl: "",
-      });
+      await Promise.all([loadThumbnails(), loadStats()]);
+
+      const flash = (saved?.id || saved?._id)
+        ? String(saved.id || saved._id)
+        : `${payload.filename}|${payload.youtubeUrl || ""}|${payload.category}|${payload.variant}`;
+      setFlashKey(flash);
+      setTimeout(() => setFlashKey(""), 2500);
+      toast("success", editingId ? "Updated ✓" : "Uploaded ✓");
+
+      // remember recent values
+      const nextPresets = { ...presets };
+      const pushUnique = (arr, v) => {
+        if (!v) return;
+        const idx = arr.indexOf(v);
+        if (idx >= 0) arr.splice(idx, 1);
+        arr.unshift(v);
+        if (arr.length > 12) arr.length = 12;
+      };
+      pushUnique(nextPresets.category, payload.category);
+      pushUnique(nextPresets.subcategory, payload.subcategory);
+      pushUnique(nextPresets.variants, payload.variant);
+      pushUnique(nextPresets.filenameTemplates, payload.filename);
+      setPresets(nextPresets);
+      localStorage.setItem(LS_PRESETS_KEY, JSON.stringify(nextPresets));
+
+      setForm({ ...DEFAULT_FORM });
+      localStorage.removeItem(LS_FORM_DRAFT_KEY);
       setEditingId(null);
       setImagePreview("");
-
-      await loadThumbnails();
-      await loadStats();
     } catch (e) {
-      setErr(e.message || "Error saving thumbnail");
+      surfaceError(e.message || "Error saving thumbnail", e, saveThumbnail, [e]);
+      toast("error", e.message || "Error saving thumbnail");
     } finally {
-      setBusy(false);
+      setBusy(false); setBusyLabel("");
     }
   };
 
-  // Delete thumbnail
   const deleteThumbnail = async (id, filename) => {
     if (!confirm(`Delete thumbnail "${filename}"?\n\nNote: View count data will be preserved in storage.`)) return;
-    
-    setBusy(true);
-    setErr("");
-    
+    setBusy(true); setBusyLabel("Deleting..."); clearError();
+    const prev = thumbnails;
+    setThumbnails((ts) => ts.filter((x) => x.id !== id));
     try {
-      const res = await fetch(`${AUTH_BASE}/thumbnails/${id}`, {
-        method: "DELETE",
-        headers: { authorization: `Bearer ${getToken()}` }
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Authentication required. Please login.");
-        throw new Error(data?.error || "Failed to delete");
-      }
-
-      await loadThumbnails();
+      await store.delete(id);
       await loadStats();
+      toast("success", "Deleted");
     } catch (e) {
-      setErr(e.message || "Error deleting thumbnail");
+      setThumbnails(prev);
+      surfaceError(e.message || "Error deleting thumbnail", e, deleteThumbnail, [id, filename]);
+      toast("error", e.message || "Error deleting thumbnail");
     } finally {
-      setBusy(false);
+      setBusy(false); setBusyLabel("");
     }
   };
 
-  // Edit thumbnail
-  const editThumbnail = (thumbnail) => {
-    setEditingId(thumbnail.id);
+  const editThumbnail = (t) => {
+    setEditingId(t.id);
     setForm({
-      filename: thumbnail.filename,
-      youtubeUrl: thumbnail.youtubeUrl || "",
-      category: thumbnail.category,
-      subcategory: thumbnail.subcategory || "",
-      variant: thumbnail.variant,
-      imageUrl: thumbnail.imageUrl || "",
+      ...DEFAULT_FORM,
+      filename: t.filename,
+      youtubeUrl: t.youtubeUrl || "",
+      category: t.category,
+      subcategory: t.subcategory || "",
+      variant: t.variant,
+      imageUrl: t.imageUrl || "",
     });
-    setImagePreview(thumbnail.imageUrl || "");
+    setImagePreview(t.imageUrl || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Cancel editing
-  const cancelEdit = () => {
+  const duplicateThumbnail = (t) => {
     setEditingId(null);
     setForm({
-      filename: "",
-      youtubeUrl: "",
-      category: "GAMING",
-      subcategory: "",
-      variant: "VIDEO",
-      imageUrl: "",
+      ...DEFAULT_FORM,
+      filename: `${t.filename}-copy`,
+      youtubeUrl: t.youtubeUrl || "",
+      category: t.category,
+      subcategory: t.subcategory || "",
+      variant: t.variant,
+      imageUrl: t.imageUrl || "",
     });
-    setImagePreview("");
+    setImagePreview(t.imageUrl || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast("success", "Duplicated into the form");
   };
 
-  // Export thumbnails as JSON
+  const cancelEdit = () => { setEditingId(null); setForm({ ...DEFAULT_FORM }); setImagePreview(""); };
+
   const exportData = () => {
     const dataStr = JSON.stringify(thumbnails, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `thumbnails-export-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `thumbnails-export-${new Date().toISOString().split("T")[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    toast("success", "Exported JSON");
   };
 
-  // Import thumbnails from JSON
-  const importData = () => {
+  // ---------- Resumable Import (chunked) via helper ----------
+  const _writeCheckpoint = (cp) => localStorage.setItem(LS_IMPORT_CHECKPOINT, JSON.stringify(cp));
+  const _readCheckpoint = () => {
+    try { return JSON.parse(localStorage.getItem(LS_IMPORT_CHECKPOINT) || "null"); }
+    catch { return null; }
+  };
+  const _clearCheckpoint = () => localStorage.removeItem(LS_IMPORT_CHECKPOINT);
+
+  const _resumeImportIfAny = async () => {
+    const cp = _readCheckpoint();
+    if (!cp) return false;
+    if (!confirm(`Resume importing "${cp.fileName}" from item ${cp.index + 1} of ${cp.total}?`)) { _clearCheckpoint(); return false; }
+    await _runImport(cp.payloadAll, cp.replace, cp.index, cp.chunkSize, cp.fileName, true);
+    return true;
+  };
+
+  const _runImport = async (payloadAll, replace, startIndex = 0, chunkSize = IMPORT_CHUNK_SIZE, fileName = "import.json", isResume = false) => {
+    setBusy(true); setBusyLabel(isResume ? "Resuming import..." : "Importing..."); clearError();
+    try {
+      // If replacing, do a single initial replace call (empty thumbnails with replace=true)
+      if (!isResume && replace) {
+        await store.bulkImport([], true);
+      }
+
+      for (let i = startIndex; i < payloadAll.length; i += chunkSize) {
+        const chunk = payloadAll.slice(i, i + chunkSize);
+        setBusyLabel(`Importing ${Math.min(i + chunk.length, payloadAll.length)} / ${payloadAll.length}...`);
+        // checkpoint first so we can resume even if the tab reloads mid-request
+        _writeCheckpoint({
+          fileName,
+          index: i,
+          chunkSize,
+          replace: false, // replace already handled
+          total: payloadAll.length,
+          payloadAll,
+        });
+
+        await store.bulkImport(chunk, false);
+      }
+
+      // done
+      _clearCheckpoint();
+      await Promise.all([loadThumbnails(), loadStats()]);
+      toast("success", `Imported ${payloadAll.length} ✓`);
+    } catch (e) {
+      surfaceError(e.message || "Error importing data", e);
+      toast("error", e.message || "Error importing data");
+    } finally {
+      setBusy(false); setBusyLabel("");
+    }
+  };
+
+  const importData = async () => {
+    // try resume first if any
+    const resumed = await _resumeImportIfAny();
+    if (resumed) return;
+
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
     input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
+      const file = e.target.files?.[0]; if (!file) return;
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        
-        if (!Array.isArray(data)) {
-          throw new Error("Invalid JSON format. Expected an array of thumbnails.");
-        }
-
+        if (!Array.isArray(data)) throw new Error("Invalid JSON format. Expected an array of thumbnails.");
         const replace = confirm(
-          `Import ${data.length} thumbnails?\n\nClick OK to REPLACE all existing thumbnails.\nClick Cancel to ADD to existing thumbnails.`
+`Import ${data.length} thumbnails?
+
+Click OK to REPLACE all existing thumbnails.
+Click Cancel to ADD to existing thumbnails.`
         );
-
-        setBusy(true);
-        setErr("");
-
-        const res = await fetch(`${AUTH_BASE}/bulk-import`, {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ thumbnails: data, replace }),
-        });
-
-        const result = await res.json();
-        
-        if (!res.ok) {
-          if (res.status === 401) throw new Error("Authentication required. Please login.");
-          throw new Error(result?.error || "Failed to import");
-        }
-
-        alert(`Successfully imported ${result.imported} thumbnails!\nTotal: ${result.total}`);
-        await loadThumbnails();
-        await loadStats();
+        await _runImport(data, replace, 0, IMPORT_CHUNK_SIZE, file.name, false);
       } catch (e) {
-        setErr(e.message || "Error importing data");
-      } finally {
-        setBusy(false);
+        surfaceError(e.message || "Error importing data", e);
+        toast("error", e.message || "Error importing data");
       }
     };
     input.click();
   };
 
+  // ----------- Effects -----------
+  // 0) Register the Service Worker for instant repeat visits
   useEffect(() => {
-    // Check if user is logged in
-    if (!getToken()) {
-      setErr("Missing token - Please login to access this page");
-      return;
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw-thumbnails.js")
+        .catch(() => { /* ignore */ });
     }
-    
-    loadThumbnails();
-    loadStats();
   }, []);
 
-  // Format time ago
-  const timeAgo = (timestamp) => {
-    if (!timestamp) return 'Never';
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    const intervals = {
-      year: 31536000,
-      month: 2592000,
-      week: 604800,
-      day: 86400,
-      hour: 3600,
-      minute: 60
-    };
-    
-    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-      const interval = Math.floor(seconds / secondsInUnit);
-      if (interval >= 1) {
-        return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
+  // 1) Friendlier first-load: check token & connection, then parallel fetch
+  useEffect(() => {
+    (async () => {
+      const token = getToken();
+      if (!token) {
+        surfaceError("Missing token - Please login to access this page", {
+          hint: `Set "${LS_TOKEN_KEY}" in localStorage or ensure your login flow stores it.`,
+        });
+        return;
       }
+      try {
+        setBusy(true);
+        setBusyLabel("Checking connection...");
+        const ok = await store.testConnection();
+        if (!ok) {
+          surfaceError(
+            `Cannot reach Worker at ${AUTH_BASE}`,
+            {
+              hint:
+                "Verify VITE_AUTH_BASE, the Worker route, CORS (OPTIONS allowed), and that /stats endpoint returns 200.",
+            }
+          );
+          return;
+        }
+      } catch (e) {
+        surfaceError(
+          `Connection check failed`,
+          e?.message || e
+        );
+        return;
+      } finally {
+        setBusy(false);
+        setBusyLabel("");
+      }
+      // Load both in parallel (faster TTI)
+      await Promise.all([loadThumbnails(), loadStats()]);
+    })();
+  }, [loadThumbnails, loadStats]);
+
+  // 2) Persist form draft
+  useEffect(() => {
+    const toSave = { ...form }; delete toSave._file; delete toSave._imageMeta;
+    localStorage.setItem(LS_FORM_DRAFT_KEY, JSON.stringify(toSave));
+  }, [form]);
+
+  // 3) Warn on unsaved form
+  useEffect(() => {
+    const beforeUnload = (e) => {
+      if (editingId || form.filename || form.youtubeUrl || form.imageUrl || (form._file && form._file.size > 0)) {
+        e.preventDefault(); e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [editingId, form]);
+
+  // 4) Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchInput.trim()), 220);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // ----------- Derived view -----------
+  const filtered = useMemo(() => {
+    let rows = [...thumbnails];
+    if (debouncedQuery) {
+      const q = debouncedQuery.toLowerCase();
+      rows = rows.filter((t) =>
+        [t.filename, t.category, t.subcategory, t.variant, t.videoId, t.youtubeUrl]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      );
     }
-    return 'Just now';
+    if (filters.category !== "ALL") rows = rows.filter((t) => t.category === filters.category);
+    if (filters.variant !== "ALL") rows = rows.filter((t) => t.variant === filters.variant);
+    if (filters.onlyYT === "YES") rows = rows.filter((t) => !!t.youtubeUrl);
+    if (filters.onlyYT === "NO") rows = rows.filter((t) => !t.youtubeUrl);
+
+    rows.sort((a, b) => {
+      const dir = sort.dir === "asc" ? 1 : -1;
+      switch (sort.key) {
+        case "filename": return dir * a.filename.localeCompare(b.filename);
+        case "updated": return dir * ((a.lastViewUpdate || 0) - (b.lastViewUpdate || 0));
+        default: return 0;
+      }
+    });
+    return rows;
+  }, [thumbnails, debouncedQuery, filters, sort]);
+
+  const allSelected = selectedIds.size > 0 && filtered.every((t) => selectedIds.has(t.id));
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((t) => t.id)));
   };
 
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected thumbnail(s)?`)) return;
+    setBusy(true); setBusyLabel("Deleting selected...");
+    try {
+      const ids = Array.from(selectedIds);
+      await runWithConcurrency(
+        ids,
+        async (id) => {
+          await store.delete(id);
+        },
+        5
+      );
+      setSelectedIds(new Set());
+      await Promise.all([loadThumbnails(), loadStats()]);
+      toast("success", "Bulk delete completed");
+    } catch (e) {
+      surfaceError(e.message || "Bulk delete failed", e);
+      toast("error", e.message || "Bulk delete failed");
+    } finally {
+      setBusy(false); setBusyLabel("");
+    }
+  };
+
+  const copyText = async (text, id) => {
+    try { await navigator.clipboard.writeText(String(text || "")); setCopyOkId(id || text); setTimeout(() => setCopyOkId(null), 1200); }
+    catch {}
+  };
+
+  // Variant filter dynamic list
+  const variantFilterOptions = useMemo(() => {
+    const base = presets.variants.length ? presets.variants : ["VIDEO","LIVE"];
+    return ["ALL", ...base];
+  }, [presets.variants]);
+
+  // ---------- Render ----------
   return (
     <section className="min-h-screen" style={{ background: "var(--surface)" }}>
-      <div className="container mx-auto px-4 py-10 max-w-6xl">
+      <LoadingOverlay show={busy || isPending} label={busyLabel || (isPending ? "Working..." : "")} />
+      <div className="container mx-auto px-4 py-10 max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>
             Admin · Thumbnails Manager
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={refreshAllViews}
               disabled={refreshingAll || busy}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
               style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)", opacity: refreshingAll ? 0.6 : 1 }}
               title="Refresh view counts (7+ days old)"
             >
@@ -442,7 +819,7 @@ const extractVideoId = (url) => {
             <button
               onClick={exportData}
               disabled={busy || !thumbnails.length}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium disabled:opacity-50"
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
               title="Export as JSON"
             >
@@ -451,16 +828,16 @@ const extractVideoId = (url) => {
             <button
               onClick={importData}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium disabled:opacity-50"
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
-              title="Import from JSON"
+              title="Import from JSON (resumable)"
             >
               <Upload size={16} /> Import
             </button>
             <button
               onClick={() => { loadThumbnails(); loadStats(); }}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium disabled:opacity-50"
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
               title="Refresh"
             >
@@ -469,33 +846,141 @@ const extractVideoId = (url) => {
           </div>
         </div>
 
+        {/* Error Banner */}
+        {err && (
+          <div className="mb-4 rounded-lg p-3 text-sm flex items-start gap-3"
+               style={{ background: "rgba(255,59,48,0.08)", border: "1px solid rgba(255,59,48,0.3)" }}>
+            <AlertCircle size={18} className="mt-0.5" style={{ color: "#ff3b30" }} />
+            <div className="flex-1">
+              <div className="font-medium" style={{ color: "#b91c1c" }}>{err}</div>
+              {errDetails && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer" style={{ color: "var(--text-muted)" }}>Details</summary>
+                  <pre className="mt-1 p-2 rounded text-xs overflow-auto"
+                       style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+                    {errDetails}
+                  </pre>
+                </details>
+              )}
+              <div className="flex gap-2 mt-2">
+                {lastRetryRef.current.fn && (
+                  <button
+                    onClick={() => lastRetryRef.current.fn?.(...(lastRetryRef.current.args || []))}
+                    className="px-2 py-1 text-xs rounded border"
+                    style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+                    Retry
+                  </button>
+                )}
+                <button onClick={clearError} className="px-2 py-1 text-xs rounded border"
+                        style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Info Banner */}
-        <div className="mb-4 rounded-lg p-3 text-sm flex items-start gap-2" 
+        <div className="mb-4 rounded-lg p-3 text-sm flex items-start gap-2"
              style={{ background: "rgba(232,80,2,0.1)", color: "var(--text)", border: "1px solid rgba(232,80,2,0.2)" }}>
-          <AlertCircle size={16} style={{ color: "var(--orange)", marginTop: "2px", flexShrink: 0 }} />
+          <Info size={16} style={{ color: "var(--orange)", marginTop: "2px", flexShrink: 0 }} />
           <div>
-            <strong>View Count System:</strong> View counts are cached and refreshed automatically once per week to save API quota. 
-            Use "Refresh Views" to manually update counts older than 7 days. Deleted videos show their last known view count.
+            <strong>View Count System:</strong> View counts are cached and refreshed automatically once per week to
+            save API quota. Use "Refresh Views" to manually update counts older than 7 days. Deleted videos show their
+            last known view count.
           </div>
         </div>
 
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Total Thumbnails" value={stats.total || 0} />
-            <StatCard label="With YouTube" value={stats.withYouTube || 0} />
-            <StatCard label="Categories" value={Object.keys(stats.byCategory || {}).length} />
-            <StatCard label="Live/Video" value={`${stats.byVariant?.LIVE || 0} / ${stats.byVariant?.VIDEO || 0}`} />
-          </div>
-        )}
+        {/* Toolbar — aligned, compact */}
+        <div className="mb-2">
+          <div className="flex flex-wrap items-end gap-2">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[220px]">
+              <input
+                className="w-full h-[42px] rounded-lg pl-9 pr-3"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                placeholder="Search filename, category, video id..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-70" />
+            </div>
 
-        {/* Error message */}
-        {err && (
-          <div className="mb-4 rounded-lg p-3 text-sm" 
-               style={{ background: "rgba(255,59,48,0.1)", color: "#ff3b30", border: "1px solid rgba(255,59,48,0.2)" }}>
-            {err}
+            {/* Filters group */}
+            <div className="flex items-end gap-2">
+              <span className="text-xs mb-[6px] px-2 py-1 rounded border"
+                    style={{ color: "var(--text-muted)", borderColor: "var(--border)" }}>
+                <Filter size={12} className="inline mr-1" /> Filters
+              </span>
+
+              <LabeledCompactSelect
+                label="Category"
+                value={filters.category}
+                onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
+                options={["ALL", "GAMING", "VLOG", "MUSIC & BHAJANS", "OTHER"]}
+              />
+
+              <LabeledCompactSelect
+                label="Variant"
+                value={filters.variant}
+                onChange={(v) => setFilters((f) => ({ ...f, variant: v }))}
+                options={variantFilterOptions}
+              />
+
+              <LabeledCompactSelect
+                label="YouTube"
+                value={filters.onlyYT}
+                onChange={(v) => setFilters((f) => ({ ...f, onlyYT: v }))}
+                options={["ALL", "YES", "NO"]}
+              />
+            </div>
+
+            {/* Sort group */}
+            <div className="flex items-end gap-2 ml-auto">
+              <span className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Sort</span>
+              <SortBtn
+                active={sort.key === "filename"}
+                dir={sort.dir}
+                onClick={() => setSort((s) => ({ key: "filename", dir: s.dir }))}
+              >
+                Filename
+              </SortBtn>
+              <SortBtn
+                active={sort.key === "updated"}
+                dir={sort.dir}
+                onClick={() => setSort((s) => ({ key: "updated", dir: s.dir }))}
+              >
+                Last Updated
+              </SortBtn>
+              <button
+                className="inline-flex items-center gap-1 px-2 h-[36px] rounded border text-xs"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                onClick={() => setSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))}
+                title="Toggle sort direction"
+              >
+                {sort.dir === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Dir
+              </button>
+            </div>
+
+            {/* Bulk delete */}
+            <div className="flex items-end">
+              <button
+                onClick={bulkDelete}
+                disabled={busy || selectedIds.size === 0}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium disabled:opacity-50"
+                style={{ borderColor: "#fcc", color: "#c00" }}
+                title="Bulk delete selected"
+              >
+                <Trash2 size={16} /> Delete Selected ({selectedIds.size})
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Showing count */}
+        <div className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Showing <strong>{filtered.length}</strong> of <strong>{thumbnails.length}</strong>
+        </div>
 
         {/* Add/Edit Form */}
         <form onSubmit={saveThumbnail} className="rounded-2xl p-4 border mb-6"
@@ -504,47 +989,59 @@ const extractVideoId = (url) => {
             <div className="text-base font-semibold" style={{ color: "var(--text)" }}>
               {editingId ? "Edit Thumbnail" : "Add New Thumbnail"}
             </div>
-            {editingId && (
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="text-sm px-3 py-1 rounded-lg"
-                style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}
-              >
-                Cancel
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {editingId && (
+                <button type="button" onClick={cancelEdit} className="text-sm px-3 py-1 rounded-lg"
+                        style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+                  Cancel
+                </button>
+              )}
+              {form.imageUrl && (
+                <button type="button" onClick={() => downloadImage(form.imageUrl, form.filename || "thumbnail")}
+                        className="text-sm px-3 py-1 rounded-lg inline-flex items-center gap-2"
+                        style={{ color: "var(--text)", border: "1px solid var(--border)" }}
+                        title="Download full-quality image">
+                  <Download size={14} /> Download Original
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
-            <Input 
-              label="Filename *" 
-              value={form.filename} 
+            <InputWithPresets
+              label="Filename *"
+              value={form.filename}
               onChange={(v) => setForm({ ...form, filename: v })}
               placeholder="e.g., Creator-Game-1-Video"
+              recent={presets.filenameTemplates}
             />
-            
+
             <div className="relative">
-              <Input 
-                label="YouTube URL" 
-                value={form.youtubeUrl} 
+              <Input
+                label="YouTube URL"
+                value={form.youtubeUrl}
                 onChange={(v) => setForm({ ...form, youtubeUrl: v })}
                 placeholder="https://youtube.com/watch?v=..."
               />
               {form.youtubeUrl && (
-                <button
-                  type="button"
-                  onClick={() => fetchYouTubeDetails(form.youtubeUrl)}
-                  className="absolute right-2 top-8 p-1 text-xs"
-                  style={{ color: "var(--orange)" }}
-                  title="Fetch video details"
-                >
-                  <ExternalLink size={16} />
-                </button>
+                <div className="absolute right-2 top-8 flex items-center gap-1">
+                  <button type="button" onClick={() => fetchYouTubeDetails(form.youtubeUrl)} className="p-1 text-xs"
+                          style={{ color: "var(--orange)" }} title="Fetch video details">
+                    <ExternalLink size={16} />
+                  </button>
+                  {extractVideoId(form.youtubeUrl) && (
+                    <button type="button" onClick={() => copyText(extractVideoId(form.youtubeUrl), "vid")}
+                            className="p-1 text-xs" title="Copy video id"
+                            style={{ color: copyOkId === "vid" ? "#22c55e" : "var(--text-muted)" }}>
+                      {copyOkId === "vid" ? <Check size={16} /> : <Copy size={16} />}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
-            <Select
+            {/* Category (fixed options) */}
+            <SelectWithPresets
               label="Category *"
               value={form.category}
               onChange={(v) => setForm({ ...form, category: v })}
@@ -554,43 +1051,50 @@ const extractVideoId = (url) => {
                 { value: "MUSIC & BHAJANS", label: "Music & Bhajans" },
                 { value: "OTHER", label: "Other" },
               ]}
+              recent={presets.category}
             />
 
-            <Input 
-              label="Subcategory" 
-              value={form.subcategory} 
+            {/* Subcategory textbox with memory */}
+            <ComboboxInput
+              label="Subcategory"
+              value={form.subcategory}
               onChange={(v) => setForm({ ...form, subcategory: v })}
+              suggestions={presets.subcategory}
               placeholder="e.g., Valorant, BGMI"
             />
 
-            <Select
+            {/* Variant textbox with memory */}
+            <ComboboxInput
               label="Variant *"
               value={form.variant}
               onChange={(v) => setForm({ ...form, variant: v })}
-              options={[
-                { value: "VIDEO", label: "Video" },
-                { value: "LIVE", label: "Live" },
-              ]}
+              suggestions={presets.variants.length ? presets.variants : ["VIDEO","LIVE"]}
+              placeholder="e.g., VIDEO, LIVE, SHORTS..."
+              required
             />
 
             {/* Image Upload */}
             <div className="block">
-              <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
-                Thumbnail Image
-              </span>
-              <label 
-                className="flex items-center justify-center gap-2 w-full h-[42px] rounded-lg px-3 cursor-pointer hover:opacity-80 transition"
+              <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>Thumbnail Image</span>
+              <div
+                ref={dropRef}
+                className="flex items-center justify-between gap-2 w-full min-h-[42px] rounded-lg px-3 cursor-pointer hover:opacity-90 transition border"
                 style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onClick={() => fileInputRef.current?.click()}
+                title="Click to choose or drag & drop"
               >
-                <ImageIcon size={16} />
-                <span className="text-sm">Choose Image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </label>
+                <div className="flex items-center gap-2 py-2">
+                  <ImageIcon size={16} />
+                  <span className="text-sm">Choose Image / Drop here</span>
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={handleImageInputChange} className="hidden" />
+                <span className="text-xs opacity-70">PNG/JPG · Max 25MB</span>
+              </div>
+              {form._imageMeta && (
+                <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  {form._imageMeta.width}×{form._imageMeta.height} · {bytes(form._imageMeta.size)} · {form._imageMeta.type}
+                </div>
+              )}
             </div>
           </div>
 
@@ -599,23 +1103,21 @@ const extractVideoId = (url) => {
             <div className="mb-3 p-3 rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Preview:</div>
               <div className="flex items-start gap-3">
-                <img 
-                  src={imagePreview} 
-                  alt="Preview" 
-                  className="max-w-xs max-h-40 rounded-lg object-contain"
-                  style={{ border: "1px solid var(--border)" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImagePreview("");
-                    setForm({ ...form, imageUrl: "" });
-                  }}
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ color: "#ff3b30", border: "1px solid rgba(255,59,48,0.3)" }}
-                >
-                  Remove
-                </button>
+                <img src={imagePreview} alt="Preview" className="max-w-xs max-h-40 rounded-lg object-contain"
+                     style={{ border: "1px solid var(--border)" }} loading="lazy" />
+                <div className="flex flex-col gap-2">
+                  <button type="button" onClick={() => downloadImage(form.imageUrl || imagePreview, form.filename || "thumbnail")}
+                          className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
+                          style={{ color: "var(--text)", border: "1px solid var(--border)" }}>
+                    <Download size={12} /> Download Full Quality
+                  </button>
+                  <button type="button"
+                          onClick={() => { setImagePreview(""); setForm({ ...form, imageUrl: "", _file: null, _imageMeta: null }); }}
+                          className="text-xs px-2 py-1 rounded inline-flex items-center gap-1"
+                          style={{ color: "#ff3b30", border: "1px solid rgba(255,59,48,0.3)" }}>
+                    <X size={12} /> Remove
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -633,25 +1135,17 @@ const extractVideoId = (url) => {
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-white disabled:opacity-50"
               style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
             >
-              {editingId ? (
-                <>
-                  <Edit2 size={16} /> Update Thumbnail
-                </>
-              ) : (
-                <>
-                  <Plus size={16} /> Add Thumbnail
-                </>
-              )}
+              {editingId ? (<><Edit2 size={16} /> Update Thumbnail</>) : (<><Plus size={16} /> Add Thumbnail</>)}
             </button>
           </div>
         </form>
 
         {/* Thumbnails List */}
-        <div className="rounded-2xl border overflow-x-auto"
-             style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+        <div className="rounded-2xl border overflow-x-auto" style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
           <table className="w-full text-sm">
             <thead style={{ color: "var(--text-muted)" }}>
               <tr>
+                <th className="p-3 w-10"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} /></th>
                 <th className="text-left p-3">Preview</th>
                 <th className="text-left p-3">Filename</th>
                 <th className="text-left p-3">Category</th>
@@ -662,119 +1156,83 @@ const extractVideoId = (url) => {
               </tr>
             </thead>
             <tbody style={{ color: "var(--text)" }}>
-              {thumbnails.map((t) => (
-                <tr key={t.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="p-3">
-                    <div className="w-16 h-10 rounded overflow-hidden bg-black/5">
-                      {t.imageUrl ? (
-                        <img 
-                          src={t.imageUrl} 
-                          alt={t.filename}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                          No img
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-3">
-                    <div className="font-medium">{t.filename}</div>
-                    <div className="text-xs opacity-60">{t.variant}</div>
-                  </td>
-                  <td className="p-3">
-                    <div className="capitalize">{t.category}</div>
-                    {t.subcategory && (
-                      <div className="text-xs opacity-60">{t.subcategory}</div>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {t.youtubeUrl ? (
-                      <a 
-                        href={t.youtubeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs"
-                        style={{ color: "var(--orange)" }}
-                      >
-                        <Eye size={12} /> {t.videoId}
-                      </a>
-                    ) : (
-                      <span className="text-xs opacity-40">—</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {t.youtubeViews ? (
-                      <div>
-                        <div className="text-sm font-medium">
-                          {t.youtubeViews.toLocaleString()}
-                        </div>
-                        {t.viewStatus === 'deleted' && (
-                          <div className="text-xs" style={{ color: "#ff9500" }}>
-                            ⚠️ Deleted
-                          </div>
-                        )}
-                      </div>
-                    ) : t.youtubeUrl ? (
-                      <span className="text-xs opacity-40">Pending</span>
-                    ) : (
-                      <span className="text-xs opacity-40">—</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-xs opacity-60">
-                    {t.lastViewUpdate ? timeAgo(t.lastViewUpdate) : '—'}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex gap-2">
-                      {t.videoId && (
-                        <button
-                          onClick={() => refreshSingleView(t.videoId, t.id)}
-                          disabled={refreshingId === t.id}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-                          style={{ borderColor: "var(--border)", color: "var(--orange)" }}
-                          title="Refresh view count"
-                        >
-                          <RefreshCw size={12} className={refreshingId === t.id ? "animate-spin" : ""} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => editThumbnail(t)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-                        style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                        title="Edit"
-                      >
-                        <Edit2 size={12} /> Edit
-                      </button>
-                      <button
-                        onClick={() => deleteThumbnail(t.id, t.filename)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-                        style={{ borderColor: "#fcc", color: "#c00" }}
-                        title="Delete"
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!thumbnails.length && (
+              {busy && thumbnails.length === 0 ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="p-3"><div className="w-4 h-4 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="w-16 h-10 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-40 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-24 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-32 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-16 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-4 w-24 rounded bg-black/5 animate-pulse" /></td>
+                    <td className="p-3"><div className="h-6 w-40 rounded bg-black/5 animate-pulse" /></td>
+                  </tr>
+                ))
+              ) : filtered.length ? (
+                filtered.map((t, i) => {
+                  const stableKey = String(t.id || `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}|${i}`);
+                  const isFlash = flashKey && (flashKey === String(t.id) || flashKey === `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}`);
+                  return (
+                    <Row
+                      key={stableKey}
+                      t={t}
+                      selectedIds={selectedIds}
+                      setSelectedIds={setSelectedIds}
+                      duplicateThumbnail={duplicateThumbnail}
+                      timeAgo={timeAgo}
+                      refreshingId={refreshingId}
+                      refreshSingleView={refreshSingleView}
+                      downloadImage={downloadImage}
+                      editThumbnail={editThumbnail}
+                      deleteThumbnail={deleteThumbnail}
+                      copyOkId={copyOkId}
+                      copyText={copyText}
+                      flash={isFlash}
+                    />
+                  );
+                })
+              ) : (
                 <tr>
-                  <td className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }} colSpan={7}>
-                    No thumbnails yet. Add your first thumbnail above!
+                  <td className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }} colSpan={8}>
+                    No thumbnails found.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <StatCard label="Total Thumbnails" value={stats.total || 0} />
+            <StatCard label="With YouTube" value={stats.withYouTube || 0} />
+            <StatCard label="Categories" value={Object.keys(stats.byCategory || {}).length} />
+            <StatCard label="Live/Video" value={`${stats.byVariant?.LIVE || 0} / ${stats.byVariant?.VIDEO || 0}`} />
+          </div>
+        )}
+
+        {/* Toaster */}
+        <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+          {toasts.map((t) => (
+            <div key={t.id} className="rounded-lg px-3 py-2 text-sm shadow"
+                 style={{
+                   background: t.type === "error" ? "#fee2e2" : t.type === "success" ? "#dcfce7" : t.type === "warning" ? "#fef9c3" : "var(--surface)",
+                   color: "var(--text)",
+                   border: "1px solid var(--border)",
+                 }}>
+              {t.message}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-// Helper components
-function Input({ label, value, onChange, placeholder, type = "text" }) {
+// ---------- Helpers ----------
+function Input({ label, value, onChange, placeholder, type = "text", required = false }) {
   return (
     <label className="block">
       <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>{label}</span>
@@ -785,27 +1243,158 @@ function Input({ label, value, onChange, placeholder, type = "text" }) {
         placeholder={placeholder}
         className="w-full h-[42px] rounded-lg px-3"
         style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-        required={label.includes("*")}
+        required={required || label.includes("*")}
       />
     </label>
   );
 }
 
-function Select({ label, value, onChange, options }) {
+/**
+ * ComboboxInput
+ * - Always a text input
+ * - Shows a dropdown of suggestions (from memory)
+ * - Typing filters suggestions; click to fill
+ */
+function ComboboxInput({ label, value, onChange, suggestions = [], placeholder, required = false }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState(value || "");
+
+  useEffect(() => setQ(value || ""), [value]);
+
+  const filtered = useMemo(() => {
+    const s = (q || "").toLowerCase();
+    if (!s) return suggestions.slice(0, 10);
+    return suggestions.filter((v) => v.toLowerCase().includes(s)).slice(0, 10);
+  }, [q, suggestions]);
+
   return (
-    <label className="block">
-      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>{label}</span>
+    <div className="relative">
+      <Input
+        label={label}
+        value={q}
+        onChange={(v) => { setQ(v); onChange(v); setOpen(true); }}
+        placeholder={placeholder}
+        required={required}
+      />
+      {suggestions.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="absolute right-2 top-8 px-2 py-1 text-xs rounded border"
+          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+          title="Show recent"
+        >
+          Recent <ChevronRight size={12} />
+        </button>
+      )}
+      {open && filtered.length > 0 && (
+        <div className="absolute z-10 right-0 left-0 mt-1 rounded border bg-[var(--surface-alt)]"
+             style={{ borderColor: "var(--border)" }}>
+          {filtered.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => { onChange(r); setQ(r); setOpen(false); }}
+              className="w-full text-left px-3 py-2 hover:bg-black/5"
+              style={{ color: "var(--text)" }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InputWithPresets({ label, value, onChange, placeholder, recent = [] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <Input label={label} value={value} onChange={onChange} placeholder={placeholder} />
+      {recent?.length > 0 && (
+        <button type="button" onClick={() => setOpen((o) => !o)}
+                className="absolute right-2 top-8 px-2 py-1 text-xs rounded border"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+          Recent <ChevronRight size={12} />
+        </button>
+      )}
+      {open && recent?.length > 0 && (
+        <div className="absolute z-10 right-0 mt-1 w-64 rounded border bg-[var(--surface-alt)]"
+             style={{ borderColor: "var(--border)" }}>
+          {recent.map((r) => (
+            <button key={r} type="button" onClick={() => { onChange(r); setOpen(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-black/5"
+                    style={{ color: "var(--text)" }}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * SelectWithPresets
+ * - If `options` provided and non-empty → renders a <select>
+ * - Else → text input
+ */
+function SelectWithPresets({ label, value, onChange, options = [], recent = [], placeholder }) {
+  const [open, setOpen] = useState(false);
+  const hasOptions = options?.length > 0;
+  return (
+    <div className="relative">
+      <label className="block">
+        <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>{label}</span>
+        {hasOptions ? (
+          <select value={value} onChange={(e) => onChange(e.target.value)}
+                  className="w-full h-[42px] rounded-lg px-3"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : (
+          <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+                 className="w-full h-[42px] rounded-lg px-3"
+                 style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
+        )}
+      </label>
+      {recent?.length > 0 && (
+        <button type="button" onClick={() => setOpen((o) => !o)}
+                className="absolute right-2 top-8 px-2 py-1 text-xs rounded border"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+          Recent <ChevronRight size={12} />
+        </button>
+      )}
+      {open && recent?.length > 0 && (
+        <div className="absolute z-10 right-0 mt-1 w-64 rounded border bg-[var(--surface-alt)]"
+             style={{ borderColor: "var(--border)" }}>
+          {recent.map((r) => (
+            <button key={r} type="button" onClick={() => { onChange(r); setOpen(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-black/5"
+                    style={{ color: "var(--text)" }}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LabeledCompactSelect({ label, value, onChange, options }) {
+  return (
+    <div className="min-w-[130px]">
+      <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-[42px] rounded-lg px-3"
+        className="h-[36px] rounded px-2 w-full"
         style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
-    </label>
+    </div>
   );
 }
 
@@ -814,6 +1403,136 @@ function StatCard({ label, value }) {
     <div className="rounded-lg p-3 border" style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
       <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</div>
       <div className="text-xl font-bold" style={{ color: "var(--text)" }}>{value}</div>
+    </div>
+  );
+}
+
+function SortBtn({ active, dir, onClick, children }) {
+  return (
+    <button className={`inline-flex items-center gap-1 px-2 h-[36px] rounded border text-xs ${active ? "font-semibold" : ""}`}
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}
+            onClick={onClick}>
+      {children} {active ? (dir === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />) : null}
+    </button>
+  );
+}
+
+const Row = memo(function Row({
+  t, selectedIds, setSelectedIds, duplicateThumbnail, timeAgo,
+  refreshingId, refreshSingleView, downloadImage, editThumbnail, deleteThumbnail,
+  copyOkId, copyText, flash,
+}) {
+  const selected = selectedIds.has(t.id);
+  return (
+    <tr className="border-t" style={{ borderColor: "var(--border)", transition: "background 300ms", background: flash ? "rgba(34,197,94,0.08)" : "transparent" }}>
+      <td className="p-3 align-top">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => setSelectedIds((s) => {
+            const n = new Set(s);
+            if (e.target.checked) n.add(t.id); else n.delete(t.id);
+            return n;
+          })}
+        />
+      </td>
+      <td className="p-3">
+        <div className="w-16 h-10 rounded overflow-hidden bg-black/5">
+          {t.imageUrl ? (
+            <img src={t.imageUrl} alt={t.filename} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs opacity-50">No img</div>
+          )}
+        </div>
+      </td>
+      <td className="p-3 align-top">
+        <div className="font-medium flex items-center gap-2">
+          {t.filename}
+          <span className="text-[10px] px-1.5 py-0.5 rounded border" style={{ display: flash ? "inline-flex" : "none", borderColor: "#86efac", color: "#16a34a" }}>Uploaded ✓</span>
+          <button className="inline-flex items-center gap-1 px-1 py-0.5 rounded border text-[10px]"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  title="Duplicate into form"
+                  onClick={() => duplicateThumbnail(t)}>
+            <Layers size={10} /> Duplicate
+          </button>
+        </div>
+        <div className="text-xs opacity-60">{t.variant}</div>
+      </td>
+      <td className="p-3 align-top">
+        <div className="capitalize">{t.category}</div>
+        {t.subcategory && <div className="text-xs opacity-60">{t.subcategory}</div>}
+      </td>
+      <td className="p-3 align-top">
+        {t.youtubeUrl ? (
+          <div className="flex items-center gap-2">
+            <a href={t.youtubeUrl} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1 text-xs" style={{ color: "var(--orange)" }}>
+              <Eye size={12} /> {t.videoId}
+            </a>
+            <button className="p-1 text-xs rounded border"
+                    style={{ borderColor: "var(--border)" }}
+                    title="Copy video id"
+                    onClick={() => copyText(t.videoId, t.id)}>
+              {copyOkId === t.id ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
+        ) : <span className="text-xs opacity-40">—</span>}
+      </td>
+      <td className="p-3 align-top">
+        {t.youtubeViews ? (
+          <div>
+            <div className="text-sm font-medium">{Number(t.youtubeViews).toLocaleString()}</div>
+            {t.viewStatus === "deleted" && <div className="text-xs" style={{ color: "#ff9500" }}>⚠️ Deleted</div>}
+          </div>
+        ) : t.youtubeUrl ? <span className="text-xs opacity-40">Pending</span> : <span className="text-xs opacity-40">—</span>}
+      </td>
+      <td className="p-3 text-xs opacity-60 align-top">{t.lastViewUpdate ? timeAgo(t.lastViewUpdate) : "—"}</td>
+      <td className="p-3 align-top">
+        <div className="flex flex-wrap gap-2">
+          {t.videoId && (
+            <button onClick={() => refreshSingleView(t.videoId, t.id)}
+                    disabled={refreshingId === t.id}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs disabled:opacity-50"
+                    style={{ borderColor: "var(--border)", color: "var(--orange)" }}
+                    title="Refresh view count">
+              <RefreshCw size={12} className={refreshingId === t.id ? "animate-spin" : ""} />
+            </button>
+          )}
+          {t.imageUrl && (
+            <button onClick={() => downloadImage(t.imageUrl, t.filename)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                    style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                    title="Download image">
+              <Download size={12} />
+            </button>
+          )}
+          <button onClick={() => editThumbnail(t)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  title="Edit">
+            <Edit2 size={12} /> Edit
+          </button>
+          <button onClick={() => deleteThumbnail(t.id, t.filename)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                  style={{ borderColor: "#fcc", color: "#c00" }}
+                  title="Delete">
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+function LoadingOverlay({ show, label }) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+      <div className="rounded-2xl p-4 border shadow-xl flex items-center gap-3"
+           style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+        <RefreshCw className="animate-spin" size={18} style={{ color: "var(--orange)" }} />
+        <div className="text-sm" style={{ color: "var(--text)" }}>{label || "Working..."}</div>
+      </div>
     </div>
   );
 }
