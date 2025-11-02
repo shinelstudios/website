@@ -55,6 +55,61 @@ export class CloudflareThumbnailStorage {
     this._etags.clear();
   }
 
+  // ---------- utils ----------
+  /** Estimate decoded bytes of a data: URL (base64) image */
+  _estimateDataUrlSizeBytes(dataUrl = "") {
+    if (!dataUrl.startsWith("data:")) return 0;
+    const comma = dataUrl.indexOf(",");
+    if (comma < 0) return 0;
+    const meta = dataUrl.slice(0, comma);
+    const isB64 = /;base64/i.test(meta);
+    const payload = dataUrl.slice(comma + 1);
+    if (!isB64) {
+      // URI-encoded data; rough decode size
+      try {
+        return new TextEncoder().encode(decodeURIComponent(payload)).length;
+      } catch {
+        return payload.length;
+      }
+    }
+    // base64 size ~= 3/4 of payload length (minus padding)
+    const len = payload.length - (payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0);
+    return Math.floor(len * 0.75);
+  }
+
+  /** Sanitize & validate a thumbnail payload before sending to Worker */
+  _validateThumbnailInput(th) {
+    const errors = [];
+    const safe = {
+      filename: String(th.filename || "").trim(),
+      youtubeUrl: th.youtubeUrl ? String(th.youtubeUrl).trim() : "",
+      category: String(th.category || "").trim(),
+      subcategory: th.subcategory ? String(th.subcategory).trim() : "",
+      variant: String(th.variant || "").trim(),
+      imageUrl: th.imageUrl ? String(th.imageUrl) : "",
+    };
+
+    // Required fields (to match Admin requirement)
+    if (!safe.filename) errors.push("Filename is required.");
+    if (!safe.category) errors.push("Category is required.");
+    if (!safe.variant) errors.push("Variant is required.");
+    if (!safe.imageUrl) errors.push("Thumbnail image is required.");
+
+    // 25 MB ceiling (Cloudflare KV item value limit is ~25 MiB and your Worker stores list in a single KV entry)
+    const bytes = this._estimateDataUrlSizeBytes(safe.imageUrl);
+    const MAX = 25 * 1024 * 1024; // 25MB hard stop to avoid 413 from Worker
+    if (bytes > MAX) {
+      errors.push(`Image is too large (${(bytes / (1024 * 1024)).toFixed(1)} MB). Max 25 MB.`);
+    }
+
+    if (errors.length) {
+      const err = new Error(errors.join(" "));
+      err.code = "VALIDATION";
+      throw err;
+    }
+    return safe;
+  }
+
   // ---------- internals ----------
   _authHeaders(json = true) {
     const h = {};
@@ -189,6 +244,7 @@ export class CloudflareThumbnailStorage {
   }
 
   async _pollJobIfAny(result, { onProgress, timeoutMs = 15000 } = {}) {
+    // Worker uses async jobs for view refresh only; keep a passthrough here.
     if (typeof onProgress === "function") {
       try { onProgress({ status: "queued-or-done" }); } catch {}
     }
@@ -206,27 +262,68 @@ export class CloudflareThumbnailStorage {
   }
 
   // ---------- writes (admin) ----------
-  async add(thumbnail) {
-    const res = await this._requestJSON("POST", "/thumbnails", thumbnail, { useAuth: true });
+  /**
+   * Create a thumbnail (client-side validates required fields + 25MB guard)
+   * @param {object} thumbnail
+   * @param {{ onProgress?: (p:number)=>void }} [opts]  // 0..100
+   */
+  async add(thumbnail, opts = {}) {
+    const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
+    const safe = this._validateThumbnailInput(thumbnail);
+
+    onProgress?.(5);   // validate
+    const res = await this._requestJSON("POST", "/thumbnails", safe, { useAuth: true });
+    onProgress?.(90);  // server responded
     await this._pollJobIfAny(res);
     this._etags.delete(`${this.workerUrl}/thumbnails`);
     this._etags.delete(`${this.workerUrl}/stats`);
+    onProgress?.(100);
     return { success: true, data: res?.thumbnail ?? res };
   }
 
-  async update(id, updates) {
-    const res = await this._requestJSON("PUT", `/thumbnails/${encodeURIComponent(id)}`, updates, { useAuth: true });
+  /**
+   * Update a thumbnail (validates when imageUrl present)
+   * @param {string} id
+   * @param {object} updates
+   * @param {{ onProgress?: (p:number)=>void }} [opts]
+   */
+  async update(id, updates, opts = {}) {
+    const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
+    let body = { ...updates };
+    if (body.imageUrl) {
+      // If image changed, validate size & requireds minimally
+      const bytes = this._estimateDataUrlSizeBytes(body.imageUrl);
+      const MAX = 25 * 1024 * 1024;
+      if (bytes > MAX) {
+        const err = new Error(`Image is too large (${(bytes / (1024 * 1024)).toFixed(1)} MB). Max 25 MB.`);
+        err.code = "VALIDATION";
+        throw err;
+      }
+    }
+    onProgress?.(10);
+    const res = await this._requestJSON("PUT", `/thumbnails/${encodeURIComponent(id)}`, body, { useAuth: true });
+    onProgress?.(90);
     await this._pollJobIfAny(res);
     this._etags.delete(`${this.workerUrl}/thumbnails`);
     this._etags.delete(`${this.workerUrl}/stats`);
+    onProgress?.(100);
     return { success: true, data: res?.thumbnail ?? res };
   }
 
-  async delete(id) {
+  /**
+   * Delete a thumbnail
+   * @param {string} id
+   * @param {{ onProgress?: (p:number)=>void }} [opts]
+   */
+  async delete(id, opts = {}) {
+    const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
+    onProgress?.(15);
     const res = await this._requestJSON("DELETE", `/thumbnails/${encodeURIComponent(id)}`, undefined, { useAuth: true });
+    onProgress?.(85);
     await this._pollJobIfAny(res);
     this._etags.delete(`${this.workerUrl}/thumbnails`);
     this._etags.delete(`${this.workerUrl}/stats`);
+    onProgress?.(100);
     return { success: true, data: res ?? null };
   }
 
@@ -254,22 +351,29 @@ export class CloudflareThumbnailStorage {
    * @param {{
    *   replace?: boolean,
    *   chunkSize?: number,
-   *   onProgress?: (p: {done:number,total:number,phase:"replace"|"append"}) => void
+   *   onProgress?: (p: {done:number,total:number,phase:"replace"|"append",percent:number}) => void
    * }} [opts]
    */
   async bulkImportChunked(thumbnails, opts = {}) {
     const { replace = false, chunkSize = 50, onProgress } = opts;
     const total = thumbnails.length;
 
+    const emit = (done, phase) => {
+      const percent = total ? Math.round((done / total) * 100) : 100;
+      onProgress?.({ done, total, phase, percent });
+    };
+
     if (replace) {
       await this._requestJSON("POST", "/bulk-import", { thumbnails: [], replace: true }, { useAuth: true });
-      if (typeof onProgress === "function") onProgress({ done: 0, total, phase: "replace" });
+      emit(0, "replace");
     }
 
+    let done = 0;
     for (let i = 0; i < thumbnails.length; i += chunkSize) {
       const chunk = thumbnails.slice(i, i + chunkSize);
       await this._requestJSON("POST", "/bulk-import", { thumbnails: chunk, replace: false }, { useAuth: true });
-      if (typeof onProgress === "function") onProgress({ done: Math.min(i + chunk.length, total), total, phase: "append" });
+      done = Math.min(i + chunk.length, total);
+      emit(done, "append");
     }
 
     this._etags.delete(`${this.workerUrl}/thumbnails`);
