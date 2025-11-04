@@ -541,12 +541,6 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
 
   if (!currentItem) return null;
 
-  const openOnYouTube = () => {
-    if (currentItem.youtubeUrl) {
-      window.open(currentItem.youtubeUrl, "_blank", "noopener,noreferrer");
-    }
-  };
-
   return (
     <div
       ref={modalRef}
@@ -585,20 +579,36 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
               </svg>
             </button>
 
-            {/* Open on YouTube */}
-            {currentItem.youtubeUrl && (
-              <button
-                onClick={openOnYouTube}
-                className="p-2 rounded-lg hover:bg-red-600 transition-colors text-[var(--text)] hover:text-white"
-                title="Open on YouTube"
-                aria-label="Open on YouTube"
-                type="button"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                </svg>
-              </button>
-            )}
+            {/* Zoom out */}
+            <button
+              onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
+              className="p-2 rounded-lg hover:bg-[var(--orange)] transition-colors text-[var(--text)] hover:text-white"
+              title="Zoom out (-)"
+              aria-label="Zoom out"
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="7" y1="11" x2="15" y2="11"></line>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+
+            {/* Zoom in */}
+            <button
+              onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
+              className="p-2 rounded-lg hover:bg-[var(--orange)] transition-colors text-[var(--text)] hover:text-white"
+              title="Zoom in (+)"
+              aria-label="Zoom in"
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="11" y1="7" x2="11" y2="15"></line>
+                <line x1="7" y1="11" x2="15" y2="11"></line>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
 
             {/* Fullscreen */}
             <button
@@ -639,11 +649,15 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
           style={{ height: "75vh" }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="relative max-w-full max-h-full transition-transform duration-200" style={{ transform: `scale(${zoom})` }}>
+          {/* IMPORTANT: wrapper is full size so 100% zoom fits entirely */}
+          <div
+            className="relative w-full h-full transition-transform duration-200"
+            style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+          >
             <ProtectedImg
               src={currentItem.imageUrl || currentItem.image}
               alt={`${currentItem.category} ${currentItem.subcategory || ""}`}
-              className="max-w-full max-h-full object-contain pointer-events-none"
+              className="w-full h-full object-contain pointer-events-none"
             />
           </div>
 

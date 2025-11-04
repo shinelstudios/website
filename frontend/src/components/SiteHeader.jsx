@@ -6,7 +6,7 @@ import {
   Sun, Moon, Menu, X, ChevronDown, Lock, Wand2, Search, Languages,
   Lightbulb, Brain, UserCog, Bell, Settings, LogOut, User,
   Shield, Zap, ArrowRight, ExternalLink, Home, Briefcase, Mail,
-  BarChart3, Video, Image as ImageIcon
+  BarChart3, Video, Image as ImageIcon, DollarSign, FolderOpen
 } from "lucide-react";
 import TrustBar from "./Trustbar.jsx";
 import logoLight from "../assets/logo_light.png";
@@ -46,9 +46,10 @@ function getAuthState() {
     };
 
     const email = (payload?.email || safeGet("userEmail") || "").trim();
-    const role = (payload?.role || safeGet("userRole") || "").trim().toLowerCase();
-    const firstName = (payload?.firstName || safeGet("userFirstName") || "").trim();
-    const lastName = (payload?.lastName || safeGet("userLastName") || "").trim();
+    const role = (payload?.role || safeGet("role") || "").trim().toLowerCase();
+    const firstName = (payload?.firstName || safeGet("firstName") || "").trim();
+    const lastName = (payload?.lastName || safeGet("lastName") || "").trim();
+
 
     return {
       isAuthed: Boolean(token) && !expired,
@@ -73,18 +74,13 @@ function initialsFrom(first, last, email) {
 
 function setFaviconForTheme(isDark) {
   try {
-    const light = document.querySelector('link[rel="icon"][data-theme="light"]');
-    const dark = document.querySelector('link[rel="icon"][data-theme="dark"]');
-    if (light && dark) {
-      light.disabled = !!isDark;
-      dark.disabled = !isDark;
-    }
     const link =
       document.getElementById("favicon") ||
       document.querySelector('link[rel="icon"]:not([data-theme])');
     if (link) link.href = isDark ? "/favicon-dark-32x32.png" : "/favicon-light-32x32.png";
   } catch {}
 }
+
 
 /* ---------------- Notification system ---------------- */
 function useNotifications() {
@@ -154,7 +150,6 @@ const toolsCatalog = [
 const SiteHeader = ({ isDark, setIsDark }) => {
   const [auth, setAuth] = useState(getAuthState());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [workOpen, setWorkOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -183,7 +178,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   const closeAllMenus = useCallback(() => {
     setToolsOpen(false);
-    setWorkOpen(false);
     setUserMenuOpen(false);
     setNotifOpen(false);
     setIsMenuOpen(false);
@@ -325,18 +319,19 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   }, [searchQuery, allToolsForMenu]);
 
   const handleLogout = useCallback(() => {
-    try {
-      ["token","refresh","userEmail","userFirstName","userLastName","userRole","rememberMe"].forEach((k)=>localStorage.removeItem(k));
-    } catch {}
-    try {
-      window.dispatchEvent(new Event("auth:changed"));
-      window.dispatchEvent(new CustomEvent("notify", {
-        detail: { message: "Successfully logged out", type: "success" }
-      }));
-    } catch {}
-    closeAllMenus();
-    navigate("/");
-  }, [closeAllMenus, navigate]);
+  try {
+    ["token","refresh","userEmail","firstName","lastName","role","rememberMe"].forEach((k)=>localStorage.removeItem(k));
+  } catch {}
+  try {
+    window.dispatchEvent(new Event("auth:changed"));
+    window.dispatchEvent(new CustomEvent("notify", {
+      detail: { message: "Successfully logged out", type: "success" }
+    }));
+  } catch {}
+  closeAllMenus();
+  navigate("/");
+}, [closeAllMenus, navigate]);
+
 
   const trustItems = useMemo(() => ([
     { icon: Wand2, text: "AI-first studio • human-directed quality" },
@@ -353,7 +348,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   ]), []);
 
   const DesktopNavLink = ({ label, to, icon: Icon }) => {
-    const isActive = location.pathname === to || (to === "/#contact" && location.hash === "#contact");
+    const isActive =
+    location.pathname === to ||
+    location.pathname.startsWith(to + "/") ||
+    (to === "/#contact" && location.hash === "#contact");
+
     return (
       <div className="relative">
         <Link
@@ -488,133 +487,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           </Link>
 
           {/* desktop nav */}
+          {/* desktop nav */}
           <div className="hidden md:flex items-center gap-8 relative">
             <DesktopNavLink label="Home" to="/" icon={Home} />
-
-            {/* Work dropdown (desktop) */}
-            <div className="relative">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded transition-all duration-200"
-                aria-expanded={workOpen}
-                aria-haspopup="menu"
-                aria-controls="work-menu"
-                onClick={() => setWorkOpen(v => !v)}
-                style={{
-                  color: hovered === "Work" || workOpen ? "var(--nav-hover)" : "var(--nav-link)",
-                  transform: hovered === "Work" && !prefersReduced ? 'translateY(-1px)' : 'translateY(0)'
-                }}
-                onMouseEnter={() => setHovered("Work")}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <BarChart3 size={16} />
-                <span className="nav-label">Work</span>
-                <ChevronDown size={16} className={`ml-1 transition-transform duration-200 ${workOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              <AnimatePresence>
-                {workOpen && (
-                  <motion.div
-                    id="work-menu"
-                    role="menu"
-                    initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-                    animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
-                    exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute left-0 mt-3 w-[420px] rounded-2xl shadow-xl overflow-hidden"
-                    style={{ background: "var(--surface)", border: "1px solid var(--border)", zIndex: 4 }}
-                  >
-                    <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-                      <div className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--text-muted)" }}>
-                        Explore our work
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-0">
-                      {/* GFX column */}
-                      <div className="p-3 border-r" style={{ borderColor: "var(--border)" }}>
-                        <div className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold"
-                             style={{ color: "var(--text)" }}>
-                          <span className="flex items-center gap-2">
-                            <Wand2 size={16} style={{ color: "var(--orange)" }} />
-                            GFX
-                          </span>
-                        </div>
-
-                        <ul className="space-y-1 mt-2">
-                          <li>
-                            <Link
-                              to="/gfx/thumbnails"
-                              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors duration-150 w-full"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <span>Thumbnails</span>
-                              <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              to="/gfx/branding"
-                              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors duration-150 w-full"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <span>Logo / Banner / Overlays (3-in-1)</span>
-                              <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-
-                      {/* Videos column */}
-                      <div className="p-3">
-                        <div className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold"
-                             style={{ color: "var(--text)" }}>
-                          <span className="flex items-center gap-2">
-                            <Video size={16} style={{ color: "var(--orange)" }} />
-                            Videos
-                          </span>
-                        </div>
-
-                        <ul className="space-y-1 mt-2">
-                          <li>
-                            <Link
-                              to="/videos/shorts"
-                              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors duration-150 w-full"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <span>Shorts</span>
-                              <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                            </Link>
-                          </li>
-                          <li>
-                            <Link
-                              to="/videos/long"
-                              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors duration-150 w-full"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <span>Long Videos</span>
-                              <ArrowRight size={14} style={{ color: "var(--orange)" }} />
-                            </Link>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="px-4 py-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                      Tip: Use <kbd className="px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)" }}>Esc</kbd> to close menus.
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <Link to="/#contact" className="relative">
-              <span className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded flex items-center gap-1.5 transition-all duration-200"
-                style={{ color: "var(--nav-link)" }}>
-                <Mail size={16} />
-                Contact
-              </span>
-            </Link>
+            <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
+            <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
 
             {/* Tools dropdown with search */}
             <div className="relative" ref={toolsRef}>
@@ -1037,137 +914,82 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               onClick={() => setIsMenuOpen(false)}
             >
               <nav className="px-4 py-4 space-y-4" onClick={(e) => e.stopPropagation()}>
-                {/* Search */}
-                <div className="relative">
-                  <Search
-                    size={18}
-                    className="absolute left-3 top-1/2 -translate-y-1/2"
-                    style={{ color: "var(--text-muted)" }}
-                  />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder="Search tools..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                    style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
-                  />
-                </div>
+  {/* Quick links */}
+  <div className="grid grid-cols-2 gap-3">
+    <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
+    <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
+  </div>
+  <div className="grid grid-cols-1 gap-3">
+    <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
+  </div>
 
-                {/* Primary quick actions */}
-                <div className="grid grid-cols-2 gap-3">
-                  <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
-                  <MobileCardLink to="/#contact" icon={Mail} title="Contact" subtitle="Reach out to us" />
-                </div>
-
-                {/* Work section with collapsible groups */}
-                <div className="space-y-3">
-                  <SectionHeader
-                    icon={BarChart3}
-                    title="Work"
-                    subtitle="Explore services & showcases"
-                    right={
-                      <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
-                        4 items
-                      </span>
-                    }
-                  />
-
-                  {/* GFX */}
-                  <details className="rounded-2xl" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }} open>
-                    <summary className="list-none cursor-pointer select-none">
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between px-4 py-3"
-                        onClick={(e) => { e.preventDefault(); const el = e.currentTarget.closest('details'); el.open = !el.open; haptic(); }}
-                      >
-                        <span className="flex items-center gap-2">
-                          <div className="h-9 w-9 rounded-lg grid place-items-center"
-                               style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
-                            <Wand2 size={18} style={{ color: "var(--orange)" }} />
-                          </div>
-                          <div>
-                            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>GFX</div>
-                            <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>Designs, logos & overlays</div>
-                          </div>
-                        </span>
-                        <ChevronDown size={18} className="transition-transform duration-200" />
-                      </button>
-                    </summary>
-                    <div className="px-3 pb-3 space-y-2">
-                      <MobileCardLink to="/gfx/thumbnails" icon={Wand2} title="Thumbnails" subtitle=" High-CTR concepts" />
-                      <MobileCardLink to="/gfx/branding" icon={Wand2} title="Branding (3-in-1)" subtitle="Logo • Banner • Overlays" />
-                    </div>
-                  </details>
-
-                  {/* Videos */}
-                  <details className="rounded-2xl" style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }} open>
-                    <summary className="list-none cursor-pointer select-none">
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between px-4 py-3"
-                        onClick={(e) => { e.preventDefault(); const el = e.currentTarget.closest('details'); el.open = !el.open; haptic(); }}
-                      >
-                        <span className="flex items-center gap-2">
-                          <div className="h-9 w-9 rounded-lg grid place-items-center"
-                               style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
-                            <Video size={18} style={{ color: "var(--orange)" }} />
-                          </div>
-                          <div>
-                            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>Videos</div>
-                            <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>Shorts & long-form edits</div>
-                          </div>
-                        </span>
-                        <ChevronDown size={18} className="transition-transform duration-200" />
-                      </button>
-                    </summary>
-                    <div className="px-3 pb-3 space-y-2">
-                      <MobileCardLink to="/videos/shorts" icon={Video} title="Shorts" subtitle="Snappy vertical edits" />
-                      <MobileCardLink to="/videos/long" icon={Video} title="Long Videos" subtitle="Narrative & pacing" />
-                    </div>
-                  </details>
-                </div>
-
-                {/* Tools quick list (styled cards) */}
-                <div className="space-y-2">
-                  <SectionHeader
-                    icon={Zap}
-                    title="Tools"
-                    subtitle={auth.isAuthed ? "Your available utilities" : "Login to unlock everything"}
-                    right={null}
-                  />
-                  <div className="grid grid-cols-1 gap-2">
-                    {(searchQuery.trim() ? filteredTools : allToolsForMenu).map(t => {
-                      const Icon = t.icon;
-                      const allowed = auth.isAuthed && t.roles.includes(role);
-                      const to = allowed ? t.path : "/login?next=/studio";
-                      return (
-                        <Link
-                          key={t.name}
-                          to={to}
-                          className="group rounded-xl p-3.5 flex items-center justify-between"
-                          style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
-                          onClick={haptic}
-                        >
-                          <span className="flex items-center gap-3 min-w-0">
-                            <div className="h-9 w-9 rounded-lg grid place-items-center"
-                                 style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
-                              {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
-                            </div>
-                            <span className="min-w-0">
-                              <div className="text-[15px] font-semibold truncate">{t.name}</div>
-                              {t.description && <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>{t.description}</div>}
-                            </span>
-                            {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
-                          </span>
-                          <ArrowRight size={18} className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150" style={{ color: "var(--orange)" }} />
-                        </Link>
-                      );
-                    })}
+  {/* Tools quick list (styled cards) */}
+  <div className="space-y-2">
+    <SectionHeader
+      icon={Zap}
+      title="Tools"
+      subtitle={auth.isAuthed ? "Your available utilities" : "Login to unlock everything"}
+      right={null}
+    />
+    {/* keep search just for tools */}
+    <div className="relative">
+      <Search
+        size={18}
+        className="absolute left-3 top-1/2 -translate-y-1/2"
+        style={{ color: "var(--text-muted)" }}
+      />
+      <input
+        ref={searchInputRef}
+        type="text"
+        placeholder="Search tools..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+        style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
+      />
+    </div>
+    <div className="grid grid-cols-1 gap-2">
+      {(searchQuery.trim() ? filteredTools : allToolsForMenu).map(t => {
+        const Icon = t.icon;
+        const allowed = auth.isAuthed && t.roles.includes(role);
+        const to = allowed ? t.path : "/login?next=/studio";
+        return (
+          <Link
+            key={t.name}
+            to={to}
+            className="group rounded-xl p-3.5 flex items-center justify-between"
+            style={{ background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text)" }}
+            onClick={haptic}
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <div
+                className="h-9 w-9 rounded-lg grid place-items-center"
+                style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}
+              >
+                {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
+              </div>
+              <span className="min-w-0">
+                <div className="text-[15px] font-semibold truncate">{t.name}</div>
+                {t.description && (
+                  <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+                    {t.description}
                   </div>
-                </div>
-              </nav>
+                )}
+              </span>
+              {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
+            </span>
+            <ArrowRight
+              size={18}
+              className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150"
+              style={{ color: "var(--orange)" }}
+            />
+          </Link>
+        );
+      })}
+    </div>
+  </div>
+</nav>
+
             </motion.div>
           )}
         </AnimatePresence>

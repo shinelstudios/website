@@ -6,26 +6,53 @@ import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
-import AdminThumbnailsPage from './components/AdminThumbnailsPage';
+import AdminThumbnailsPage from "./components/AdminThumbnailsPage";
 
-import { startHashActionRouter, registerHashAction, routeHash } from "./lib/hashActions";
+import {
+  startHashActionRouter,
+  registerHashAction,
+  routeHash,
+} from "./lib/hashActions";
 
-const ShinelStudiosHomepage = React.lazy(() => import("./components/ShinelStudiosHomepage.jsx"));
-const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
+// --- Lazy imports ---
+const ShinelStudiosHomepage = React.lazy(() =>
+  import("./components/ShinelStudiosHomepage.jsx")
+);
+const VideoEditing = React.lazy(() =>
+  import("./components/VideoEditing.jsx")
+);
 const Branding = React.lazy(() => import("./components/Branding.jsx"));
 const Thumbnails = React.lazy(() => import("./components/Thumbnails.jsx"));
 const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
 const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
-const ProtectedRoute = React.lazy(() => import("./components/ProtectedRoute.jsx"));
-const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
-const AdminUsersPage = React.lazy(() => import("./components/AdminUsersPage.jsx"));
-const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
-
-const ToolsIndex = React.lazy(() => import("./components/tools/ToolsIndex.jsx"));
+const ProtectedRoute = React.lazy(() =>
+  import("./components/ProtectedRoute.jsx")
+);
+const AIStudioPage = React.lazy(() =>
+  import("./components/AIStudioPage.jsx")
+);
+const AdminUsersPage = React.lazy(() =>
+  import("./components/AdminUsersPage.jsx")
+);
+const LiveTemplates = React.lazy(() =>
+  import("./components/LiveTemplates.jsx")
+);
+const ToolsIndex = React.lazy(() =>
+  import("./components/tools/ToolsIndex.jsx")
+);
 const SrtTool = React.lazy(() => import("./components/tools/SrtTool.jsx"));
 const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
-const ThumbnailIdeation = React.lazy(() => import("./components/tools/ThumbnailIdeation.jsx"));
-const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
+const ThumbnailIdeation = React.lazy(() =>
+  import("./components/tools/ThumbnailIdeation.jsx")
+);
+const CustomAIs = React.lazy(() =>
+  import("./components/tools/CustomAIs.jsx")
+);
+
+// ✅ Add WorkPage here
+const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
+
+// ------------------------------------------
 
 function ScrollToHash() {
   const { pathname, hash } = useLocation();
@@ -37,10 +64,12 @@ function ScrollToHash() {
     if (!el) return;
 
     const headerOffset = parseInt(
-      getComputedStyle(document.documentElement).getPropertyValue("--header-h") || 76,
+      getComputedStyle(document.documentElement).getPropertyValue("--header-h") ||
+        76,
       10
     );
-    const offset = el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
+    const offset =
+      el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
     requestAnimationFrame(() => {
       window.scrollTo({ top: offset, behavior: "smooth" });
     });
@@ -56,10 +85,13 @@ function Layout() {
       if (saved) return saved === "dark";
     } catch {}
     if (document.documentElement.classList.contains("dark")) return true;
-    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
+    return (
+      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false
+    );
   });
 
   const location = useLocation();
+
   React.useEffect(() => {
     const headerEl = () => document.querySelector("header");
     const setHeaderVar = () => {
@@ -71,10 +103,13 @@ function Layout() {
     };
     requestAnimationFrame(setHeaderVar);
     window.addEventListener("resize", setHeaderVar);
-    const ro = "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;
+    const ro =
+      "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;
     if (ro && headerEl()) ro.observe(headerEl());
     if (document.fonts?.ready) {
-      document.fonts.ready.then(() => requestAnimationFrame(setHeaderVar)).catch(() => {});
+      document.fonts.ready
+        .then(() => requestAnimationFrame(setHeaderVar))
+        .catch(() => {});
     }
     return () => {
       window.removeEventListener("resize", setHeaderVar);
@@ -88,7 +123,9 @@ function Layout() {
       try {
         localStorage.setItem("theme", isDark ? "dark" : "light");
       } catch {}
-      let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
+      let metaTheme = document.querySelector(
+        'meta[name="theme-color"]:not([media])'
+      );
       if (!metaTheme) {
         metaTheme = document.createElement("meta");
         metaTheme.setAttribute("name", "theme-color");
@@ -102,7 +139,12 @@ function Layout() {
     <>
       <SiteHeader isDark={isDark} setIsDark={setIsDark} />
       <ScrollToHash />
-      <main style={{ paddingTop: "var(--header-h, 76px)", transition: "padding-top 0.25s ease" }}>
+      <main
+        style={{
+          paddingTop: "var(--header-h, 76px)",
+          transition: "padding-top 0.25s ease",
+        }}
+      >
         <Outlet />
       </main>
       <SiteFooter isDark={isDark} />
@@ -124,9 +166,15 @@ function RedirectIfAuthed({ children }) {
 function Logout() {
   React.useEffect(() => {
     try {
-      ["token", "refresh", "userEmail", "userRole", "userFirst", "userLast", "rememberMe"].forEach((k) =>
-        localStorage.removeItem(k)
-      );
+      [
+        "token",
+        "refresh",
+        "userEmail",
+        "userRole",
+        "userFirst",
+        "userLast",
+        "rememberMe",
+      ].forEach((k) => localStorage.removeItem(k));
     } catch {}
     window.dispatchEvent(new Event("auth:changed"));
   }, []);
@@ -158,6 +206,8 @@ export default function App() {
       <Routes key={location.pathname}>
         <Route element={<Layout />}>
           <Route index element={<ShinelStudiosHomepage />} />
+
+          {/* Existing routes */}
           <Route path="/video-editing" element={<VideoEditing />} />
           <Route path="/branding" element={<Branding />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
@@ -166,16 +216,78 @@ export default function App() {
           <Route path="/videos/shorts" element={<Shorts />} />
           <Route path="/gfx/branding" element={<Branding />} />
           <Route path="/gfx/thumbnails" element={<Thumbnails />} />
-          <Route path="/login" element={<RedirectIfAuthed><LoginPage /></RedirectIfAuthed>} />
+
+          {/* ✅ New Work Page */}
+          <Route path="/work" element={<WorkPage />} />
+
+          <Route
+            path="/login"
+            element={
+              <RedirectIfAuthed>
+                <LoginPage />
+              </RedirectIfAuthed>
+            }
+          />
           <Route path="/logout" element={<Logout />} />
-          <Route path="/studio" element={<ProtectedRoute><AIStudioPage /></ProtectedRoute>} />
-          <Route path="/tools" element={<ProtectedRoute><ToolsIndex /></ProtectedRoute>} />
-          <Route path="/tools/srt" element={<ProtectedRoute><AutoSRTTool /></ProtectedRoute>} />
-          <Route path="/tools/seo" element={<ProtectedRoute><SeoTool /></ProtectedRoute>} />
-          <Route path="/tools/thumbnail-ideation" element={<ProtectedRoute><ThumbnailIdeation /></ProtectedRoute>} />
-          <Route path="/tools/custom-ais" element={<ProtectedRoute><CustomAIs /></ProtectedRoute>} />
-          <Route path="/admin/users" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} />
+          <Route
+            path="/studio"
+            element={
+              <ProtectedRoute>
+                <AIStudioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools"
+            element={
+              <ProtectedRoute>
+                <ToolsIndex />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/srt"
+            element={
+              <ProtectedRoute>
+                <AutoSRTTool />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/seo"
+            element={
+              <ProtectedRoute>
+                <SeoTool />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/thumbnail-ideation"
+            element={
+              <ProtectedRoute>
+                <ThumbnailIdeation />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools/custom-ais"
+            element={
+              <ProtectedRoute>
+                <CustomAIs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute>
+                <AdminUsersPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
+
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

@@ -15,6 +15,7 @@ function parseJwt(token) {
     return null;
   }
 }
+
 const daysLeftFromExp = (payload) => {
   if (!payload?.exp) return null;
   const ms = payload.exp * 1000 - Date.now();
@@ -34,25 +35,23 @@ export default function AdminUsersPage() {
     password: "",
   });
 
-  // --- session meta (expiry banner for admin) ---
-  const token = useMemo(() => localStorage.getItem("token") || "", []);
+  // --- token state that updates when auth changes ---
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
   const payload = useMemo(() => (token ? parseJwt(token) : null), [token]);
   const role = (payload?.role || localStorage.getItem("role") || "").toLowerCase();
   const daysLeft = daysLeftFromExp(payload);
 
-  // banner threshold (warn when <= 14 days)
+  // --- derived banner conditions ---
   const showExpiringBanner = role === "admin" && Number.isFinite(daysLeft) && daysLeft <= 14;
 
-  // stable headers + abort controller
-  const authHeaders = useMemo(
-    () => ({ authorization: `Bearer ${localStorage.getItem("token") || ""}` }),
-    []
-  );
+  // --- recompute headers whenever token changes ---
+  const authHeaders = useMemo(() => ({ authorization: `Bearer ${token}` }), [token]);
+
   const abortRef = useRef(null);
 
   async function loadUsers({ warm = false } = {}) {
     setErr("");
-    // If we already have a warm cache, show it instantly on mount
+    // Warm cache
     if (warm) {
       try {
         const cached = sessionStorage.getItem("adminUsersCache");
@@ -63,7 +62,7 @@ export default function AdminUsersPage() {
       } catch {}
     }
 
-    // Abort any in-flight request before issuing a new one
+    // Cancel ongoing request
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -78,7 +77,6 @@ export default function AdminUsersPage() {
       if (!res.ok) throw new Error(data?.error || "Failed to load users");
       const list = data.users || [];
       setUsers(list);
-      // persist warm cache for instant next paint
       sessionStorage.setItem("adminUsersCache", JSON.stringify(list));
     } catch (e) {
       if (e.name !== "AbortError") setErr(e.message || "Error");
@@ -103,7 +101,7 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to create user");
       setForm({ firstName: "", lastName: "", email: "", role: "client", password: "" });
-      await loadUsers(); // refresh list
+      await loadUsers();
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -122,7 +120,7 @@ export default function AdminUsersPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to delete");
-      await loadUsers(); // refresh list
+      await loadUsers();
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -134,16 +132,21 @@ export default function AdminUsersPage() {
     try {
       const refresh = localStorage.getItem("refresh") || "";
       if (!refresh) return alert("No refresh token available");
+
       const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
         method: "POST",
         headers: { authorization: `Bearer ${refresh}` },
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Refresh failed");
+
       // update storage
       localStorage.setItem("token", data.token);
-      data.refresh && localStorage.setItem("refresh", data.refresh);
+      if (data.refresh) localStorage.setItem("refresh", data.refresh);
       if (data.role) localStorage.setItem("role", data.role);
+      setToken(data.token);
+
       window.dispatchEvent(new Event("auth:changed"));
       alert("Session refreshed ✅");
     } catch (e) {
@@ -152,11 +155,14 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    // warm paint from cache, then network in parallel
+    // initial warm paint
     loadUsers({ warm: true });
 
-    // on token/role refresh elsewhere, reload users
-    const onAuthChanged = () => loadUsers();
+    // when token changes externally
+    const onAuthChanged = () => {
+      setToken(localStorage.getItem("token") || "");
+      loadUsers();
+    };
     window.addEventListener("auth:changed", onAuthChanged);
 
     return () => {
@@ -195,18 +201,25 @@ export default function AdminUsersPage() {
         {showExpiringBanner && (
           <div
             className="mb-5 rounded-xl p-4 flex items-start gap-3"
-            style={{ background: "rgba(232,80,2,.1)", border: "1px solid var(--border)", color: "var(--text)" }}
+            style={{
+              background: "rgba(232,80,2,.1)",
+              border: "1px solid var(--border)",
+              color: "var(--text)",
+            }}
           >
             <AlertTriangle size={18} style={{ color: "var(--orange)" }} />
             <div className="text-sm">
-              <b>Heads up:</b> your admin session expires in <b>{daysLeft} days</b>. Auto-refresh is enabled, but if
-              your browser is closed for very long periods, you can tap <i>Refresh session</i> above to roll it forward.
+              <b>Heads up:</b> your admin session expires in <b>{daysLeft} days</b>. Auto-refresh is enabled, but if your
+              browser is closed for very long periods, you can tap <i>Refresh session</i> above to roll it forward.
             </div>
           </div>
         )}
 
         {err && (
-          <div className="mb-4 rounded-lg p-3 text-sm" style={{ background: "var(--surface-alt)", color: "var(--text)" }}>
+          <div
+            className="mb-4 rounded-lg p-3 text-sm"
+            style={{ background: "var(--surface-alt)", color: "var(--text)" }}
+          >
             {err}
           </div>
         )}
@@ -234,7 +247,12 @@ export default function AdminUsersPage() {
                 { value: "client", label: "Client" },
               ]}
             />
-            <Input label="Password" value={form.password} onChange={(v) => setForm({ ...form, password: v })} type="password" />
+            <Input
+              label="Password"
+              value={form.password}
+              onChange={(v) => setForm({ ...form, password: v })}
+              type="password"
+            />
           </div>
           <div className="mt-3">
             <button
@@ -294,33 +312,49 @@ export default function AdminUsersPage() {
   );
 }
 
+// ---- UI helpers ----
 function Input({ label, value, onChange, type = "text" }) {
   return (
     <label className="block">
-      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>{label}</span>
+      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
+        {label}
+      </span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full h-[42px] rounded-lg px-3"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          color: "var(--text)",
+        }}
         required={label !== "Last name"}
       />
     </label>
   );
 }
+
 function Select({ label, value, onChange, options }) {
   return (
     <label className="block">
-      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>{label}</span>
+      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
+        {label}
+      </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full h-[42px] rounded-lg px-3"
-        style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          color: "var(--text)",
+        }}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
         ))}
       </select>
     </label>

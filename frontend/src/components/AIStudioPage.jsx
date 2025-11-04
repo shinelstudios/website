@@ -1,10 +1,10 @@
 // src/components/AIStudioPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LogOut, ChevronDown, ChevronUp, RefreshCcw, Timer } from "lucide-react";
 
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
 
-// Helper: decode JWT payload (no verification)
+// ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
   try {
     const [, payload] = token.split(".");
@@ -15,6 +15,7 @@ function parseJwt(token) {
     return null;
   }
 }
+
 const daysLeftFromExp = (payload) => {
   if (!payload?.exp) return null;
   const ms = payload.exp * 1000 - Date.now();
@@ -34,6 +35,7 @@ export default function AIStudioPage() {
 
   const daysLeft = daysLeftFromExp(payload);
 
+  // Sync local state with global auth changes
   useEffect(() => {
     const onAuth = () => {
       const t = localStorage.getItem("token") || "";
@@ -44,35 +46,42 @@ export default function AIStudioPage() {
     return () => window.removeEventListener("auth:changed", onAuth);
   }, []);
 
+  // Logout clears all keys consistently
   const handleLogout = () => {
     try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh");
-      localStorage.removeItem("userEmail");
-      localStorage.removeItem("role");
-      localStorage.removeItem("firstName");
-      localStorage.removeItem("lastName");
-      localStorage.removeItem("rememberMe");
+      ["token", "refresh", "userEmail", "role", "firstName", "lastName", "rememberMe"].forEach((k) =>
+        localStorage.removeItem(k)
+      );
     } catch {}
     window.dispatchEvent(new Event("auth:changed"));
     window.location.href = "/"; // go Home
   };
 
+  // Manual token refresh
   async function refreshNow() {
     try {
       setRefreshing(true);
       const refresh = localStorage.getItem("refresh") || "";
-      if (!refresh) throw new Error("No refresh token");
+      if (!refresh) throw new Error("No refresh token available");
+
       const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
         method: "POST",
         headers: { authorization: `Bearer ${refresh}` },
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Refresh failed");
+
       localStorage.setItem("token", data.token);
-      data.refresh && localStorage.setItem("refresh", data.refresh);
+      if (data.refresh) localStorage.setItem("refresh", data.refresh);
       if (data.role) localStorage.setItem("role", data.role);
+
+      // Update local state immediately
+      setToken(data.token);
+      setPayload(parseJwt(data.token));
+
       window.dispatchEvent(new Event("auth:changed"));
+      alert("Session refreshed ✅");
     } catch (e) {
       alert(e.message || "Could not refresh");
     } finally {
@@ -95,7 +104,13 @@ export default function AIStudioPage() {
           <div className="text-xs opacity-90">
             <span className="capitalize">{role || "member"}</span>
             {Number.isFinite(daysLeft) && (
-              <span> • Session: {role === "admin" ? `${daysLeft} days (auto-refresh on)` : `${daysLeft} days left`}</span>
+              <span>
+                {" "}
+                • Session:{" "}
+                {role === "admin"
+                  ? `${daysLeft} days (auto-refresh on)`
+                  : `${daysLeft} days left`}
+              </span>
             )}
           </div>
         </div>
@@ -122,13 +137,15 @@ export default function AIStudioPage() {
       {/* Studio Content */}
       <h1 className="text-3xl font-bold mb-3">🎬 Shinel Studios AI Studio</h1>
       <p className="mb-6 text-white/80 text-center max-w-xl">
-        Welcome to the AI Studio. Your tools unlock based on your role. Admins also get a
-        perpetual session via safe background refresh.
+        Welcome to the AI Studio. Your tools unlock based on your role. Admins also
+        get a perpetual session via safe background refresh.
       </p>
 
       {/* Session status card */}
-      <div className="w-full max-w-2xl mb-8 rounded-xl p-4 border"
-           style={{ background: "#121212", borderColor: "#262626" }}>
+      <div
+        className="w-full max-w-2xl mb-8 rounded-xl p-4 border"
+        style={{ background: "#121212", borderColor: "#262626" }}
+      >
         <div className="flex items-center gap-2 text-white/90 mb-2">
           <Timer size={16} />
           <b>Session</b>
@@ -136,13 +153,21 @@ export default function AIStudioPage() {
         {Number.isFinite(daysLeft) ? (
           <div className="text-sm text-white/80">
             {role === "admin" ? (
-              <>Your admin session auto-refreshes in the background. Current token shows <b>{daysLeft}</b> days left.</>
+              <>
+                Your admin session auto-refreshes in the background. Current token
+                shows <b>{daysLeft}</b> days left.
+              </>
             ) : (
-              <>Your session expires in <b>{daysLeft}</b> day(s). You can refresh anytime with the button above.</>
+              <>
+                Your session expires in <b>{daysLeft}</b> day(s). You can refresh
+                anytime with the button above.
+              </>
             )}
           </div>
         ) : (
-          <div className="text-sm text-white/70">No expiry data found in token.</div>
+          <div className="text-sm text-white/70">
+            No expiry data found in token.
+          </div>
         )}
       </div>
 
@@ -162,7 +187,7 @@ export default function AIStudioPage() {
             <code className="block break-all">{token}</code>
             <p className="mt-3 mb-1 text-white/70">Decoded Payload:</p>
             <pre className="bg-black/40 p-2 rounded text-xs">
-{JSON.stringify(payload, null, 2)}
+              {JSON.stringify(payload, null, 2)}
             </pre>
           </div>
         )}
