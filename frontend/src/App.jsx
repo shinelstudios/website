@@ -14,13 +14,14 @@ import {
   routeHash,
 } from "./lib/hashActions";
 
-// --- Lazy imports ---
+/* -------------------------------------------------------------------------- */
+/*                              Lazy Component Imports                        */
+/* -------------------------------------------------------------------------- */
+
 const ShinelStudiosHomepage = React.lazy(() =>
   import("./components/ShinelStudiosHomepage.jsx")
 );
-const VideoEditing = React.lazy(() =>
-  import("./components/VideoEditing.jsx")
-);
+const VideoEditing = React.lazy(() => import("./components/VideoEditing.jsx"));
 const Branding = React.lazy(() => import("./components/Branding.jsx"));
 const Thumbnails = React.lazy(() => import("./components/Thumbnails.jsx"));
 const Shorts = React.lazy(() => import("./components/Shorts.jsx"));
@@ -28,9 +29,7 @@ const LoginPage = React.lazy(() => import("./components/LoginPage.jsx"));
 const ProtectedRoute = React.lazy(() =>
   import("./components/ProtectedRoute.jsx")
 );
-const AIStudioPage = React.lazy(() =>
-  import("./components/AIStudioPage.jsx")
-);
+const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
 const AdminUsersPage = React.lazy(() =>
   import("./components/AdminUsersPage.jsx")
 );
@@ -45,14 +44,13 @@ const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
 const ThumbnailIdeation = React.lazy(() =>
   import("./components/tools/ThumbnailIdeation.jsx")
 );
-const CustomAIs = React.lazy(() =>
-  import("./components/tools/CustomAIs.jsx")
-);
-
-// ✅ Add WorkPage here
+const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
+const Pricing = React.lazy(() => import("./components/Pricing.jsx")); // ✅ New Pricing page route
 
-// ------------------------------------------
+/* -------------------------------------------------------------------------- */
+/*                             Utility Components                             */
+/* -------------------------------------------------------------------------- */
 
 function ScrollToHash() {
   const { pathname, hash } = useLocation();
@@ -70,6 +68,7 @@ function ScrollToHash() {
     );
     const offset =
       el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
+
     requestAnimationFrame(() => {
       window.scrollTo({ top: offset, behavior: "smooth" });
     });
@@ -77,6 +76,10 @@ function ScrollToHash() {
 
   return null;
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                   Layout                                   */
+/* -------------------------------------------------------------------------- */
 
 function Layout() {
   const [isDark, setIsDark] = React.useState(() => {
@@ -92,6 +95,7 @@ function Layout() {
 
   const location = useLocation();
 
+  // Handle dynamic header height CSS variable
   React.useEffect(() => {
     const headerEl = () => document.querySelector("header");
     const setHeaderVar = () => {
@@ -103,6 +107,7 @@ function Layout() {
     };
     requestAnimationFrame(setHeaderVar);
     window.addEventListener("resize", setHeaderVar);
+
     const ro =
       "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;
     if (ro && headerEl()) ro.observe(headerEl());
@@ -111,12 +116,14 @@ function Layout() {
         .then(() => requestAnimationFrame(setHeaderVar))
         .catch(() => {});
     }
+
     return () => {
       window.removeEventListener("resize", setHeaderVar);
       if (ro && headerEl()) ro.unobserve(headerEl());
     };
   }, [location.pathname]);
 
+  // Handle dark/light theme state
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
@@ -152,6 +159,10 @@ function Layout() {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                            Auth Redirect Helpers                            */
+/* -------------------------------------------------------------------------- */
+
 function RedirectIfAuthed({ children }) {
   const isAuthed = React.useMemo(() => {
     try {
@@ -181,6 +192,10 @@ function Logout() {
   return <Navigate to="/" replace />;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   App Root                                 */
+/* -------------------------------------------------------------------------- */
+
 export default function App() {
   const location = useLocation();
 
@@ -205,9 +220,12 @@ export default function App() {
     <React.Suspense fallback={<LoadingScreen />}>
       <Routes key={location.pathname}>
         <Route element={<Layout />}>
+          {/* ---------------------------- Public Pages ---------------------------- */}
           <Route index element={<ShinelStudiosHomepage />} />
+          <Route path="/work" element={<WorkPage />} />
+          <Route path="/pricing" element={<Pricing />} /> {/* ✅ Standalone Pricing page */}
 
-          {/* Existing routes */}
+          {/* ---------------------------- Service Pages --------------------------- */}
           <Route path="/video-editing" element={<VideoEditing />} />
           <Route path="/branding" element={<Branding />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
@@ -217,9 +235,7 @@ export default function App() {
           <Route path="/gfx/branding" element={<Branding />} />
           <Route path="/gfx/thumbnails" element={<Thumbnails />} />
 
-          {/* ✅ New Work Page */}
-          <Route path="/work" element={<WorkPage />} />
-
+          {/* ---------------------------- Auth & Studio --------------------------- */}
           <Route
             path="/login"
             element={
@@ -237,6 +253,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* ------------------------------- Tools -------------------------------- */}
           <Route
             path="/tools"
             element={
@@ -277,6 +295,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* ------------------------------- Admin -------------------------------- */}
           <Route
             path="/admin/users"
             element={
@@ -287,7 +307,7 @@ export default function App() {
           />
           <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
 
-          {/* Fallback */}
+          {/* ----------------------------- Fallback ------------------------------- */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
