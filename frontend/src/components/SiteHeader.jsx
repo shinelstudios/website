@@ -144,6 +144,7 @@ const toolsCatalog = [
   { name: "Viral Thumbnail Ideation", path: "/tools/thumbnail-ideation", icon: Lightbulb, roles: ["admin", "editor", "client"], description: "AI-powered thumbnail concepts that convert" },
   { name: "Custom AIs", path: "/tools/custom-ais", icon: Brain, roles: ["admin"], description: "Configure specialized AI workflows" },
   { name: "Admin • Users", path: "/admin/users", icon: UserCog, roles: ["admin"], description: "Manage team access and permissions" },
+  { name: "Admin • Videos", path: "/admin/videos", icon: Video, roles: ["admin"], description: "Manage video entries & refresh views" },
 ];
 
 /* ---------------- SiteHeader ---------------- */
@@ -805,6 +806,14 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               >
                 <ImageIcon size={18} style={{ color: "var(--orange)" }} />
                 <span>Thumbnails</span>
+              </Link>
+              <Link
+                to="/admin/videos"
+                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                style={{ color: "var(--text)" }}
+              >
+                <ImageIcon size={18} style={{ color: "var(--orange)" }} />
+                <span>Videos</span>
               </Link>
             </>
           )}

@@ -48,6 +48,11 @@ const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx")); // ✅ New Pricing page route
 
+// NEW
+const AdminVideosPage = React.lazy(() =>
+  import("./components/AdminVideosPage.jsx")
+);
+
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
 /* -------------------------------------------------------------------------- */
@@ -306,6 +311,15 @@ export default function App() {
             }
           />
           <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
+          {/* NEW */}
+          <Route
+            path="/admin/videos"
+            element={
+              <ProtectedRoute>
+                <AdminVideosPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ----------------------------- Fallback ------------------------------- */}
           <Route path="*" element={<Navigate to="/" replace />} />

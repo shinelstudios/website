@@ -1,3 +1,4 @@
+// src/components/ProtectedRoute.jsx
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
@@ -15,15 +16,12 @@ function parseJwt(token) {
   }
 }
 
-// --- Refresh token logic ---
+// --- Refresh token logic (cookie-based) ---
 async function tryRefresh() {
-  const refresh = localStorage.getItem("refresh");
-  if (!refresh) return null;
-
   try {
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
-      headers: { authorization: `Bearer ${refresh}` },
+      credentials: "include", // <-- send ss_refresh cookie
     });
 
     if (!res.ok) throw new Error("Refresh failed");
@@ -31,17 +29,15 @@ async function tryRefresh() {
     const data = await res.json().catch(() => ({}));
     if (!data?.token) throw new Error("No token in response");
 
-    // Save new tokens and role consistently
+    // Save new token and role
     localStorage.setItem("token", data.token);
-    if (data.refresh) localStorage.setItem("refresh", data.refresh);
     if (data.role) localStorage.setItem("role", data.role);
 
     window.dispatchEvent(new Event("auth:changed"));
     return data.token;
   } catch (err) {
     console.warn("Token refresh failed:", err);
-    // On failure, clear stored tokens
-    ["token", "refresh", "role"].forEach((k) => localStorage.removeItem(k));
+    ["token", "role"].forEach((k) => localStorage.removeItem(k));
     window.dispatchEvent(new Event("auth:changed"));
     return null;
   }
@@ -91,7 +87,6 @@ export default function ProtectedRoute({ children, roles }) {
     }
 
     checkAuth();
-
     return () => {
       cancelled = true;
     };
