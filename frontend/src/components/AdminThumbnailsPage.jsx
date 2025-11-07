@@ -1443,11 +1443,12 @@ export default function AdminThumbnailsPage() {
 
             <div className="relative">
               <Input
-                label="YouTube URL"
-                value={form.youtubeUrl}
-                onChange={(v) => setForm({ ...form, youtubeUrl: v })}
-                placeholder="https://youtube.com/watch?v=..."
-              />
+  label="YouTube URL (Creator · preferred)"
+  value={form.youtubeUrl}
+  onChange={(v) => setForm({ ...form, youtubeUrl: v })}
+  placeholder="Creator video URL, e.g. https://youtube.com/watch?v=..."
+/>
+
               {form.youtubeUrl && (
                 <div className="absolute right-2 top-8 flex items-center gap-1">
                   <button
@@ -1642,13 +1643,14 @@ export default function AdminThumbnailsPage() {
           )}
 
           {form.youtubeUrl && (
-            <div
-              className="mb-3 p-2 rounded text-xs"
-              style={{ background: "var(--surface)", color: "var(--text-muted)" }}
-            >
-              YouTube URL set.
-            </div>
-          )}
+  <div
+    className="mb-3 p-2 rounded text-xs"
+    style={{ background: "var(--surface)", color: "var(--text-muted)" }}
+  >
+    Creator YouTube URL set. The Worker prefers this URL when deriving the <code>videoId</code>.
+  </div>
+)}
+
 
           <div className="flex gap-2">
             <button
@@ -1693,7 +1695,7 @@ export default function AdminThumbnailsPage() {
                 <th className="text-left p-3">Preview</th>
                 <th className="text-left p-3">Filename</th>
                 <th className="text-left p-3">Category</th>
-                <th className="text-left p-3">YouTube</th>
+                <th className="text-left p-3">YouTube (Creator)</th>
                 <th className="text-left p-3">Views</th>
                 <th className="text-left p-3">Last Updated</th>
                 <th className="text-left p-3">Actions</th>
@@ -2222,14 +2224,16 @@ const Row = memo(function Row({
         {t.youtubeUrl ? (
           <div className="flex items-center gap-2">
             <a
-              href={t.youtubeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs"
-              style={{ color: "var(--orange)" }}
-            >
-              <Eye size={12} /> Open
-            </a>
+  href={t.youtubeUrl}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="inline-flex items-center gap-1 text-xs"
+  style={{ color: "var(--orange)" }}
+  title="Open creator video"
+>
+  <Eye size={12} /> Open
+</a>
+
             {t.videoId && (
               <button
                 className="p-1 text-xs rounded border"

@@ -1,5 +1,5 @@
 // src/components/VideoEditing.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 
 /**
  * Public/Protected read:
@@ -10,6 +10,13 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
  *
  * Endpoint used:
  *   GET  /videos   → { videos: [...] } with ETag
+ *
+ * Enhancements:
+ * - In-page video player (modal with YouTube iframe) → no navigation away.
+ * - "Hype" chip:
+ *      • Uses v.hype or v.hypeScore if present from API
+ *      • Fallback: derived from views & recency (cheap to compute)
+ * - Gentle, CPU-friendly animations (respect prefers-reduced-motion).
  */
 
 const AUTH_BASE =
@@ -20,15 +27,20 @@ const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 /* ---------------- Cache key (ETag) ---------------- */
 const STORAGE_KEY = "videosCacheV1";
 
-/* ---------------- Helpers (copied from Thumbnails style) ---------------- */
+/* ---------------- Helpers (copied / extended) ---------------- */
 function formatViews(count) {
   if (!count || count === 0) return null;
-  if (count >= 1_000_000) return (count / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (count >= 1_000) return (count / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  if (count >= 1_000_000)
+    return (count / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (count >= 1_000)
+    return (count / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
   return Number(count).toLocaleString();
 }
 
-async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 30000, retries = 2 } = {}) {
+async function fetchJSONWithETag(
+  url,
+  { etag, signal, authToken, timeoutMs = 30000, retries = 2 } = {}
+) {
   const attemptOnce = async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -36,7 +48,11 @@ async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 300
       const headers = new Headers();
       if (etag) headers.set("If-None-Match", etag);
       if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
-      const res = await fetch(url, { headers, signal: signal || controller.signal, credentials: "omit" });
+      const res = await fetch(url, {
+        headers,
+        signal: signal || controller.signal,
+        credentials: "omit",
+      });
       const newEtag = res.headers.get("ETag") || null;
 
       if (res.status === 304) {
@@ -55,7 +71,11 @@ async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 300
       }
       const text = await res.text();
       let data = null;
-      try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = { raw: text };
+      }
       return { status: res.status, etag: newEtag, data };
     } finally {
       clearTimeout(timer);
@@ -64,10 +84,15 @@ async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 300
 
   let lastErr;
   for (let i = 0; i <= retries; i++) {
-    try { return await attemptOnce(); }
-    catch (e) {
+    try {
+      return await attemptOnce();
+    } catch (e) {
       lastErr = e;
-      const retriable = e?.name === "AbortError" || e?.status === 429 || (e?.status >= 500 && e?.status < 600) || !e?.status;
+      const retriable =
+        e?.name === "AbortError" ||
+        e?.status === 429 ||
+        (e?.status >= 500 && e?.status < 600) ||
+        !e?.status;
       if (i < retries && retriable) {
         const backoff = 400 * Math.pow(2, i) + Math.floor(Math.random() * 150);
         await new Promise((r) => setTimeout(r, backoff));
@@ -79,35 +104,10 @@ async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 300
   throw lastErr || new Error("Network error");
 }
 
-/* ---------------- Reusable bits (consistent with Thumbnails) ---------------- */
-const SkeletonCard = () => (
-  <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
-    <div className="w-full aspect-[16/9] bg-gray-700/30" />
-    <div className="p-4 space-y-2.5">
-      <div className="h-6 bg-gray-700/30 rounded w-3/4"></div>
-      <div className="h-4 bg-gray-700/30 rounded w-1/2"></div>
-      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
-    </div>
-  </div>
-);
-
-function ProtectedImg({ src, alt, className = "", onError, onLoad, fetchpriority = "auto" }) {
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={`select-none ${className}`}
-      onContextMenu={(e) => e.preventDefault()}
-      onDragStart={(e) => e.preventDefault()}
-      onError={onError}
-      onLoad={onLoad}
-      loading="lazy"
-      decoding="async"
-      fetchpriority={fetchpriority}
-      draggable="false"
-    />
-  );
-}
+/* ---------------- CPU-friendly micro-animations ---------------- */
+const canAnimate =
+  typeof window !== "undefined" &&
+  !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------------- Main page ---------------- */
 export default function VideoEditing() {
@@ -116,6 +116,11 @@ export default function VideoEditing() {
   const [etag, setEtag] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  // Inline player state
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [activeYouTubeId, setActiveYouTubeId] = useState(null);
+  const [activeTitle, setActiveTitle] = useState("");
 
   // Optional auth for reads (mirrors Thumbnails.jsx)
   const readToken = useMemo(() => {
@@ -140,26 +145,47 @@ export default function VideoEditing() {
 
       if (status !== 304 && data?.videos) {
         // normalize to the fields our UI needs
-        const normalized = data.videos.map((v) => ({
-          id: v.id || v.videoId || v.youtubeId || v.primaryUrl || Math.random().toString(36).slice(2),
-          title: v.title || "",
-          category: v.category || "OTHER",
-          subcategory: v.subcategory || "",
-          kind: v.kind || "LONG",
-          primaryUrl: v.primaryUrl || "",
-          creatorUrl: v.creatorUrl || "",
-          youtubeId: v.videoId || v.youtubeId || extractYouTubeId(v.primaryUrl),
-          // views mapping (fix #1)
-          views: Number(v.youtubeViews ?? v.views ?? 0),
-          lastViewUpdate: v.lastViewUpdate || v.updated || null,
-          tags: Array.isArray(v.tags) ? v.tags : [],
-          // preview image from YouTube if not provided
-          thumb: v.thumb || (v.videoId || v.youtubeId ? `https://img.youtube.com/vi/${v.videoId || v.youtubeId}/hqdefault.jpg` : null),
-        }));
+        const normalized = data.videos.map((v) => {
+          const youtubeId = v.videoId || v.youtubeId || extractYouTubeId(v.primaryUrl) || extractYouTubeId(v.creatorUrl);
+          return {
+            id:
+              v.id ||
+              v.videoId ||
+              v.youtubeId ||
+              v.primaryUrl ||
+              Math.random().toString(36).slice(2),
+            title: v.title || "",
+            category: v.category || "OTHER",
+            subcategory: v.subcategory || "",
+            kind: v.kind || "LONG",
+            primaryUrl: v.primaryUrl || "",
+            creatorUrl: v.creatorUrl || "",
+            youtubeId,
+            // views mapping
+            views: Number(v.youtubeViews ?? v.views ?? 0),
+            lastViewUpdate: v.lastViewUpdate || v.updated || null,
+            tags: Array.isArray(v.tags) ? v.tags : [],
+            // optional hype direct from API
+            hype: typeof v.hype === "number" ? v.hype : typeof v.hypeScore === "number" ? v.hypeScore : null,
+            // preview image from YouTube if not provided
+            thumb:
+              v.thumb ||
+              (youtubeId
+                ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+                : null),
+          };
+        });
 
         setVideos(normalized);
         setEtag(newEtag || null);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ etag: newEtag || null, items: normalized, ts: Date.now() }));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            etag: newEtag || null,
+            items: normalized,
+            ts: Date.now(),
+          })
+        );
       }
     } catch (e) {
       setErr(e.message || "Failed to load videos");
@@ -168,16 +194,41 @@ export default function VideoEditing() {
     }
   }, [readToken]);
 
-  useEffect(() => { loadVideos(); }, [loadVideos]);
+  useEffect(() => {
+    loadVideos();
+  }, [loadVideos]);
+
+  // open inline modal player
+  const openPlayer = useCallback((youtubeId, title = "") => {
+    if (!youtubeId) return;
+    setActiveYouTubeId(youtubeId);
+    setActiveTitle(title || "");
+    setPlayerOpen(true);
+  }, []);
+  const closePlayer = useCallback(() => {
+    setPlayerOpen(false);
+    setTimeout(() => {
+      // allow fade-out before clearing iframe (reduces CPU)
+      setActiveYouTubeId(null);
+      setActiveTitle("");
+    }, 150);
+  }, []);
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <header className="mb-6 sm:mb-8">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight" style={{ color: "var(--text)" }}>
+        <h1
+          className="text-3xl sm:text-4xl font-extrabold tracking-tight"
+          style={{ color: "var(--text)" }}
+        >
           Video Editing
         </h1>
-        <p className="mt-2 text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
-          Hand-picked edits crafted by our team. This list is sourced from the Admin Videos panel.
+        <p
+          className="mt-2 text-sm sm:text-base"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Hand-picked edits crafted by our team. This list is sourced from the
+          Admin Videos panel.
         </p>
       </header>
 
@@ -189,7 +240,9 @@ export default function VideoEditing() {
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-          {Array.from({ length: 9 }).map((_, i) => <SkeletonCard key={i} />)}
+          {Array.from({ length: 9 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       ) : videos.length === 0 ? (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] p-6 text-center">
@@ -198,60 +251,109 @@ export default function VideoEditing() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-          {videos.map((v, idx) => (
-            <VideoCard key={v.id || idx} v={v} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+            {videos.map((v, idx) => (
+              <VideoCard key={v.id || idx} v={v} onPlay={openPlayer} />
+            ))}
+          </div>
+
+          {/* Inline modal player (same tab) */}
+          <VideoPlayerModal
+            open={playerOpen}
+            youtubeId={activeYouTubeId}
+            title={activeTitle}
+            onClose={closePlayer}
+          />
+        </>
       )}
     </section>
   );
 }
 
-/* ---------------- Card (Thumbnails look) ---------------- */
-function VideoCard({ v }) {
+/* ---------------- Card ---------------- */
+function VideoCard({ v, onPlay }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const formattedViews = formatViews(v.views);
-
-  const youtubeId = v.youtubeId || extractYouTubeId(v.primaryUrl);
+  const youtubeId =
+    v.youtubeId || extractYouTubeId(v.primaryUrl) || extractYouTubeId(v.creatorUrl);
   const playable = !!youtubeId;
+
+  // Hype: prefer API-provided; else cheap fallback based on views + freshness
+  const hype = useMemo(() => {
+    if (typeof v.hype === "number") return v.hype;
+    const base =
+      typeof v.hypeScore === "number"
+        ? v.hypeScore
+        : computeFallbackHype(v.views, v.lastViewUpdate);
+    return base;
+  }, [v.hype, v.hypeScore, v.views, v.lastViewUpdate]);
 
   return (
     <article
-      className="group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-all hover:scale-[1.02] hover:shadow-2xl hover:border-[var(--orange)]"
+      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${
+        canAnimate ? "hover:scale-[1.01]" : ""
+      } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
     >
-      <div className="relative w-full aspect-[16/9] bg-black/30 overflow-hidden">
-        {!imageLoaded && <div className="absolute inset-0 bg-gray-700/30 animate-pulse" />}
+      <button
+        type="button"
+        onClick={() => playable && onPlay(youtubeId, v.title)}
+        className="relative w-full aspect-[16/9] bg-black/30 overflow-hidden text-left"
+        aria-label={playable ? "Play video" : "Thumbnail"}
+      >
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-gray-700/30 animate-pulse" />
+        )}
         <ProtectedImg
-          src={v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : "")}
+          src={
+            v.thumb ||
+            (youtubeId
+              ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+              : "")
+          }
           alt={v.title || v.category}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
           onLoad={() => setImageLoaded(true)}
         />
         {playable && (
-          <a
-            href={`https://www.youtube.com/watch?v=${youtubeId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute inset-0 flex items-center justify-center"
-            aria-label="Play video on YouTube"
-          >
-            <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-lg group-hover:shadow-xl">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-black"><path d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-md">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="text-black"
+              >
+                <path d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+              </svg>
               <span className="text-sm font-semibold text-black">Play</span>
             </div>
-          </a>
+          </div>
         )}
-      </div>
+      </button>
 
       <div className="p-4 sm:p-5">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
-            {v.category}{v.subcategory ? <span className="opacity-70"> • {v.subcategory}</span> : null}
+            {v.category}
+            {v.subcategory ? (
+              <span className="opacity-70"> • {v.subcategory}</span>
+            ) : null}
           </span>
           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-gray-700/30 text-gray-300 border-gray-600/30">
             {v.kind || "LONG"}
           </span>
+          {hype != null && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-amber-500/15 text-amber-300 border-amber-500/30"
+              title="Hype (engagement momentum)"
+            >
+              🔥 {formatHype(hype)}
+            </span>
+          )}
         </div>
 
         <h3 className="text-[var(--text)] text-sm sm:text-base font-semibold line-clamp-2 min-h-[2.5rem] leading-tight">
@@ -260,14 +362,25 @@ function VideoCard({ v }) {
 
         <div className="mt-2 flex items-center justify-between gap-3 text-[10px] sm:text-xs text-[var(--text-muted)]">
           {formattedViews && (
-            <div title={v.lastViewUpdate ? `Views last updated ${new Date(v.lastViewUpdate).toLocaleString()}` : ""}>
+            <div
+              title={
+                v.lastViewUpdate
+                  ? `Views last updated ${new Date(
+                      v.lastViewUpdate
+                    ).toLocaleString()}`
+                  : ""
+              }
+            >
               👁️‍🗨️ <span className="font-medium">{formattedViews}</span>
             </div>
           )}
           {v.tags?.length > 0 && (
             <div className="flex items-center gap-2 truncate">
               {v.tags.slice(0, 2).map((t, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-full border text-[10px]">
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-full border text-[10px]"
+                >
                   {t}
                 </span>
               ))}
@@ -278,19 +391,92 @@ function VideoCard({ v }) {
 
         {playable && (
           <div className="mt-3">
-            <a
-              href={`https://www.youtube.com/watch?v=${youtubeId}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => onPlay(youtubeId, v.title)}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-white text-sm"
               style={{ background: "var(--orange)" }}
             >
               ▶ View
-            </a>
+            </button>
           </div>
         )}
       </div>
     </article>
+  );
+}
+
+/* ---------------- Inline Modal Player ---------------- */
+function VideoPlayerModal({ open, youtubeId, title, onClose }) {
+  const refBackdrop = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      ref={refBackdrop}
+      className="fixed inset-0 z-50 grid place-items-center px-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || "Video player"}
+      onMouseDown={(e) => {
+        // close when clicking the backdrop (not the dialog box)
+        if (e.target === refBackdrop.current) onClose();
+      }}
+      style={{
+        background: "rgba(0,0,0,0.6)",
+        transition: "opacity 150ms ease-out",
+      }}
+    >
+      <div
+        className="relative w-full max-w-5xl rounded-xl overflow-hidden border"
+        style={{ borderColor: "var(--border)", background: "black" }}
+      >
+        {/* 16:9 responsive iframe box */}
+        <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+          {youtubeId ? (
+            <iframe
+              key={youtubeId}
+              title={title || "YouTube video"}
+              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`}
+              allow="autoplay; encrypted-media; picture-in-picture; web-share"
+              allowFullScreen
+              className="absolute top-0 left-0 w-full h-full"
+              loading="eager"
+            />
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-semibold"
+          style={{ background: "rgba(255,255,255,0.9)", color: "#111" }}
+          aria-label="Close player"
+        >
+          ✕
+        </button>
+
+        {title ? (
+          <div className="px-3 py-2 text-xs sm:text-sm" style={{ color: "#ddd" }}>
+            {title}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -307,4 +493,61 @@ function extractYouTubeId(url = "") {
     }
   } catch {}
   return null;
+}
+
+// Cheap, bounded "hype" fallback; returns a small integer (0–999)
+function computeFallbackHype(views = 0, lastViewUpdate = null) {
+  if (!views) return 0;
+  const days =
+    lastViewUpdate ? Math.max(0, (Date.now() - Number(lastViewUpdate)) / 86400000) : 7;
+  // fresh videos score slightly higher; very stale capped down
+  const freshness = Math.max(0.5, Math.min(1, 1 - days / 30)); // 0.5–1 range
+  const raw = Math.log10(views + 1) * 100 * freshness; // ~0–(300+) range
+  return Math.round(Math.min(999, raw));
+}
+function formatHype(n) {
+  if (n == null) return null;
+  if (n >= 900) return "S+";
+  if (n >= 750) return "S";
+  if (n >= 600) return "A";
+  if (n >= 450) return "B";
+  if (n >= 300) return "C";
+  return "D";
+}
+
+/* ---------------- Reusable bits ---------------- */
+const SkeletonCard = () => (
+  <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
+    <div className="w-full aspect-[16/9] bg-gray-700/30" />
+    <div className="p-4 space-y-2.5">
+      <div className="h-6 bg-gray-700/30 rounded w-3/4"></div>
+      <div className="h-4 bg-gray-700/30 rounded w-1/2"></div>
+      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
+    </div>
+  </div>
+);
+
+function ProtectedImg({
+  src,
+  alt,
+  className = "",
+  onError,
+  onLoad,
+  fetchpriority = "auto",
+}) {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={`select-none ${className}`}
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
+      onError={onError}
+      onLoad={onLoad}
+      loading="lazy"
+      decoding="async"
+      fetchpriority={fetchpriority}
+      draggable="false"
+    />
+  );
 }
