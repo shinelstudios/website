@@ -786,33 +786,42 @@ function VideoPlayerModal({ open, youtubeId, title, onClose, onNext, onPrev }) {
         style={{
           borderColor: "var(--border)",
           width: `${dims.width}px`,
-          height: `${dims.height}px`,
         }}
       >
-        {youtubeId ? (
-          <iframe
-            key={youtubeId}
-            title={title || "YouTube short"}
-            src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&start=0&vq=highres`}
-            allow="autoplay; encrypted-media; picture-in-picture; web-share"
-            allowFullScreen
-            className="absolute top-0 left-0 w-full h-full"
-            loading="eager"
-          />
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-semibold"
-          style={{ background: "rgba(255,255,255,0.9)", color: "#111" }}
-          aria-label="Close player"
+        {/* Video area – full 9:16, nothing over the bottom so YT controls are free */}
+        <div
+          className="relative w-full"
+          style={{ height: `${dims.height}px` }}
         >
-          ✕
-        </button>
+          {youtubeId ? (
+            <iframe
+              key={youtubeId}
+              title={title || "YouTube short"}
+              // start=0 -> always from beginning
+              // vq=hd1080 -> request highest quality; YouTube may still downgrade
+              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=1&fs=1&start=0&vq=hd1080`}
+              allow="autoplay; encrypted-media; picture-in-picture; web-share"
+              allowFullScreen
+              className="absolute top-0 left-0 w-full h-full"
+              loading="eager"
+            />
+          ) : null}
 
+          {/* Close button only, in the corner – not covering quality/settings */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-semibold"
+            style={{ background: "rgba(255,255,255,0.9)", color: "#111" }}
+            aria-label="Close player"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Our title is now BELOW the player, so it doesn't block YT UI at all */}
         {title ? (
-          <div className="absolute bottom-0 left-0 right-0 px-3 py-2 text-xs sm:text-sm bg-black/55 text-gray-100">
+          <div className="px-3 py-2 text-xs sm:text-sm text-gray-100 bg-black">
             {title}
           </div>
         ) : null}

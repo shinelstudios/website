@@ -1,25 +1,44 @@
 name = "shinel-auth"
 main = "worker.js"
-compatibility_date = "2025-09-11"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
 
-# If you will call this Worker from the browser and want the cookie refresh flow,
-# keep it on workers.dev or add a custom route below.
-# Uncomment to bind to a custom subdomain/route:
-# routes = [
-#   { pattern = "api.shinelstudios.in", custom_domain = true }
-# ]
+# Replace this with your actual account id from `wrangler whoami`
+account_id = "ef97dba03debca21252fabdfee85d006"
 
-[vars]
-# Exactly the sites that will call your API (no trailing slashes)
-ALLOWED_ORIGINS = "https://shinelstudios.in,https://www.shinelstudios.in,http://localhost:5173"
+# --- KV Namespaces ---
+# ✅ KV for thumbnails storage
+[[kv_namespaces]]
+binding = "THUMBNAILS"
+id = "4568299114a9458dabca40cb7d34b506"
 
-# You will set these as SECRETS, not vars:
-# wrangler secret put JWT_SECRET
-# wrangler secret put USERS_JSON
+# ✅ KV for video view cache
+[[kv_namespaces]]
+binding = "VIDEO_VIEWS"
+id = "8df49ad0a82f475994a88ce4d9872c62"
 
-# KV for rate limits + audit log (required by worker.js)
+# ✅ KV for users (if used for auth)
+[[kv_namespaces]]
+binding = "SHINEL_USERS"
+id = "b591c0b101c94327bf80c53e639eb779"
+
+# ✅ KV for audit logs / global data (used by thumbnails & videos)
 [[kv_namespaces]]
 binding = "SHINEL_AUDIT"
-# Replace with your actual namespace IDs after `wrangler kv:namespace create SHINEL_AUDIT`
-id = "<YOUR_KV_NAMESPACE_ID>"
-# (optional) preview_id = "<YOUR_KV_NAMESPACE_PREVIEW_ID>"
+id = "d066d3e9d7d94153a263067a8204ca9e"          # existing PROD KV
+preview_id = "3cbcd4fa6bb448789ca40ec2c42658dd"   # new PREVIEW KV
+
+# ✅ Optional additional namespace (if your auth worker references it)
+[[kv_namespaces]]
+binding = "SHINEL_USERS_PROD"
+id = "f97b96f897114a559bce369f79ec80f2"
+
+# --- Environment Variables ---
+[vars]
+ALLOWED_ORIGINS="https://shinelstudios.in,https://www.shinelstudios.in,https://beta.shinelstudios.in,http://localhost:5173"
+
+# Note: Secrets (JWT_SECRET, USERS_JSON, YOUTUBE_API_KEY) are stored separately via:
+# wrangler secret put JWT_SECRET
+# wrangler secret put USERS_JSON
+# wrangler secret put YOUTUBE_API_KEY
