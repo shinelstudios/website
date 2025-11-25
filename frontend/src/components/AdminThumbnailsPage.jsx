@@ -1003,6 +1003,31 @@ export default function AdminThumbnailsPage() {
     else setSelectedIds(new Set(filtered.map((t) => t.id)));
   };
 
+    const thumbnailStats = useMemo(() => {
+    if (!thumbnails || thumbnails.length === 0) return null;
+
+    const total = thumbnails.length;
+    let withYouTube = 0;
+    const categorySet = new Set();
+    const byVariant = {};
+
+    for (const t of thumbnails) {
+      if (t.youtubeUrl) withYouTube += 1;
+      if (t.category) categorySet.add(t.category);
+      if (t.variant) {
+        byVariant[t.variant] = (byVariant[t.variant] || 0) + 1;
+      }
+    }
+
+    return {
+      total,
+      withYouTube,
+      categories: categorySet.size,
+      byVariant,
+    };
+  }, [thumbnails]);
+
+
   const bulkDelete = async () => {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} selected thumbnail(s)?`)) return;
@@ -1781,18 +1806,31 @@ export default function AdminThumbnailsPage() {
           </table>
         </div>
 
-        {/* Stats */}
-        {stats && (
+                {/* Stats */}
+        {thumbnailStats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-            <StatCard label="Total Thumbnails" value={stats.total || 0} />
-            <StatCard label="With YouTube" value={stats.withYouTube || 0} />
+            {/* Prefer local stats, fall back to /stats.counts if needed */}
             <StatCard
-              label="Categories"
-              value={Object.keys(stats.byCategory || {}).length}
+              label="Total Thumbnails"
+              value={
+                thumbnailStats.total ??
+                stats?.counts?.thumbnails ??
+                0
+              }
             />
             <StatCard
-              label="Live/Video"
-              value={`${stats.byVariant?.LIVE || 0} / ${stats.byVariant?.VIDEO || 0}`}
+              label="With YouTube"
+              value={thumbnailStats.withYouTube || 0}
+            />
+            <StatCard
+              label="Categories"
+              value={thumbnailStats.categories || 0}
+            />
+            <StatCard
+              label="Live / Video"
+              value={`${thumbnailStats.byVariant?.LIVE || 0} / ${
+                thumbnailStats.byVariant?.VIDEO || 0
+              }`}
             />
           </div>
         )}
