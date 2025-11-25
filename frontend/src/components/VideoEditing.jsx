@@ -1,5 +1,12 @@
 // src/components/VideoEditing.jsx
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 /**
  * Public/Protected read:
@@ -17,6 +24,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
  *      • Uses v.hype or v.hypeScore if present from API
  *      • Fallback: derived from views & recency (cheap to compute)
  * - Gentle, CPU-friendly animations (respect prefers-reduced-motion).
+ * - Category filters synced with URL (?category=GAMING) so you can share filtered links.
  */
 
 const AUTH_BASE =
@@ -117,10 +125,16 @@ export default function VideoEditing() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // Filters
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+
   // Inline player state
   const [playerOpen, setPlayerOpen] = useState(false);
   const [activeYouTubeId, setActiveYouTubeId] = useState(null);
   const [activeTitle, setActiveTitle] = useState("");
+
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Optional auth for reads (mirrors Thumbnails.jsx)
   const readToken = useMemo(() => {
@@ -146,35 +160,44 @@ export default function VideoEditing() {
       if (status !== 304 && data?.videos) {
         // normalize to the fields our UI needs
         const normalized = data.videos.map((v) => {
-          const youtubeId = v.videoId || v.youtubeId || extractYouTubeId(v.primaryUrl) || extractYouTubeId(v.creatorUrl);
-          return {
-            id:
-              v.id ||
-              v.videoId ||
-              v.youtubeId ||
-              v.primaryUrl ||
-              Math.random().toString(36).slice(2),
-            title: v.title || "",
-            category: v.category || "OTHER",
-            subcategory: v.subcategory || "",
-            kind: v.kind || "LONG",
-            primaryUrl: v.primaryUrl || "",
-            creatorUrl: v.creatorUrl || "",
-            youtubeId,
-            // views mapping
-            views: Number(v.youtubeViews ?? v.views ?? 0),
-            lastViewUpdate: v.lastViewUpdate || v.updated || null,
-            tags: Array.isArray(v.tags) ? v.tags : [],
-            // optional hype direct from API
-            hype: typeof v.hype === "number" ? v.hype : typeof v.hypeScore === "number" ? v.hypeScore : null,
-            // preview image from YouTube if not provided
-            thumb:
-              v.thumb ||
-              (youtubeId
-                ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-                : null),
-          };
-        });
+  // PRIMARY URL MUST WIN
+  const youtubeId =
+    extractYouTubeId(v.primaryUrl) ||
+    extractYouTubeId(v.creatorUrl) ||
+    v.videoId ||
+    v.youtubeId;
+
+  return {
+    id:
+      v.id ||
+      v.videoId ||
+      v.youtubeId ||
+      v.primaryUrl ||
+      Math.random().toString(36).slice(2),
+    title: v.title || "",
+    category: v.category || "OTHER",
+    subcategory: v.subcategory || "",
+    kind: v.kind || "LONG",
+    primaryUrl: v.primaryUrl || "",
+    creatorUrl: v.creatorUrl || "",
+    youtubeId, // <-- now based on primaryUrl first
+    views: Number(v.youtubeViews ?? v.views ?? 0),
+    lastViewUpdate: v.lastViewUpdate || v.updated || null,
+    tags: Array.isArray(v.tags) ? v.tags : [],
+    hype:
+      typeof v.hype === "number"
+        ? v.hype
+        : typeof v.hypeScore === "number"
+        ? v.hypeScore
+        : null,
+    thumb:
+      v.thumb ||
+      (youtubeId
+        ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+        : null),
+  };
+});
+
 
         setVideos(normalized);
         setEtag(newEtag || null);
@@ -197,6 +220,59 @@ export default function VideoEditing() {
   useEffect(() => {
     loadVideos();
   }, [loadVideos]);
+
+  // Read category from URL on mount / URL change
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cat = params.get("category");
+    if (cat && cat !== categoryFilter) {
+      setCategoryFilter(cat);
+    }
+    if (!cat && categoryFilter !== "ALL") {
+      setCategoryFilter("ALL");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  // All categories available in data
+  const categoryOptions = useMemo(() => {
+    const set = new Set();
+    videos.forEach((v) => {
+      if (v.category) set.add(v.category);
+    });
+    return ["ALL", ...Array.from(set).sort()];
+  }, [videos]);
+
+  // Apply filters
+  const filteredVideos = useMemo(() => {
+    let list = videos;
+    if (categoryFilter !== "ALL") {
+      list = list.filter(
+        (v) => (v.category || "OTHER") === categoryFilter
+      );
+    }
+    return list;
+  }, [videos, categoryFilter]);
+
+  const handleCategoryChange = useCallback(
+    (next) => {
+      setCategoryFilter(next);
+      const params = new URLSearchParams(location.search);
+      if (next === "ALL") {
+        params.delete("category");
+      } else {
+        params.set("category", next);
+      }
+      navigate(
+        {
+          pathname: location.pathname,
+          search: params.toString(),
+        },
+        { replace: false }
+      );
+    },
+    [location.pathname, location.search, navigate]
+  );
 
   // open inline modal player
   const openPlayer = useCallback((youtubeId, title = "") => {
@@ -252,11 +328,58 @@ export default function VideoEditing() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-            {videos.map((v, idx) => (
-              <VideoCard key={v.id || idx} v={v} onPlay={openPlayer} />
-            ))}
+          {/* Filters row */}
+          <div className="mb-4 sm:mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="text-[11px] sm:text-xs mr-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Filter by category:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {categoryOptions.map((cat) => (
+                  <FilterChip
+                    key={cat}
+                    label={cat === "ALL" ? "All" : cat}
+                    active={
+                      (cat === "ALL" && categoryFilter === "ALL") ||
+                      cat === categoryFilter
+                    }
+                    onClick={() => handleCategoryChange(cat)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="sm:ml-auto text-[11px] sm:text-xs">
+              <span style={{ color: "var(--text-muted)" }}>
+                Showing{" "}
+                <strong style={{ color: "var(--text)" }}>
+                  {filteredVideos.length}
+                </strong>{" "}
+                of{" "}
+                <strong style={{ color: "var(--text)" }}>
+                  {videos.length}
+                </strong>{" "}
+                videos
+              </span>
+            </div>
           </div>
+
+          {filteredVideos.length === 0 ? (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] p-6 text-center">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No videos in this category yet. Try another filter or add more
+                in <strong>Tools → Admin • Videos</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+              {filteredVideos.map((v, idx) => (
+                <VideoCard key={v.id || idx} v={v} onPlay={openPlayer} />
+              ))}
+            </div>
+          )}
 
           {/* Inline modal player (same tab) */}
           <VideoPlayerModal
@@ -275,9 +398,9 @@ export default function VideoEditing() {
 function VideoCard({ v, onPlay }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const formattedViews = formatViews(v.views);
-  const youtubeId =
-    v.youtubeId || extractYouTubeId(v.primaryUrl) || extractYouTubeId(v.creatorUrl);
+  const youtubeId = v.youtubeId; // already normalized with primaryUrl priority
   const playable = !!youtubeId;
+
 
   // Hype: prefer API-provided; else cheap fallback based on views + freshness
   const hype = useMemo(() => {
@@ -451,7 +574,7 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
             <iframe
               key={youtubeId}
               title={title || "YouTube video"}
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&start=0&vq=highres`}
               allow="autoplay; encrypted-media; picture-in-picture; web-share"
               allowFullScreen
               className="absolute top-0 left-0 w-full h-full"
@@ -498,8 +621,9 @@ function extractYouTubeId(url = "") {
 // Cheap, bounded "hype" fallback; returns a small integer (0–999)
 function computeFallbackHype(views = 0, lastViewUpdate = null) {
   if (!views) return 0;
-  const days =
-    lastViewUpdate ? Math.max(0, (Date.now() - Number(lastViewUpdate)) / 86400000) : 7;
+  const days = lastViewUpdate
+    ? Math.max(0, (Date.now() - Number(lastViewUpdate)) / 86400000)
+    : 7;
   // fresh videos score slightly higher; very stale capped down
   const freshness = Math.max(0.5, Math.min(1, 1 - days / 30)); // 0.5–1 range
   const raw = Math.log10(views + 1) * 100 * freshness; // ~0–(300+) range
@@ -549,5 +673,22 @@ function ProtectedImg({
       fetchpriority={fetchpriority}
       draggable="false"
     />
+  );
+}
+
+/* ---------------- Filter Chip ---------------- */
+function FilterChip({ label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1 rounded-full text-[11px] sm:text-xs border transition-all ${
+        active
+          ? "bg-[var(--orange)] text-white border-[var(--orange)]"
+          : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
