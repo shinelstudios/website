@@ -46,11 +46,19 @@ const ThumbnailIdeation = React.lazy(() =>
 );
 const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
-const Pricing = React.lazy(() => import("./components/Pricing.jsx")); // ✅ New Pricing page route
+const Pricing = React.lazy(() => import("./components/Pricing.jsx")); // ✅ Pricing page route
 
-// NEW
+// NEW (already in your file)
 const AdminVideosPage = React.lazy(() =>
   import("./components/AdminVideosPage.jsx")
+);
+
+// ✅ NEW: Services pages (add these files in the paths below)
+const ServiceCategoryPage = React.lazy(() =>
+  import("./components/ServiceCategoryPage.jsx")
+);
+const ServiceSubcategoryPage = React.lazy(() =>
+  import("./components/ServiceSubcategoryPage.jsx")
 );
 
 /* -------------------------------------------------------------------------- */
@@ -228,7 +236,16 @@ export default function App() {
           {/* ---------------------------- Public Pages ---------------------------- */}
           <Route index element={<ShinelStudiosHomepage />} />
           <Route path="/work" element={<WorkPage />} />
-          <Route path="/pricing" element={<Pricing />} /> {/* ✅ Standalone Pricing page */}
+          <Route path="/pricing" element={<Pricing />} />
+
+          {/* ---------------------- NEW: Services + Subcategories ---------------------- */}
+          <Route path="/services/:categoryKey" element={<ServiceCategoryPage />} />
+          {/* For now, keep item route on CategoryPage (safe). Later you can swap to a dedicated ItemPage. */}
+          <Route path="/services/:categoryKey/:itemKey" element={<ServiceCategoryPage />} />
+          <Route
+            path="/services/:categoryKey/:itemKey/:subKey"
+            element={<ServiceSubcategoryPage />}
+          />
 
           {/* ---------------------------- Service Pages --------------------------- */}
           <Route path="/video-editing" element={<VideoEditing />} />
@@ -311,7 +328,6 @@ export default function App() {
             }
           />
           <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
-          {/* NEW */}
           <Route
             path="/admin/videos"
             element={
