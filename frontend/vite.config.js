@@ -13,4 +13,18 @@ export default defineConfig({
       "@assets": path.resolve(__dirname, "src/assets"),
     },
   },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+        // keep the path as-is
+        rewrite: (p) => p,
+      },
+    },
+  },
 });
