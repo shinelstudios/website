@@ -5,22 +5,41 @@ import { Lock, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "";
 
-// Safe, tiny JWT parse (no crypto)
+// Safe base64url decode + JWT parse (no crypto)
+function base64UrlDecode(str) {
+  try {
+    if (!str) return "";
+    const b64 =
+      str.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((str.length + 3) % 4);
+    const bin = atob(b64);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
 function parseJwt(token) {
   try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decodeURIComponent(escape(json)));
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    const json = base64UrlDecode(parts[1]);
+    return json ? JSON.parse(json) : null;
   } catch {
     return null;
   }
 }
 
+function safeNextPath(next) {
+  // Prevent open-redirects; allow only internal paths
+  if (!next) return "/";
+  return next.startsWith("/") ? next : "/";
+}
+
 export default function LoginPage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const next = params.get("next") || "/";
+  const next = safeNextPath(params.get("next"));
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -35,34 +54,52 @@ export default function LoginPage() {
     e.preventDefault();
     setErr("");
     setLoading(true);
+
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok || !data?.token) {
         setErr("Invalid email or password");
         return;
       }
 
-      // Persist auth
+      const payload = parseJwt(data.token) || {};
+
+      // Normalize + persist auth keys (single source of truth)
       try {
         localStorage.setItem("rememberMe", remember ? "1" : "0");
         localStorage.setItem("token", data.token);
         if (data.refresh) localStorage.setItem("refresh", data.refresh);
-        localStorage.setItem("userEmail", email);
-        if (data.firstName) localStorage.setItem("userFirstName", data.firstName);
-        if (data.lastName) localStorage.setItem("userLastName", data.lastName);
-        if (data.role) localStorage.setItem("userRole", data.role);
+
+        const finalEmail = String(data.email || payload.email || email || "").trim();
+        const finalRole = String(data.role || payload.role || "").trim();
+        const firstName = String(data.firstName || payload.firstName || payload.first_name || "").trim();
+        const lastName = String(data.lastName || payload.lastName || payload.last_name || "").trim();
+
+        if (finalEmail) localStorage.setItem("userEmail", finalEmail);
+        if (finalRole) localStorage.setItem("role", finalRole);        // ✅ normalized
+        if (firstName) localStorage.setItem("firstName", firstName);   // ✅ normalized
+        if (lastName) localStorage.setItem("lastName", lastName);      // ✅ normalized
+
+        // Optional: clean legacy keys (keeps storage tidy)
+        ["userRole", "userFirst", "userLast", "userFirstName", "userLastName"].forEach((k) =>
+          localStorage.removeItem(k)
+        );
       } catch {}
 
       // Let header & guards react
-      window.dispatchEvent(new Event("auth:changed"));
+      try {
+        window.dispatchEvent(new Event("auth:changed"));
+      } catch {}
 
-      // Small delay feels snappier
-      setTimeout(() => nav(next, { replace: true }), 100);
+      // Navigate
+      setTimeout(() => nav(next, { replace: true }), 80);
     } catch {
       setErr("Invalid email or password");
     } finally {
@@ -71,7 +108,10 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="min-h-[70vh] grid place-items-center" style={{ background: "var(--surface)" }}>
+    <section
+      className="min-h-[70vh] grid place-items-center"
+      style={{ background: "var(--surface)" }}
+    >
       <div className="w-full max-w-md mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -80,10 +120,18 @@ export default function LoginPage() {
           style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-9 w-9 rounded-xl grid place-items-center" style={{ background: "rgba(232,80,2,.1)", border: "1px solid var(--border)" }}>
+            <div
+              className="h-9 w-9 rounded-xl grid place-items-center"
+              style={{
+                background: "rgba(232,80,2,.1)",
+                border: "1px solid var(--border)",
+              }}
+            >
               <Lock size={18} style={{ color: "var(--orange)" }} />
             </div>
-            <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>Sign in</h1>
+            <h1 className="text-2xl font-bold" style={{ color: "var(--text)" }}>
+              Sign in
+            </h1>
           </div>
 
           <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
@@ -93,7 +141,11 @@ export default function LoginPage() {
           {err && (
             <div
               className="mb-4 rounded-lg px-3 py-2 text-sm"
-              style={{ color: "#b91c1c", border: "1px solid #7f1d1d", background: "rgba(185,28,28,.08)" }}
+              style={{
+                color: "#b91c1c",
+                border: "1px solid #7f1d1d",
+                background: "rgba(185,28,28,.08)",
+              }}
               role="alert"
             >
               {err}
@@ -143,7 +195,10 @@ export default function LoginPage() {
                   onClick={() => setShow((v) => !v)}
                   className="p-1.5 rounded-lg"
                   aria-label={show ? "Hide password" : "Show password"}
-                  style={{ border: "1px solid var(--border)", background: "var(--surface-alt)" }}
+                  style={{
+                    border: "1px solid var(--border)",
+                    background: "var(--surface-alt)",
+                  }}
                 >
                   {show ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -187,9 +242,15 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-6 text-center text-xs">
-            <Link to="/privacy" style={{ color: "var(--text-muted)" }}>Privacy</Link>
-            <span className="mx-2" style={{ color: "var(--text-muted)" }}>•</span>
-            <Link to="/terms" style={{ color: "var(--text-muted)" }}>Terms</Link>
+            <Link to="/privacy" style={{ color: "var(--text-muted)" }}>
+              Privacy
+            </Link>
+            <span className="mx-2" style={{ color: "var(--text-muted)" }}>
+              •
+            </span>
+            <Link to="/terms" style={{ color: "var(--text-muted)" }}>
+              Terms
+            </Link>
           </div>
         </motion.div>
       </div>

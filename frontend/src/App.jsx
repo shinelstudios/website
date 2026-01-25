@@ -1,10 +1,11 @@
-// src/App.jsx
+// frontend/src/App.jsx
 import React from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import SiteHeader from "./components/SiteHeader.jsx";
 import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
+
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 import AdminThumbnailsPage from "./components/AdminThumbnailsPage";
 
@@ -33,9 +34,6 @@ const AIStudioPage = React.lazy(() => import("./components/AIStudioPage.jsx"));
 const AdminUsersPage = React.lazy(() =>
   import("./components/AdminUsersPage.jsx")
 );
-const LiveTemplates = React.lazy(() =>
-  import("./components/LiveTemplates.jsx")
-);
 const ToolsIndex = React.lazy(() =>
   import("./components/tools/ToolsIndex.jsx")
 );
@@ -46,14 +44,13 @@ const ThumbnailIdeation = React.lazy(() =>
 );
 const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
-const Pricing = React.lazy(() => import("./components/Pricing.jsx")); // ✅ Pricing page route
+const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
 
-// NEW (already in your file)
 const AdminVideosPage = React.lazy(() =>
   import("./components/AdminVideosPage.jsx")
 );
 
-// ✅ NEW: Services pages (add these files in the paths below)
+// ✅ NEW: Services pages
 const ServiceCategoryPage = React.lazy(() =>
   import("./components/ServiceCategoryPage.jsx")
 );
@@ -79,6 +76,7 @@ function ScrollToHash() {
         76,
       10
     );
+
     const offset =
       el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
 
@@ -101,14 +99,12 @@ function Layout() {
       if (saved) return saved === "dark";
     } catch {}
     if (document.documentElement.classList.contains("dark")) return true;
-    return (
-      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false
-    );
+    return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
 
   const location = useLocation();
 
-  // Handle dynamic header height CSS variable
+  // Header height CSS variable
   React.useEffect(() => {
     const headerEl = () => document.querySelector("header");
     const setHeaderVar = () => {
@@ -118,12 +114,14 @@ function Layout() {
         document.documentElement.style.setProperty("--header-h", `${h}px`);
       }
     };
+
     requestAnimationFrame(setHeaderVar);
     window.addEventListener("resize", setHeaderVar);
 
     const ro =
       "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;
     if (ro && headerEl()) ro.observe(headerEl());
+
     if (document.fonts?.ready) {
       document.fonts.ready
         .then(() => requestAnimationFrame(setHeaderVar))
@@ -136,13 +134,14 @@ function Layout() {
     };
   }, [location.pathname]);
 
-  // Handle dark/light theme state
+  // Dark/light theme
   React.useEffect(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.toggle("dark", isDark);
       try {
         localStorage.setItem("theme", isDark ? "dark" : "light");
       } catch {}
+
       let metaTheme = document.querySelector(
         'meta[name="theme-color"]:not([media])'
       );
@@ -190,18 +189,31 @@ function RedirectIfAuthed({ children }) {
 function Logout() {
   React.useEffect(() => {
     try {
+      // ✅ Canonical keys
       [
         "token",
         "refresh",
         "userEmail",
+        "role",
+        "firstName",
+        "lastName",
+        "rememberMe",
+      ].forEach((k) => localStorage.removeItem(k));
+
+      // ✅ Back-compat keys (safe to remove too)
+      [
         "userRole",
         "userFirst",
         "userLast",
-        "rememberMe",
+        "userFirstName",
+        "userLastName",
+        "userEmailAddress",
       ].forEach((k) => localStorage.removeItem(k));
     } catch {}
+
     window.dispatchEvent(new Event("auth:changed"));
   }, []);
+
   return <Navigate to="/" replace />;
 }
 
@@ -214,6 +226,7 @@ export default function App() {
 
   React.useEffect(() => {
     startHashActionRouter();
+
     registerHashAction(/^#\/shorts\/(\w+)$/, ([, id]) => {
       window.dispatchEvent(new CustomEvent("open:short", { detail: { id } }));
     });
@@ -226,6 +239,7 @@ export default function App() {
     registerHashAction(/^#\/tools$/, () => {
       window.dispatchEvent(new Event("open:tools"));
     });
+
     routeHash();
   }, []);
 
@@ -238,10 +252,15 @@ export default function App() {
           <Route path="/work" element={<WorkPage />} />
           <Route path="/pricing" element={<Pricing />} />
 
-          {/* ---------------------- NEW: Services + Subcategories ---------------------- */}
-          <Route path="/services/:categoryKey" element={<ServiceCategoryPage />} />
-          {/* For now, keep item route on CategoryPage (safe). Later you can swap to a dedicated ItemPage. */}
-          <Route path="/services/:categoryKey/:itemKey" element={<ServiceCategoryPage />} />
+          {/* ---------------------- Services + Subcategories ---------------------- */}
+          <Route
+            path="/services/:categoryKey"
+            element={<ServiceCategoryPage />}
+          />
+          <Route
+            path="/services/:categoryKey/:itemKey"
+            element={<ServiceCategoryPage />}
+          />
           <Route
             path="/services/:categoryKey/:itemKey/:subKey"
             element={<ServiceSubcategoryPage />}
@@ -267,6 +286,7 @@ export default function App() {
             }
           />
           <Route path="/logout" element={<Logout />} />
+
           <Route
             path="/studio"
             element={
@@ -277,22 +297,36 @@ export default function App() {
           />
 
           {/* ------------------------------- Tools -------------------------------- */}
+          {/* Keep tools index public or protected as you prefer.
+              Header already gates tool links via /login?next=. */}
           <Route
-            path="/tools"
+  path="/tools"
+  element={
+    <ProtectedRoute>
+      <ToolsIndex />
+    </ProtectedRoute>
+  }
+/>
+
+
+          <Route
+            path="/tools/srt"
             element={
               <ProtectedRoute>
-                <ToolsIndex />
+                <SrtTool />
               </ProtectedRoute>
             }
           />
+
           <Route
-            path="/tools/srt"
+            path="/tools/youtube-captions"
             element={
               <ProtectedRoute>
                 <AutoSRTTool />
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/tools/seo"
             element={
@@ -301,6 +335,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/tools/thumbnail-ideation"
             element={
@@ -309,6 +344,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/tools/custom-ais"
             element={
@@ -327,7 +363,16 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/admin/thumbnails" element={<AdminThumbnailsPage />} />
+
+          <Route
+            path="/admin/thumbnails"
+            element={
+              <ProtectedRoute>
+                <AdminThumbnailsPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/admin/videos"
             element={
