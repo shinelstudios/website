@@ -160,10 +160,7 @@ export const SAMPLE_AFTER = findAssetByBase("sample_after") || svgPlaceholder("A
 
 /* ===================== Enhanced Case Studies (metric-first) ===================== */
 const CaseStudies = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = false;
 
   const MEDIA = import.meta.glob("../assets/case_studies/*.{png,jpg,jpeg,webp,avif,mp4,webm}", {
     eager: true,
@@ -589,10 +586,7 @@ const CaseStudies = () => {
 
 /* ===================== Enhanced Process Section (AI-first) ===================== */
 const ProcessSection = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = false;
 
   const [activeStep, setActiveStep] = useState(null);
 
@@ -985,9 +979,7 @@ const ProcessSection = () => {
 
 /* ===================== Enhanced Testimonials (Video + Analytics, AI-first) ===================== */
 const TestimonialsSection = ({ isDark }) => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const reduceMotion = false;
 
   const TESTIMONIALS = [
     {
@@ -1506,10 +1498,7 @@ const TestimonialsSection = ({ isDark }) => {
 
 /* ===================== Enhanced FAQ Section ===================== */
 const FAQSection = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = false;
 
   const [openFAQ, setOpenFAQ] = useState(null);
 
@@ -1780,9 +1769,7 @@ const FAQSection = () => {
 
 /* ===================== Contact (polished + mobile-first + CPU-friendly) ===================== */
 const ContactCTA = ({ onBook }) => {
-  const reduceMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const reduceMotion = false;
 
   const buildWhatsApp = useCallback(() => {
     let text = CONTACT.whatsappDefaultMessage;
@@ -1942,9 +1929,7 @@ const FloatingWhatsApp = () => {
   const lastScrollY = useRef(0);
   const hideTimeout = useRef(null);
 
-  const reduceMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const reduceMotion = false;
 
   // Simplified visibility logic
   useEffect(() => {
@@ -2498,31 +2483,17 @@ export default function ShinelStudiosHomepage() {
   }
 
   /* CPU-friendly animations - only transform and opacity */
-  @media (prefers-reduced-motion: no-preference) {
-    * {
-      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    /* Optimize animated elements */
-    [class*="motion-"],
-    [class*="animate-"],
-    .animated {
-      will-change: transform, opacity;
-      transform: translate3d(0, 0, 0);
-      -webkit-transform: translate3d(0, 0, 0);
-    }
+  * {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Stop all animations when tab is hidden (performance) */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
+  /* Optimize animated elements */
+  [class*="motion-"],
+  [class*="animate-"],
+  .animated {
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
   }
 
   /* Optimize for 60fps animations */

@@ -38,11 +38,11 @@ const useDeviceType = () => {
       const isMobile = width < 640;
       const isTablet = width >= 640 && width < 1024;
       const isDesktop = width >= 1024;
-      
+
       // Detect low-end device
-      const isLowEnd = navigator.hardwareConcurrency <= 4 || 
-                       /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
+      const isLowEnd = navigator.hardwareConcurrency <= 4 ||
+        /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
       setDeviceType({ isMobile, isTablet, isDesktop, isLowEnd });
     };
 
@@ -73,14 +73,13 @@ export default function RoiCalculator({
   onBook,
   defaults = { views: 10000, posts: 8, ctr: 4.5, lift: 30, rpm: 120 },
 }) {
-  const prefersReducedMotion = useReducedMotion();
   const device = useDeviceType();
-  
+
   // Core inputs
   const [views, setViews] = useState(defaults.views);
   const [posts, setPosts] = useState(defaults.posts);
   const [lift, setLift] = useState(defaults.lift);
-  
+
   // Advanced options
   const [openMore, setOpenMore] = useState(false);
   const [ctr, setCtr] = useState(defaults.ctr);
@@ -104,39 +103,39 @@ export default function RoiCalculator({
 
   /* ---------- Quick presets ---------- */
   const stagePresets = useMemo(() => [
-    { 
-      label: "🌱 Starter", 
+    {
+      label: "🌱 Starter",
       desc: "Starting out",
-      views: 5000, 
-      posts: 4, 
-      ctr: 3.5, 
+      views: 5000,
+      posts: 4,
+      ctr: 3.5,
       rpm: 80,
       color: "#10b981"
     },
-    { 
-      label: "📈 Growing", 
+    {
+      label: "📈 Growing",
       desc: "Building audience",
-      views: 10000, 
-      posts: 8, 
-      ctr: 4.5, 
+      views: 10000,
+      posts: 8,
+      ctr: 4.5,
       rpm: 120,
       color: "#3b82f6"
     },
-    { 
-      label: "⭐ Established", 
+    {
+      label: "⭐ Established",
       desc: "Consistent creator",
-      views: 25000, 
-      posts: 12, 
-      ctr: 5.5, 
+      views: 25000,
+      posts: 12,
+      ctr: 5.5,
       rpm: 180,
       color: "#f59e0b"
     },
-    { 
-      label: "🚀 Pro", 
+    {
+      label: "🚀 Pro",
       desc: "High performer",
-      views: 50000, 
-      posts: 16, 
-      ctr: 6.5, 
+      views: 50000,
+      posts: 16,
+      ctr: 6.5,
       rpm: 250,
       color: "#8b5cf6"
     },
@@ -161,12 +160,12 @@ export default function RoiCalculator({
   useEffect(() => {
     const el = mainCtaRef.current;
     if (!el || !("IntersectionObserver" in window)) return;
-    
+
     const io = new IntersectionObserver(
       (ents) => setCtaOffscreen(!ents[0].isIntersecting),
       { threshold: 0.01, rootMargin: "0px" }
     );
-    
+
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -174,7 +173,7 @@ export default function RoiCalculator({
   /* ---------- Calculation Model ---------- */
   const m = useMemo(() => {
     setIsCalculating(true);
-    
+
     const n = clamp(Number(debouncedPosts) || 0, 0, 120);
     const C = clamp(Number(ctr) || 0, 0.1, 50);
     const L = clamp(Number(debouncedLift) || 0, 0, 200);
@@ -217,7 +216,7 @@ export default function RoiCalculator({
   /* ---------- Handlers ---------- */
   const handleBook = useCallback(() => {
     if (!hasInteracted) setHasInteracted(true);
-    
+
     try {
       window.dispatchEvent(
         new CustomEvent("analytics", {
@@ -234,8 +233,8 @@ export default function RoiCalculator({
           },
         })
       );
-    } catch {}
-    
+    } catch { }
+
     onBook?.();
   }, [hasInteracted, debouncedViews, debouncedPosts, ctr, debouncedLift, rpm, advanced, impressions, m.deltaRevenue, onBook]);
 
@@ -260,12 +259,12 @@ export default function RoiCalculator({
       ``,
       `Generated via CTR Calculator`,
     ].join("\n");
-    
+
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch { }
   }, [ctr, views, posts, rpm, debouncedLift, m, annualDelta]);
 
   const resetCalculator = useCallback(() => {
@@ -295,13 +294,13 @@ export default function RoiCalculator({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: prefersReducedMotion || device.isLowEnd ? 0 : 0.1,
+        staggerChildren: device.isLowEnd ? 0 : 0.1,
       },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: prefersReducedMotion || device.isLowEnd ? 0 : 10 },
+    hidden: { opacity: 0, y: device.isLowEnd ? 0 : 10 },
     visible: {
       opacity: 1,
       y: 0,
@@ -313,7 +312,7 @@ export default function RoiCalculator({
     <section
       aria-labelledby="roi-heading"
       className="py-8 sm:py-12 md:py-16"
-      style={{ 
+      style={{
         background: "var(--surface)",
         WebkitTapHighlightColor: "transparent",
       }}
@@ -325,7 +324,7 @@ export default function RoiCalculator({
         animate="visible"
       >
         {/* Header - Improved mobile typography */}
-        <motion.div 
+        <motion.div
           className="text-center mb-6 sm:mb-8"
           variants={itemVariants}
         >
@@ -336,7 +335,7 @@ export default function RoiCalculator({
           >
             Calculate Your CTR Uplift
           </h2>
-          <p 
+          <p
             className="mt-3 text-sm sm:text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
             style={{ color: "var(--text-muted)" }}
           >
@@ -345,7 +344,7 @@ export default function RoiCalculator({
         </motion.div>
 
         {/* Quick Channel Presets - Mobile Optimized */}
-        <motion.div 
+        <motion.div
           className="mb-6"
           variants={itemVariants}
         >
@@ -364,15 +363,15 @@ export default function RoiCalculator({
                   background: "var(--surface-alt)",
                   WebkitTapHighlightColor: "transparent",
                 }}
-                whileHover={!prefersReducedMotion && !device.isLowEnd ? { 
-                  scale: 1.02, 
+                whileHover={!device.isLowEnd ? {
+                  scale: 1.02,
                   borderColor: preset.color,
                 } : {}}
                 whileTap={{ scale: 0.98 }}
               >
                 <div className="flex items-start justify-between mb-2">
                   <span className="text-lg">{preset.label.split(' ')[0]}</span>
-                  <div 
+                  <div
                     className="w-2 h-2 rounded-full"
                     style={{ background: preset.color }}
                   />
@@ -392,8 +391,8 @@ export default function RoiCalculator({
         <motion.div
           variants={itemVariants}
           className="rounded-2xl p-4 sm:p-6 md:p-8 border-2 mb-5 relative overflow-hidden"
-          style={{ 
-            background: "var(--surface-alt)", 
+          style={{
+            background: "var(--surface-alt)",
             borderColor: "var(--border)",
             willChange: "transform",
           }}
@@ -414,17 +413,17 @@ export default function RoiCalculator({
             <div className="mb-6">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div>
-                  <div 
+                  <div
                     className="text-xs sm:text-sm uppercase tracking-wide mb-2"
                     style={{ color: "var(--text-muted)" }}
                   >
                     💰 Monthly Revenue Increase
                   </div>
-                  <motion.div 
+                  <motion.div
                     className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold font-['Poppins']"
                     style={{ color: "var(--orange)" }}
                     key={m.deltaRevenue}
-                    initial={!prefersReducedMotion && !device.isLowEnd ? { scale: 1.1, opacity: 0.5 } : {}}
+                    initial={!device.isLowEnd ? { scale: 1.1, opacity: 0.5 } : {}}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3 }}
                   >
@@ -506,7 +505,7 @@ export default function RoiCalculator({
             {/* Lift Control - Enhanced Mobile UX */}
             <div className="w-full">
               <div className="flex items-center justify-between mb-3">
-                <label 
+                <label
                   className="text-sm sm:text-base font-semibold"
                   style={{ color: "var(--text)" }}
                   htmlFor="lift-slider"
@@ -559,7 +558,7 @@ export default function RoiCalculator({
                   }}
                   aria-label="Expected CTR lift percentage"
                 />
-                
+
                 {/* Slider markers */}
                 <div className="flex justify-between mt-2 px-1">
                   {[0, 50, 100, 150, 200].map((mark) => (
@@ -612,7 +611,7 @@ export default function RoiCalculator({
                 now={`${ctr.toFixed(1)}%`}
                 next={`${m.newCtr.toFixed(1)}%`}
                 pct={clamp((m.newCtr || 0) / Math.max(ctr || 0.1, 0.1), 0, 4)}
-                prefersReducedMotion={prefersReducedMotion}
+                prefersReducedMotion={false}
               />
               <CompareStatEnhanced
                 label="Views per Video"
@@ -620,7 +619,7 @@ export default function RoiCalculator({
                 now={formatNumber(m.perNow)}
                 next={formatNumber(m.perNew)}
                 pct={clamp((m.perNew || 0) / Math.max(m.perNow || 1, 1), 0, 4)}
-                prefersReducedMotion={prefersReducedMotion}
+                prefersReducedMotion={false}
               />
             </div>
           </div>
@@ -642,7 +641,7 @@ export default function RoiCalculator({
         </motion.div>
 
         {/* Core Inputs - Improved Mobile Layout */}
-        <motion.div 
+        <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4"
           variants={itemVariants}
         >
@@ -755,7 +754,7 @@ export default function RoiCalculator({
                   suffix="%"
                   isMobile={device.isMobile}
                 />
-                
+
                 {/* Quick CTR presets */}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {[3, 4.5, 6, 8].map((c) => (
@@ -827,7 +826,7 @@ export default function RoiCalculator({
                     />
                   </label>
                 </div>
-                
+
                 <fieldset disabled={!advanced} className={!advanced ? "opacity-50" : ""}>
                   <FieldEnhanced
                     label="Impressions/video"
@@ -870,7 +869,7 @@ export default function RoiCalculator({
                 {posts} videos/mo · RPM {formatINR(rpm)}
               </div>
             </div>
-            
+
             <motion.button
               type="button"
               onClick={copySummary}
@@ -910,9 +909,9 @@ export default function RoiCalculator({
               background: "linear-gradient(135deg, var(--orange), #ff9357)",
               willChange: "transform",
             }}
-            whileHover={!prefersReducedMotion && !device.isLowEnd ? { 
-              scale: 1.02, 
-              boxShadow: "0 12px 24px rgba(232,80,2,0.3)" 
+            whileHover={!device.isLowEnd ? {
+              scale: 1.02,
+              boxShadow: "0 12px 24px rgba(232,80,2,0.3)"
             } : {}}
             whileTap={{ scale: 0.98 }}
             aria-label="Book an audit to achieve this uplift"
@@ -951,81 +950,81 @@ export default function RoiCalculator({
       </motion.div>
 
       {/* Floating Mobile CTA - Coordinated with WhatsApp button */}
-<AnimatePresence>
-  {ctaOffscreen && hasInteracted && device.isMobile && (
-    <motion.div
-      initial={{ y: 100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 100, opacity: 0 }}
-      onAnimationStart={() => {
-        // Notify WhatsApp button to hide
-        window.dispatchEvent(
-          new CustomEvent("roi:cta:visible", { detail: { visible: true } })
-        );
-      }}
-      onAnimationComplete={(definition) => {
-        if (definition.opacity === 0) {
-          // Notify WhatsApp button it can show again
-          window.dispatchEvent(
-            new CustomEvent("roi:cta:visible", { detail: { visible: false } })
-          );
-        }
-      }}
-      transition={{ 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 30,
-        mass: 0.8 
-      }}
-      className="fixed left-0 right-0 z-45"
-      style={{
-        bottom: "max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))",
-        paddingLeft: "16px",
-        paddingRight: "16px",
-      }}
-    >
-      <motion.div
-        className="max-w-md mx-auto rounded-2xl shadow-2xl p-3 flex items-center justify-between gap-3"
-        style={{
-          background: "var(--surface)",
-          border: "2px solid var(--orange)",
-          boxShadow: "0 12px 40px rgba(232,80,2,0.35), 0 0 0 1px rgba(255,255,255,0.1)",
-          willChange: "transform",
-          transform: "translate3d(0, 0, 0)",
-          WebkitTransform: "translate3d(0, 0, 0)",
-          WebkitTapHighlightColor: "transparent",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-        }}
-        whileHover={!prefersReducedMotion && !device.isLowEnd ? { scale: 1.02 } : {}}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
-            💰 Monthly Potential
-          </div>
-          <div className="text-lg font-bold leading-tight" style={{ color: "var(--orange)" }}>
-            {formatINR(m.deltaRevenue)}
-          </div>
-        </div>
-        
-        <motion.button
-          onClick={handleBook}
-          className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-lg"
-          style={{
-            background: "linear-gradient(135deg, var(--orange), #ff9357)",
-            willChange: "transform",
-            transform: "translate3d(0, 0, 0)",
-            WebkitTransform: "translate3d(0, 0, 0)",
-          }}
-          whileTap={{ scale: 0.95 }}
-          aria-label="Book strategy call"
-        >
-          Book Call →
-        </motion.button>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+      <AnimatePresence>
+        {ctaOffscreen && hasInteracted && device.isMobile && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            onAnimationStart={() => {
+              // Notify WhatsApp button to hide
+              window.dispatchEvent(
+                new CustomEvent("roi:cta:visible", { detail: { visible: true } })
+              );
+            }}
+            onAnimationComplete={(definition) => {
+              if (definition.opacity === 0) {
+                // Notify WhatsApp button it can show again
+                window.dispatchEvent(
+                  new CustomEvent("roi:cta:visible", { detail: { visible: false } })
+                );
+              }
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 30,
+              mass: 0.8
+            }}
+            className="fixed left-0 right-0 z-45"
+            style={{
+              bottom: "max(16px, calc(env(safe-area-inset-bottom, 16px) + 8px))",
+              paddingLeft: "16px",
+              paddingRight: "16px",
+            }}
+          >
+            <motion.div
+              className="max-w-md mx-auto rounded-2xl shadow-2xl p-3 flex items-center justify-between gap-3"
+              style={{
+                background: "var(--surface)",
+                border: "2px solid var(--orange)",
+                boxShadow: "0 12px 40px rgba(232,80,2,0.35), 0 0 0 1px rgba(255,255,255,0.1)",
+                willChange: "transform",
+                transform: "translate3d(0, 0, 0)",
+                WebkitTransform: "translate3d(0, 0, 0)",
+                WebkitTapHighlightColor: "transparent",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+              }}
+              whileHover={!device.isLowEnd ? { scale: 1.02 } : {}}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
+                  💰 Monthly Potential
+                </div>
+                <div className="text-lg font-bold leading-tight" style={{ color: "var(--orange)" }}>
+                  {formatINR(m.deltaRevenue)}
+                </div>
+              </div>
+
+              <motion.button
+                onClick={handleBook}
+                className="shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, var(--orange), #ff9357)",
+                  willChange: "transform",
+                  transform: "translate3d(0, 0, 0)",
+                  WebkitTransform: "translate3d(0, 0, 0)",
+                }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Book strategy call"
+              >
+                Book Call →
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Enhanced Slider Styles */}
       <style>{`
         /* Custom range slider - iOS-optimized */
@@ -1185,7 +1184,7 @@ function FieldEnhanced({
 }
 
 /* ---------- Enhanced Comparison Component ---------- */
-function CompareStatEnhanced({ label, icon, now, next, pct, prefersReducedMotion }) {
+function CompareStatEnhanced({ label, icon, now, next, pct }) {
   const pctClamped = clamp((pct || 0) * 25, 0, 100);
   const nowWidth = clamp(100 / Math.max(pct || 1, 1), 15, 100);
 
@@ -1202,31 +1201,31 @@ function CompareStatEnhanced({ label, icon, now, next, pct, prefersReducedMotion
           <span>{icon}</span>
           <span>{label}</span>
         </div>
-        <div className="text-xs px-2 py-1 rounded-full" style={{ 
-          background: "rgba(232,80,2,0.1)", 
-          color: "var(--orange)" 
+        <div className="text-xs px-2 py-1 rounded-full" style={{
+          background: "rgba(232,80,2,0.1)",
+          color: "var(--orange)"
         }}>
           {((pct - 1) * 100).toFixed(0)}% ↑
         </div>
       </div>
-      
+
       <div className="space-y-2">
-        <BarEnhanced label={now} widthPct={nowWidth} muted prefersReducedMotion={prefersReducedMotion} />
-        <BarEnhanced label={next} widthPct={pctClamped} highlight prefersReducedMotion={prefersReducedMotion} />
+        <BarEnhanced label={now} widthPct={nowWidth} muted />
+        <BarEnhanced label={next} widthPct={pctClamped} highlight />
       </div>
     </div>
   );
 }
 
-function BarEnhanced({ label, widthPct, highlight, muted, prefersReducedMotion }) {
+function BarEnhanced({ label, widthPct, highlight, muted }) {
   return (
-    <div 
-      className="w-full h-10 sm:h-12 rounded-lg overflow-hidden border-2" 
+    <div
+      className="w-full h-10 sm:h-12 rounded-lg overflow-hidden border-2"
       style={{ borderColor: "var(--border)" }}
     >
       <motion.div
         className="h-full flex items-center justify-between px-3 whitespace-nowrap"
-        initial={!prefersReducedMotion ? { width: 0 } : { width: `${clamp(widthPct, 10, 100)}%` }}
+        initial={{ width: 0 }}
         animate={{ width: `${clamp(widthPct, 10, 100)}%` }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         style={{

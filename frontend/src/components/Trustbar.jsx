@@ -12,8 +12,6 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  *
  * Props:
  * - items: Array<{icon: React.ComponentType, text: string}>
- * - prefersReduced: boolean (optional override)
- * - forceMotion: boolean (ignore reduced-motion)
  * - speedPps: number (pixels per second, default 40)
  * - direction: "rtl" | "ltr" (default "rtl")
  * - gapRem: number (gap between items in rem, default 2)
@@ -23,8 +21,6 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  */
 const TrustBar = ({
   items,
-  prefersReduced: prefersReducedProp,
-  forceMotion = false,
   speedPps = 40, // [MODIFIED] Changed to pixels-per-second
   direction = "rtl",
   gapRem = 2,
@@ -48,28 +44,6 @@ const TrustBar = ({
   const [animationDuration, setAnimationDuration] = useState("60s"); // Default duration
   const [animationDistance, setAnimationDistance] = useState("0px");
 
-  const [prefersReduced, setPrefersReduced] = useState(() => {
-    if (typeof prefersReducedProp === "boolean") return prefersReducedProp;
-    if (typeof window !== "undefined" && window.matchMedia) {
-      try {
-        return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      } catch {}
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (typeof prefersReducedProp === "boolean") {
-      setPrefersReduced(prefersReducedProp);
-      return;
-    }
-    if (!window.matchMedia) return;
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const handler = (e) => setPrefersReduced(!!e.matches);
-    m.addEventListener?.("change", handler);
-    return () => m.removeEventListener?.("change", handler);
-  }, [prefersReducedProp]);
-
   // [NEW] We only need two copies for a seamless loop
   const duplicatedItems = useMemo(() => [...elements, ...elements], [elements]);
 
@@ -79,7 +53,7 @@ const TrustBar = ({
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       setIsIOS(iOS);
-    } catch {}
+    } catch { }
   }, []);
 
   // [NEW] Measure segment width and calculate animation properties
@@ -92,16 +66,16 @@ const TrustBar = ({
 
       // Calculate gap in pixels based on root font size
       gapPx.current = parseFloat(getComputedStyle(document.documentElement).fontSize) * gapRem;
-      
+
       const segmentWidth = seg.scrollWidth;
       // Total distance to travel = width of segment + gap between segments
-      const totalDistance = segmentWidth + gapPx.current; 
-      
+      const totalDistance = segmentWidth + gapPx.current;
+
       const pxPerSec = Math.max(10, Number(speedPps) || 40);
       const durationSec = totalDistance / pxPerSec;
 
       setAnimationDuration(`${durationSec.toFixed(3)}s`);
-      setAnimationDistance(`${totalDistance.toFixed(2)}px`); 
+      setAnimationDistance(`${totalDistance.toFixed(2)}px`);
     };
 
     // Initial calculation on mount, after layout
@@ -114,7 +88,7 @@ const TrustBar = ({
         ro.observe(segmentRef.current);
       }
     }
-    
+
     // Always add resize listener for fallback and to catch rem/font-size changes
     window.addEventListener('resize', updateMarqueeMetrics);
 
@@ -165,7 +139,6 @@ const TrustBar = ({
   }, [isIOS, boostOnHover]);
 
 
-  const showStatic = prefersReduced && !forceMotion;
   const animateDir = direction === "rtl" ? "rtl" : "ltr";
   const baseDuration = parseFloat(animationDuration) || 60;
   const boostedDuration = Math.max(2, baseDuration * boostFactor);
@@ -191,126 +164,92 @@ const TrustBar = ({
         ["--animation-distance"]: animationDistance,
       }}
     >
-      {showStatic ? (
+      <div
+        ref={containerRef}
+        className={`marquee-container dir-${animateDir}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd} // [FIX] Handle touch cancel
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          cursor: "default", // [FIX] No 'ew-resize'
+          WebkitUserSelect: "none",
+          userSelect: "none",
+        }}
+      >
+        {/* fade masks */}
         <div
-          className="static-trust-bar"
+          className="marquee-mask-left"
           style={{
-            padding: "0.625rem 1rem",
-            display: "flex",
-            // [FIX] No 'gap', use margin fallback (see CSS)
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            WebkitOverflowScrolling: "touch",
+            position: "absolute",
+            left: 0, top: 0, bottom: 0,
+            width: "var(--marquee-mask)",
+            background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
+            zIndex: 1,
+            pointerEvents: "none",
           }}
-        >
-          {elements.map((item, i) => (
-            <div
-              key={`static-${i}`}
-              className="static-trust-item"
-              style={{
-                whiteSpace: "nowrap",
-                fontSize: "clamp(0.6875rem, 1.5vw, 0.875rem)", // [FIX] Consistent font size
-                color: "var(--text)",
-                display: "inline-flex",
-                gap: "0.5rem", // 'gap' inside item is fine
-                alignItems: "center",
-                flexShrink: 0,
-              }}
-            >
-              {item.icon && <item.icon size={14} style={{ color: "var(--orange)", flexShrink: 0 }} />}
-              <span>{item.text}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
+        />
         <div
-          ref={containerRef}
-          className={`marquee-container dir-${animateDir}`}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchEnd} // [FIX] Handle touch cancel
+          className="marquee-mask-right"
           style={{
-            position: "relative",
-            overflow: "hidden",
-            cursor: "default", // [FIX] No 'ew-resize'
-            WebkitUserSelect: "none",
-            userSelect: "none",
+            position: "absolute",
+            right: 0, top: 0, bottom: 0,
+            width: "var(--marquee-mask)",
+            background: "linear-gradient(270deg, var(--header-bg) 0%, transparent 100%)", // [FIX] Corrected gradient direction
+            zIndex: 1,
+            pointerEvents: "none",
           }}
-        >
-          {/* fade masks */}
-          <div
-            className="marquee-mask-left"
-            style={{
-              position: "absolute",
-              left: 0, top: 0, bottom: 0,
-              width: "var(--marquee-mask)",
-              background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            className="marquee-mask-right"
-            style={{
-              position: "absolute",
-              right: 0, top: 0, bottom: 0,
-              width: "var(--marquee-mask)",
-              background: "linear-gradient(270deg, var(--header-bg) 0%, transparent 100%)", // [FIX] Corrected gradient direction
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          />
+        />
 
-          {/* [MODIFIED] New track structure */}
-          <div
-            ref={trackRef}
-            className={`marquee-track ${isPaused || !isVisible ? "paused" : ""}`}
-            style={{
-              display: "flex", // Use flex for the track
-              width: "max-content",
-              alignItems: "center",
-              willChange: "transform",
-              transform: "translate3d(0,0,0)",
-              animation: "marquee-scroll var(--animation-duration) linear infinite",
-              animationDirection: animateDir === 'rtl' ? 'normal' : 'reverse',
-              animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
-              transition: "animation-duration 0.3s ease-out", // Smooth speed boost
-            }}
-          >
-            {/* Segment A (Measured) */}
-            <ul ref={segmentRef} className="marquee-segment">
-              {elements.map((item, i) => (
-                <li key={`item-a-${i}`} className="marquee-item">
-                  {item.icon && (
-                    <item.icon
-                      size={14}
-                      style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
-                    />
-                  )}
-                  <span>{item.text}</span>
-                </li>
-              ))}
-            </ul>
-            {/* Segment B (Clone) */}
-            <ul className="marquee-segment" aria-hidden="true">
-              {elements.map((item, i) => (
-                <li key={`item-b-${i}`} className="marquee-item">
-                  {item.icon && (
-                    <item.icon
-                      size={14}
-                      style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
-                    />
-                  )}
-                  <span>{item.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* [MODIFIED] New track structure */}
+        <div
+          ref={trackRef}
+          className={`marquee-track ${isPaused || !isVisible ? "paused" : ""}`}
+          style={{
+            display: "flex", // Use flex for the track
+            width: "max-content",
+            alignItems: "center",
+            willChange: "transform",
+            transform: "translate3d(0,0,0)",
+            animation: "marquee-scroll var(--animation-duration) linear infinite",
+            animationDirection: animateDir === 'rtl' ? 'normal' : 'reverse',
+            animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
+            transition: "animation-duration 0.3s ease-out", // Smooth speed boost
+          }}
+        >
+          {/* Segment A (Measured) */}
+          <ul ref={segmentRef} className="marquee-segment">
+            {elements.map((item, i) => (
+              <li key={`item-a-${i}`} className="marquee-item">
+                {item.icon && (
+                  <item.icon
+                    size={14}
+                    style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
+                  />
+                )}
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ul>
+          {/* Segment B (Clone) */}
+          <ul className="marquee-segment" aria-hidden="true">
+            {elements.map((item, i) => (
+              <li key={`item-b-${i}`} className="marquee-item">
+                {item.icon && (
+                  <item.icon
+                    size={14}
+                    style={{ color: "var(--orange)", flexShrink: 0, minWidth: 14, minHeight: 14 }}
+                  />
+                )}
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-      )}
+      </div>
 
       <style>{`
 /* =============== TrustBar Scoped Styles & Animations =============== */

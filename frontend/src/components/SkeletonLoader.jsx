@@ -12,12 +12,7 @@ const SkeletonLoader = ({
     className = '',
     animate = true,
 }) => {
-    const reduceMotion =
-        typeof window !== 'undefined' &&
-        window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const shouldAnimate = animate && !reduceMotion;
+    const shouldAnimate = animate;
 
     const pulseAnimation = shouldAnimate
         ? {

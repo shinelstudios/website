@@ -13,7 +13,7 @@ export const CONTACT = {
 };
 
 // API Configuration
-export const AUTH_BASE = import.meta.env.VITE_API_URL || "https://shinel-auth.raghav-ka.workers.dev"; // Fallback to production worker
+export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.shinelstudioofficial.workers.dev"; // Corrected production fallback
 
 // Client Activity Registry (Pulse)
 export const CLIENT_REGISTRY = [

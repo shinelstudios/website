@@ -1,6 +1,6 @@
 // src/components/QuickQuoteBar.jsx
 import React from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 
 /**
@@ -13,9 +13,6 @@ import { Zap } from "lucide-react";
 const QuickQuoteBar = ({ onBook }) => {
   const [showBase, setShowBase] = React.useState(false);        // scrolled enough
   const [nearForm, setNearForm] = React.useState(false);        // hide near lead form
-  const [forcedHidden, setForcedHidden] = React.useState(false); // leadform:visible event
-  const prefersReducedMotion = useReducedMotion();
-
   const [isMobile, setIsMobile] = React.useState(false);
 
   // Detect mobile for positioning
@@ -113,10 +110,7 @@ const QuickQuoteBar = ({ onBook }) => {
       document.dispatchEvent(new CustomEvent("qqb:visible", { detail: { visible: false } }));
   }, [visible]);
 
-  const shimmer =
-    !prefersReducedMotion
-      ? { x: ["-120%", "120%"], transition: { repeat: Infinity, duration: 1.8, ease: "linear" } }
-      : {};
+  const shimmer = { x: ["-120%", "120%"], transition: { repeat: Infinity, duration: 1.8, ease: "linear" } };
 
   if (!visible) return null;
 
@@ -169,18 +163,16 @@ const QuickQuoteBar = ({ onBook }) => {
                 whileHover={{ scale: 1.02, y: -1 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {!prefersReducedMotion && (
-                  <motion.span
-                    aria-hidden="true"
-                    initial={false}
-                    animate={shimmer}
-                    className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3"
-                    style={{
-                      background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%)",
-                      filter: "blur(5px)",
-                    }}
-                  />
-                )}
+                <motion.span
+                  aria-hidden="true"
+                  initial={false}
+                  animate={shimmer}
+                  className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3"
+                  style={{
+                    background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%)",
+                    filter: "blur(5px)",
+                  }}
+                />
                 Get Free Audit
               </motion.button>
 

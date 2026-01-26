@@ -13,15 +13,15 @@ export const ClientStatsProvider = ({ children }) => {
 
         const fetchStats = async () => {
             try {
-                const res = await fetch(`${AUTH_BASE}/clients/stats`);
+                // Try fetching from the main clients endpoint which contains stats
+                const res = await fetch(`${AUTH_BASE}/clients`);
                 if (!res.ok) throw new Error("Failed to fetch client stats");
                 const data = await res.json();
 
                 if (mounted) {
-                    setStats(data.stats || []);
+                    // Expecting { clients: [...] } where each client has subscribers, views, etc.
+                    setStats(data.clients || []);
                     setLoading(false);
-                    // Optional: Log if stale cache was served
-                    if (data.stale) console.warn("Serving stale client stats cache");
                 }
             } catch (err) {
                 console.error("ClientStats Error:", err);

@@ -113,11 +113,6 @@ async function fetchJSONWithETag(
   throw lastErr || new Error("Network error");
 }
 
-/* ---------------- CPU-friendly micro-animations ---------------- */
-const canAnimate =
-  typeof window !== "undefined" &&
-  !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
 /* ---------------- Main page ---------------- */
 export default function VideoEditing() {
   // ONLY server-managed videos (no hard-coded imports)
@@ -427,8 +422,7 @@ function VideoCard({ v, onPlay }) {
 
   return (
     <article
-      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${canAnimate ? "hover:scale-[1.01]" : ""
-        } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
+      className="group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] hover:scale-[1.01] hover:shadow-xl hover:border-[var(--orange)] will-change-transform"
     >
       <button
         type="button"

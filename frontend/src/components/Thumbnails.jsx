@@ -39,15 +39,6 @@ function formatViews(count) {
   return Number(count).toLocaleString();
 }
 
-const prefersReducedMotion = () => {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  try {
-    return window.matchMedia("(prefers-reduced-motion: reduce)")?.matches ?? false;
-  } catch {
-    return false;
-  }
-};
-
 function getItemsPerPage(gridSize) {
   if (typeof window === "undefined") return 12;
   const width = window.innerWidth;
@@ -181,19 +172,17 @@ function ProtectedImg({ src, alt, onError, onLoad, className = "", fetchpriority
 
 /* ---------------- Chip ---------------- */
 const Chip = ({ children, active, onClick }) => {
-  const reducedMotion = prefersReducedMotion();
   return (
     <button
       type="button"
       onClick={onClick}
       className={`
         text-xs sm:text-sm px-4 py-2 rounded-full border font-medium whitespace-nowrap select-none
-        transition-all duration-200
+        transition-all duration-200 hover:scale-105
         ${active
           ? "bg-[var(--orange)] text-white border-[var(--orange)]"
           : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
         }
-        ${reducedMotion ? "!transition-none" : "hover:scale-105"}
       `}
     >
       {children}
@@ -732,7 +721,6 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
 
 /* ---------------- Pagination ---------------- */
 const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) => {
-  const reducedMotion = prefersReducedMotion();
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
@@ -769,8 +757,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
             ${currentPage === 1
               ? "opacity-40 cursor-not-allowed"
-              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"
-              }`
+              : "hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:scale-105"
             }
             transition-all`}
           aria-label="Previous page"
@@ -791,7 +778,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
               className={`min-w-[2.5rem] px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                 ${page === currentPage
                   ? "bg-[var(--orange)] text-white border border-[var(--orange)]"
-                  : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"}`
+                  : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:scale-105"
                 }`}
               aria-current={page === currentPage ? "page" : undefined}
             >
@@ -807,8 +794,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
             ${currentPage === totalPages
               ? "opacity-40 cursor-not-allowed"
-              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"
-              }`
+              : "hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:scale-105"
             }
             transition-all`}
           aria-label="Next page"
@@ -1125,8 +1111,6 @@ export default function Thumbnails() {
     scrollToTop();
   };
 
-  const reducedMotion = prefersReducedMotion();
-
   return (
     <div className="min-h-screen bg-[var(--surface)]">
       <MetaTags
@@ -1155,14 +1139,12 @@ export default function Thumbnails() {
         <section className="pt-28 pb-8 text-center bg-hero">
           <div className="container mx-auto px-3 sm:px-4 md:px-6">
             <h1
-              className={`text-4xl sm:text-6xl font-extrabold text-[var(--text)] ${reducedMotion ? "" : "animate-in fade-in duration-600"
-                }`}
+              className="text-4xl sm:text-6xl font-extrabold text-[var(--text)] animate-in fade-in duration-600"
             >
               Thumbnail <span className="text-[var(--orange)]">Gallery</span>
             </h1>
             <p
-              className={`mt-3 text-base sm:text-lg text-[var(--text-muted)] ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-100"
-                }`}
+              className="mt-3 text-base sm:text-lg text-[var(--text-muted)] animate-in fade-in duration-600 delay-100"
             >
               Designed for clicks. Optimized for retention.
             </p>
@@ -1196,7 +1178,7 @@ export default function Thumbnails() {
             )}
 
             {/* Search */}
-            <div className={`mt-6 max-w-md mx-auto ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-200"}`}>
+            <div className="mt-6 max-w-md mx-auto animate-in fade-in duration-600 delay-200">
               <div className="relative">
                 <input
                   type="text"
@@ -1234,8 +1216,7 @@ export default function Thumbnails() {
 
             {/* Controls (grid + result count) */}
             <div
-              className={`mt-4 flex flex-wrap items-center justify-center gap-3 ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-300"
-                }`}
+              className="mt-4 flex flex-wrap items-center justify-center gap-3 animate-in fade-in duration-600 delay-300"
             >
               {/* Grid size */}
               <div className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
@@ -1264,8 +1245,7 @@ export default function Thumbnails() {
 
             {/* Categories */}
             <div
-              className={`mt-4 flex flex-wrap justify-center gap-2 ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-400"
-                }`}
+              className="mt-4 flex flex-wrap justify-center gap-2 animate-in fade-in duration-600 delay-400"
             >
               {CATEGORY_CHIPS.map((c) => (
                 <Chip key={c} active={c === cat} onClick={() => setCat(c)}>
@@ -1319,7 +1299,7 @@ export default function Thumbnails() {
                   {paginatedItems.map((t, index) => (
                     <div
                       key={t.id}
-                      className={reducedMotion ? "" : "animate-in fade-in duration-400"}
+                      className="animate-in fade-in duration-400"
                       style={{ animationDelay: `${index * 30}ms` }}
                     >
                       <ThumbCard

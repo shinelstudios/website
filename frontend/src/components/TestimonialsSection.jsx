@@ -4,11 +4,9 @@ import { Quote, BarChart3, Wand2, X, Play, ExternalLink } from "lucide-react";
 import { findAssetByBase } from "../lib/helpers"; // Import helper
 
 const TestimonialsSection = ({ isDark }) => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const reduceMotion = false;
 
-  const TESTIMONIALS = [ /* ... (full TESTIMONIALS array) ... */ ];
+  const TESTIMONIALS = [ /* ... (full TESTIMONIALS array) ... */];
   const getAvatar = (key) => findAssetByBase(key);
   const [openVideo, setOpenVideo] = useState(null);
   const [tab, setTab] = useState("all");
@@ -22,7 +20,7 @@ const TestimonialsSection = ({ isDark }) => {
   const HeaderRow = ({ name, tag, avatarKey, color }) => { /* ... */ };
   const VideoCard = ({ item, i }) => { /* ... */ };
   const AnalyticsCard = ({ item, i }) => { /* ... */ };
-  
+
   if (!items || items.length === 0) return null; // Safety check
 
   return (

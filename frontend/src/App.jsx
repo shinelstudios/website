@@ -9,6 +9,7 @@ import LoadingScreen from "./components/LoadingScreen.jsx";
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 const AdminThumbnailsPage = React.lazy(() => import("./components/AdminThumbnailsPage.jsx"));
 import Toaster from "./components/ui/Toaster.jsx";
+import CookieConsent from "./components/CookieConsent.jsx";
 
 import {
   startHashActionRouter,
@@ -65,6 +66,7 @@ const AdminClientsPage = React.lazy(() => import("./components/AdminClientsPage.
 const PortfolioPage = React.lazy(() => import("./components/PortfolioPage.jsx"));
 const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"));
 const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
+const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -176,6 +178,7 @@ function Layout() {
       </main>
       <SiteFooter isDark={isDark} />
       <Toaster />
+      <CookieConsent />
     </>
   );
 }
@@ -299,6 +302,7 @@ export default function App() {
 
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
+          <Route path="/live-templates" element={<LiveTemplates />} />
 
           {/* ---------------------------- Auth & Studio --------------------------- */}
           <Route

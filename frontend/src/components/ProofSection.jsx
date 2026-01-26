@@ -48,10 +48,6 @@ const showcases = [
 
 /* ===================== Enhanced Proof Section ===================== */
 const ProofSection = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   // State to manage the currently selected showcase
   const [activeIndex, setActiveIndex] = useState(0);
   const [countUp, setCountUp] = useState(0);
@@ -88,7 +84,7 @@ const ProofSection = () => {
       return;
     };
 
-    if (!isInView || reduceMotion) {
+    if (!isInView) {
       setCountUp(currentShowcase.stats.ctrIncrease);
       return;
     }
@@ -120,7 +116,7 @@ const ProofSection = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [activeIndex, isInView, reduceMotion, currentShowcase.stats.ctrIncrease]);
+  }, [activeIndex, isInView, currentShowcase.stats.ctrIncrease]);
 
   // Dynamically generate the stats array based on the current showcase
   const stats = [
@@ -170,31 +166,29 @@ const ProofSection = () => {
         }}
         aria-hidden="true"
       />
-      {!reduceMotion && (
-        <>
-          <div
-            className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, var(--orange), transparent 60%)",
-            }}
-            aria-hidden="true"
-          />
-          <div
-            className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, #ff9357, transparent 60%)",
-            }}
-            aria-hidden="true"
-          />
-        </>
-      )}
+      <>
+        <div
+          className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+          style={{
+            background: "radial-gradient(circle, var(--orange), transparent 60%)",
+          }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+          style={{
+            background: "radial-gradient(circle, #ff9357, transparent 60%)",
+          }}
+          aria-hidden="true"
+        />
+      </>
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
         <motion.div
           className="text-center mb-12"
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.5 }}
           style={{ willChange: "transform, opacity" }}
@@ -208,7 +202,7 @@ const ProofSection = () => {
               boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
               willChange: "transform",
             }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
+            whileHover={{ scale: 1.05, y: -2 }}
           >
             <IconImage size={14} />
             Real Results
@@ -252,8 +246,8 @@ const ProofSection = () => {
         {/* Before/After Comparison (Dynamic) */}
         <motion.div
           key={activeIndex}
-          initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-10%" }}
           transition={{ duration: 0.6, delay: 0.1 }}
           style={{ willChange: "transform, opacity" }}
@@ -272,8 +266,8 @@ const ProofSection = () => {
         {/* Animated CTR Badge (Dynamic) */}
         <motion.div
           className="mt-8 flex justify-center"
-          initial={reduceMotion ? {} : { opacity: 0, scale: 0.9 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.3 }}
           style={{ willChange: "transform, opacity" }}
@@ -286,7 +280,7 @@ const ProofSection = () => {
               willChange: "transform",
               WebkitTapHighlightColor: "transparent",
             }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
+            whileHover={{ scale: 1.05, y: -2 }}
           >
             <div className="flex items-baseline gap-1">
               <span className="text-3xl md:text-4xl font-bold text-white">
@@ -305,8 +299,8 @@ const ProofSection = () => {
         {/* Action CTA */}
         <motion.div
           className="mt-6 text-center"
-          initial={reduceMotion ? {} : { opacity: 0 }}
-          whileInView={reduceMotion ? {} : { opacity: 1 }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
         >
           <a
@@ -325,8 +319,8 @@ const ProofSection = () => {
         <motion.div
           className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
           key={`stats-${activeIndex}`}
-          initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.2 }}
           style={{ willChange: "transform, opacity" }}
@@ -341,7 +335,7 @@ const ProofSection = () => {
                 boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                 willChange: "transform",
               }}
-              whileHover={reduceMotion ? {} : { y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
+              whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -368,8 +362,8 @@ const ProofSection = () => {
         <motion.div
           className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs"
           style={{ color: "var(--text-muted)" }}
-          initial={reduceMotion ? {} : { opacity: 0 }}
-          whileInView={reduceMotion ? {} : { opacity: 1 }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >

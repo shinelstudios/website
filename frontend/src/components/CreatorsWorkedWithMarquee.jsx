@@ -101,10 +101,7 @@ const CreatorsWorkedWithMarquee = ({
   forceMotion = false,
   direction = 'left',
 }) => {
-  const prefersReduced =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prefersReduced = false;
 
   // State
   const [isPaused, setIsPaused] = useState(false);
@@ -591,9 +588,6 @@ const CreatorsWorkedWithMarquee = ({
           to   { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          .cw-track.cw-animated { animation: none !important; }
-        }
       `}</style>
     </section>
   );

@@ -286,17 +286,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
 
 
-  const prefersReduced = useMemo(() => {
-    try {
-      return (
-        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
-        false
-      );
-    } catch {
-      return false;
-    }
-  }, []);
-
   useEffect(() => setFaviconForTheme(!!isDark), [isDark]);
 
   const closeAllMenus = useCallback(() => {
@@ -512,7 +501,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           style={{
             color: isActive ? "var(--nav-hover)" : "var(--nav-link)",
             transform:
-              hovered === label && !prefersReduced
+              hovered === label
                 ? "translateY(-1px)"
                 : "translateY(0)",
           }}
@@ -688,7 +677,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     className="flex p-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] relative transition-all duration-200 hover:bg-white/5"
                     style={{
                       color: "var(--text)",
-                      transform: !prefersReduced && notifOpen ? "scale(1.05)" : "scale(1)",
+                      transform: notifOpen ? "scale(1.05)" : "scale(1)",
                     }}
                     aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
                   >
@@ -710,7 +699,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       background: "var(--surface-alt)",
                       border: "1px solid var(--border)",
                       transform:
-                        !prefersReduced && userMenuOpen
+                        userMenuOpen
                           ? "scale(1.02)"
                           : "scale(1)",
                     }}
@@ -736,9 +725,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   <AnimatePresence>
                     {userMenuOpen && (
                       <motion.div
-                        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
-                        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
-                        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+                        initial={{ opacity: 0, scale: 0.98, y: 6 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.98, y: 6 }}
                         className="absolute right-0 mt-3 w-[280px] rounded-2xl shadow-xl overflow-hidden"
                         style={{
                           background: "var(--surface)",
@@ -916,9 +905,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           {isMenuOpen && (
             <motion.div
               id="mobile-menu"
-              initial={prefersReduced ? {} : { opacity: 0, y: -10 }}
-              animate={prefersReduced ? {} : { opacity: 1, y: 0 }}
-              exit={prefersReduced ? {} : { opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="md:hidden fixed left-0 right-0"
               style={{
@@ -953,10 +942,19 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
+                  <MobileCardLink
+                    to="/live"
+                    icon={Radio}
+                    title="Pulse"
+                    subtitle="Live metrics"
+                  />
+                  <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   {auth.isAuthed && (
                     <MobileCardLink to="/dashboard" icon={Shield} title="Hub" subtitle="Manage Studio" />
                   )}
-                  <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                 </div>
 
                 {/* Tools */}
@@ -1050,8 +1048,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
         <TrustBar
           items={trustItems}
-          prefersReduced={prefersReduced}
-          forceMotion={true}
           speed={45}
           direction="rtl"
         />

@@ -15,11 +15,6 @@ import { animations } from "../lib/helpers"; // Assuming helpers are in src/lib/
 
 /* ===================== Enhanced Services Section ===================== */
 const ServicesSection = () => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   const [activeService, setActiveService] = useState(null);
 
   const services = [
@@ -146,26 +141,22 @@ const ServicesSection = () => {
       style={{ background: "var(--surface-alt)" }}
     >
       {/* Ambient background effects */}
-      {!reduceMotion && (
-        <>
-          <div
-            className="absolute top-20 left-10 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, var(--orange), transparent 70%)",
-              animation: "ss-float-slow 20s ease-in-out infinite",
-            }}
-            aria-hidden="true"
-          />
-          <div
-            className="absolute bottom-20 right-10 w-80 h-80 rounded-full opacity-15 blur-3xl pointer-events-none"
-            style={{
-              background: "radial-gradient(circle, #ff9357, transparent 70%)",
-              animation: "ss-float-slow 18s ease-in-out infinite 2s",
-            }}
-            aria-hidden="true"
-          />
-        </>
-      )}
+      <div
+        className="absolute top-20 left-10 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, var(--orange), transparent 70%)",
+          animation: "ss-float-slow 20s ease-in-out infinite",
+        }}
+        aria-hidden="true"
+      />
+      <div
+        className="absolute bottom-20 right-10 w-80 h-80 rounded-full opacity-15 blur-3xl pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, #ff9357, transparent 70%)",
+          animation: "ss-float-slow 18s ease-in-out infinite 2s",
+        }}
+        aria-hidden="true"
+      />
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Section Heading */}
@@ -184,7 +175,7 @@ const ServicesSection = () => {
               background: "rgba(232,80,2,0.08)",
               boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
             }}
-            whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
+            whileHover={{ scale: 1.05, y: -2 }}
           >
             <Zap size={14} />
             AI-first
@@ -219,8 +210,8 @@ const ServicesSection = () => {
                   border: "1px solid var(--border)",
                   background: "var(--surface)",
                 }}
-                initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-                whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
               >
@@ -257,20 +248,18 @@ const ServicesSection = () => {
                 onMouseLeave={() => setActiveService(null)}
               >
                 {/* Gradient glow on hover */}
-                {!reduceMotion && (
-                  <motion.div
-                    className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 pointer-events-none"
-                    style={{
-                      background: s.gradient,
-                      filter: "blur(20px)",
-                      zIndex: -1,
-                    }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: isActive ? 0.15 : 0 }}
-                    transition={{ duration: 0.3 }}
-                    aria-hidden="true"
-                  />
-                )}
+                <motion.div
+                  className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 pointer-events-none"
+                  style={{
+                    background: s.gradient,
+                    filter: "blur(20px)",
+                    zIndex: -1,
+                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: isActive ? 0.15 : 0 }}
+                  transition={{ duration: 0.3 }}
+                  aria-hidden="true"
+                />
 
                 {/* Icon with animated background */}
                 <motion.div
@@ -281,7 +270,7 @@ const ServicesSection = () => {
                       "1px solid color-mix(in oklab, var(--orange) 20%, transparent)",
                   }}
                   animate={
-                    isActive && !reduceMotion
+                    isActive
                       ? {
                         scale: [1, 1.05, 1],
                         rotate: [0, 5, -5, 0],
@@ -293,7 +282,7 @@ const ServicesSection = () => {
                   <div style={{ color: "var(--orange)" }}>{s.icon}</div>
 
                   {/* Pulse effect */}
-                  {isActive && !reduceMotion && (
+                  {isActive && (
                     <motion.div
                       className="absolute inset-0 rounded-2xl"
                       style={{
@@ -383,7 +372,7 @@ const ServicesSection = () => {
                     height="14"
                     viewBox="0 0 24 24"
                     fill="none"
-                    animate={isActive && !reduceMotion ? { x: [0, 4, 0] } : {}}
+                    animate={isActive ? { x: [0, 4, 0] } : {}}
                     transition={{ duration: 1, repeat: Infinity }}
                   >
                     <path
@@ -407,8 +396,8 @@ const ServicesSection = () => {
             background: "var(--surface)",
             border: "1px solid var(--border)",
           }}
-          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
           <svg

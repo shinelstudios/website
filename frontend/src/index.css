@@ -5,67 +5,70 @@
 
 /* ===================== Base (theme vars, defaults, a11y) ===================== */
 @layer base {
+
   /* Brand variables (light & dark) */
-  :root{
-    --orange:#E85002;
+  :root {
+    --orange: #E85002;
 
     /* -------- FOOTER tokens (keeps footer dark on both themes) -------- */
-    --footer-bg:#0d0d0d;                    /* dark footer even on light theme */
-    --footer-text:#fff;
-    --footer-muted:rgba(255,255,255,.7);
-    --footer-input-bg:rgba(255,255,255,.06);
+    --footer-bg: #0d0d0d;
+    /* dark footer even on light theme */
+    --footer-text: #fff;
+    --footer-muted: rgba(255, 255, 255, .7);
+    --footer-input-bg: rgba(255, 255, 255, .06);
 
     /* light tokens */
-    --text:#0D0D0D;
-    --text-muted:rgba(13,13,13,.70);
-    --surface:#FFFFFF;
-    --surface-alt:#FFF9F6;
-    --border:rgba(0,0,0,.10);
-    --header-bg:rgba(255,255,255,.85);
+    --text: #0D0D0D;
+    --text-muted: rgba(13, 13, 13, .70);
+    --surface: #FFFFFF;
+    --surface-alt: #FFF9F6;
+    --border: rgba(0, 0, 0, .10);
+    --header-bg: rgba(255, 255, 255, .85);
 
     /* LIGHT hero background (multi-layer, richer) */
     --hero-bg:
-      linear-gradient(180deg,#fffdfb 0%,#fff8f2 55%, #fff3ea 100%),
-      radial-gradient(750px 420px at 0% -10%, rgba(232,80,2,.06), transparent 60%),
-      radial-gradient(750px 420px at 100% -10%, rgba(255,147,87,.05), transparent 60%);
+      linear-gradient(180deg, #fffdfb 0%, #fff8f2 55%, #fff3ea 100%),
+      radial-gradient(750px 420px at 0% -10%, rgba(232, 80, 2, .06), transparent 60%),
+      radial-gradient(750px 420px at 100% -10%, rgba(255, 147, 87, .05), transparent 60%);
 
-    --nav-link:rgba(13,13,13,.72);
-    --nav-hover:var(--orange);
+    --nav-link: rgba(13, 13, 13, .72);
+    --nav-hover: var(--orange);
 
     /* Layout tokens */
-    --header-h:72px;                /* updated dynamically by header via ResizeObserver */
-    --radius-xl:16px;
-    --shadow-soft:0 8px 24px rgba(0,0,0,.10);
+    --header-h: 72px;
+    /* updated dynamically by header via ResizeObserver */
+    --radius-xl: 16px;
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .10);
 
     /* NEW: help form controls & UA styles pick correct palette */
     color-scheme: light;
   }
 
-  .dark{
+  .dark {
     /* -------- FOOTER tokens (slightly deeper in dark) -------- */
-    --footer-bg:#000;
-    --footer-text:#fff;
-    --footer-muted:rgba(255,255,255,.72);
-    --footer-input-bg:rgba(255,255,255,.08);
+    --footer-bg: #000;
+    --footer-text: #fff;
+    --footer-muted: rgba(255, 255, 255, .72);
+    --footer-input-bg: rgba(255, 255, 255, .08);
 
     /* dark tokens */
-    --text:#FFFFFF;
-    --text-muted:rgba(255,255,255,.72);
-    --surface:#0F0F0F;
-    --surface-alt:#0B0B0B;
-    --border:rgba(255,255,255,.12);
-    --header-bg:rgba(0,0,0,.75);
+    --text: #FFFFFF;
+    --text-muted: rgba(255, 255, 255, .72);
+    --surface: #0F0F0F;
+    --surface-alt: #0B0B0B;
+    --border: rgba(255, 255, 255, .12);
+    --header-bg: rgba(0, 0, 0, .75);
 
     /* DARK hero background (multi-layer, richer) */
     --hero-bg:
-      radial-gradient(900px 500px at -10% -20%, rgba(232,80,2,.14), transparent 55%),
-      radial-gradient(900px 500px at 110% -20%, rgba(232,80,2,.08), transparent 55%),
-      linear-gradient(180deg,#0b0b0b,#101010 45%, #0e0e0e);
+      radial-gradient(900px 500px at -10% -20%, rgba(232, 80, 2, .14), transparent 55%),
+      radial-gradient(900px 500px at 110% -20%, rgba(232, 80, 2, .08), transparent 55%),
+      linear-gradient(180deg, #0b0b0b, #101010 45%, #0e0e0e);
 
-    --nav-link:rgba(255,255,255,.72);
-    --nav-hover:#FFB48A;
+    --nav-link: rgba(255, 255, 255, .72);
+    --nav-hover: #FFB48A;
 
-    --shadow-soft:0 8px 24px rgba(0,0,0,.30);
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .30);
 
     /* NEW */
     color-scheme: dark;
@@ -73,162 +76,353 @@
 
   /* Sparkles theme (driven by .dark on <html>) */
   :root:not(.dark) .ss-sparkle {
-    background: radial-gradient(circle, rgba(232,80,2,.55) 0%, rgba(232,80,2,.25) 38%, rgba(232,80,2,0) 68%);
+    background: radial-gradient(circle, rgba(232, 80, 2, .55) 0%, rgba(232, 80, 2, .25) 38%, rgba(232, 80, 2, 0) 68%);
     filter: blur(.2px);
     mix-blend-mode: multiply;
   }
+
   :root:not(.dark) .ss-sparkle::before,
   :root:not(.dark) .ss-sparkle::after {
-    content: ""; position: absolute; left: 50%; top: 50%;
-    width: calc(var(--s,12px) * 1.4); height: 1px; border-radius: 2px;
-    transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-    background: linear-gradient(90deg, transparent, rgba(232,80,2,.45), transparent); opacity: .6;
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--s, 12px) * 1.4);
+    height: 1px;
+    border-radius: 2px;
+    transform-origin: center center;
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+    background: linear-gradient(90deg, transparent, rgba(232, 80, 2, .45), transparent);
+    opacity: .6;
   }
+
   :root:not(.dark) .ss-sparkle::after {
-    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .5;
+    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg));
+    opacity: .5;
   }
 
   /* CHANGED: keep selector consistent with Tailwind's .dark on <html> */
   .dark .ss-sparkle {
-    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,147,87,.95) 45%, rgba(255,147,87,0) 70%);
-    filter: drop-shadow(0 2px 12px rgba(232,80,2,.35));
+    background: radial-gradient(circle, rgba(255, 255, 255, 1) 0%, rgba(255, 147, 87, .95) 45%, rgba(255, 147, 87, 0) 70%);
+    filter: drop-shadow(0 2px 12px rgba(232, 80, 2, .35));
     mix-blend-mode: screen;
   }
+
   .dark .ss-sparkle::before,
   .dark .ss-sparkle::after {
-    content: ""; position: absolute; left: 50%; top: 50%;
-    width: calc(var(--s,12px) * 1.8); height: 2px; border-radius: 2px;
-    transform-origin: center center; transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent); opacity: .85;
-  }
-  .dark .ss-sparkle::after {
-    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg)); opacity: .75;
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--s, 12px) * 1.8);
+    height: 2px;
+    border-radius: 2px;
+    transform-origin: center center;
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .95), transparent);
+    opacity: .85;
   }
 
-  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
-  body{background:var(--surface);color:var(--text);}
+  .dark .ss-sparkle::after {
+    transform: translate(-50%, -50%) rotate(calc(var(--rot, 0deg) + 90deg));
+    opacity: .75;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--surface);
+    color: var(--text);
+  }
 
   /* Smooth scrolling; reserve space for sticky header */
-  :root{scroll-behavior:smooth;scroll-padding-top:calc(var(--header-h) + 8px);}
+  :root {
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--header-h) + 8px);
+  }
 
   /* Typography polish */
-  p,h1,h2,h3{text-wrap:balance;}
-  img,svg,video,canvas{display:block;max-width:100%;height:auto;}
+  p,
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
 
   /* Better focus for keyboard users */
-  :focus-visible{outline:2px solid var(--orange);outline-offset:2px;}
-  @media (prefers-contrast: more){
-    :focus-visible{outline-width:3px;}
+  :focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-contrast: more) {
+    :focus-visible {
+      outline-width: 3px;
+    }
   }
 
   /* Slightly wider container than Tailwind’s default */
-  @media (min-width:1440px){.container{max-width:1180px}}
-  @media (min-width:1680px){.container{max-width:1280px}}
-
-  /* CHANGED: limit transitions to color props only (avoid layout jank) */
-  *{
-    transition-property: color, background-color, border-color, fill, stroke;
-    transition-duration:.15s; transition-timing-function: linear;
+  @media (min-width:1440px) {
+    .container {
+      max-width: 1180px
+    }
   }
 
-  /* Reduced motion: calm everything */
-  @media (prefers-reduced-motion: reduce){
-    *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
-    html{scroll-behavior:auto;}
+  @media (min-width:1680px) {
+    .container {
+      max-width: 1280px
+    }
+  }
+
+  /* CHANGED: limit transitions to color props only (avoid layout jank) */
+  * {
+    transition-property: color, background-color, border-color, fill, stroke;
+    transition-duration: .15s;
+    transition-timing-function: linear;
   }
 }
 
 /* ===================== Components (buttons, header, chips) ===================== */
-@layer components{
+@layer components {
+
   /* Frosted sticky header surface */
-  .header-blur{
-    background:var(--header-bg);
-    -webkit-backdrop-filter:saturate(140%) blur(10px);
-            backdrop-filter:saturate(140%) blur(10px);
-    box-shadow:var(--shadow-soft);
+  .header-blur {
+    background: var(--header-bg);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    backdrop-filter: saturate(140%) blur(10px);
+    box-shadow: var(--shadow-soft);
   }
 
   /* Brand button (use on all CTAs) */
-  .btn-brand{
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold text-white
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
-    background:linear-gradient(90deg,var(--orange),#ff9357);
-    box-shadow:0 10px 26px rgba(232,80,2,.35), inset 0 0 0 1px rgba(255,255,255,.08);
-    transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
-    will-change:transform, box-shadow;
+  .btn-brand {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
+    background: linear-gradient(90deg, var(--orange), #ff9357);
+    box-shadow: 0 10px 26px rgba(232, 80, 2, .35), inset 0 0 0 1px rgba(255, 255, 255, .08);
+    transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+    will-change: transform, box-shadow;
   }
-  .btn-brand:hover{ transform:translateY(-2px); }
-  .btn-brand:active{ transform:translateY(0); box-shadow:0 6px 16px rgba(232,80,2,.30); }
+
+  .btn-brand:hover {
+    transform: translateY(-2px);
+  }
+
+  .btn-brand:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(232, 80, 2, .30);
+  }
 
   /* Outline/ghost button that adapts to theme */
-  .btn-ghost{
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
-    color:var(--text);
-    background:color-mix(in oklab, var(--surface) 92%, transparent);
-    border:1px solid var(--border);
-    box-shadow:0 4px 12px rgba(0,0,0,.06);
-    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
+    color: var(--text);
+    background: color-mix(in oklab, var(--surface) 92%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .06);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
   }
-  .btn-ghost:hover{ transform:translateY(-2px); border-color:color-mix(in oklab, var(--orange) 35%, var(--border)); }
+
+  .btn-ghost:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--orange) 35%, var(--border));
+  }
 
   /* Soft chip (labels, stat badges) */
-  .chip-soft{
+  .chip-soft {
     @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm;
-    border:1px solid var(--border);
-    background:color-mix(in oklab, var(--surface) 92%, transparent);
-    color:var(--text-muted);
+    border: 1px solid var(--border);
+    background: color-mix(in oklab, var(--surface) 92%, transparent);
+    color: var(--text-muted);
   }
 
   /* Icon-only button size */
-  .icon-btn{
-    @apply inline-flex items-center justify-center rounded-xl w-10 h-10
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
+  .icon-btn {
+    @apply inline-flex items-center justify-center rounded-xl w-10 h-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
   }
 }
 
 /* ===================== Utilities (scrollbars, targets, marquee) ===================== */
-@layer utilities{
-  .ring-focus{
+@layer utilities {
+  .ring-focus {
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
   }
 
-  .no-scrollbar{ scrollbar-width:none; }
-  .no-scrollbar::-webkit-scrollbar{ display:none; }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
 
-  .touch-target{ min-height:44px; min-width:44px; }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 
   /* Quick helper to apply the hero background */
-  .bg-hero{ background: var(--hero-bg); }
+  .bg-hero {
+    background: var(--hero-bg);
+  }
 
-  .mask-fade-x{
-    -webkit-mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
-            mask-image:linear-gradient(to right,transparent,black 24px,black calc(100% - 24px),transparent);
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
   }
 
   /* -------- Marquee utilities (perf + a11y) -------- */
-  @keyframes marquee-rtl{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-50%,0,0)}}
-  @keyframes marquee-ltr{0%{transform:translate3d(-50%,0,0)}100%{transform:translate3d(0,0,0)}}
-
-  .marquee-viewport{ @apply relative overflow-hidden; }
-  .marquee-track{
-    display:inline-flex;
-    width:max-content;
-    will-change:transform;
-  }
-  .animate-marquee-rtl{ animation: marquee-rtl var(--marquee-duration,40s) linear infinite; }
-  .animate-marquee-ltr{ animation: marquee-ltr var(--marquee-duration,40s) linear infinite; }
-
-  @media (hover:hover) and (pointer:fine){
-    .marquee-hover-pause:hover .marquee-track{ animation-play-state:paused; }
-  }
-
-  @media (prefers-reduced-motion: reduce){
-    .animate-marquee-rtl,
-    .animate-marquee-ltr{
-      animation-duration:1ms!important;
-      animation-iteration-count:1!important;
-      transform:none!important;
+  @keyframes marquee-rtl {
+    0% {
+      transform: translate3d(0, 0, 0)
     }
+
+    100% {
+      transform: translate3d(-50%, 0, 0)
+    }
+  }
+
+  @keyframes marquee-ltr {
+    0% {
+      transform: translate3d(-50%, 0, 0)
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0)
+    }
+  }
+
+  .marquee-viewport {
+    @apply relative overflow-hidden;
+  }
+
+  .marquee-track {
+    display: inline-flex;
+    width: max-content;
+    will-change: transform;
+  }
+
+  .animate-marquee-rtl {
+    animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
+  }
+
+  .animate-marquee-ltr {
+    animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
+  }
+
+  @media (hover:hover) and (pointer:fine) {
+    .marquee-hover-pause:hover .marquee-track {
+      animation-play-state: paused;
+    }
+  }
+
+  /* Aurora Animations */
+  @keyframes aurora-1 {
+
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate(20px, -20px) scale(1.1);
+    }
+  }
+
+  @keyframes aurora-2 {
+
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate(-20px, 10px) scale(0.9);
+    }
+  }
+
+  .animate-aurora-1 {
+    animation: aurora-1 10s ease-in-out infinite;
+  }
+
+  .animate-aurora-2 {
+    animation: aurora-2 15s ease-in-out infinite;
+  }
+
+  /* Starfield Animations */
+  @keyframes star-movement-1 {
+    0% {
+      transform: translateY(0);
+    }
+
+    100% {
+      transform: translateY(-2000px);
+    }
+  }
+
+  @keyframes star-movement-2 {
+    0% {
+      transform: translateY(0);
+    }
+
+    100% {
+      transform: translateY(-1000px);
+    }
+  }
+
+  .animate-stars-1 {
+    animation: star-movement-1 150s linear infinite;
+  }
+
+  .animate-stars-2 {
+    animation: star-movement-2 200s linear infinite;
+  }
+
+  /* Slow Pulse for Trust Badge */
+  @keyframes pulse-slow {
+
+    0%,
+    100% {
+      opacity: 0.2;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.6;
+      transform: scale(1.05);
+    }
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 3s ease-in-out infinite;
+  }
+
+  /* Star Twinkle */
+  @keyframes twinkle {
+
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(0.9);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+
+  .animate-twinkle {
+    animation: twinkle 4s ease-in-out infinite;
   }
 }

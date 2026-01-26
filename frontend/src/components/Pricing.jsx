@@ -15,7 +15,6 @@ const Pricing = ({ onOpenCalendly }) => {
   const [openIdx, setOpenIdx] = useState(null);
   const [idx, setIdx] = useState(0);
 
-  const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
   // 1. Detect Active Festival Offer
@@ -246,7 +245,7 @@ const Pricing = ({ onOpenCalendly }) => {
     const clamped = Math.max(0, Math.min(i, currentPlans.length - 1));
     const child = railRef.current.children[clamped];
     if (child) {
-      child.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
+      child.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       setIdx(clamped);
     }
   }, [currentPlans.length, reduceMotion]);
@@ -354,8 +353,8 @@ const Pricing = ({ onOpenCalendly }) => {
               key={c.k}
               onClick={() => { setCat(c.k); setIdx(0); setOpenIdx(null); }}
               className={`group relative flex items-center gap-3 px-10 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${cat === c.k
-                  ? "bg-white text-black scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
-                  : "bg-white/[0.04] border border-white/10 text-white/40 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
+                ? "bg-white text-black scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
+                : "bg-white/[0.04] border border-white/10 text-white/40 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
                 }`}
               style={{ willChange: 'transform, opacity' }}
             >
@@ -394,8 +393,8 @@ const Pricing = ({ onOpenCalendly }) => {
                 >
                   {/* Studio Spec Card - Enhanced Hovers & Contrast */}
                   <div className={`h-full rounded-[2.5rem] p-8 border transition-all duration-500 flex flex-col relative overflow-hidden ${isPopular
-                      ? "border-orange-500/40 bg-orange-500/[0.02]"
-                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/30"
+                    ? "border-orange-500/40 bg-orange-500/[0.02]"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/30"
                     }`}
                     style={{ willChange: 'transform' }}>
 
@@ -493,8 +492,8 @@ const Pricing = ({ onOpenCalendly }) => {
                     <button
                       onClick={() => handleCTA(p)}
                       className={`w-full mt-10 py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn active:scale-95 z-20 ${isPopular
-                          ? "bg-white text-black hover:bg-orange-600 hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
-                          : "bg-white/[0.05] text-white hover:bg-white/[0.1] border border-white/10"
+                        ? "bg-white text-black hover:bg-orange-600 hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
+                        : "bg-white/[0.05] text-white hover:bg-white/[0.1] border border-white/10"
                         }`}
                       style={{ willChange: 'transform' }}
                     >

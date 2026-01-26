@@ -21,19 +21,16 @@ function useDeviceType() {
     isTablet: false,
     isLaptop: false,
     isDesktop: true,
-    prefersReducedMotion: false
   });
 
   useEffect(() => {
     const checkDevice = () => {
       const width = window.innerWidth;
-      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       setDevice({
         isMobile: width < 768,
         isTablet: width >= 768 && width < 1024,
         isLaptop: width >= 1024 && width < 1440,
-        isDesktop: width >= 1440,
-        prefersReducedMotion
+        isDesktop: width >= 1440
       });
     };
     checkDevice();
@@ -219,13 +216,13 @@ function useEnhancedSEO() {
       ]
     };
 
-     const JSONLD_ID = "live-templates-jsonld";
-     let scriptTag = document.getElementById(JSONLD_ID);
-     if (!scriptTag) {
-        scriptTag = document.createElement("script");
-        scriptTag.type = "application/ld+json";
-        scriptTag.id = JSONLD_ID;
-        document.head.appendChild(scriptTag);
+    const JSONLD_ID = "live-templates-jsonld";
+    let scriptTag = document.getElementById(JSONLD_ID);
+    if (!scriptTag) {
+      scriptTag = document.createElement("script");
+      scriptTag.type = "application/ld+json";
+      scriptTag.id = JSONLD_ID;
+      document.head.appendChild(scriptTag);
     }
     scriptTag.textContent = JSON.stringify(structuredData);
 
@@ -254,25 +251,25 @@ function useFestivalDiscount() {
     ];
 
     const activeOffer = windows.find(w => now >= w.from && now <= w.to);
-    
+
     if (activeOffer) {
-      const maxEndsAt = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000)); 
+      const maxEndsAt = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));
       let actualEndsAt = activeOffer.to;
       let label = activeOffer.label;
 
       if (activeOffer.to.getTime() > maxEndsAt.getTime()) {
         actualEndsAt = maxEndsAt;
-        label = `Limited Time: ${activeOffer.percent}% OFF`; 
+        label = `Limited Time: ${activeOffer.percent}% OFF`;
       }
-      
-      return { 
-        active: true, 
-        label: label, 
-        percent: activeOffer.percent, 
-        endsAt: actualEndsAt 
+
+      return {
+        active: true,
+        label: label,
+        percent: activeOffer.percent,
+        endsAt: actualEndsAt
       };
     }
-    
+
     return { active: false, label: "", percent: 0, endsAt: null };
   }, []);
 }
@@ -398,22 +395,22 @@ const TripleBeforeAfterSlider = ({ images, device }) => {
   }, [setFromPct]);
 
   const bindDrag = useCallback(() => {
-  const onPointerMove = (ev) => updateByClientX(ev.clientX);
+    const onPointerMove = (ev) => updateByClientX(ev.clientX);
 
-  const endDrag = () => {
-    activeHandleRef.current = null;
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", endDrag);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  };
-  
-  // we never call preventDefault in onPointerMove, so passive is fine
-  document.addEventListener("pointermove", onPointerMove, { passive: true });
-  document.addEventListener("pointerup", endDrag, { passive: true });
-  document.addEventListener("pointercancel", endDrag, { passive: true });
+    const endDrag = () => {
+      activeHandleRef.current = null;
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", endDrag);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
 
-  return endDrag;
-}, [updateByClientX]);
+    // we never call preventDefault in onPointerMove, so passive is fine
+    document.addEventListener("pointermove", onPointerMove, { passive: true });
+    document.addEventListener("pointerup", endDrag, { passive: true });
+    document.addEventListener("pointercancel", endDrag, { passive: true });
+
+    return endDrag;
+  }, [updateByClientX]);
 
   const startDrag = useCallback((which, clientX) => {
     activeHandleRef.current = which;
@@ -439,86 +436,86 @@ const TripleBeforeAfterSlider = ({ images, device }) => {
 
   // Handle UI
   const Handle = ({ xPct, which }) => (
-  <div
-    className="absolute top-0 bottom-0"
-    style={{
-      left: `${xPct}%`,
-      transform: "translateX(-50%)",
-      zIndex: 15,
-      touchAction: "none",
-      cursor: "ew-resize",
-    }}
-    onPointerDown={(e) => {
-      if (e && e.cancelable) e.preventDefault();
-      e.stopPropagation();
-      startDrag(which, e.clientX);
-    }}
-    role="slider"
-    aria-orientation="horizontal"
-    tabIndex={0}
-    aria-label={which === 1 ? "Divide Base & Variation 1" : "Divide Variation 1 & Variation 2"}
-    aria-valuemin={0}
-    aria-valuemax={100}
-    aria-valuenow={Math.round(xPct)}
-    onKeyDown={(e) => {
-      const step = e.shiftKey ? 5 : 1;
-      if (e.key === "ArrowLeft") {
-        setFromPct(xPct - step, which);
-        e.preventDefault();
-      } else if (e.key === "ArrowRight") {
-        setFromPct(xPct + step, which);
-        e.preventDefault();
-      } else if (e.key === "Home") {
-        setFromPct(which === 1 ? 0 : Math.max(pos1Ref.current, 0), which);
-        e.preventDefault();
-      } else if (e.key === "End") {
-       setFromPct(which === 2 ? 100 : Math.min(pos2Ref.current, 100), which);
-        e.preventDefault();
-      }
-    }}
-   >
-    {/* bar */}
     <div
-      className="absolute top-0 bottom-0 left-1/2"
+      className="absolute top-0 bottom-0"
       style={{
-        width: "4px",
-        background: "linear-gradient(180deg, var(--orange), #ff9357, var(--orange))",
+        left: `${xPct}%`,
         transform: "translateX(-50%)",
-        boxShadow: "0 0 0 2px rgba(255,255,255,0.6), 0 0 24px rgba(232,80,2,0.6)",
-        pointerEvents: "none",
+        zIndex: 15,
+        touchAction: "none",
+        cursor: "ew-resize",
       }}
-    />
-    {/* knob */}
-    <div
-      className="absolute top-1/2 left-1/2 rounded-full flex items-center justify-center"
-      style={{
-        width: device.isMobile ? "54px" : device.isTablet ? "58px" : device.isLaptop ? "62px" : "66px",
-        height: device.isMobile ? "54px" : device.isTablet ? "58px" : device.isLaptop ? "62px" : "66px",
-        transform: "translate(-50%, -50%)",
-        background: "linear-gradient(135deg, var(--orange), #ff9357)",
-        boxShadow: "0 6px 20px rgba(232,80,2,0.4), inset 0 -2px 10px rgba(0,0,0,0.3), inset 0 2px 0 rgba(255,255,255,0.3)",
-        border: device.isMobile ? "4px solid white" : "5px solid white",
-        pointerEvents: "none",
+      onPointerDown={(e) => {
+        if (e && e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        startDrag(which, e.clientX);
+      }}
+      role="slider"
+      aria-orientation="horizontal"
+      tabIndex={0}
+      aria-label={which === 1 ? "Divide Base & Variation 1" : "Divide Variation 1 & Variation 2"}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(xPct)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 5 : 1;
+        if (e.key === "ArrowLeft") {
+          setFromPct(xPct - step, which);
+          e.preventDefault();
+        } else if (e.key === "ArrowRight") {
+          setFromPct(xPct + step, which);
+          e.preventDefault();
+        } else if (e.key === "Home") {
+          setFromPct(which === 1 ? 0 : Math.max(pos1Ref.current, 0), which);
+          e.preventDefault();
+        } else if (e.key === "End") {
+          setFromPct(which === 2 ? 100 : Math.min(pos2Ref.current, 100), which);
+          e.preventDefault();
+        }
       }}
     >
-      <svg
-        width={device.isMobile ? 24 : device.isTablet ? 26 : device.isLaptop ? 30 : 32}
-        height={device.isMobile ? 24 : device.isTablet ? 26 : device.isLaptop ? 30 : 32}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        focusable="false"
+      {/* bar */}
+      <div
+        className="absolute top-0 bottom-0 left-1/2"
+        style={{
+          width: "4px",
+          background: "linear-gradient(180deg, var(--orange), #ff9357, var(--orange))",
+          transform: "translateX(-50%)",
+          boxShadow: "0 0 0 2px rgba(255,255,255,0.6), 0 0 24px rgba(232,80,2,0.6)",
+          pointerEvents: "none",
+        }}
+      />
+      {/* knob */}
+      <div
+        className="absolute top-1/2 left-1/2 rounded-full flex items-center justify-center"
+        style={{
+          width: device.isMobile ? "54px" : device.isTablet ? "58px" : device.isLaptop ? "62px" : "66px",
+          height: device.isMobile ? "54px" : device.isTablet ? "58px" : device.isLaptop ? "62px" : "66px",
+          transform: "translate(-50%, -50%)",
+          background: "linear-gradient(135deg, var(--orange), #ff9357)",
+          boxShadow: "0 6px 20px rgba(232,80,2,0.4), inset 0 -2px 10px rgba(0,0,0,0.3), inset 0 2px 0 rgba(255,255,255,0.3)",
+          border: device.isMobile ? "4px solid white" : "5px solid white",
+          pointerEvents: "none",
+        }}
       >
-        <path d="M15 18l-6-6 6-6" />
-        <path d="M9 18l-6-6 6-6" />
-      </svg>
+        <svg
+          width={device.isMobile ? 24 : device.isTablet ? 26 : device.isLaptop ? 30 : 32}
+          height={device.isMobile ? 24 : device.isTablet ? 26 : device.isLaptop ? 30 : 32}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M15 18l-6-6 6-6" />
+          <path d="M9 18l-6-6 6-6" />
+        </svg>
+      </div>
     </div>
-  </div>
-);
+  );
 
 
   return (
@@ -776,7 +773,7 @@ const PriceCard = ({
   isExpress = false     // Set true only for "Express" plan
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const shouldAnimate = !device.isMobile && !device.prefersReducedMotion;
+  const shouldAnimate = !device.isMobile;
 
   // ---------------- Pricing logic ----------------
   // Express: always show ₹150 → ₹120 (independent of festival)
@@ -821,8 +818,8 @@ const PriceCard = ({
     boxShadow: highlight
       ? "0 12px 40px rgba(232,80,2,0.25)"
       : isHovered && shouldAnimate
-      ? "0 8px 30px rgba(0, 0, 0, 0.4)"
-      : "0 4px 20px rgba(0, 0, 0, 0.3)",
+        ? "0 8px 30px rgba(0, 0, 0, 0.4)"
+        : "0 4px 20px rgba(0, 0, 0, 0.3)",
     willChange: shouldAnimate && isHovered ? "transform" : "auto"
   };
 
@@ -859,7 +856,7 @@ const PriceCard = ({
             transform: "translateX(-50%)",
             boxShadow: "0 4px 16px rgba(232,80,2,0.5)",
             fontSize: device.isMobile ? "10px" : "12px",
-            animation: device.prefersReducedMotion ? "none" : "pulse 2s ease-in-out infinite",
+            animation: "pulse 2s ease-in-out infinite",
             border: "2px solid rgba(255, 255, 255, 0.3)"
           }}
         >
@@ -988,7 +985,7 @@ const FloatingCTA = ({ device, festival }) => {
       style={{
         background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.95))",
         padding: "12px 16px 16px",
-        animation: device.prefersReducedMotion ? "none" : "slideIn 300ms ease-out",
+        animation: "slideIn 300ms ease-out",
         backdropFilter: "blur(10px)"
       }}
     >
@@ -1007,7 +1004,7 @@ const FloatingCTA = ({ device, festival }) => {
         }}
       >
         <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
         </svg>
         {festival?.active ? `Get ${festival.percent}% OFF Now!` : "Get Started on WhatsApp"}
       </a>
@@ -1033,12 +1030,12 @@ export default function LiveTemplates() {
     const pad = (n) => String(n).padStart(2, "0");
     const compute = () => {
       const diff = Math.max(0, festival.endsAt.getTime() - Date.now());
-      
+
       if (diff <= 0) {
         setTimeLeft("0d 00h 00m 00s");
         return;
       }
-      
+
       const d = Math.floor(diff / (1000 * 60 * 60 * 24));
       const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
       const m = Math.floor((diff / (1000 * 60)) % 60);
@@ -1061,7 +1058,7 @@ export default function LiveTemplates() {
   return (
     <div style={{ background: "var(--bg)", color: "var(--text)", minHeight: "100vh" }}>
       <FloatingCTA device={device} festival={festival} />
-      
+
       {/* HERO */}
       <section className="container mx-auto px-4 py-8 md:py-12 lg:py-16" style={{ paddingTop: "calc(var(--header-h,72px) + 16px)" }}>
         <div className="max-w-4xl mx-auto text-center">
@@ -1094,12 +1091,12 @@ export default function LiveTemplates() {
           <p
             className="mb-6 md:mb-8 leading-relaxed"
             style={{
-                fontSize: device.isMobile ? "15px" : device.isTablet ? "17px" : device.isLaptop ? "18px" : "20px",
-                color: "var(--text-muted)",
-                maxWidth: "100%",
-                margin: "0 auto",
-                marginBottom: device.isMobile ? "24px" : "32px",
-                lineHeight: 1.7
+              fontSize: device.isMobile ? "15px" : device.isTablet ? "17px" : device.isLaptop ? "18px" : "20px",
+              color: "var(--text-muted)",
+              maxWidth: "100%",
+              margin: "0 auto",
+              marginBottom: device.isMobile ? "24px" : "32px",
+              lineHeight: 1.7
             }}
           >
             We design the base template once, then swap your{" "}
@@ -1128,7 +1125,7 @@ export default function LiveTemplates() {
               </span>
               {timeLeft && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-1"
-                      style={{ background: "rgba(232,80,2,0.08)", border: "1px solid rgba(232,80,2,0.20)", color: "var(--orange)", fontSize: 12, fontWeight: 800 }}>
+                  style={{ background: "rgba(232,80,2,0.08)", border: "1px solid rgba(232,80,2,0.20)", color: "var(--orange)", fontSize: 12, fontWeight: 800 }}>
                   <Timer size={14} /> {timeLeft}
                 </span>
               )}
@@ -1242,7 +1239,7 @@ export default function LiveTemplates() {
       <section id="templates" className="container mx-auto px-4 py-8 md:py-12 lg:py-16">
         <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">
           <h2 className="font-bold mb-3 md:mb-4"
-              style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
+            style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
             Available Templates (BGMI)
           </h2>
           <p style={{ fontSize: device.isMobile ? "14px" : device.isTablet ? "16px" : device.isLaptop ? "17px" : "18px", color: "var(--text-muted)" }}>
@@ -1266,7 +1263,7 @@ export default function LiveTemplates() {
                   padding: device.isMobile ? "16px" : device.isTablet ? "20px" : "24px",
                   borderColor: "rgba(232,80,2,0.15)",
                   background: "var(--surface)",
-                  animation: device.prefersReducedMotion ? "none" : `fadeInUp 500ms ease-out ${idx * 0.08}s both`
+                  animation: `fadeInUp 500ms ease-out ${idx * 0.08}s both`
                 }}
               >
                 <div className="mb-4 md:mb-5">
@@ -1275,7 +1272,7 @@ export default function LiveTemplates() {
                       {t.gameName}
                     </h3>
                     <span className="px-2 md:px-3 py-1 rounded-full font-bold"
-                          style={{ fontSize: device.isMobile ? "10px" : device.isTablet ? "11px" : "12px", background: "linear-gradient(135deg, var(--orange), #ff9357)", color: "#fff" }}>
+                      style={{ fontSize: device.isMobile ? "10px" : device.isTablet ? "11px" : "12px", background: "linear-gradient(135deg, var(--orange), #ff9357)", color: "#fff" }}>
                       Live
                     </span>
                   </div>
@@ -1333,7 +1330,7 @@ export default function LiveTemplates() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-8">
             <h2 className="font-bold mb-3"
-                style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "28px" : "32px", color: "var(--text)" }}>
+              style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "28px" : "32px", color: "var(--text)" }}>
               Why Our System Works Better
             </h2>
           </div>
@@ -1429,7 +1426,7 @@ export default function LiveTemplates() {
       <section className="container mx-auto px-4 py-8 md:py-12 lg:py-16" style={{ background: "linear-gradient(180deg, transparent 0%, rgba(232,80,2,0.03) 50%, transparent 100%)" }}>
         <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">
           <h2 className="font-bold mb-3 md:mb-4"
-              style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
+            style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
             Trusted by Gaming Creators
           </h2>
           <p style={{ fontSize: device.isMobile ? "14px" : device.isTablet ? "16px" : device.isLaptop ? "17px" : "18px", color: "var(--text-muted)" }}>
@@ -1439,7 +1436,7 @@ export default function LiveTemplates() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 max-w-6xl mx-auto">
           {TESTIMONIALS.map((testimonial, idx) => (
-            <div key={idx} style={{ animation: device.prefersReducedMotion ? "none" : `fadeInUp 500ms ease-out ${idx * 0.1}s both` }}>
+            <div key={idx} style={{ animation: `fadeInUp 500ms ease-out ${idx * 0.1}s both` }}>
               <TestimonialCard testimonial={testimonial} device={device} />
             </div>
           ))}
@@ -1492,7 +1489,7 @@ export default function LiveTemplates() {
       <section id="pricing" className="container mx-auto px-4 py-8 md:py-12 lg:py-16">
         <div className="text-center max-w-2xl mx-auto mb-6 md:mb-8">
           <h2 className="font-bold mb-3 md:mb-4"
-              style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
+            style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
             Simple, Creator-Friendly Pricing
           </h2>
           <p style={{ fontSize: device.isMobile ? "14px" : device.isTablet ? "16px" : device.isLaptop ? "17px" : "18px", color: "var(--text-muted)" }}>
@@ -1569,7 +1566,7 @@ export default function LiveTemplates() {
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8 md:mb-12">
             <h2 className="font-bold mb-3 md:mb-4"
-                style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
+              style={{ fontSize: device.isMobile ? "24px" : device.isTablet ? "32px" : device.isLaptop ? "36px" : "40px", color: "var(--text)" }}>
               Frequently Asked Questions
             </h2>
             <p style={{ fontSize: device.isMobile ? "14px" : device.isTablet ? "16px" : device.isLaptop ? "17px" : "18px", color: "var(--text-muted)" }}>
@@ -1684,7 +1681,7 @@ export default function LiveTemplates() {
                   }}
                 >
                   <svg width={device.isMobile ? 22 : 26} height={device.isMobile ? 22 : 26} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                   </svg>
                   <span>Chat on WhatsApp</span>
                 </a>
