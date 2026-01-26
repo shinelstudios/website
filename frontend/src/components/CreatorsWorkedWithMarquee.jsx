@@ -2,26 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { motion } from "framer-motion";
 // [NEW] Imported new icons for social proof
 import { CheckCircle2, Users, TrendingUp } from "lucide-react";
+import { LazyImage } from "./ProgressiveImage";
 
 /**
  * Reusable, responsive, auto-scrolling marquee for "Creators Worked With".
- * - [NEW] Upgraded copy for better conversion and SEO.
- * - [NEW] Added staggered animations to the header.
- * - [NEW] Added whileInView animation to the marquee container.
- * - [Fix] Only animates if content overflows the container.
- * - [Fix] Pauses on hover, touch, and keyboard focus.
- * - [Fix] Uses margin-left fallback for 'gap' for better iOS < 14.1 support.
- * - [Fix] Adds onTouchCancel handler.
- * - [A11y] Improved ARIA roles with aria-labelledby.
- * - [Perf] Memoized event handlers with useCallback.
- *
- * Props:
- * - isDark?: boolean
- * - creators?: Array<{name, key, url, category, color, subs?: number, href?: string}>
- * - speedPps?: number  // pixels per second (default 60)
- * - gap?: number      // rem gap between items (default 1.0)
- * - forceMotion?: boolean // ignore reduced-motion (default false)
- * - direction?: 'left' | 'right' // scroll direction (default 'left')
  */
 
 // Helper to find asset URL from a glob map
@@ -48,11 +32,10 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
   return (
     <>
       <span className="cw-avatar">
-        <img
+        <LazyImage
           src={creator.url}
           alt={`${creator.name} logo`}
-          loading="lazy"
-          decoding="async"
+          className="w-full h-full object-cover"
           style={{ filter: isHovered ? "grayscale(0)" : undefined }}
         />
         <span className="cw-ring" style={{ borderColor: isHovered ? creator.color : "transparent" }} />
@@ -87,7 +70,6 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
   );
 });
 
-
 // [NEW] Animation variants for staggered header
 const headerVariants = {
   hidden: { opacity: 0 },
@@ -110,7 +92,6 @@ const itemVariant = {
     },
   },
 };
-
 
 const CreatorsWorkedWithMarquee = ({
   isDark,
@@ -217,13 +198,13 @@ const CreatorsWorkedWithMarquee = ({
       setShouldAnimate(isOverflowing);
 
       gapPx.current = parseFloat(getComputedStyle(document.documentElement).fontSize) * gapRem;
-      
-      const totalDistance = segmentWidth + gapPx.current; 
+
+      const totalDistance = segmentWidth + gapPx.current;
       const pxPerSec = Math.max(20, Number(speedPps) || 60);
       const durationSec = totalDistance / pxPerSec;
 
       setAnimationDuration(`${durationSec.toFixed(3)}s`);
-      setAnimationDistance(`${totalDistance.toFixed(2)}px`); 
+      setAnimationDistance(`${totalDistance.toFixed(2)}px`);
     };
 
     const rafId = requestAnimationFrame(updateMarqueeMetrics);
@@ -234,7 +215,7 @@ const CreatorsWorkedWithMarquee = ({
       if (segmentRef.current) ro.observe(segmentRef.current);
       if (containerRef.current) ro.observe(containerRef.current);
     }
-    
+
     window.addEventListener('resize', updateMarqueeMetrics);
 
     return () => {
@@ -379,11 +360,9 @@ const CreatorsWorkedWithMarquee = ({
             {/* Track (2x segments for seamless loop) */}
             <div
               ref={trackRef}
-              className={`cw-track ${
-                enableAnimation ? "cw-animated" : "cw-static"
-              } ${animationIsPaused ? "paused" : ""} ${
-                direction === 'right' ? 'direction-right' : ''
-              }`}
+              className={`cw-track ${enableAnimation ? "cw-animated" : "cw-static"
+                } ${animationIsPaused ? "paused" : ""} ${direction === 'right' ? 'direction-right' : ''
+                }`}
               style={{
                 "--gap-rem": `${gapRem}`,
                 "--animation-duration": animationDuration,
@@ -433,7 +412,7 @@ const CreatorsWorkedWithMarquee = ({
 
               {/* Segment B (clone) */}
               {enableAnimation && (
-                <ul 
+                <ul
                   className="cw-segment"
                   aria-hidden="true" // Clone is decorative
                 >

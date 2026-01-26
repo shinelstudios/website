@@ -30,7 +30,10 @@ import {
   Image as ImageIcon,
   DollarSign,
   FolderOpen,
+  Radio,
+  Youtube,
 } from "lucide-react";
+import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
@@ -84,27 +87,27 @@ function getAuthState() {
     // ✅ canonical keys first, then back-compat keys
     const email = (payload?.email || safeGet("userEmail") || safeGet("email") || "").trim();
 
-// role can be in role OR userRole (legacy)
-const role = (
-  payload?.role ||
-  safeGet("role") ||
-  safeGet("userRole")
-).trim().toLowerCase();
+    // role can be in role OR userRole (legacy)
+    const role = (
+      payload?.role ||
+      safeGet("role") ||
+      safeGet("userRole")
+    ).trim().toLowerCase();
 
-// name can be firstName/lastName OR userFirstName/userLastName OR userFirst/userLast
-const firstName = (
-  payload?.firstName ||
-  safeGet("firstName") ||
-  safeGet("userFirstName") ||
-  safeGet("userFirst")
-).trim();
+    // name can be firstName/lastName OR userFirstName/userLastName OR userFirst/userLast
+    const firstName = (
+      payload?.firstName ||
+      safeGet("firstName") ||
+      safeGet("userFirstName") ||
+      safeGet("userFirst")
+    ).trim();
 
-const lastName = (
-  payload?.lastName ||
-  safeGet("lastName") ||
-  safeGet("userLastName") ||
-  safeGet("userLast")
-).trim();
+    const lastName = (
+      payload?.lastName ||
+      safeGet("lastName") ||
+      safeGet("userLastName") ||
+      safeGet("userLast")
+    ).trim();
 
 
     return {
@@ -145,70 +148,38 @@ function setFaviconForTheme(isDark) {
       link.href = isDark
         ? "/favicon-dark-32x32.png"
         : "/favicon-light-32x32.png";
-  } catch {}
+  } catch { }
 }
 
-/* ---------------- Notification system ---------------- */
-function useNotifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+/* ---------------- Notification unread count helper ---------------- */
+const LS_NOTIF_KEY = "shinel_notifications_history";
+function useUnreadCount() {
+  const [count, setCount] = useState(0);
+
+  const update = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(LS_NOTIF_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCount(parsed.filter(n => !n.read).length);
+      }
+    } catch { }
+  }, []);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("notifications") || "[]");
-      const arr = Array.isArray(saved) ? saved : [];
-      setNotifications(arr);
-      setUnreadCount(arr.filter((n) => !n.read).length);
-    } catch {}
-
-    const handler = (e) => {
-      try {
-        const detail = e?.detail || {};
-        const newNotif = {
-          id: Date.now(),
-          message: String(detail.message || "Notification"),
-          type: String(detail.type || "info"),
-          read: false,
-          timestamp: Date.now(),
-        };
-
-        setNotifications((prev) => {
-          const updated = [newNotif, ...prev].slice(0, 50);
-          try {
-            localStorage.setItem("notifications", JSON.stringify(updated));
-          } catch {}
-          setUnreadCount(updated.filter((n) => !n.read).length);
-          return updated;
-        });
-      } catch {}
+    update();
+    const handler = () => update();
+    window.addEventListener("notify", handler);
+    window.addEventListener("notif-refresh", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("notify", handler);
+      window.removeEventListener("notif-refresh", handler);
+      window.removeEventListener("storage", handler);
     };
+  }, [update]);
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("notify", handler);
-      return () => window.removeEventListener("notify", handler);
-    }
-  }, []);
-
-  const markAsRead = useCallback((id) => {
-    setNotifications((prev) => {
-      const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-      try {
-        localStorage.setItem("notifications", JSON.stringify(updated));
-      } catch {}
-      setUnreadCount(updated.filter((n) => !n.read).length);
-      return updated;
-    });
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setNotifications([]);
-    setUnreadCount(0);
-    try {
-      localStorage.removeItem("notifications");
-    } catch {}
-  }, []);
-
-  return { notifications, unreadCount, markAsRead, clearAll };
+  return count;
 }
 
 /* ---------------- tools matrix (role-gated) ---------------- */
@@ -249,26 +220,33 @@ const toolsCatalog = [
     description: "Configure specialized AI workflows",
   },
   {
-    name: "Admin • Users",
-    path: "/admin/users",
+    name: "User Registry",
+    path: "/dashboard/users",
     icon: UserCog,
     roles: ["admin"],
     description: "Manage team access and permissions",
   },
   {
-  name: "Admin • Thumbnails",
-  path: "/admin/thumbnails",
-  icon: ImageIcon,
-  roles: ["admin"],
-  description: "Manage thumbnail entries & approvals",
-},
+    name: "Thumbnail Registry",
+    path: "/dashboard/thumbnails",
+    icon: ImageIcon,
+    roles: ["admin", "artist"],
+    description: "Manage thumbnail entries & approvals",
+  },
 
   {
-    name: "Admin • Videos",
-    path: "/admin/videos",
+    name: "Video Manager",
+    path: "/dashboard/videos",
     icon: Video,
-    roles: ["admin"],
+    roles: ["admin", "editor"],
     description: "Manage video entries & refresh views",
+  },
+  {
+    name: "Pulse Registry",
+    path: "/dashboard/clients",
+    icon: Youtube,
+    roles: ["admin"],
+    description: "Manage YouTube client list",
   },
 ];
 
@@ -276,37 +254,37 @@ const toolsCatalog = [
 const SiteHeader = ({ isDark, setIsDark }) => {
   const [auth, setAuth] = useState(getAuthState());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [hovered, setHovered] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [progress, setProgress] = useState(0);
   const [headerH, setHeaderH] = useState(76);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const location = useLocation();
   const navigate = useNavigate();
 
   const headerRef = useRef(null);
-  const toolsRef = useRef(null);
   const userMenuRef = useRef(null);
-  const notifRef = useRef(null);
+
+  const unreadCount = useUnreadCount();
+
+  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef(null);
+  const notifRef = useRef(null);
 
-  const { notifications, unreadCount, markAsRead, clearAll } =
-    useNotifications();
+  const allToolsForMenu = useMemo(() => toolsCatalog, []);
 
-  // Auto-focus tool search when Tools menu opens
-  useEffect(() => {
-    if (!toolsOpen) return;
-    const t = setTimeout(() => {
-      try {
-        searchInputRef.current?.focus();
-      } catch {}
-    }, 80);
-    return () => clearTimeout(t);
-  }, [toolsOpen]);
+  const filteredTools = useMemo(() => {
+    if (!searchQuery.trim()) return allToolsForMenu;
+    const q = searchQuery.toLowerCase();
+    return allToolsForMenu.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q)
+    );
+  }, [searchQuery, allToolsForMenu]);
+
+
 
   const prefersReduced = useMemo(() => {
     try {
@@ -322,14 +300,13 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   useEffect(() => setFaviconForTheme(!!isDark), [isDark]);
 
   const closeAllMenus = useCallback(() => {
-    setToolsOpen(false);
     setUserMenuOpen(false);
     setNotifOpen(false);
     setIsMenuOpen(false);
     try {
       document.documentElement.style.overflow = "";
       document.body.style.overscrollBehavior = "";
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -337,12 +314,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       try {
         document.documentElement.style.overflow = "hidden";
         document.body.style.overscrollBehavior = "contain";
-      } catch {}
+      } catch { }
     } else {
       try {
         document.documentElement.style.overflow = "";
         document.body.style.overscrollBehavior = "";
-      } catch {}
+      } catch { }
     }
   }, [isMenuOpen]);
 
@@ -371,7 +348,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           "scroll-padding-top",
           `${h + 8}px`
         );
-      } catch {}
+      } catch { }
     };
     setVars();
     const ro =
@@ -381,7 +358,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     return () => {
       try {
         ro?.disconnect();
-      } catch {}
+      } catch { }
       window.removeEventListener("resize", setVars);
     };
   }, []);
@@ -398,7 +375,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         const p = Math.min(100, (y / h) * 100);
         setProgress(p);
         setScrolled(y > 6);
-      } catch {}
+      } catch { }
     };
     const onScroll = () => {
       if (!ticking) {
@@ -425,12 +402,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     const onDocDown = (e) => {
       try {
         if (
-          toolsOpen &&
-          toolsRef.current &&
-          !toolsRef.current.contains(e.target)
-        )
-          setToolsOpen(false);
-        if (
           userMenuOpen &&
           userMenuRef.current &&
           !userMenuRef.current.contains(e.target)
@@ -442,7 +413,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           !notifRef.current.contains(e.target)
         )
           setNotifOpen(false);
-      } catch {}
+      } catch { }
     };
     const onEsc = (e) => {
       if (e.key === "Escape") closeAllMenus();
@@ -453,7 +424,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       document.removeEventListener("pointerdown", onDocDown);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [toolsOpen, userMenuOpen, notifOpen, closeAllMenus]);
+  }, [userMenuOpen, notifOpen, closeAllMenus]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -462,10 +433,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       if (["input", "textarea"].includes(tag) || e.target?.isContentEditable)
         return;
 
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setToolsOpen(true);
-      }
       if ((e.metaKey || e.ctrlKey) && e.key === "/") {
         e.preventDefault();
         setIsDark?.((d) => !d);
@@ -477,38 +444,26 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   }, [closeAllMenus, setIsDark]);
 
   const role = (auth.role || "client").toLowerCase();
-  const availableTools = toolsCatalog.filter((t) => t.roles.includes(role));
-  const allToolsForMenu = auth.isAuthed ? availableTools : toolsCatalog;
   const logoSrc = isDark ? logoLight : logoDark;
   const initials = initialsFrom(auth.firstName, auth.lastName, auth.email);
-
-  const filteredTools = useMemo(() => {
-    if (!searchQuery.trim()) return allToolsForMenu;
-    const q = searchQuery.toLowerCase();
-    return allToolsForMenu.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        (t.description || "").toLowerCase().includes(q)
-    );
-  }, [searchQuery, allToolsForMenu]);
 
   const handleLogout = useCallback(() => {
     try {
       // ✅ canonical
       [
-  "token","refresh","rememberMe",
-  "userEmail","email",
-  "role","userRole",
-  "firstName","lastName",
-  "userFirstName","userLastName",
-  "userFirst","userLast"
-].forEach((k)=>localStorage.removeItem(k));
+        "token", "refresh", "rememberMe",
+        "userEmail", "email",
+        "role", "userRole",
+        "firstName", "lastName",
+        "userFirstName", "userLastName",
+        "userFirst", "userLast"
+      ].forEach((k) => localStorage.removeItem(k));
 
       // ✅ back-compat
       ["userRole", "userFirst", "userLast", "userFirstName", "userLastName"].forEach((k) =>
         localStorage.removeItem(k)
       );
-    } catch {}
+    } catch { }
 
     try {
       window.dispatchEvent(new Event("auth:changed"));
@@ -517,7 +472,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           detail: { message: "Successfully logged out", type: "success" },
         })
       );
-    } catch {}
+    } catch { }
 
     closeAllMenus();
     navigate("/");
@@ -577,7 +532,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   const haptic = () => {
     try {
       if (navigator?.vibrate) navigator.vibrate(7);
-    } catch {}
+    } catch { }
   };
 
   const SectionHeader = ({ icon: Icon, title, subtitle, right }) => (
@@ -715,299 +670,35 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           <div className="hidden md:flex items-center gap-8 relative">
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
+            <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
+            {auth.isAuthed && (
+              <DesktopNavLink label="Hub" to="/dashboard" icon={Shield} />
+            )}
             <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
-
-            {/* Tools dropdown with search */}
-            <div className="relative" ref={toolsRef}>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded transition-all duration-200"
-                aria-expanded={toolsOpen}
-                aria-haspopup="menu"
-                aria-controls="ai-tools-menu"
-                onClick={() => setToolsOpen((v) => !v)}
-                style={{
-                  color:
-                    hovered === "Tools" || toolsOpen
-                      ? "var(--nav-hover)"
-                      : "var(--nav-link)",
-                  transform:
-                    hovered === "Tools" && !prefersReduced
-                      ? "translateY(-1px)"
-                      : "translateY(0)",
-                }}
-                onMouseEnter={() => setHovered("Tools")}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <Zap size={16} />
-                <span className="nav-label">Tools</span>
-                {!auth.isAuthed && <Lock size={14} className="ml-1 opacity-70" />}
-                <ChevronDown
-                  size={16}
-                  className={`ml-1 transition-transform duration-200 ${
-                    toolsOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              <AnimatePresence>
-                {toolsOpen && (
-                  <motion.div
-                    id="ai-tools-menu"
-                    role="menu"
-                    initial={
-                      prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                    }
-                    animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
-                    exit={
-                      prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                    }
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute left-0 mt-3 w-[380px] rounded-2xl shadow-xl overflow-hidden"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      zIndex: 4,
-                    }}
-                  >
-                    <div
-                      className="p-4 border-b"
-                      style={{ borderColor: "var(--border)" }}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div
-                          className="text-xs font-semibold tracking-wide uppercase"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {auth.isAuthed
-                            ? `Your tools • ${role}`
-                            : "AI Tools · Login required"}
-                        </div>
-                        <kbd
-                          className="hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono"
-                          style={{
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)",
-                          }}
-                        >
-                          <span>⌘</span>K
-                        </kbd>
-                      </div>
-
-                      <div className="relative">
-                        <Search
-                          size={16}
-                          className="absolute left-3 top-1/2 -translate-y-1/2"
-                          style={{ color: "var(--text-muted)" }}
-                        />
-                        <input
-                          ref={searchInputRef}
-                          type="text"
-                          placeholder="Search tools..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-3 py-2 rounded-lg text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                          style={{
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text)",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {(searchQuery.trim() ? filteredTools : allToolsForMenu).map(
-                        (t, i) => {
-                          const Icon = t.icon;
-                          const allowed = auth.isAuthed && t.roles.includes(role);
-                          const to = allowed
-                            ? t.path
-                            : `/login?next=${encodeURIComponent(t.path)}`;
-                          const total = (searchQuery.trim()
-                            ? filteredTools.length
-                            : allToolsForMenu.length);
-
-                          return (
-                            <Link
-                              key={t.name}
-                              role="menuitem"
-                              to={to}
-                              className="flex items-start gap-3 w-full px-4 py-3 text-left transition-colors duration-150"
-                              style={{
-                                color: "var(--text)",
-                                borderBottom:
-                                  i === total - 1 ? "0" : "1px solid var(--border)",
-                                opacity: auth.isAuthed ? (allowed ? 1 : 0.6) : 1,
-                                background: "transparent",
-                              }}
-                            >
-                              <div
-                                className="w-10 h-10 rounded-lg grid place-items-center shrink-0"
-                                style={{
-                                  background: "rgba(232,80,2,0.10)",
-                                  border: "1px solid var(--border)",
-                                }}
-                                aria-hidden="true"
-                              >
-                                {Icon && <Icon size={20} style={{ color: "var(--orange)" }} />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium flex items-center gap-2">
-                                  <span className="truncate">{t.name}</span>
-                                  {!allowed && <Lock size={12} className="opacity-70 shrink-0" />}
-                                </div>
-                                {t.description && (
-                                  <div
-                                    className="text-xs mt-0.5 opacity-80"
-                                    style={{ color: "var(--text-muted)" }}
-                                  >
-                                    {t.description}
-                                  </div>
-                                )}
-                              </div>
-                              <ArrowRight
-                                size={16}
-                                className="opacity-100 shrink-0"
-                                style={{ color: "var(--orange)" }}
-                              />
-                            </Link>
-                          );
-                        }
-                      )}
-                    </div>
-
-                    {!auth.isAuthed && (
-                      <div
-                        className="p-4 border-t"
-                        style={{
-                          borderColor: "var(--border)",
-                          background: "var(--surface-alt)",
-                        }}
-                      >
-                        <Link
-                          to="/login"
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-transform duration-150 hover:scale-[1.02]"
-                          style={{
-                            background:
-                              "linear-gradient(90deg, var(--orange), #ff9357)",
-                          }}
-                        >
-                          Login to unlock all tools
-                          <ArrowRight size={16} />
-                        </Link>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
 
           {/* right actions */}
           <div className="flex items-center gap-2 md:gap-3">
             {auth.isAuthed ? (
               <>
-                {/* Notifications */}
-                <div className="relative" ref={notifRef}>
+                {/* Notifications Bell */}
+                <div className="relative">
                   <button
-                    onClick={() => setNotifOpen((v) => !v)}
-                    className="hidden md:flex p-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] relative transition-all duration-150"
+                    onClick={() => setNotifOpen(true)}
+                    className="flex p-2 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] relative transition-all duration-200 hover:bg-white/5"
                     style={{
-                      background: notifOpen ? "var(--surface-alt)" : "transparent",
                       color: "var(--text)",
-                      transform:
-                        !prefersReduced && notifOpen ? "scale(1.04)" : "scale(1)",
+                      transform: !prefersReduced && notifOpen ? "scale(1.05)" : "scale(1)",
                     }}
-                    aria-label={`Notifications ${
-                      unreadCount > 0 ? `(${unreadCount} unread)` : ""
-                    }`}
+                    aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ""}`}
                   >
                     <Bell size={20} />
                     {unreadCount > 0 && (
                       <span
-                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center"
-                        style={{ background: "var(--orange)", color: "#fff" }}
-                      >
-                        {unreadCount > 9 ? "9+" : unreadCount}
-                      </span>
+                        className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(232,80,2,0.5)]"
+                      />
                     )}
                   </button>
-
-                  <AnimatePresence>
-                    {notifOpen && (
-                      <motion.div
-                        initial={
-                          prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                        }
-                        animate={
-                          prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }
-                        }
-                        exit={
-                          prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                        }
-                        className="absolute right-0 mt-3 w-[320px] rounded-2xl shadow-xl overflow-hidden"
-                        style={{
-                          background: "var(--surface)",
-                          border: "1px solid var(--border)",
-                          zIndex: 4,
-                        }}
-                      >
-                        <div
-                          className="flex items-center justify-between px-4 py-3 border-b"
-                          style={{ borderColor: "var(--border)" }}
-                        >
-                          <div className="font-semibold" style={{ color: "var(--text)" }}>
-                            Notifications
-                          </div>
-                          {notifications.length > 0 && (
-                            <button
-                              onClick={clearAll}
-                              className="text-xs underline"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              Clear all
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="max-h-[400px] overflow-y-auto">
-                          {notifications.length > 0 ? (
-                            notifications.map((n) => (
-                              <div
-                                key={n.id}
-                                className="px-4 py-3 border-b cursor-pointer transition-colors duration-150"
-                                style={{
-                                  borderColor: "var(--border)",
-                                  background: n.read
-                                    ? "transparent"
-                                    : "rgba(232,80,2,0.05)",
-                                }}
-                                onClick={() => markAsRead(n.id)}
-                              >
-                                <div className="text-sm" style={{ color: "var(--text)" }}>
-                                  {n.message}
-                                </div>
-                                <div
-                                  className="text-xs mt-1"
-                                  style={{ color: "var(--text-muted)" }}
-                                >
-                                  {new Date(n.timestamp).toLocaleTimeString()}
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div
-                              className="px-4 py-8 text-center text-sm"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              No notifications yet
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
 
                 {/* User menu */}
@@ -1027,11 +718,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     <div
                       className="h-7 w-7 rounded-full grid place-items-center text-[11px] font-bold"
                       style={{ background: "var(--orange)", color: "#fff" }}
-                      title={
-                        `${auth.firstName || ""} ${auth.lastName || ""}`.trim() ||
-                        auth.email ||
-                        ""
-                      }
                     >
                       {initials}
                     </div>
@@ -1043,24 +729,16 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     </span>
                     <ChevronDown
                       size={14}
-                      className={`transition-transform duration-200 ${
-                        userMenuOpen ? "rotate-180" : ""
-                      }`}
+                      className={`transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`}
                     />
                   </button>
 
                   <AnimatePresence>
                     {userMenuOpen && (
                       <motion.div
-                        initial={
-                          prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                        }
-                        animate={
-                          prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }
-                        }
-                        exit={
-                          prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }
-                        }
+                        initial={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
+                        animate={prefersReduced ? {} : { opacity: 1, scale: 1, y: 0 }}
+                        exit={prefersReduced ? {} : { opacity: 0, scale: 0.98, y: 6 }}
                         className="absolute right-0 mt-3 w-[280px] rounded-2xl shadow-xl overflow-hidden"
                         style={{
                           background: "var(--surface)",
@@ -1084,8 +762,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                                 className="font-semibold truncate"
                                 style={{ color: "var(--text)" }}
                               >
-                                {`${auth.firstName || ""} ${auth.lastName || ""}`.trim() ||
-                                  "User"}
+                                {`${auth.firstName || ""} ${auth.lastName || ""}`.trim() || "User"}
                               </div>
                               <div
                                 className="text-xs truncate"
@@ -1136,35 +813,15 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                             <span>Settings</span>
                           </Link>
 
-                          {role === "admin" && (
-                            <>
-                              <Link
-                                to="/admin/users"
-                                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                                style={{ color: "var(--text)" }}
-                              >
-                                <UserCog size={18} style={{ color: "var(--orange)" }} />
-                                <span>Users</span>
-                              </Link>
-
-                              <Link
-                                to="/admin/thumbnails"
-                                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                                style={{ color: "var(--text)" }}
-                              >
-                                <ImageIcon size={18} style={{ color: "var(--orange)" }} />
-                                <span>Thumbnails</span>
-                              </Link>
-
-                              <Link
-                                to="/admin/videos"
-                                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                                style={{ color: "var(--text)" }}
-                              >
-                                <Video size={18} style={{ color: "var(--orange)" }} />
-                                <span>Videos</span>
-                              </Link>
-                            </>
+                          {['admin', 'editor', 'artist'].includes(role) && (
+                            <Link
+                              to="/dashboard"
+                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                              style={{ color: "var(--text)" }}
+                            >
+                              <Shield size={18} style={{ color: "var(--orange)" }} />
+                              <span>Management Hub</span>
+                            </Link>
                           )}
                         </div>
 
@@ -1174,7 +831,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                         >
                           <button
                             onClick={handleLogout}
-                            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-colors duration-150"
+                            className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-colors duration-150 hover:bg-white/5"
                             style={{ color: "var(--text)" }}
                           >
                             <LogOut size={18} style={{ color: "var(--orange)" }} />
@@ -1295,7 +952,10 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {auth.isAuthed && (
+                    <MobileCardLink to="/dashboard" icon={Shield} title="Hub" subtitle="Manage Studio" />
+                  )}
                   <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                 </div>
 
@@ -1396,7 +1056,10 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           direction="rtl"
         />
       </header>
-    </div>
+
+      {/* Global Components */}
+      <NotificationHub isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+    </div >
   );
 };
 

@@ -1,5 +1,5 @@
-// frontend/src/components/Branding.jsx
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /* ---------- fallback demo (used if no external data present) ---------- */
 const FALLBACK = [
@@ -181,11 +181,11 @@ export default function Branding() {
           const arr = await res.json();
           if (!cancelled) { setRaw(Array.isArray(arr) ? arr : []); return; }
         }
-      } catch {}
+      } catch { }
       try {
         const g = window.__BRANDING_PROJECTS__;
         if (!cancelled && Array.isArray(g)) { setRaw(g); return; }
-      } catch {}
+      } catch { }
       if (!cancelled) setRaw(FALLBACK);
     })();
     return () => { cancelled = true; };
@@ -303,10 +303,17 @@ export default function Branding() {
 
   return (
     <div className="min-h-screen">
-      <title>Logo / Banner / Overlays (3-in-1) | Shinel Studios</title>
-      <meta
-        name="description"
-        content="Custom logos, channel banners, and stream overlays — a cohesive brand system that looks sharp everywhere."
+      <MetaTags
+        title="Logo & Branding Design | Shinel Studios - Visual Identity for Creators"
+        description="Premium logos, channel banners, and stream overlays. Build a cohesive visual brand that scales across all platforms."
+        keywords="branding design, esports logo, youtube banner, twitch overlay, creator identity"
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Work', url: '/work' },
+          { name: 'Branding', url: '/branding' },
+        ]}
       />
 
       {/* Hero */}

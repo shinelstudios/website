@@ -10,6 +10,7 @@ import {
   Megaphone,
   BarChart3,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { animations } from "../lib/helpers"; // Assuming helpers are in src/lib/helpers.js
 
 /* ===================== Enhanced Services Section ===================== */
@@ -28,6 +29,7 @@ const ServicesSection = () => {
       outcome: "Boost CTR with concept & layout exploration.",
       proof: "Multivariate iterations • A/B-ready exports",
       gradient: "linear-gradient(135deg, #ff6b6b, #ff8787)",
+      path: "/thumbnails",
       features: [
         "AI-powered concept generation",
         "A/B testing ready",
@@ -41,6 +43,7 @@ const ServicesSection = () => {
       outcome: "Style-matched transitions and pacing that hold attention.",
       proof: "Kamz Inkzone (172k): +38% avg view duration in 30 days",
       gradient: "linear-gradient(135deg, #4ecdc4, #44a8a3)",
+      path: "/video-editing",
       features: [
         "Smart pacing analysis",
         "Hook optimization",
@@ -54,6 +57,7 @@ const ServicesSection = () => {
       outcome: "Hook-first highlights, auto-captions, meme timing.",
       proof: "Manav: +9.4k subs from Shorts in Q2",
       gradient: "linear-gradient(135deg, #f7b731, #f39c12)",
+      path: "/shorts",
       features: [
         "Hook-first structure",
         "Auto captions",
@@ -67,6 +71,7 @@ const ServicesSection = () => {
       outcome: "Auto transcripts with clean, on-brand subtitles.",
       proof: "Faster edits • Better accessibility • Higher retention",
       gradient: "linear-gradient(135deg, #45b7d1, #3498db)",
+      path: "/services/growth/captions",
       features: [
         "99% accuracy AI",
         "Multi-language support",
@@ -80,6 +85,7 @@ const ServicesSection = () => {
       outcome: "AI outlines + beat sheets → human punch-up.",
       proof: "Hook retention +18% in A/B tests (first 8s)",
       gradient: "linear-gradient(135deg, #5f27cd, #341f97)",
+      path: "/services/growth/seo",
       features: [
         "Research assistance",
         "Hook templates",
@@ -93,6 +99,7 @@ const ServicesSection = () => {
       outcome: "Consent-first face replacement & object removal.",
       proof: "Creator-approved only • Review-gated workflow",
       gradient: "linear-gradient(135deg, #ff9ff3, #f368e0)",
+      path: "/services/editing/long",
       features: [
         "Consent verification",
         "Review workflow",
@@ -106,6 +113,7 @@ const ServicesSection = () => {
       outcome: "Natural voice pickups, noise cleanup, alt takes.",
       proof: "Consent-first cloning • Platform-policy compliant",
       gradient: "linear-gradient(135deg, #ee5a6f, #c44569)",
+      path: "/services/editing/long",
       features: [
         "Voice cloning (consent)",
         "Noise reduction",
@@ -119,6 +127,7 @@ const ServicesSection = () => {
       outcome: "Auto-posting, asset handoff, titles, tags, descriptions.",
       proof: "+27% browse/search traffic after metadata revamp",
       gradient: "linear-gradient(135deg, #48dbfb, #0abde3)",
+      path: "/services/growth/seo",
       features: [
         "Auto-scheduling",
         "Metadata optimization",
@@ -234,28 +243,18 @@ const ServicesSection = () => {
           {services.map((s, i) => {
             const isActive = activeService === i;
             return (
-              <motion.div
+              <Link
                 key={i}
-                variants={animations.scaleIn}
-                className="group relative p-6 rounded-2xl shadow-lg cursor-pointer"
+                to={s.path}
+                className="group relative p-6 rounded-2xl shadow-lg border block"
                 style={{
                   background: "var(--surface)",
-                  border: "1px solid var(--border)",
+                  borderColor: "var(--border)",
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                   willChange: "transform, box-shadow",
                 }}
                 onMouseEnter={() => setActiveService(i)}
                 onMouseLeave={() => setActiveService(null)}
-                whileHover={
-                  reduceMotion
-                    ? {}
-                    : {
-                        y: -8,
-                        scale: 1.02,
-                        boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-                      }
-                }
-                whileTap={reduceMotion ? {} : { scale: 0.98 }}
               >
                 {/* Gradient glow on hover */}
                 {!reduceMotion && (
@@ -284,9 +283,9 @@ const ServicesSection = () => {
                   animate={
                     isActive && !reduceMotion
                       ? {
-                          scale: [1, 1.05, 1],
-                          rotate: [0, 5, -5, 0],
-                        }
+                        scale: [1, 1.05, 1],
+                        rotate: [0, 5, -5, 0],
+                      }
                       : {}
                   }
                   transition={{ duration: 0.6 }}
@@ -396,7 +395,7 @@ const ServicesSection = () => {
                     />
                   </motion.svg>
                 </motion.div>
-              </motion.div>
+              </Link>
             );
           })}
         </motion.div>

@@ -7,6 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
  * Public/Protected read:
@@ -72,7 +73,7 @@ async function fetchJSONWithETag(
           const j = await res.json();
           if (j?.error) msg = j.error;
           if (j?.message) msg = j.message;
-        } catch {}
+        } catch { }
         const err = new Error(msg);
         err.status = res.status;
         throw err;
@@ -160,43 +161,43 @@ export default function VideoEditing() {
       if (status !== 304 && data?.videos) {
         // normalize to the fields our UI needs
         const normalized = data.videos.map((v) => {
-  // PRIMARY URL MUST WIN
-  const youtubeId =
-    extractYouTubeId(v.primaryUrl) ||
-    extractYouTubeId(v.creatorUrl) ||
-    v.videoId ||
-    v.youtubeId;
+          // PRIMARY URL MUST WIN
+          const youtubeId =
+            extractYouTubeId(v.primaryUrl) ||
+            extractYouTubeId(v.creatorUrl) ||
+            v.videoId ||
+            v.youtubeId;
 
-  return {
-    id:
-      v.id ||
-      v.videoId ||
-      v.youtubeId ||
-      v.primaryUrl ||
-      Math.random().toString(36).slice(2),
-    title: v.title || "",
-    category: v.category || "OTHER",
-    subcategory: v.subcategory || "",
-    kind: v.kind || "LONG",
-    primaryUrl: v.primaryUrl || "",
-    creatorUrl: v.creatorUrl || "",
-    youtubeId, // <-- now based on primaryUrl first
-    views: Number(v.youtubeViews ?? v.views ?? 0),
-    lastViewUpdate: v.lastViewUpdate || v.updated || null,
-    tags: Array.isArray(v.tags) ? v.tags : [],
-    hype:
-      typeof v.hype === "number"
-        ? v.hype
-        : typeof v.hypeScore === "number"
-        ? v.hypeScore
-        : null,
-    thumb:
-      v.thumb ||
-      (youtubeId
-        ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-        : null),
-  };
-});
+          return {
+            id:
+              v.id ||
+              v.videoId ||
+              v.youtubeId ||
+              v.primaryUrl ||
+              Math.random().toString(36).slice(2),
+            title: v.title || "",
+            category: v.category || "OTHER",
+            subcategory: v.subcategory || "",
+            kind: v.kind || "LONG",
+            primaryUrl: v.primaryUrl || "",
+            creatorUrl: v.creatorUrl || "",
+            youtubeId, // <-- now based on primaryUrl first
+            views: Number(v.youtubeViews ?? v.views ?? 0),
+            lastViewUpdate: v.lastViewUpdate || v.updated || null,
+            tags: Array.isArray(v.tags) ? v.tags : [],
+            hype:
+              typeof v.hype === "number"
+                ? v.hype
+                : typeof v.hypeScore === "number"
+                  ? v.hypeScore
+                  : null,
+            thumb:
+              v.thumb ||
+              (youtubeId
+                ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+                : null),
+          };
+        });
 
 
         setVideos(normalized);
@@ -292,6 +293,18 @@ export default function VideoEditing() {
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <MetaTags
+        title="Professional Video Editing | Shinel Studios - Cinematic Post-Production"
+        description="Transform your raw footage into high-retention stories. Expert long-form editing for gaming, vlogs, and business."
+        keywords="video editing services, youtube editor, cinematic editing, retention optimization"
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Work', url: '/work' },
+          { name: 'Video Editing', url: '/video-editing' },
+        ]}
+      />
       <header className="mb-6 sm:mb-8">
         <h1
           className="text-3xl sm:text-4xl font-extrabold tracking-tight"
@@ -414,9 +427,8 @@ function VideoCard({ v, onPlay }) {
 
   return (
     <article
-      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${
-        canAnimate ? "hover:scale-[1.01]" : ""
-      } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
+      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${canAnimate ? "hover:scale-[1.01]" : ""
+        } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
     >
       <button
         type="button"
@@ -435,9 +447,8 @@ function VideoCard({ v, onPlay }) {
               : "")
           }
           alt={v.title || v.category}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${
-            imageLoaded ? "opacity-100" : "opacity-0"
-          }`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
           onLoad={() => setImageLoaded(true)}
         />
         {playable && (
@@ -489,8 +500,8 @@ function VideoCard({ v, onPlay }) {
               title={
                 v.lastViewUpdate
                   ? `Views last updated ${new Date(
-                      v.lastViewUpdate
-                    ).toLocaleString()}`
+                    v.lastViewUpdate
+                  ).toLocaleString()}`
                   : ""
               }
             >
@@ -614,7 +625,7 @@ function extractYouTubeId(url = "") {
       const m = u.pathname.match(/\/shorts\/([^/]+)/);
       if (m) return m[1];
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -670,7 +681,7 @@ function ProtectedImg({
       onLoad={onLoad}
       loading="lazy"
       decoding="async"
-      fetchpriority={fetchpriority}
+      fetchPriority={fetchpriority}
       draggable="false"
     />
   );
@@ -682,11 +693,10 @@ function FilterChip({ label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1 rounded-full text-[11px] sm:text-xs border transition-all ${
-        active
-          ? "bg-[var(--orange)] text-white border-[var(--orange)]"
-          : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
-      }`}
+      className={`px-3 py-1 rounded-full text-[11px] sm:text-xs border transition-all ${active
+        ? "bg-[var(--orange)] text-white border-[var(--orange)]"
+        : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
+        }`}
     >
       {label}
     </button>

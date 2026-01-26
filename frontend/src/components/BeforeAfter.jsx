@@ -5,6 +5,7 @@ import {
   useTransform,
   animate,
 } from "framer-motion";
+import { LazyImage } from "./ProgressiveImage";
 
 /* ===================== Enhanced Before/After (keyboard + drag + animations) ===================== */
 const BeforeAfter = ({
@@ -87,13 +88,13 @@ const BeforeAfter = ({
       ([entry]) => {
         if (entry.isIntersecting && !hasPlayed) {
           setHasPlayed(true);
-          
+
           // [MODIFIED] Use Framer Motion's animate utility for performant auto-play
           const controls = animate(vPct, [50, 75, 25, 50], {
             duration: 2,
             ease: "easeInOut",
           });
-          
+
           // Store controls to stop them on unmount
           el.animationControls = controls;
         }
@@ -124,8 +125,8 @@ const BeforeAfter = ({
           boxShadow: isDragging
             ? "0 20px 40px rgba(232,80,2,0.25)"
             : isHovering
-            ? "0 12px 30px rgba(0,0,0,0.15)"
-            : "0 8px 20px rgba(0,0,0,0.1)",
+              ? "0 12px 30px rgba(0,0,0,0.15)"
+              : "0 8px 20px rgba(0,0,0,0.1)",
           transition: "all 0.3s ease",
           touchAction: "none",
           WebkitTapHighlightColor: "transparent",
@@ -149,17 +150,15 @@ const BeforeAfter = ({
       >
         {/* AFTER image (background) */}
         <div className="relative">
-          <img
+          <LazyImage
             src={after}
             alt={afterAlt}
-            loading="lazy"
-            decoding="async"
             width={width}
             height={height}
             className="w-full block"
             style={{ aspectRatio: `${width} / ${height}` }}
           />
-          
+
           {/* After label */}
           <motion.div
             className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold"
@@ -187,17 +186,15 @@ const BeforeAfter = ({
             WebkitClipPath: clip,
           }}
         >
-          <img
+          <LazyImage
             src={before}
             alt={beforeAlt}
-            loading="lazy"
-            decoding="async"
             width={width}
             height={height}
             className="w-full block"
             style={{ aspectRatio: `${width} / ${height}` }}
           />
-          
+
           {/* Before label */}
           <motion.div
             className="absolute top-4 left-4 px-3 py-1.5 rounded-full text-xs font-semibold"

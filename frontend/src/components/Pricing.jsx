@@ -1,895 +1,678 @@
 // src/components/Pricing.jsx
-import React from "react";
-import { motion } from "framer-motion";
-import { formatINR, track } from "../lib/helpers"; // currency + lightweight analytics
+import React, { useState, useMemo, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { formatINR, track } from "../lib/helpers";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
+import { FESTIVAL_DATABASE, CONTACT, TYPOGRAPHY, COLORS } from "../config/constants";
+import { Check, ArrowRight, Zap, Star, Shield, Clock, Sparkles, Info, MessageCircle, Settings, Monitor, Activity, Cpu, Layers, BarChart, HardDrive } from "lucide-react";
 
-const CATS = [ /* your CATS array */ ];
-const RATE_CARD = { /* your RATE_CARD object */ };
-const PLANS = { /* your PLANS object */ };
-const POPULAR = { /* your POPULAR object */ };
+/**
+ * Pricing - Elite Agency Optimized Version
+ * High-contrast readability, 60fps animations, and new "Studio Pipeline" features.
+ */
 const Pricing = ({ onOpenCalendly }) => {
-  const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const [cat, setCat] = useState("gaming");
+  const [openIdx, setOpenIdx] = useState(null);
+  const [idx, setIdx] = useState(0);
 
-  const isTouch =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(hover: none)").matches;
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
-  // Detect mobile viewport (≤ 640px) for carousel mode
-  const [isMobile, setIsMobile] = React.useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(max-width: 640px)").matches
-      : false
-  );
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 640px)");
-    const onChange = (e) => setIsMobile(e.matches);
-    mq.addEventListener?.("change", onChange);
-    return () => mq.removeEventListener?.("change", onChange);
+  // 1. Detect Active Festival Offer
+  const activeOffer = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    return FESTIVAL_DATABASE.find(fest => {
+      const start = new Date(currentYear, fest.month, fest.day - 1);
+      const end = new Date(currentYear, fest.month, fest.day + fest.durationDays);
+      return now >= start && now <= end;
+    });
   }, []);
 
-  /* ---------- Tabs ---------- */
+  // 2. Comprehensive Data Structure
   const CATS = [
-    {
-      k: "gaming",
-      label: "Gaming",
-      headline: "Level up your channel, not just your KD",
-      sub: "Hook-first edits, cracked thumbnails, and highlight engines built for any title.",
-    },
-    {
-      k: "vlog",
-      label: "Vlogs",
-      headline: "Turn everyday moments into bingeable stories",
-      sub: "Cleaner cuts, clearer hooks, and packaging that earns the click.",
-    },
-    {
-      k: "talking",
-      label: "Talking Heads & Motion Graphics",
-      headline: "Ship long-form, spin a clips flywheel",
-      sub: "Studio-grade edits, transcripts, and steady clips for discovery.",
-    },
-    {
-      k: "others",
-      label: "Others",
-      headline: "Custom mix for brands & niches",
-      sub: "Tell us your format and goals — we’ll tailor a plan.",
-    },
+    { k: "gaming", label: "Gaming", headline: "CRACK THE ALGORITHM", sub: "Hook-first edits for creators who play to win." },
+    { k: "vlog", label: "Vlogs", headline: "NARRATIVE ARCHITECTURE", sub: "Everyday moments, polished into bingeable cinema." },
+    { k: "talking", label: "Talking Heads", headline: "AUTHORITY ENGINE", sub: "Studio-grade edits for podcasts, educators, and leaders." },
+    { k: "others", label: "Studio Custom", headline: "BESPOKE PIPELINES", sub: "Tell us the vision; we build the production line." },
   ];
-  const [cat, setCat] = React.useState("gaming");
 
-  /* ---------- INTERNAL rate card (not rendered) ---------- */
-  const RATE_CARD = {
-    gaming: { thumb: 170, short: 200, longPerMin: 200 },
-    vlog: { longPerMin: 200, longPerMinCine: 250, thumb: 170, short: 200 },
-    talking: { editPerMin: 180, clip: 220, thumb: 170 }, // podcasts merged here
-  };
-
-  const estimatePlan = (catKey, spec = {}) => {
-    const r = RATE_CARD[catKey] || {};
-    let total = 0;
-
-    if (catKey === "gaming") {
-      total += (spec.thumbs || 0) * (r.thumb || 0);
-      total += (spec.shorts || 0) * (r.short || 0);
-      total += (spec.longMins || 0) * (r.longPerMin || 0);
-    } else if (catKey === "vlog") {
-      const cine = Math.min(spec.longMins || 0, spec.cineMins || 0);
-      const normal = Math.max(0, (spec.longMins || 0) - cine);
-      total += (spec.thumbs || 0) * (r.thumb || 0);
-      total += (spec.shorts || 0) * (r.short || 0);
-      total += cine * (r.longPerMinCine || r.longPerMin || 0);
-      total += normal * (r.longPerMin || 0);
-    } else if (catKey === "talking") {
-      total += (spec.episodeMins || 0) * (r.editPerMin || 0);
-      total += (spec.clips || 0) * (r.clip || 0);
-      total += (spec.thumbs || 0) * (r.thumb || 0);
-    }
-    return Math.round(total || 0);
-  };
-
-  /* ---------- Plans (public prices) ---------- */
   const PLANS = {
     gaming: [
       {
-        name: "Starter — Warm-Up",
-        tag: "Kickoff + mini audit",
+        name: "Trial Sprint",
+        tag: "100% QUALITY PROOF",
         key: "starter",
-        cta: "Start Warm-Up",
-        priceInr: 599, // one-time
+        cta: "Deploy Trial",
+        priceInr: 599,
         billing: "one-time",
         bullets: [
-          "1 Thumbnail (AI-assisted + human polish)",
-          "1 Short (≤50s) with kinetic captions & sound design",
-          "Mini channel audit (hooks, metadata, packaging)",
+          "1 Cinematic Thumbnail (A/B Ready)",
+          "1 High-Octane Short (≤50s)",
+          "Channel Audit & SEO Baseline",
         ],
         includes: [
-          "A/B-ready: 2 thumbnail comps (color & text style)",
-          "Custom short thumbnail",
-          "Turnaround: 48–72h",
+          "2 Design Variations",
+          "Kinetic SFX & Color Grade",
+          "48h Handoff",
         ],
-        spec: { thumbs: 1, shorts: 1, longMins: 0 },
       },
       {
-        name: "Clutch Highlights",
-        tag: "Predictable Shorts growth",
+        name: "Shorts Factory",
+        tag: "VIRAL FREQUENCY",
         key: "highlights",
-        cta: "Book Highlights",
-        priceInr: 6999, // monthly
+        cta: "Scale Shorts",
+        priceInr: 6999,
         billing: "monthly",
         bullets: [
-          "30 Gaming Shorts (feed-optimized)",
-          "30 custom short thumbnails",
-          "Subscribe/Follow animation (YT/IG/TikTok)",
+          "30 Optimized Shorts / Month",
+          "30 Bespoke Vertical Thumbnails",
+          "Custom Platform Branding Pack",
         ],
         includes: [
-          "Meme timing • emoji accents • SFX",
-          "5 AI-made transitions/hooks",
-          "Captions + title suggestions",
+          "Meme-Engine Integration",
+          "Trend-First Subtitles",
+          "72h Priority Queue",
         ],
-        spec: { shorts: 30, thumbs: 4, longMins: 0 },
       },
       {
-        name: "Rank Up",
-        tag: "Thumbnails + long-form rhythm",
+        name: "The Vanguard",
+        tag: "LONG-FORM RHYTHM",
         key: "rankup",
-        cta: "Book Rank Up",
-        priceInr: 5499, // monthly
+        cta: "Join the Vanguard",
+        priceInr: 5499,
         billing: "monthly",
         bullets: [
-          "2 Long-form edits (≤8 min each)",
-          "2 Thumbnails (A/B-ready) + 5 Live thumbnails",
-          "Titles, tags & descriptions (full SEO for these videos)",
+          "2 Long-Form Masterpieces / Month",
+          "2 A/B Tested Thumbnails per vid",
+          "Full Video SEO Suite",
         ],
         includes: [
-          "Intros/outros • memes • sound design • captions",
-          "Transitions • zooms • subscribe animations",
-          "AI transitions & custom templates where needed",
+          "Advanced Storyboarding",
+          "Soundtrack Curation",
+          "Unlimited Revisions",
         ],
-        spec: { thumbs: 7, shorts: 0, longMins: 16 },
       },
       {
-        name: "Pro League",
-        tag: "End-to-end growth engine",
+        name: "Empire Tier",
+        tag: "FULL STUDIO OUTSOURCE",
         key: "pro",
-        cta: "Book Pro League",
-        priceInr: 13499, // monthly
+        cta: "Build My Empire",
+        priceInr: 13499,
         billing: "monthly",
         bullets: [
-          "4 Long-form edits (≤8 min each)",
-          "4 Video thumbnails A/B + 6 Live thumbnails",
-          "20 Shorts",
+          "4 Long-Form + 20 Shorts / Month",
+          "Complete Channel Management",
+          "Monthly Growth & Analytics Audit",
         ],
         includes: [
-          "All Rank Up inclusions + free SEO for live streams",
-          "Access to Shinel SEO Tools",
-          "SLA: 48–72h, priority queueing",
+          "Priority Production Lead",
+          "Full Asset Handoff (PRPROJ)",
+          "SLA: 48h Guaranteed",
         ],
-        spec: { thumbs: 10, shorts: 20, longMins: 32 },
       },
     ],
     vlog: [
       {
-        name: "Starter — Spark",
-        tag: "Kickoff + mini audit",
+        name: "Spark Trial",
+        tag: "SINGLE STORY PROOF",
         key: "starter",
         cta: "Start Spark",
-        priceInr: 699, // one-time
+        priceInr: 699,
         billing: "one-time",
-        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)", "Mini audit (storyline & packaging)"],
-        includes: [
-          "AI hook help for openers",
-          "Color & audio cleanup on the short",
-          "Basic SEO checklist",
-        ],
-        spec: { thumbs: 1, shorts: 1, longMins: 0, cineMins: 0 },
+        bullets: ["1 Premium Thumbnail", "1 Story-Driven Reel", "Narrative Structure Audit"],
+        includes: ["Color Restoration", "AI Audio Cleanup", "48h SLA"],
       },
       {
         name: "Daily Driver",
-        tag: "Reliable cadence",
+        tag: "RELIABLE OUTPUT",
         key: "driver",
-        cta: "Book Daily Driver",
-        priceInr: 9999, // monthly
+        cta: "Deploy Driver",
+        priceInr: 9999,
         billing: "monthly",
-        bullets: ["3 Vlog edits (≤8 min each)", "3 Thumbnails", "9 Reels/Shorts (platform-ready)"],
-        includes: [
-          "Color grading • captions where needed",
-          "Intro/Outro for videos",
-          "AI short thumbnails • AI opening beat/transition",
-        ],
-        spec: { longMins: 24, cineMins: 0, thumbs: 3, shorts: 9 },
+        bullets: ["3 Narrative Vlog Edits (≤8m)", "3 Thumbnails (A/B Comps)", "9 Multi-Platform Reels"],
+        includes: ["LUT Color Grading", "Audio Mastering", "Monthly Asset Library"],
       },
       {
-        name: "Storyteller",
-        tag: "Narrative & cinematic polish",
+        name: "Cinematic Suite",
+        tag: "FILM-GRADE FINISH",
         key: "story",
-        cta: "Book Storyteller",
-        priceInr: 7499, // monthly
+        cta: "Go Cinematic",
+        priceInr: 7499,
         billing: "monthly",
-        bullets: ["2 Cinematic vlogs (≤8 min)", "2 Thumbnails", "6 Reels/Shorts"],
-        includes: [
-          "Music curation & SFX",
-          "Cinematic LUT pass + stabilization",
-          "Color grading • captions • AI opener/transition",
-        ],
-        spec: { longMins: 16, cineMins: 16, thumbs: 2, shorts: 6 },
+        bullets: ["2 Cinematic Story-Arcs / Month", "2 Premium Hook-Based Layouts", "6 Multi-Platform Reels"],
+        includes: ["Soundscape Design", "Advanced Color Mix", "4K Processing"],
       },
       {
-        name: "Creator Suite",
-        tag: "Scale up everything",
+        name: "Auteur Pack",
+        tag: "TOTAL CREATIVE CONTROL",
         key: "suite",
-        cta: "Book Creator Suite",
-        priceInr: 17999, // monthly
+        cta: "Unlock Auteur",
+        priceInr: 17999,
         billing: "monthly",
-        bullets: [
-          "4 Vlog edits (≤8 min) + 2 Cinematic vlogs (≤8 min)",
-          "6 Thumbnails (A/B-ready)",
-          "15 Reels/Shorts + brand-kit starter",
-        ],
-        includes: [
-          "Title/Thumb concept board",
-          "AI thumbnail credits",
-          "Early access to Shinel AI tools",
-        ],
-        spec: { longMins: 48, cineMins: 16, thumbs: 6, shorts: 15 },
+        bullets: ["6 Large-Scale Edits / Month", "6 A/B Thumbnail Pairs", "15 Reels + Brand Kit"],
+        includes: ["Concept Pre-Production", "Dedicated Handoff Manager", "Priority Rendering"],
       },
     ],
     talking: [
       {
-        name: "Starter — On Air",
-        tag: "One-time",
+        name: "On-Air Sprint",
+        tag: "TEST THE MIC",
         key: "starter",
-        cta: "Start On Air",
-        priceInr: 999, // one-time
+        cta: "Go On-Air",
+        priceInr: 999,
         billing: "one-time",
-        bullets: ["1 Thumbnail", "1 Short/Reel (≤50s)"],
-        includes: [
-          "Motion-graphics lower-third & speaker ID",
-          "Kinetic captions on the short",
-          "Basic SEO checklist • 48–72h SLA",
-        ],
-        spec: { episodeMins: 0, clips: 1, thumbs: 1 },
+        bullets: ["1 Authority Thumbnail", "1 Information-Dense Reel"],
+        includes: ["Motion Graphic Titles", "48h SLA", "SEO Title Pack"],
       },
       {
-        name: "Studio",
-        tag: "Long-form + clips flywheel",
+        name: "Studio Line",
+        tag: "PROFESSIONAL HUB",
         key: "studio",
-        cta: "Book Studio",
-        priceInr: 13999, // monthly
+        cta: "Setup Studio",
+        priceInr: 13999,
         billing: "monthly",
-        bullets: [
-          "2 Full videos (≤8 min) edited",
-          "12 Clips (30–60s) • 2 Thumbnails",
-          "Show notes + timestamps",
-        ],
-        includes: [
-          "Transcription & filler-word removal pass",
-          "Noise cleanup preset • light motion graphics",
-          "72h SLA",
-        ],
-        spec: { episodeMins: 16, clips: 12, thumbs: 2 },
+        bullets: ["2 Multi-Cam Edits / Month", "12 Knowledge-Clips", "Full Show-Notes & Chapters"],
+        includes: ["Transcription Logic", "Dynamic Lower-Thirds", "72h SLA"],
       },
       {
-        name: "Clips Engine",
-        tag: "High-volume discovery",
+        name: "Clips Flywheel",
+        tag: "DISCOVERY MONSTER",
         key: "clips",
-        cta: "Book Clips Engine",
-        priceInr: 14999, // monthly
+        cta: "Launch Flywheel",
+        priceInr: 14999,
         billing: "monthly",
-        bullets: [
-          "30 Clips (30–60s) from long recordings",
-          "Square/vertical exports",
-          "30 clip covers",
-        ],
-        includes: [
-          "Multi-cam auto-framing",
-          "Kinetic captions • subscribe/follow animations",
-          "Topic tags & title suggestions",
-        ],
-        spec: { episodeMins: 0, clips: 30, thumbs: 4 },
+        bullets: ["30 High-Intensity Clips / Month", "30 Topic-Based Covers", "Automated Framing Optimization"],
+        includes: ["Hook Iteration Suite", "Multi-Layout Export", "Priority Rendertrain"],
       },
       {
-        name: "Network",
-        tag: "Scale your show",
+        name: "Enterprise Show",
+        tag: "GLOBAL BROADCAST",
         key: "network",
-        cta: "Book Network",
-        priceInr: 24999, // monthly
+        cta: "Build Network",
+        priceInr: 24999,
         billing: "monthly",
-        bullets: [
-          "4 Videos (≤8 min) • 20 Clips",
-          "4 Thumbnails",
-          "Chapters + blog draft",
-        ],
-        includes: [
-          "Template pack (FFX/MOGRT)",
-          "Brand kit & style guide",
-          "Access to Shinel SEO tools",
-        ],
-        spec: { episodeMins: 32, clips: 20, thumbs: 4 },
+        bullets: ["4 Multi-Cam Episodes / Month", "20 Global Clips", "Blog-Post Adaptations"],
+        includes: ["Custom MOGRT Pack", "Dedicated Creative Lead", "Quarterly Brand Strategy"],
       },
     ],
     others: [
       {
-        name: "Explainer Sprint",
-        tag: "Business • Product • SaaS",
+        name: "Explainer Pro",
+        tag: "CONVERSION MOVIE",
         key: "explainer",
-        cta: "Plan an Explainer",
-        priceInr: null, // quote
+        cta: "Start Pipeline",
+        priceInr: null,
         billing: "quote",
-        bullets: [
-          "30–60s product explainer or ad",
-          "Script assist + storyboard frames",
-          "On-brand motion graphics",
-        ],
-        includes: [
-          "Voiceover guidance (or provided VO)",
-          "Two styleboards to choose from",
-          "Square/vertical exports + captions",
-        ],
-        spec: {},
+        bullets: ["60s SaaS/Product Ad", "Script & Handoff Storyboard", "Premium Motion Design Suite"],
+        includes: ["VO Direction", "Brand Sync", "SLA: Custom"],
       },
       {
-        name: "Custom Builder",
-        tag: "Strategy-first",
+        name: "Custom Studio",
+        tag: "BESPOKE WORKFLOW",
         key: "custom",
-        cta: "Build My Plan",
-        priceInr: null, // quote only
+        cta: "Build Pipeline",
+        priceInr: null,
         billing: "quote",
-        bullets: [
-          "Mix editing • thumbnails • shorts • motion graphics",
-          "Ideal for brands, explainers, tutorials & more",
-          "We’ll scope to your cadence and KPIs",
-        ],
-        includes: [
-          "Free 15-min audit call",
-          "Roadmap & sample concepts before you commit",
-          "Tailored SLA & handoff",
-        ],
-        spec: {},
+        bullets: ["Tailored Mixed-Media Production", "Dedicated Production POD", "KPI-Driven Creative Handoff"],
+        includes: ["Director Consultation", "Workflow Design", "Full IP Handoff"],
       },
     ],
   };
 
-  // "Most Popular" mapping per category
-  const POPULAR = {
-    gaming: "highlights",
-    vlog: "driver",
-    talking: "clips",
-    others: "explainer",
-  };
+  const POPULAR = { gaming: "highlights", vlog: "driver", talking: "clips" };
 
-  const plans = PLANS[cat] || [];
-  const [openIdx, setOpenIdx] = React.useState(null);
+  // 3. Logic & Helpers
+  const calculateDiscountedPrice = useCallback((original) => {
+    if (!original || !activeOffer) return original;
+    const factor = (100 - activeOffer.discount) / 100;
+    return Math.floor(original * factor);
+  }, [activeOffer]);
 
   const handleCTA = (plan) => {
-    const estimate = estimatePlan(cat, plan.spec || {});
-    try {
-      track("pricing_estimate", { category: cat, plan: plan.key, estimate });
-      track("plan_click", { category: cat, plan: plan.key, billing: plan.billing });
-    } catch {}
-    onOpenCalendly?.();
+    const discounted = calculateDiscountedPrice(plan.priceInr);
+    const priceStr = plan.priceInr ? formatINR(discounted) : "Custom Quote";
+    const msg = `SHINEL STUDIOS // INQUIRY \n-----------------\nCAT: ${cat.toUpperCase()}\nPLAN: ${plan.name}\nVAL: ${priceStr}${plan.billing === 'monthly' ? '/mo' : ''}\nOFFER: ${activeOffer ? activeOffer.id : 'N/A'}\n-----------------\nRequesting production availability.`;
+    const waUrl = `https://wa.me/${CONTACT.phone}?text=${encodeURIComponent(msg)}`;
+    track("agency_pricing_cta", { plan: plan.key, cat });
+    window.open(waUrl, "_blank");
   };
 
-  const PriceBadge = ({ priceInr, billing }) => {
-    if (priceInr == null) {
-      return (
-        <span
-          className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full border"
-          style={{ color: "var(--orange)", borderColor: "var(--orange)" }}
-        >
-          Get Quote
-        </span>
-      );
+  const currentPlans = PLANS[cat] || [];
+  const railRef = useRef(null);
+
+  const scrollToIndex = useCallback((i) => {
+    if (!railRef.current) return;
+    const clamped = Math.max(0, Math.min(i, currentPlans.length - 1));
+    const child = railRef.current.children[clamped];
+    if (child) {
+      child.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
+      setIdx(clamped);
     }
-    return (
-      <span
-        className="ml-2 inline-flex items-center text-xs px-2 py-1 rounded-full"
-        style={{ background: "rgba(232,80,2,.12)", color: "var(--orange)" }}
-      >
-        {formatINR(priceInr)} {billing === "monthly" ? "/mo" : ""}
-      </span>
-    );
-  };
+  }, [currentPlans.length, reduceMotion]);
 
-  /* ---------- Mobile carousel logic ---------- */
-  const railRef = React.useRef(null);
-  const [idx, setIdx] = React.useState(0);
+  // 4. Sub-Components
+  const MetricLabel = ({ icon: Icon, label, value }) => (
+    <div className="flex items-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity duration-300">
+      <Icon size={12} className="text-orange-500" />
+      <span className="text-[10px] font-mono leading-none tracking-widest uppercase font-bold">{label}: {value}</span>
+    </div>
+  );
 
-   const scrollToIndex = React.useCallback((i) => {
-    const rail = railRef.current;
-    if (!rail) return;
-    const clamped = Math.max(0, Math.min(i, plans.length - 1));
-    const child = rail.children[clamped];
-    if (!child) return;
-    child.scrollIntoView({
-      behavior: reduceMotion ? "auto" : "smooth",
-      inline: "center",
-      block: "nearest",
-    });
-    setIdx(clamped);
-  }, [plans.length, reduceMotion]);
-
-  const onPrev = React.useCallback(() => scrollToIndex(idx - 1), [idx, scrollToIndex]);
-  const onNext = React.useCallback(() => scrollToIndex(idx + 1), [idx, scrollToIndex]);
-
-  // Update active index on user scroll (mobile)
-  React.useEffect(() => {
-    if (!isMobile || !railRef.current) return;
-    const rail = railRef.current;
-    let t = null;
-    const onScroll = () => {
-      window.clearTimeout(t);
-      t = window.setTimeout(() => {
-        const { scrollLeft, clientWidth } = rail;
-        const newIdx = Math.round(scrollLeft / clientWidth);
-        setIdx(Math.max(0, Math.min(newIdx, plans.length - 1)));
-      }, 60);
-    };
-    rail.addEventListener("scroll", onScroll, { passive: true });
-    return () => rail.removeEventListener("scroll", onScroll);
-  }, [isMobile, plans.length]);
-
-  // Keyboard arrow support
-  const onKeyDownCarousel = React.useCallback((e) => {
-  if (e.key === "ArrowRight") {
-    e.preventDefault();
-    onNext();
-  } else if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    onPrev();
-  }
-}, [onNext, onPrev]);
+  const StatusStage = ({ label, active, complete }) => (
+    <div className="flex flex-col items-center gap-2">
+      <div className={`w-2.5 h-2.5 rounded-full border ${complete ? 'bg-orange-500 border-orange-500' : active ? 'bg-orange-500 animate-pulse border-orange-500 shadow-[0_0_10px_rgba(232,80,2,0.8)]' : 'border-white/20'}`} />
+      <span className={`text-[8px] font-mono uppercase tracking-widest ${active || complete ? 'text-white font-black' : 'text-white/20'}`}>{label}</span>
+    </div>
+  );
 
   return (
-    <section
-      id="pricing"
-      className="py-18 md:py-20 relative overflow-hidden"
-      style={{ background: "var(--surface)" }}
-      aria-labelledby="pricing-heading"
-    >
-      {/* Ambient glows (light & CPU-friendly) */}
-      {!reduceMotion && (
-        <>
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute -top-40 -left-40 w-[420px] h-[420px] rounded-full"
-            style={{
-              background:
-                "radial-gradient(closest-side, rgba(232,80,2,.14), rgba(232,80,2,0) 70%)",
-              filter: "blur(10px)",
-            }}
-            initial={{ opacity: 0.18 }}
-            animate={{ opacity: [0.12, 0.18, 0.15] }}
-            transition={{ duration: 7.5, repeat: Infinity }}
-          />
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute -bottom-40 -right-40 w-[420px] h-[420px] rounded-full"
-            style={{
-              background:
-                "radial-gradient(closest-side, rgba(255,147,87,.14), rgba(255,147,87,0) 70%)",
-              filter: "blur(12px)",
-            }}
-            initial={{ opacity: 0.18 }}
-            animate={{ opacity: [0.1, 0.18, 0.14] }}
-            transition={{ duration: 7.8, repeat: Infinity, delay: 0.4 }}
-          />
-        </>
-      )}
+    <section id="pricing" className="py-24 md:py-32 relative bg-[#020202] overflow-hidden min-h-screen cursor-default">
+      <MetaTags
+        title="Production Pricing | Shinel Studios - Elite Video Editing Agency"
+        description="Transparent production pricing for top-tier creators. AI-powered, human-directed, post-production excellence. High-contrast, 60fps experience."
+      />
 
-      <div className="container mx-auto px-4 max-w-7xl">
-        {/* Header */}
-        <div className="text-center mb-4 md:mb-6">
-          <motion.h2
-            id="pricing-heading"
-            className="text-3xl md:text-4xl font-bold font-['Poppins']"
-            style={{ color: "var(--text)" }}
-            initial={reduceMotion ? {} : { opacity: 0, y: 12 }}
-            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+      {/* Cinematic Texture Layer - Fixed for Performance */}
+      <div className="absolute inset-0 pointer-events-none z-50 opacity-[0.02] mix-blend-overlay" style={{ backgroundImage: "url('https://grainy-gradients.vercel.app/noise.svg')", position: 'fixed' }} />
+
+      {/* Spotlight Lighting */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-screen bg-[radial-gradient(circle_at_50%_0%,rgba(232,80,2,0.1)_0%,transparent_70%)] pointer-events-none" />
+      <div className="absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] bg-blue-500/5 blur-[150px] pointer-events-none rounded-full" />
+
+      <div className="container mx-auto px-6 max-w-7xl relative z-10">
+        {/* Header Section */}
+        <div className="flex flex-col items-center text-center mb-24 lg:mb-32">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.35 }}
+            className="flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] mb-8"
           >
-            Simple, Proven Packages — tuned for your category
-          </motion.h2>
+            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.4em] text-white/50 font-black">Production Standards v4.2 // OPTIMIZED</span>
+          </motion.div>
+
+          <motion.h1
+            style={{ fontFamily: TYPOGRAPHY.display }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="text-5xl md:text-8xl lg:text-9xl text-white mb-6 tracking-tight leading-none"
+          >
+            Elite <span className="italic text-orange-500">Value.</span>
+          </motion.h1>
+
           <motion.p
-            className="mt-2 text-sm md:text-base"
-            style={{ color: "var(--text-muted)" }}
-            initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
-            whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.3, delay: 0.05 }}
+            className="text-white/50 text-[10px] md:text-xs font-mono uppercase tracking-[0.5em] max-w-2xl font-bold"
           >
-            Gaming, Vlogs, Talking Heads & Motion Graphics — or build your own.
+            Tiered output pipelines for high-performance channels.
           </motion.p>
         </div>
 
-        {/* Category Tabs */}
-        <motion.div
-          className="mx-auto mb-5 md:mb-7 flex w-full max-w-[1080px] items-center justify-center gap-2 flex-wrap"
-          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.28 }}
-        >
-          {CATS.map((c) => {
-            const on = c.k === cat;
-            return (
-              <button
-                key={c.k}
-                onClick={() => {
-  setCat(c.k);
-  setOpenIdx(null);
-  setIdx(0);
-  requestAnimationFrame(() => scrollToIndex(0)); // reset rail scroll on tab switch
-}}
+        {/* Global Offer Alert - Enhanced Contrast */}
+        <AnimatePresence>
+          {activeOffer && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-20 rounded-[2.5rem] border border-orange-500/30 bg-orange-500/[0.04] p-10 relative overflow-hidden group backdrop-blur-xl"
+            >
+              {/* Decorative Brackets */}
+              <div className="absolute top-6 left-6 w-6 h-6 border-t-2 border-l-2 border-orange-500/40" />
+              <div className="absolute top-6 right-6 w-6 h-6 border-t-2 border-r-2 border-orange-500/40" />
+              <div className="absolute bottom-6 left-6 w-6 h-6 border-b-2 border-l-2 border-orange-500/40" />
+              <div className="absolute bottom-6 right-6 w-6 h-6 border-b-2 border-r-2 border-orange-500/40" />
 
-                className={`rounded-full px-4 py-2 text-sm font-semibold border ${
-                  on ? "shadow" : ""
+              <div className="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
+                <div className="flex items-center gap-8">
+                  <div className="w-20 h-20 rounded-3xl bg-orange-500/10 flex items-center justify-center border border-orange-500/40 shadow-[0_0_50px_rgba(232,80,2,0.1)]">
+                    <Zap className="text-orange-500 drop-shadow-glow" size={40} />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-mono text-orange-500 uppercase tracking-widest block mb-1 font-black">Incoming Transmission // Offer Active</span>
+                    <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">{activeOffer.title}</h2>
+                  </div>
+                </div>
+                <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-white/10 pt-8 md:pt-0 md:pl-12">
+                  <div className="text-[11px] font-mono text-white/40 uppercase tracking-[0.3em] mb-2 font-black">Discount Multiplier</div>
+                  <div className="text-6xl font-black text-white leading-none tracking-tighter">-{activeOffer.discount}%</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Category Tabs - High Interactive Feedback */}
+        <div className="flex flex-wrap justify-center gap-4 mb-20 px-4">
+          {CATS.map((c) => (
+            <button
+              key={c.k}
+              onClick={() => { setCat(c.k); setIdx(0); setOpenIdx(null); }}
+              className={`group relative flex items-center gap-3 px-10 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${cat === c.k
+                  ? "bg-white text-black scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
+                  : "bg-white/[0.04] border border-white/10 text-white/40 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
                 }`}
-                style={{
-                  color: "var(--text)",
-                  borderColor: "var(--border)",
-                  background: on ? "rgba(232,80,2,.12)" : "var(--surface-alt)",
-                }}
-                aria-pressed={on}
-                aria-label={`Select ${c.label}`}
-              >
-                {c.label}
-              </button>
-            );
-          })}
-        </motion.div>
-
-        {/* Category headline */}
-        <div className="text-center mb-6">
-          <div className="text-lg md:text-xl font-semibold" style={{ color: "var(--text)" }}>
-            {CATS.find((x) => x.k === cat)?.headline}
-          </div>
-          <div className="text-sm md:text-base mt-1" style={{ color: "var(--text-muted)" }}>
-            {CATS.find((x) => x.k === cat)?.sub}
-          </div>
+              style={{ willChange: 'transform, opacity' }}
+            >
+              {cat === c.k && <motion.div layoutId="tab-dot" className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(232,80,2,0.8)]" />}
+              {c.label}
+            </button>
+          ))}
         </div>
 
-        {/* ---------- DESKTOP/TABLET GRID ---------- */}
-        {!isMobile && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-            {plans.map((p, i) => {
-              const open = openIdx === i;
+        {/* Studio Plans Display Header */}
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-black text-white uppercase tracking-[0.2em] mb-4 drop-shadow-glow">{CATS.find(x => x.k === cat)?.headline}</h2>
+          <p className="text-white/40 text-[11px] uppercase tracking-[0.4em] font-mono font-black">{CATS.find(x => x.k === cat)?.sub}</p>
+        </div>
+
+        <div className="relative">
+          <div
+            ref={railRef}
+            className={`flex ${isMobile ? "overflow-x-auto snap-x snap-mandatory no-scrollbar pb-10 gap-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"}`}
+          >
+            {currentPlans.map((p, i) => {
               const isPopular = POPULAR[cat] === p.key;
+              const open = openIdx === i;
+              const originalPrice = p.priceInr;
+              const finalPrice = calculateDiscountedPrice(originalPrice);
+
               return (
-                <motion.article
+                <motion.div
                   key={`${cat}-${p.key}`}
-                  initial={{ opacity: 0, y: 22, scale: 0.98 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, margin: "-12% 0px -12% 0px" }}
-                  {...(!isTouch && !reduceMotion ? { whileHover: { y: -3 } } : {})}
-                  whileTap={{ scale: 0.99 }}
-                  transition={{ duration: 0.28, ease: "easeOut" }}
-                  className="group relative rounded-2xl p-6 border"
-                  style={{
-                    background: "var(--surface-alt)",
-                    borderColor: "var(--border)",
-                    boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
-                  }}
-                  aria-label={`${p.name} plan`}
+                  layout
+                  initial={{ opacity: 0, scale: 0.98, y: 20 }}
+                  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 100, damping: 20 }}
+                  className={`relative group shrink-0 ${isMobile ? "w-[88vw] snap-center" : "w-full"}`}
                 >
-                  {/* Popular ribbon */}
-                  {isPopular && (
-                    <div
-                      className="absolute -top-3 left-4 text-[11px] px-2 py-1 rounded-full font-semibold"
-                      style={{
-                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                        color: "#fff",
-                        boxShadow: "0 6px 14px rgba(232,80,2,.25)",
-                      }}
-                    >
-                      Most Popular
+                  {/* Studio Spec Card - Enhanced Hovers & Contrast */}
+                  <div className={`h-full rounded-[2.5rem] p-8 border transition-all duration-500 flex flex-col relative overflow-hidden ${isPopular
+                      ? "border-orange-500/40 bg-orange-500/[0.02]"
+                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/30"
+                    }`}
+                    style={{ willChange: 'transform' }}>
+
+                    {/* Shadow Glow On Hover (Desktop) */}
+                    {!isMobile && (
+                      <div className="absolute inset-0 bg-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-[80px] pointer-events-none" />
+                    )}
+
+                    {/* Sensor Data Headers - Better Readability */}
+                    <div className="flex justify-between items-center mb-10 relative z-10">
+                      <div className="flex items-center gap-2">
+                        <Activity size={12} className="text-orange-500 animate-pulse" />
+                        <span className="text-[9px] font-mono text-white/40 uppercase tracking-[0.2em] font-black">{p.key.padStart(8, '0')}</span>
+                      </div>
+                      {isPopular && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-orange-500/40 bg-orange-500/10">
+                          <Star size={8} className="text-orange-500 fill-orange-500" />
+                          <span className="text-[9px] font-mono text-orange-500 uppercase tracking-widest font-black">Elite choice</span>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-                    {p.tag || "\u00A0"} {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}
-                    {p.billing === "monthly" ? " • cancel anytime" : ""}
-                  </div>
+                    <div className="mb-10 relative z-10">
+                      <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-orange-500 font-black block mb-2">{p.tag}</span>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-6 leading-none">{p.name}</h3>
 
-                  <h3 className="text-xl font-semibold flex items-center flex-wrap" style={{ color: "var(--text)" }}>
-                    <span>{p.name}</span>
-                    <PriceBadge priceInr={p.priceInr} billing={p.billing} />
-                  </h3>
+                      <div className="flex flex-col">
+                        {originalPrice ? (
+                          <>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-4xl font-black text-white tracking-tighter">{formatINR(finalPrice)}</span>
+                              {p.billing === 'monthly' && <span className="text-[11px] font-mono text-white/40 uppercase tracking-widest font-bold">/mo</span>}
+                            </div>
+                            {originalPrice !== finalPrice && (
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="text-xs font-mono text-white/20 line-through tracking-wider font-medium">{formatINR(originalPrice)}</span>
+                                <span className="text-[10px] font-mono text-orange-500 font-black tracking-widest">FLAT -{activeOffer.discount}%</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xl font-black text-white/90 uppercase tracking-[0.2em] drop-shadow-glow">Consult Studio</span>
+                        )}
+                      </div>
+                    </div>
 
-                  <ul className="mt-4 space-y-2" style={{ color: "var(--text)" }}>
-                    {p.bullets.map((b, bi) => (
-                      <li key={bi} className="flex items-start gap-2">
-                        <span aria-hidden>•</span>
-                        <span>{b}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* Expandable details */}
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setOpenIdx(open ? null : i)}
-                      className="text-sm underline"
-                      style={{ color: "var(--orange)" }}
-                      aria-expanded={open}
-                      aria-controls={`inc-${cat}-${i}`}
-                    >
-                      {open ? "Hide details" : "What’s included"}
-                    </button>
-                    <motion.div
-                      id={`inc-${cat}-${i}`}
-                      initial={false}
-                      animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-                      transition={{ duration: 0.2 }}
-                      style={{ overflow: "hidden" }}
-                      className="mt-2"
-                    >
-                      <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
-                        {p.includes?.map((x, xi) => (
-                          <li key={xi} className="flex items-start gap-2">
-                            <span aria-hidden>–</span>
-                            <span>{x}</span>
+                    {/* Operational Bullets - Higher Contrast */}
+                    <div className="flex-1 relative z-10">
+                      <ul className="space-y-4 mb-10">
+                        {p.bullets.map((b, bi) => (
+                          <li key={bi} className="flex items-start gap-4 group/item">
+                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_5px_rgba(232,80,2,0.5)] group-hover/item:scale-150 transition-transform duration-300" />
+                            <span className="text-xs text-white/60 leading-relaxed font-mono uppercase tracking-tight group-hover/item:text-white font-bold transition-colors duration-300">{b}</span>
                           </li>
                         ))}
                       </ul>
-                    </motion.div>
-                  </div>
 
-                  <button
-                    onClick={() => handleCTA(p)}
-                    className="w-full mt-6 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                    style={{
-                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                      boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
-                    }}
-                    aria-label={p.cta}
-                  >
-                    {p.cta}
-                  </button>
+                      {/* Detail Expansion - Studio Spec Style */}
+                      {p.includes && (
+                        <div className="mt-6 pt-6 border-t border-white/10">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenIdx(open ? null : i); }}
+                            className="flex items-center justify-between w-full text-[10px] font-mono uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Settings size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-orange-500" : ""}`} />
+                              <span className={open ? 'text-orange-500 font-black' : ''}>Technical Specs</span>
+                            </div>
+                            <ArrowRight size={10} className={`transition-transform duration-300 ${open ? 'rotate-90' : ''}`} />
+                          </button>
+                          <AnimatePresence>
+                            {open && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <ul className="mt-6 space-y-3.5 pl-2 border-l border-white/5">
+                                  {p.includes.map((inc, ii) => (
+                                    <li key={ii} className="text-[10px] text-white/40 font-mono uppercase flex items-center gap-2 tracking-wide leading-relaxed font-medium hover:text-white/80 transition-colors">
+                                      <div className="w-1 h-1 rotate-45 border border-orange-500/30 shrink-0" />
+                                      {inc}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    No payment needed to preview concepts.
+                    {/* Agency Action Button - Liquid Animation */}
+                    <button
+                      onClick={() => handleCTA(p)}
+                      className={`w-full mt-10 py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn active:scale-95 z-20 ${isPopular
+                          ? "bg-white text-black hover:bg-orange-600 hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
+                          : "bg-white/[0.05] text-white hover:bg-white/[0.1] border border-white/10"
+                        }`}
+                      style={{ willChange: 'transform' }}
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-3">
+                        {p.cta} <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
+                      </span>
+                    </button>
+
+                    <div className="mt-8 flex justify-between items-center px-1 relative z-10">
+                      <MetricLabel icon={Cpu} label="Engine" value="v9.0a" />
+                      <MetricLabel icon={Clock} label="Latency" value="&lt;48H" />
+                    </div>
                   </div>
-                </motion.article>
+                </motion.div>
               );
             })}
           </div>
-        )}
+        </div>
 
-        {/* ---------- MOBILE CAROUSEL ---------- */}
-        {isMobile && (
-          <div
-            role="region"
-            aria-label={`${cat} plans carousel`}
-            className="relative"
-            onKeyDown={onKeyDownCarousel}
-          >
-            <div aria-live="polite" className="sr-only">
-  {`Plan ${idx + 1} of ${plans.length}`}
-</div>
-
-            {/* Arrow buttons */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <button
-                type="button"
-                onClick={onPrev}
-                className="rounded-full border px-3 py-1 text-sm"
-                style={{
-                  color: "var(--text)",
-                  borderColor: "var(--border)",
-                  background: "var(--surface-alt)",
-                }}
-                aria-label="Previous plan"
-                disabled={idx <= 0}
-              >
-                ←
-              </button>
-              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Use ← → to browse
-              </div>
-              <button
-                type="button"
-                onClick={onNext}
-                className="rounded-full border px-3 py-1 text-sm"
-                style={{
-                  color: "var(--text)",
-                  borderColor: "var(--border)",
-                  background: "var(--surface-alt)",
-                }}
-                aria-label="Next plan"
-                disabled={idx >= plans.length - 1}
-              >
-                →
-              </button>
-            </div>
-
-            {/* Rail */}
-            <div
-              ref={railRef}
-              tabIndex={0}
-              aria-roledescription="carousel"
-              aria-label="Plans"
-              className="flex overflow-x-auto snap-x snap-mandatory scroll-px-4 gap-4 px-1 no-scrollbar"
-              style={{
-                scrollBehavior: reduceMotion ? "auto" : "smooth",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              {plans.map((p, i) => {
-                const isPopular = POPULAR[cat] === p.key;
-                const open = openIdx === i;
-                return (
-                  <article
-                    key={`${cat}-${p.key}`}
-                    className="snap-start shrink-0 w-[92%] mx-2 rounded-2xl p-5 border"
-                    style={{
-                      background: "var(--surface-alt)",
-                      borderColor: "var(--border)",
-                      boxShadow: "0 10px 22px rgba(0,0,0,0.10)",
-                    }}
-                    aria-label={`${p.name} plan`}
-                  >
-                    {/* Popular ribbon */}
-                    {isPopular && (
-                      <div
-                        className="inline-block -mt-3 mb-2 text-[11px] px-2 py-1 rounded-full font-semibold"
-                        style={{
-                          background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                          color: "#fff",
-                          boxShadow: "0 6px 14px rgba(232,80,2,.25)",
-                        }}
-                      >
-                        Most Popular
-                      </div>
-                    )}
-
-                    <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                      {p.tag || "\u00A0"}{" "}
-                      {p.billing && p.billing !== "quote" ? "• " + p.billing : ""}{" "}
-                      {p.billing === "monthly" ? "• cancel anytime" : ""}
-                    </div>
-
-                    <h3
-                      className="text-lg font-semibold flex items-center flex-wrap"
-                      style={{ color: "var(--text)" }}
-                    >
-                      <span>{p.name}</span>
-                      <PriceBadge priceInr={p.priceInr} billing={p.billing} />
-                    </h3>
-
-                    <ul className="mt-3 space-y-1.5 text-sm" style={{ color: "var(--text)" }}>
-                      {p.bullets.map((b, bi) => (
-                        <li key={bi} className="flex items-start gap-2">
-                          <span aria-hidden>•</span>
-                          <span>{b}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* Expandable details */}
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => setOpenIdx(open ? null : i)}
-                        className="text-sm underline"
-                        style={{ color: "var(--orange)" }}
-                        aria-expanded={open}
-                        aria-controls={`m-inc-${cat}-${i}`}
-                      >
-                        {open ? "Hide details" : "What’s included"}
-                      </button>
-                      <div
-                        id={`m-inc-${cat}-${i}`}
-                        hidden={!open}
-                        className="mt-1"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        <ul className="text-sm space-y-1.5">
-                          {p.includes?.map((x, xi) => (
-                            <li key={xi} className="flex items-start gap-2">
-                              <span aria-hidden>–</span>
-                              <span>{x}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleCTA(p)}
-                      className="w-full mt-4 rounded-xl py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                        boxShadow: "0 12px 26px rgba(232,80,2,0.25)",
-                      }}
-                      aria-label={p.cta}
-                    >
-                      {p.cta} →
-                    </button>
-
-                    <div className="mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                      No payment needed to preview concepts.
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            {/* Dots */}
-            <div className="mt-3 flex items-center justify-center gap-2" aria-hidden="true">
-              {plans.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => scrollToIndex(i)}
-                  className="h-2 w-2 rounded-full"
-                  style={{
-                    background: i === idx ? "var(--orange)" : "var(--border)",
-                    transform: i === idx ? "scale(1.2)" : "scale(1)",
-                    transition: "transform .2s ease",
-                  }}
-                  aria-label={`Go to plan ${i + 1}`}
-                />
-              ))}
-            </div>
+        {/* Feature 1: The Production Pipeline Visualizer */}
+        <div className="mt-32 p-10 rounded-[3rem] border border-white/10 bg-white/[0.02] backdrop-blur-md relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-5">
+            <Monitor size={100} />
           </div>
-        )}
 
-        {/* Add-ons & Always included */}
-        <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div
-            className="rounded-2xl p-5 border"
-            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-          >
-            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
-              Add-ons (any tier)
-            </div>
-            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
-              <li>Rush 24h: +20% cost</li>
-              <li>Extra A/B thumbnail: +30%</li>
-              <li>Advanced motion pack (long-form): +₹200/min</li>
-              <li>Multi-language captions (2× SRT): +₹2,000/video</li>
-              <li>
-                Face-swap / Voice generation: custom — consent-first & policy-compliant (get quote)
-              </li>
-            </ul>
+          <div className="text-center mb-12">
+            <span className="text-[10px] font-mono text-orange-500 font-black uppercase tracking-[0.5em] block mb-2">Live Production Logic</span>
+            <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Your Pipeline Journey</h3>
           </div>
-          <div
-            className="rounded-2xl p-5 border"
-            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-          >
-            <div className="text-sm font-semibold mb-3" style={{ color: "var(--text)" }}>
-              Always included
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 relative px-4">
+            {/* Connector Line */}
+            <div className="absolute top-1.5 left-10 right-10 h-[1px] bg-white/10 hidden md:block" />
+
+            <StatusStage label="Ingestion" complete />
+            <StatusStage label="A-Cut Logic" complete />
+            <StatusStage label="Creative Pass" active />
+            <StatusStage label="Shinel QA" />
+            <StatusStage label="Master Handoff" />
+          </div>
+
+          <div className="mt-12 flex flex-col md:flex-row items-center justify-center gap-10 border-t border-white/5 pt-10">
+            <div className="flex items-center gap-3">
+              <Shield size={20} className="text-orange-500" />
+              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest font-black">Secure Data Vault Included</span>
             </div>
-            <ul className="text-sm space-y-1.5" style={{ color: "var(--text-muted)" }}>
-              <li>1 major + 2 minor revision rounds per deliverable</li>
-              <li>
-                Organized handoff, export presets, project files on request (very large timelines
-                may add cost)
-              </li>
-              <li>
-                AI for speed (transcripts, hook/metadata/thumbnail ideation) + human-directed finish
-              </li>
-              <li>Standard turnaround: 48–72 hours (coordinated queues on larger plans)</li>
-            </ul>
+            <div className="flex items-center gap-3">
+              <HardDrive size={20} className="text-orange-500" />
+              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest font-black">All Project Assets Preserved</span>
+            </div>
           </div>
         </div>
 
-        {/* reassurance */}
-        <div className="text-center mt-8">
-          <p className="text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
-            Prices in INR. Taxes extra if applicable. Don’t love the first delivery? We’ll revise or
-            credit your trial.
+        {/* Studio Add-ons Hub - Better Grid & Hover */}
+        <div className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <motion.div
+            whileHover={{ y: -5 }}
+            className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-orange-500/30 transition-colors duration-500"
+          >
+            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-20 transition-opacity">
+              <Settings size={60} />
+            </div>
+            <div className="flex items-center gap-4 mb-10">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30">
+                <Zap size={24} className="text-orange-500" />
+              </div>
+              <h4 className="text-2xl font-black text-white uppercase tracking-widest">Expansion Modules</h4>
+            </div>
+            <div className="space-y-8">
+              {[
+                { label: "Elite Rush Protocol (24h)", val: "+20%", desc: "Direct hardware allocation & priority rendering" },
+                { label: "Motion Graphic Mastery", val: "₹200/min", desc: "Complex kinetic typography & custom VFX" },
+                { label: "Global Content Adaptation", val: "₹1,000", desc: "A/B testing for multi-region performance" },
+              ].map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between group/line border-b border-white/5 pb-6 last:border-0 last:pb-0">
+                  <div className="flex-1">
+                    <span className="text-[12px] font-mono text-white uppercase tracking-widest block mb-1 group-hover/line:text-orange-500 transition-colors font-black">{item.label}</span>
+                    <span className="text-[10px] font-mono text-white/40 uppercase tracking-tight font-medium leading-relaxed max-w-xs block">{item.desc}</span>
+                  </div>
+                  <span className="text-2xl font-black text-white ml-6">{item.val}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            whileHover={{ y: -5 }}
+            className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-orange-500/30 transition-colors duration-500"
+          >
+            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-20 transition-opacity">
+              <Layers size={60} />
+            </div>
+            <div className="flex items-center gap-4 mb-10">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30">
+                <BarChart size={24} className="text-orange-500" />
+              </div>
+              <h4 className="text-2xl font-black text-white uppercase tracking-widest">Standard Specs</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+              {[
+                { l: "Revision Control", v: "1 MAJOR // 2 MINOR ACC" },
+                { l: "Asset Delivery", v: "FULL CLOUD HANDOFF" },
+                { l: "Quality Logic", v: "SHINEL 10-PT AUDIT" },
+                { l: "Production Tier", v: "HUMAN-DIRECTED AI" },
+                { l: "Initial Sync", v: "15 MIN STRATEGY CALL" },
+                { l: "Output Opt", v: "4K / VERTICAL / HDR" },
+              ].map((item, idx) => (
+                <div key={idx} className="space-y-1.5 border-l-2 border-orange-500/20 pl-4 py-1">
+                  <span className="text-[10px] font-mono text-orange-500 uppercase tracking-widest font-black">{item.l}</span>
+                  <span className="text-[11px] font-mono text-white uppercase tracking-tight block font-black">{item.v}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Feature 2: Standard vs Shinel Elite Comparison Overlay */}
+        <div className="mt-32 border-t border-white/10 pt-32">
+          <div className="text-center mb-16">
+            <h4 className="text-3xl font-black text-white uppercase tracking-tighter">Why the Industry Switches to Shinel</h4>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-5xl mx-auto">
+            {/* Feature 1 */}
+            <div className="text-center group">
+              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+                <Zap size={32} />
+              </div>
+              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">Turnaround</div>
+              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-orange-500 w-[95%]" />
+              </div>
+              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Industry: 7 Days vs Shinel: 48H</p>
+            </div>
+            {/* Feature 2 */}
+            <div className="text-center group">
+              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+                <Star size={32} />
+              </div>
+              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">Creative Index</div>
+              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-orange-500 w-[88%]" />
+              </div>
+              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Shinel Human-in-Loop Logic</p>
+            </div>
+            {/* Feature 3 */}
+            <div className="text-center group">
+              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+                <Shield size={32} />
+              </div>
+              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">QA Reliability</div>
+              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-orange-500 w-[99%]" />
+              </div>
+              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">10-Point Internal Audit</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-40 text-center opacity-30 pb-20">
+          <p className="text-[10px] font-mono uppercase tracking-[0.8em] text-white font-black">
+            SHINEL STUDIOS // ELITE CREATIVE PRODUCTION // 2026 // ALL ANALYTICS ACTIVE
           </p>
         </div>
       </div>
 
-      {/* Hide scrollbar utility (scoped) */}
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes glow {
+          0% { filter: drop-shadow(0 0 5px rgba(232,80,2,0.4)); }
+          50% { filter: drop-shadow(0 0 20px rgba(232,80,2,0.8)); }
+          100% { filter: drop-shadow(0 0 5px rgba(232,80,2,0.4)); }
+        }
+        .drop-shadow-glow {
+          animation: glow 3s infinite ease-in-out;
+        }
       `}</style>
     </section>
   );

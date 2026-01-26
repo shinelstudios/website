@@ -7,7 +7,8 @@ import SiteFooter from "./components/SiteFooter.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
-import AdminThumbnailsPage from "./components/AdminThumbnailsPage";
+const AdminThumbnailsPage = React.lazy(() => import("./components/AdminThumbnailsPage.jsx"));
+import Toaster from "./components/ui/Toaster.jsx";
 
 import {
   startHashActionRouter,
@@ -57,6 +58,13 @@ const ServiceCategoryPage = React.lazy(() =>
 const ServiceSubcategoryPage = React.lazy(() =>
   import("./components/ServiceSubcategoryPage.jsx")
 );
+const PrivacyPage = React.lazy(() => import("./components/PrivacyPage.jsx"));
+const TermsPage = React.lazy(() => import("./components/TermsPage.jsx"));
+const ClientPulsePage = React.lazy(() => import("./components/ClientPulsePage.jsx"));
+const AdminClientsPage = React.lazy(() => import("./components/AdminClientsPage.jsx"));
+const PortfolioPage = React.lazy(() => import("./components/PortfolioPage.jsx"));
+const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"));
+const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -73,7 +81,7 @@ function ScrollToHash() {
 
     const headerOffset = parseInt(
       getComputedStyle(document.documentElement).getPropertyValue("--header-h") ||
-        76,
+      76,
       10
     );
 
@@ -97,7 +105,7 @@ function Layout() {
     try {
       const saved = localStorage.getItem("theme");
       if (saved) return saved === "dark";
-    } catch {}
+    } catch { }
     if (document.documentElement.classList.contains("dark")) return true;
     return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
   });
@@ -125,7 +133,7 @@ function Layout() {
     if (document.fonts?.ready) {
       document.fonts.ready
         .then(() => requestAnimationFrame(setHeaderVar))
-        .catch(() => {});
+        .catch(() => { });
     }
 
     return () => {
@@ -140,7 +148,7 @@ function Layout() {
       document.documentElement.classList.toggle("dark", isDark);
       try {
         localStorage.setItem("theme", isDark ? "dark" : "light");
-      } catch {}
+      } catch { }
 
       let metaTheme = document.querySelector(
         'meta[name="theme-color"]:not([media])'
@@ -167,6 +175,7 @@ function Layout() {
         <Outlet />
       </main>
       <SiteFooter isDark={isDark} />
+      <Toaster />
     </>
   );
 }
@@ -209,7 +218,7 @@ function Logout() {
         "userLastName",
         "userEmailAddress",
       ].forEach((k) => localStorage.removeItem(k));
-    } catch {}
+    } catch { }
 
     window.dispatchEvent(new Event("auth:changed"));
   }, []);
@@ -251,6 +260,7 @@ export default function App() {
           <Route index element={<ShinelStudiosHomepage />} />
           <Route path="/work" element={<WorkPage />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/live" element={<ClientPulsePage />} />
 
           {/* ---------------------- Services + Subcategories ---------------------- */}
           <Route
@@ -271,10 +281,24 @@ export default function App() {
           <Route path="/branding" element={<Branding />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
-          <Route path="/videos/long" element={<VideoEditing />} />
-          <Route path="/videos/shorts" element={<Shorts />} />
-          <Route path="/gfx/branding" element={<Branding />} />
-          <Route path="/gfx/thumbnails" element={<Thumbnails />} />
+
+          {/* Redirect aliases to canonical paths */}
+          <Route path="/videos/long" element={<Navigate to="/video-editing" replace />} />
+          <Route path="/videos/shorts" element={<Navigate to="/shorts" replace />} />
+          <Route path="/gfx" element={<Navigate to="/services/gfx" replace />} />
+          <Route path="/gfx/branding" element={<Navigate to="/branding" replace />} />
+          <Route path="/gfx/thumbnails" element={<Navigate to="/thumbnails" replace />} />
+
+          {/* Deep link redirects for SEO/Consistency */}
+          <Route path="/services/gfx/thumbnails" element={<Navigate to="/thumbnails" replace />} />
+          <Route path="/services/gfx/branding" element={<Navigate to="/branding" replace />} />
+          <Route path="/services/editing/shorts" element={<Navigate to="/shorts" replace />} />
+          <Route path="/services/editing/long" element={<Navigate to="/video-editing" replace />} />
+
+          <Route path="/pulse" element={<Navigate to="/live" replace />} />
+
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
 
           {/* ---------------------------- Auth & Studio --------------------------- */}
           <Route
@@ -286,6 +310,7 @@ export default function App() {
             }
           />
           <Route path="/logout" element={<Logout />} />
+          <Route path="/portfolio/:slug" element={<PortfolioPage />} />
 
           <Route
             path="/studio"
@@ -300,13 +325,13 @@ export default function App() {
           {/* Keep tools index public or protected as you prefer.
               Header already gates tool links via /login?next=. */}
           <Route
-  path="/tools"
-  element={
-    <ProtectedRoute>
-      <ToolsIndex />
-    </ProtectedRoute>
-  }
-/>
+            path="/tools"
+            element={
+              <ProtectedRoute>
+                <ToolsIndex />
+              </ProtectedRoute>
+            }
+          />
 
 
           <Route
@@ -354,33 +379,27 @@ export default function App() {
             }
           />
 
-          {/* ------------------------------- Admin -------------------------------- */}
+          {/* ----------------------------- Dashboard ------------------------------ */}
           <Route
-            path="/admin/users"
+            path="/dashboard"
             element={
               <ProtectedRoute>
-                <AdminUsersPage />
+                <ManagementHub />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<AdminStats />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="clients" element={<AdminClientsPage />} />
+            <Route path="videos" element={<AdminVideosPage />} />
+            <Route path="thumbnails" element={<AdminThumbnailsPage />} />
+          </Route>
 
-          <Route
-            path="/admin/thumbnails"
-            element={
-              <ProtectedRoute>
-                <AdminThumbnailsPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/admin/videos"
-            element={
-              <ProtectedRoute>
-                <AdminVideosPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/admin/users" element={<Navigate to="/dashboard/users" replace />} />
+          <Route path="/admin/clients" element={<Navigate to="/dashboard/clients" replace />} />
+          <Route path="/admin/videos" element={<Navigate to="/dashboard/videos" replace />} />
+          <Route path="/admin/thumbnails" element={<Navigate to="/dashboard/thumbnails" replace />} />
 
           {/* ----------------------------- Fallback ------------------------------- */}
           <Route path="*" element={<Navigate to="/" replace />} />

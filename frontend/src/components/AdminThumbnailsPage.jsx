@@ -32,6 +32,21 @@ import {
 } from "lucide-react";
 import { createThumbnailStorage } from "./cloudflare-thumbnail-storage";
 
+// Simple LoadingOverlay component – shows a semi‑transparent backdrop with a spinner and optional label
+function LoadingOverlay({ show, label }) {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-50">
+      <div className="flex flex-col items-center gap-2 text-white">
+        <svg className="animate-spin h-8 w-8" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+        </svg>
+        {label && <span>{label}</span>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Admin · Thumbnails Manager (KV-only, no R2)
  * - Image uploads go straight to the Worker (KV) via /thumbnails/upload
@@ -39,9 +54,7 @@ import { createThumbnailStorage } from "./cloudflare-thumbnail-storage";
  * - Strong validation + deterministic progress bars + resumable import
  */
 
-const AUTH_BASE =
-  import.meta.env.VITE_AUTH_BASE ||
-  "https://shinel-auth.your-account.workers.dev";
+const AUTH_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || "";
 
 const LS_TOKEN_KEY = "token";
@@ -76,16 +89,34 @@ const DEFAULT_FORM = {
   imageUrl: "", // set automatically after upload
   _file: null, // local file for preview only
   _imageMeta: null, // preview info
+  isShinel: true,
+  attributedTo: "",
 };
+
+
+// Small wrapper so existing toast(...) calls work
+function toast(type, message) {
+  // map to your notify system
+  const mapped =
+    type === "success" ? "success" :
+      type === "error" ? "error" :
+        type === "warning" ? "warning" :
+          "success";
+
+  window.dispatchEvent(
+    new CustomEvent("notify", { detail: { type: mapped, message: String(message || "") } })
+  );
+}
+
 
 // ---------- Utilities ----------
 const getToken = () => localStorage.getItem(LS_TOKEN_KEY) || "";
 const getAuthHeaders = (isJSON = true) =>
   isJSON
     ? {
-        "Content-Type": "application/json",
-        authorization: `Bearer ${getToken()}`,
-      }
+      "Content-Type": "application/json",
+      authorization: `Bearer ${getToken()}`,
+    }
     : { authorization: `Bearer ${getToken()}` };
 
 // Only used by non-helper endpoints (e.g., fetch-youtube)
@@ -181,15 +212,7 @@ const timeAgo = (ts) => {
   return "Just now";
 };
 
-function useToasts() {
-  const [toasts, setToasts] = useState([]);
-  const add = (type, message, ttl = 3500) => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((t) => [...t, { id, type, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ttl);
-  };
-  return { toasts, add };
-}
+
 
 async function runWithConcurrency(items, worker, concurrency = 5, onTick) {
   const results = [];
@@ -268,7 +291,7 @@ export default function AdminThumbnailsPage() {
     }
   });
 
-  const { toasts, add: toast } = useToasts();
+
 
   // list controls
   const [searchInput, setSearchInput] = useState("");
@@ -297,6 +320,11 @@ export default function AdminThumbnailsPage() {
     );
     lastRetryRef.current = { fn: retryFn, args: retryArgs };
     setOp(null);
+    window.dispatchEvent(new CustomEvent("notify", { detail: { type: "error", message: message || "Error" } }));
+  };
+
+  const surfaceInfo = (msg) => {
+    window.dispatchEvent(new CustomEvent("notify", { detail: { type: "success", message: msg } }));
   };
   const clearError = () => {
     setErr("");
@@ -356,8 +384,8 @@ export default function AdminThumbnailsPage() {
           : "";
         const lastUpdated = data.details.lastUpdated
           ? `\n\nLast updated: ${new Date(
-              data.details.lastUpdated
-            ).toLocaleString()}`
+            data.details.lastUpdated
+          ).toLocaleString()}`
           : "";
         toast(
           "success",
@@ -1003,7 +1031,7 @@ export default function AdminThumbnailsPage() {
     else setSelectedIds(new Set(filtered.map((t) => t.id)));
   };
 
-    const thumbnailStats = useMemo(() => {
+  const thumbnailStats = useMemo(() => {
     if (!thumbnails || thumbnails.length === 0) return null;
 
     const total = thumbnails.length;
@@ -1077,7 +1105,7 @@ export default function AdminThumbnailsPage() {
       await navigator.clipboard.writeText(String(text || ""));
       setCopyOkId(id || text);
       setTimeout(() => setCopyOkId(null), 1200);
-    } catch {}
+    } catch { }
   };
 
   // Variant filter dynamic list
@@ -1123,12 +1151,12 @@ export default function AdminThumbnailsPage() {
             {op.kind === "create"
               ? "Saving"
               : op.kind === "update"
-              ? "Updating"
-              : op.kind === "delete"
-              ? "Deleting"
-              : op.kind === "bulk-delete"
-              ? "Bulk Deleting"
-              : "Working"}{" "}
+                ? "Updating"
+                : op.kind === "delete"
+                  ? "Deleting"
+                  : op.kind === "bulk-delete"
+                    ? "Bulk Deleting"
+                    : "Working"}{" "}
             — {op.pct}% {op.note ? `· ${op.note}` : ""}
           </div>
         </div>
@@ -1468,11 +1496,11 @@ export default function AdminThumbnailsPage() {
 
             <div className="relative">
               <Input
-  label="YouTube URL (Creator · preferred)"
-  value={form.youtubeUrl}
-  onChange={(v) => setForm({ ...form, youtubeUrl: v })}
-  placeholder="Creator video URL, e.g. https://youtube.com/watch?v=..."
-/>
+                label="YouTube URL (Creator · preferred)"
+                value={form.youtubeUrl}
+                onChange={(v) => setForm({ ...form, youtubeUrl: v })}
+                placeholder="Creator video URL, e.g. https://youtube.com/watch?v=..."
+              />
 
               {form.youtubeUrl && (
                 <div className="absolute right-2 top-8 flex items-center gap-1">
@@ -1531,6 +1559,28 @@ export default function AdminThumbnailsPage() {
               required
               error={vErrs.variant}
             />
+
+            <div className="flex flex-col gap-3 py-1">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isShinel}
+                  onChange={e => setForm({ ...form, isShinel: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                  Shinel Project
+                  <span className="block text-[10px] text-gray-500">Show on main Work page</span>
+                </span>
+              </label>
+
+              <Input
+                label="Attributed To (Email/Handle)"
+                value={form.attributedTo}
+                onChange={v => setForm({ ...form, attributedTo: v })}
+                placeholder="e.g. artist@shinelstudios.in"
+              />
+            </div>
 
             {/* Drag & Drop (Preview + Auto-upload) */}
             <div className="block col-span-full md:col-span-2 lg:col-span-3">
@@ -1668,13 +1718,13 @@ export default function AdminThumbnailsPage() {
           )}
 
           {form.youtubeUrl && (
-  <div
-    className="mb-3 p-2 rounded text-xs"
-    style={{ background: "var(--surface)", color: "var(--text-muted)" }}
-  >
-    Creator YouTube URL set. The Worker prefers this URL when deriving the <code>videoId</code>.
-  </div>
-)}
+            <div
+              className="mb-3 p-2 rounded text-xs"
+              style={{ background: "var(--surface)", color: "var(--text-muted)" }}
+            >
+              Creator YouTube URL set. The Worker prefers this URL when deriving the <code>videoId</code>.
+            </div>
+          )}
 
 
           <div className="flex gap-2">
@@ -1701,167 +1751,191 @@ export default function AdminThumbnailsPage() {
 
         {/* Thumbnails List */}
         <div
-          className="rounded-2xl border overflow-x-auto"
+          className="rounded-2xl border bg-[#0a0a0a]"
           style={{
-            background: "var(--surface-alt)",
             borderColor: "var(--border)",
           }}
         >
-          <table className="w-full text-sm">
-            <thead style={{ color: "var(--text-muted)" }}>
-              <tr>
-                <th className="p-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
-                  />
-                </th>
-                <th className="text-left p-3">Preview</th>
-                <th className="text-left p-3">Filename</th>
-                <th className="text-left p-3">Category</th>
-                <th className="text-left p-3">YouTube (Creator)</th>
-                <th className="text-left p-3">Views</th>
-                <th className="text-left p-3">Last Updated</th>
-                <th className="text-left p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody style={{ color: "var(--text)" }}>
-              {busy && thumbnails.length === 0 ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr
-                    key={`sk-${i}`}
-                    className="border-t"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    <td className="p-3">
-                      <div className="w-4 h-4 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="w-16 h-10 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-40 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-24 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-32 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-16 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-24 rounded bg-black/5 animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-6 w-40 rounded bg-black/5 animate-pulse" />
-                    </td>
-                  </tr>
-                ))
-              ) : filtered.length ? (
-                filtered.map((t, i) => {
-                  const stableKey = String(
-                    t.id ||
-                      `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}|${i}`
-                  );
-                  const isFlash =
-                    flashKey &&
-                    (flashKey === String(t.id) ||
-                      flashKey ===
-                        `${t.filename}|${t.youtubeUrl || ""}|${t.category}|${t.variant}`);
+          <div className="space-y-4 p-4 text-white">
+            {busy && thumbnails.length === 0 ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={`sk-${i}`}
+                  className="p-5 rounded-2xl border flex flex-col md:flex-row gap-4 animate-pulse"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  <div className="w-full md:w-48 aspect-video rounded-lg bg-white/5" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-6 w-3/4 bg-white/5 rounded" />
+                    <div className="h-4 w-1/2 bg-white/5 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : (
+              filtered.map((r) => (
+                <div
+                  key={r.id}
+                  className="p-5 rounded-2xl border flex flex-col md:flex-row gap-4 hover:bg-white/[0.02] transition-colors"
+                  style={{
+                    borderColor: "var(--border)",
+                    background: "rgba(255,255,255,0.02)",
+                  }}
+                >
+                  {/* Thumbnail Preview */}
+                  <div className="shrink-0">
+                    {r.imageUrl ? (
+                      <div className="relative w-full md:w-48 aspect-video rounded-lg overflow-hidden border border-white/10 group">
+                        <img
+                          src={r.imageUrl}
+                          alt={r.filename}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                        <a
+                          href={r.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Eye size={20} className="text-white" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="w-full md:w-48 aspect-video rounded-lg border border-white/10 bg-white/5 flex items-center justify-center text-white/20">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
+                  </div>
 
-                  return (
-                    <Row
-                      key={stableKey}
-                      t={t}
-                      selectedIds={selectedIds}
-                      setSelectedIds={setSelectedIds}
-                      duplicateThumbnail={duplicateThumbnail}
-                      timeAgo={timeAgo}
-                      refreshingId={refreshingId}
-                      refreshSingleView={refreshSingleView}
-                      downloadImage={downloadImage}
-                      editThumbnail={editThumbnail}
-                      deleteThumbnail={deleteThumbnail}
-                      copyOkId={copyOkId}
-                      copyText={copyText}
-                      flash={isFlash}
-                    />
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    className="p-8 text-center text-sm"
-                    style={{ color: "var(--text-muted)" }}
-                    colSpan={8}
-                  >
-                    No thumbnails found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  {/* Main Info */}
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-bold text-lg leading-tight truncate pr-4 text-white">
+                        {r.filename}
+                      </h3>
+                      {r.isShinel ? (
+                        <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
+                          SHINEL
+                        </span>
+                      ) : (
+                        <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                          FS
+                        </span>
+                      )}
+                    </div>
 
-                {/* Stats */}
-        {thumbnailStats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-            {/* Prefer local stats, fall back to /stats.counts if needed */}
-            <StatCard
-              label="Total Thumbnails"
-              value={
-                thumbnailStats.total ??
-                stats?.counts?.thumbnails ??
-                0
-              }
-            />
-            <StatCard
-              label="With YouTube"
-              value={thumbnailStats.withYouTube || 0}
-            />
-            <StatCard
-              label="Categories"
-              value={thumbnailStats.categories || 0}
-            />
-            <StatCard
-              label="Live / Video"
-              value={`${thumbnailStats.byVariant?.LIVE || 0} / ${
-                thumbnailStats.byVariant?.VIDEO || 0
-              }`}
-            />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-3 text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider">
+                          {r.variant || "VIDEO"}
+                        </span>
+                        <span className="font-medium">{r.category} {r.subcategory && `/ ${r.subcategory}`}</span>
+                      </div>
+                      {r.attributedTo && (
+                        <span className="pl-2 border-l border-white/10 opacity-50">
+                          By @{r.attributedTo.split('@')[0]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs mt-auto">
+                      {r.youtubeUrl && (
+                        <a
+                          href={r.youtubeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 hover:underline text-orange-500 transition-colors"
+                        >
+                          Watch Video <ExternalLink size={10} />
+                        </a>
+                      )}
+                      {r.views != null && r.views > 0 && (
+                        <span className="flex items-center gap-1 font-mono opacity-70 text-gray-400" title={`Last updated: ${r.lastViewUpdate ? new Date(r.lastViewUpdate).toLocaleDateString() : '?'}`}>
+                          <Eye size={12} /> {Number(r.views).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-4 min-w-[120px]">
+                    <div className="text-right hidden md:block">
+                      <div className="text-[10px] uppercase tracking-wider opacity-50 text-white">
+                        {new Date(r.updated || Date.now()).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative group/copy">
+                        <button
+                          onClick={() => {
+                            try {
+                              navigator.clipboard.writeText(r.imageUrl);
+                              surfaceInfo("URL copied to clipboard");
+                            } catch { }
+                          }}
+                          className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:text-orange-500 transition-colors"
+                          title="Copy URL"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => editThumbnail(r)}
+                        className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:text-blue-500 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteThumbnail(r.id, r.filename)}
+                        className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-red-500 hover:text-white transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {!busy && !filtered.length && (
+              <div className="py-24 text-center border-2 border-dashed rounded-[32px] border-white/10">
+                <div className="inline-flex p-4 rounded-full bg-orange-500/10 mb-4">
+                  <ImageIcon size={32} className="text-orange-500" />
+                </div>
+                <h3 className="text-lg font-bold text-white">No thumbnails found</h3>
+                <p className="text-sm mt-1 text-gray-400">Try adjusting filters or upload a new one.</p>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Toaster */}
-        <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className="rounded-lg px-3 py-2 text-sm shadow"
-              style={{
-                background:
-                  t.type === "error"
-                    ? "#fee2e2"
-                    : t.type === "success"
-                    ? "#dcfce7"
-                    : t.type === "warning"
-                    ? "#fef9c3"
-                    : "var(--surface)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {t.message}
-            </div>
-          ))}
         </div>
       </div>
+
+      {/* Stats */}
+      {thumbnailStats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+          {/* Prefer local stats, fall back to /stats.counts if needed */}
+          <StatCard
+            label="Total Thumbnails"
+            value={thumbnailStats.total ?? stats?.counts?.thumbnails ?? 0}
+          />
+          <StatCard label="With YouTube" value={thumbnailStats.withYouTube || 0} />
+          <StatCard label="Categories" value={thumbnailStats.categories || 0} />
+          <StatCard
+            label="Live / Video"
+            value={`${thumbnailStats.byVariant?.LIVE || 0} / ${thumbnailStats.byVariant?.VIDEO || 0}`}
+          />
+        </div>
+      )}
     </section>
   );
 }
+
 
 // ---------- Helpers ----------
 function Input({
@@ -2142,242 +2216,47 @@ function LabeledCompactSelect({ label, value, onChange, options }) {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, icon: Icon }) {
   return (
     <div
-      className="rounded-lg p-3 border"
-      style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}
+      className="p-4 rounded-2xl border"
+      style={{
+        background: "var(--surface-alt)",
+        borderColor: "var(--border)",
+      }}
     >
-      <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-        {label}
-      </div>
-      <div className="text-xl font-bold" style={{ color: "var(--text)" }}>
-        {value}
+      <div className="flex items-center gap-3">
+        {Icon && (
+          <div className="p-2 rounded-xl bg-orange-500/10 text-orange-500">
+            <Icon size={20} />
+          </div>
+        )}
+        <div>
+          <div className="text-xs text-[var(--text-muted)] font-medium leading-none mb-1">
+            {label}
+          </div>
+          <div className="text-xl font-bold text-[var(--text)]">
+            {value}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function SortBtn({ active, dir, onClick, children }) {
+function SortBtn({ active, children, onClick, dir }) {
   return (
     <button
-      className={`inline-flex items-center gap-1 px-2 h-[36px] rounded border text-xs ${
-        active ? "font-semibold" : ""
-      }`}
-      style={{ borderColor: "var(--border)", color: "var(--text)" }}
       onClick={onClick}
+      className={`inline-flex items-center gap-1 px-3 h-[36px] rounded-lg border text-xs font-semibold transition-all ${active
+          ? "bg-[var(--orange)] border-[var(--orange)] text-white shadow-lg shadow-orange-500/20"
+          : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] bg-[var(--surface-alt)]"
+        }`}
     >
-      {children}{" "}
-      {active ? (dir === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />) : null}
+      {children}
+      {active && (dir === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
     </button>
   );
 }
 
-const Row = memo(function Row({
-  t,
-  selectedIds,
-  setSelectedIds,
-  duplicateThumbnail,
-  timeAgo,
-  refreshingId,
-  refreshSingleView,
-  downloadImage,
-  editThumbnail,
-  deleteThumbnail,
-  copyOkId,
-  copyText,
-  flash,
-}) {
-  const selected = selectedIds.has(t.id);
-  return (
-    <tr
-      className="border-t"
-      style={{
-        borderColor: "var(--border)",
-        transition: "background 300ms",
-        background: flash ? "rgba(34,197,94,0.08)" : "transparent",
-      }}
-    >
-      <td className="p-3 align-top">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={(e) =>
-            setSelectedIds((s) => {
-              const n = new Set(s);
-              if (e.target.checked) n.add(t.id);
-              else n.delete(t.id);
-              return n;
-            })
-          }
-        />
-      </td>
-      <td className="p-3">
-        <div className="w-16 h-10 rounded overflow-hidden bg-black/5">
-          {t.imageUrl ? (
-            <img
-              src={t.imageUrl}
-              alt={t.filename}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs opacity-50">
-              No img
-            </div>
-          )}
-        </div>
-      </td>
-      <td className="p-3 align-top">
-        <div className="font-medium flex items-center gap-2">
-          {t.filename}
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded border"
-            style={{
-              display: flash ? "inline-flex" : "none",
-              borderColor: "#86efac",
-              color: "#16a34a",
-            }}
-          >
-            Uploaded ✓
-          </span>
-          <button
-            className="inline-flex items-center gap-1 px-1 py-0.5 rounded border text-[10px]"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
-            title="Duplicate into form"
-            onClick={() => duplicateThumbnail(t)}
-          >
-            <Layers size={10} /> Duplicate
-          </button>
-        </div>
-        <div className="text-xs opacity-60">{t.variant}</div>
-      </td>
-      <td className="p-3 align-top">
-        <div className="capitalize">{t.category}</div>
-        {t.subcategory && (
-          <div className="text-xs opacity-60">{t.subcategory}</div>
-        )}
-      </td>
-      <td className="p-3 align-top">
-        {t.youtubeUrl ? (
-          <div className="flex items-center gap-2">
-            <a
-  href={t.youtubeUrl}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="inline-flex items-center gap-1 text-xs"
-  style={{ color: "var(--orange)" }}
-  title="Open creator video"
->
-  <Eye size={12} /> Open
-</a>
 
-            {t.videoId && (
-              <button
-                className="p-1 text-xs rounded border"
-                style={{ borderColor: "var(--border)" }}
-                title="Copy video id"
-                onClick={() => copyText(t.videoId, t.id)}
-              >
-                {copyOkId === t.id ? <Check size={12} /> : <Copy size={12} />}
-              </button>
-            )}
-          </div>
-        ) : (
-          <span className="text-xs opacity-40">—</span>
-        )}
-      </td>
-      <td className="p-3 align-top">
-        {t.youtubeViews ? (
-          <div>
-            <div className="text-sm font-medium">
-              {Number(t.youtubeViews).toLocaleString()}
-            </div>
-            {t.viewStatus === "deleted" && (
-              <div className="text-xs" style={{ color: "#ff9500" }}>
-                ⚠️ Deleted
-              </div>
-            )}
-          </div>
-        ) : t.youtubeUrl ? (
-          <span className="text-xs opacity-40">Pending</span>
-        ) : (
-          <span className="text-xs opacity-40">—</span>
-        )}
-      </td>
-      <td className="p-3 text-xs opacity-60 align-top">
-        {t.lastViewUpdate ? timeAgo(t.lastViewUpdate) : "—"}
-      </td>
-      <td className="p-3 align-top">
-        <div className="flex flex-wrap gap-2">
-          {t.videoId && (
-            <button
-              onClick={() => refreshSingleView(t.videoId, t.id)}
-              disabled={refreshingId === t.id}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs disabled:opacity-50"
-              style={{
-                borderColor: "var(--border)",
-                color: "var(--orange)",
-              }}
-              title="Refresh view count"
-            >
-              <RefreshCw
-                size={12}
-                className={refreshingId === t.id ? "animate-spin" : ""}
-              />
-            </button>
-          )}
-          {t.imageUrl && (
-            <button
-              onClick={() => downloadImage(t.imageUrl, t.filename)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-              style={{ borderColor: "var(--border)", color: "var(--text)" }}
-              title="Download image"
-            >
-              <Download size={12} />
-            </button>
-          )}
-          <button
-            onClick={() => editThumbnail(t)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
-            title="Edit"
-          >
-            <Edit2 size={12} /> Edit
-          </button>
-          <button
-            onClick={() => deleteThumbnail(t.id, t.filename)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
-            style={{ borderColor: "#fcc", color: "#c00" }}
-            title="Delete"
-          >
-            <Trash2 size={12} /> Delete
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-});
-
-function LoadingOverlay({ show, label }) {
-  if (!show) return null;
-  return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center"
-      style={{ background: "rgba(0,0,0,0.25)" }}
-    >
-      <div
-        className="rounded-2xl p-4 border shadow-xl flex items-center gap-3"
-        style={{
-          background: "var(--surface-alt)",
-          borderColor: "var(--border)",
-        }}
-      >
-        <RefreshCw className="animate-spin" size={18} style={{ color: "var(--orange)" }} />
-        <div className="text-sm" style={{ color: "var(--text)" }}>
-          {label || "Working..."}
-        </div>
-      </div>
-    </div>
-  );
-}

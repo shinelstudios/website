@@ -62,7 +62,7 @@ const QuickLeadForm = () => {
       const on = prev.includes(label);
       try {
         window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_interest_toggle", label, on: !on } }));
-      } catch {}
+      } catch { }
       return on ? prev.filter((x) => x !== label) : [...prev, label];
     });
 
@@ -112,14 +112,31 @@ const QuickLeadForm = () => {
       if (Array.isArray(s?.selected)) setSelected(s.selected);
       if (typeof s?.msg === "string") setMsg(s.msg);
       if (s?.contactMethod) setContactMethod(s.contactMethod);
-    } catch {}
+    } catch { }
   }, []);
 
   // Autosave
   React.useEffect(() => {
     const payload = { name, handle, email, selected, msg, contactMethod };
-    try { localStorage.setItem("ss_lead", JSON.stringify(payload)); } catch {}
+    try { localStorage.setItem("ss_lead", JSON.stringify(payload)); } catch { }
   }, [name, handle, email, selected, msg, contactMethod]);
+
+  // Listen for festival offer claims
+  React.useEffect(() => {
+    const onPrefill = (e) => {
+      const { code } = e.detail || {};
+      if (code) {
+        setMsg(prev => {
+          const offerLine = `Offer Claimed: ${code}`;
+          if (prev.includes(offerLine)) return prev;
+          return `${offerLine}\n${prev}`.trim();
+        });
+        showToast("success", `Offer ${code} applied!`);
+      }
+    };
+    window.addEventListener("ss:prefillOffer", onPrefill);
+    return () => window.removeEventListener("ss:prefillOffer", onPrefill);
+  }, []);
 
   // Hide sticky mobile CTA while typing
   React.useEffect(() => {
@@ -155,7 +172,7 @@ const QuickLeadForm = () => {
           window.open(href, "_blank", "noreferrer");
           setSending(false);
           showToast("success", "Opening WhatsApp…");
-          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "whatsapp" } })); } catch {}
+          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "whatsapp" } })); } catch { }
         }, 120);
       } else {
         const href = makeMailto();
@@ -165,7 +182,7 @@ const QuickLeadForm = () => {
             try {
               await navigator.clipboard.writeText(draftLines().join("\n"));
               showToast("success", "Copied message to clipboard — paste in your email app.");
-            } catch {}
+            } catch { }
           }, 900);
         };
         setTimeout(() => {
@@ -173,7 +190,7 @@ const QuickLeadForm = () => {
           openedViaMailto();
           setSending(false);
           showToast("success", "Opening your email app…");
-          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "email" } })); } catch {}
+          try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "email" } })); } catch { }
         }, 120);
       }
     } catch {
@@ -442,7 +459,7 @@ const QuickLeadForm = () => {
               onClick={() => {
                 try {
                   window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "leadform" } }));
-                } catch {}
+                } catch { }
               }}
             >
               Message on WhatsApp

@@ -3,15 +3,16 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle,
   Send, Heart, Sparkles, TrendingUp, Users, Award, Clock,
-  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle,
+  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle, Radio,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import logoLight from "../assets/logo_light.png"; // WHITE logo (dark bg)
 import logoDark from "../assets/logo_dark.png";   // DARK logo (light bg)
+import { CONTACT } from "../config/constants";
 
 /* -------------------------------- analytics (no-op safe) ------------------------------- */
 const track = (ev, detail = {}) => {
-  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch { }
 };
 
 /* -------------------------------- theme sync helper ------------------------------------ */
@@ -26,7 +27,7 @@ function useThemeMode(isDarkProp) {
       if (typeof isDarkProp === "boolean") return isDarkProp ? "dark" : "light";
       if (document.documentElement.classList.contains("dark")) return "dark";
       if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
-    } catch {}
+    } catch { }
     return "light";
   }, [isDarkProp]);
 
@@ -34,14 +35,14 @@ function useThemeMode(isDarkProp) {
 
   useEffect(() => {
     setMode(compute());
-    
+
     // Listen to media query changes if prop isn't set
     if (typeof isDarkProp === "boolean") return;
-    
+
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     const onMedia = () => setMode(compute());
     try { mq?.addEventListener?.("change", onMedia); } catch { mq?.addListener?.(onMedia); }
-    
+
     return () => {
       try { mq?.removeEventListener?.("change", onMedia); } catch { mq?.removeListener?.(onMedia); }
     };
@@ -95,16 +96,16 @@ const SiteFooter = ({
 
   const SOCIALS = useMemo(() => ([
     { label: "Instagram", href: "https://www.instagram.com/shinel.studios/", Icon: Instagram, color: "#E4405F" },
-    { label: "LinkedIn",  href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin,  color: "#0A66C2" },
-    { label: "Facebook",  href: "https://www.facebook.com/", Icon: Facebook, color: "#1877F2" },
+    { label: "LinkedIn", href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin, color: "#0A66C2" },
+    { label: "Facebook", href: "https://www.facebook.com/", Icon: Facebook, color: "#1877F2" },
     { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter, color: "#1DA1F2" },
   ]), []);
 
   const FEATURES = useMemo(() => ([
-    { icon: Users,      text: "20+ Active Clients" },
+    { icon: Users, text: "20+ Active Clients" },
     { icon: TrendingUp, text: "7M+ Views Driven" },
-    { icon: Award,      text: "+40% CTR Boost" },
-    { icon: Clock,      text: "48–72 hr Turnaround" },
+    { icon: Award, text: "+40% CTR Boost" },
+    { icon: Clock, text: "48–72 hr Turnaround" },
   ]), []);
 
   // [IMPROVED] Newsletter submission logic
@@ -116,39 +117,39 @@ const SiteFooter = ({
       setMsg("Please enter a valid email.");
       return;
     }
-    
+
     setStatus("loading"); setMsg("");
     try {
       track("cta_click_subscribe", { src: "footer", email });
       const endpoint = import.meta?.env?.VITE_NEWSLETTER_ENDPOINT;
-      
+
       if (endpoint) {
         // API endpoint logic
-        const res = await fetch(endpoint, { 
-          method: "POST", 
-          headers: { "Content-Type": "application/json" }, 
-          body: JSON.stringify({ email, source: "footer" }) 
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, source: "footer" })
         });
         if (!res.ok) throw new Error("Server error");
-        
+
       } else {
         // Fallback mailto: logic
         console.warn("VITE_NEWSLETTER_ENDPOINT not set, using mailto: fallback.");
         const to = "hello@shinelstudiosofficial.com";
         window.open(`mailto:${to}?subject=${encodeURIComponent("Newsletter Subscribe")}&body=${encodeURIComponent(`Please subscribe me.\nEmail: ${email}\nSource: footer`)}`, "_blank");
         // Simulate success for mailto
-        await new Promise(res => setTimeout(res, 500)); 
+        await new Promise(res => setTimeout(res, 500));
       }
-      
+
       setStatus("success");
       setMsg("Thanks for subscribing! ✨");
       setEmail("");
-      
+
     } catch (err) {
       setStatus("error");
       setMsg("Could not subscribe. Please try again.");
       console.error("Subscription error:", err);
-      
+
     }
   };
 
@@ -172,16 +173,16 @@ const SiteFooter = ({
       </h3>
       <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
         <a
-          href="mailto:hello@shinelstudiosofficial.com"
+          href={`mailto:${CONTACT.email}`}
           className="flex items-center gap-2 text-sm mb-3"
           style={{ color: "var(--footer-muted)" }}
           onClick={() => track("cta_click_contact", { via: "email", place: "footer_compact_right" })}
         >
           <Mail size={16} style={{ color: "var(--orange)" }} />
-          hello@shinelstudiosofficial.com
+          {CONTACT.email}
         </a>
         <a
-          href="https://wa.me/918838179165"
+          href={CONTACT.whatsappUrl}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-2 text-sm mb-3"
@@ -199,11 +200,11 @@ const SiteFooter = ({
         <div className="mt-4 grid grid-cols-2 gap-2">
           {/* [FIX] Use React Router Link for hash links */}
           <Link to="/#contact" className="text-center px-3 py-2 rounded-lg text-sm font-semibold btn-elevate"
-             style={{ background: "linear-gradient(135deg, var(--orange) 0%, #ff6b35 100%)", color: "#fff" }}>
+            style={{ background: "linear-gradient(135deg, var(--orange) 0%, #ff6b35 100%)", color: "#fff" }}>
             Get Free Audit
           </Link>
           <Link to="/#contact" className="text-center px-3 py-2 rounded-lg text-sm font-semibold"
-             style={{ background: "var(--card-bg)", color: "var(--orange)", border: "1px solid var(--card-border)" }}>
+            style={{ background: "var(--card-bg)", color: "var(--orange)", border: "1px solid var(--card-border)" }}>
             Get Quote
           </Link>
         </div>
@@ -233,7 +234,7 @@ const SiteFooter = ({
       <div className={`container mx-auto px-4 ${compact ? "pt-12 pb-10" : "pt-20 pb-16"}`} style={{ position: "relative", zIndex: 1 }}>
         {/* Balanced grids */}
         <div className={compact ? "grid grid-cols-1 md:grid-cols-2 gap-12"
-                                : "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr_1fr] gap-16 lg:gap-20"}>
+          : "grid grid-cols-1 md:grid-cols-[1.2fr_.8fr_1fr] gap-16 lg:gap-20"}>
           {/* BRAND / LEFT */}
           <div className={isVisible ? "fade-in" : ""}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
@@ -241,7 +242,7 @@ const SiteFooter = ({
                 src={logoSrc}
                 alt="Shinel Studios"
                 className="w-48 sm:w-56 md:w-64 h-auto object-contain"
-                style={{ 
+                style={{
                   maxWidth: "100%",
                   imageRendering: "-webkit-optimize-contrast" // [NEW]
                 }}
@@ -281,8 +282,8 @@ const SiteFooter = ({
                   <motion.div
                     key={f.text}
                     className="flex items-center gap-2 p-2 rounded-lg"
-                    style={{ 
-                      background: "var(--card-bg)", 
+                    style={{
+                      background: "var(--card-bg)",
                       border: "1px solid var(--card-border)",
                       willChange: "transform, opacity", // [NEW]
                     }}
@@ -346,8 +347,9 @@ const SiteFooter = ({
                 {[
                   { t: "Home", href: "/#home", icon: Sparkles },
                   { t: "Services", href: "/#services", icon: Award },
-                  { t: "Our Work", href: "/#work", icon: TrendingUp },
+                  { t: "Our Work", href: "/work", icon: TrendingUp },
                   { t: "Contact", href: "/#contact", icon: Mail },
+                  { t: "Creator Pulse", href: "/live", icon: Radio },
                   { t: "Video Editing", href: "/video-editing" },
                   { t: "GFX", href: "/gfx" },
                   { t: "Thumbnails", href: "/thumbnails" },

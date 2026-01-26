@@ -27,7 +27,7 @@ export const services = [
         key: "thumbnails",
         title: "Thumbnails",
         icon: ImageIcon,
-        path: "/services/gfx/thumbnails",
+        path: "/thumbnails",
         sub: "CTR-first thumbnail system",
         subcategories: [
           { key: "youtube", title: "YouTube Thumbnails", icon: ImageIcon, path: "/services/gfx/thumbnails/youtube" },
@@ -39,7 +39,7 @@ export const services = [
         key: "branding",
         title: "Branding",
         icon: LayoutTemplate,
-        path: "/services/gfx/branding",
+        path: "/branding",
         sub: "Channel + social brand kit",
         subcategories: [
           { key: "channel", title: "Channel Branding", icon: LayoutTemplate, path: "/services/gfx/branding/channel" },
@@ -62,7 +62,7 @@ export const services = [
         key: "shorts",
         title: "Shorts / Reels",
         icon: Clapperboard,
-        path: "/services/editing/shorts",
+        path: "/shorts",
         sub: "Hook + pacing + captions",
         subcategories: [
           { key: "gaming", title: "Gaming Shorts", icon: Zap, path: "/services/editing/shorts/gaming" },
@@ -74,7 +74,7 @@ export const services = [
         key: "long",
         title: "Long-form Editing",
         icon: Film,
-        path: "/services/editing/long",
+        path: "/video-editing",
         sub: "Structure + retention patterns",
         subcategories: [
           { key: "gaming", title: "Gaming Long-form", icon: Zap, path: "/services/editing/long/gaming" },

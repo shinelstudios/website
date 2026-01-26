@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
  * Public/Protected read:
@@ -91,7 +92,7 @@ async function fetchJSONWithETag(url, { etag, signal, authToken, timeoutMs = 300
           const j = await res.json();
           if (j?.error) msg = j.error;
           if (j?.message) msg = j.message;
-        } catch {}
+        } catch { }
         const err = new Error(msg);
         err.status = res.status;
         throw err;
@@ -137,7 +138,7 @@ function preconnectTo(url) {
     link.href = `${u.protocol}//${u.host}`;
     link.crossOrigin = "";
     document.head.appendChild(link);
-  } catch {}
+  } catch { }
 }
 
 /* ---------------- Skeleton ---------------- */
@@ -172,7 +173,7 @@ function ProtectedImg({ src, alt, onError, onLoad, className = "", fetchpriority
       onLoad={onLoad}
       loading="lazy"
       decoding="async"
-      fetchpriority={fetchpriority}
+      fetchPriority={fetchpriority}
       draggable="false"
     />
   );
@@ -188,10 +189,9 @@ const Chip = ({ children, active, onClick }) => {
       className={`
         text-xs sm:text-sm px-4 py-2 rounded-full border font-medium whitespace-nowrap select-none
         transition-all duration-200
-        ${
-          active
-            ? "bg-[var(--orange)] text-white border-[var(--orange)]"
-            : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
+        ${active
+          ? "bg-[var(--orange)] text-white border-[var(--orange)]"
+          : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
         }
         ${reducedMotion ? "!transition-none" : "hover:scale-105"}
       `}
@@ -226,10 +226,9 @@ const ThumbCard = ({ t, onOpen, onBroken, fetchPriority = "auto" }) => {
           alt={`${t.category} ${t.subcategory || ""}`}
           onError={() => onBroken?.(t.id)}
           onLoad={() => setImageLoaded(true)}
-          fetchpriority={fetchPriority}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${
-            imageLoaded ? "opacity-100" : "opacity-0"
-          }`}
+          fetchPriority={fetchPriority}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
         />
       </div>
 
@@ -243,11 +242,10 @@ const ThumbCard = ({ t, onOpen, onBroken, fetchPriority = "auto" }) => {
           </span>
 
           <span
-            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${
-              t.variant === "LIVE"
-                ? "bg-red-600/20 text-red-400 border-red-500/30 animate-pulse"
-                : "bg-gray-700/30 text-gray-300 border-gray-600/30"
-            }`}
+            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${t.variant === "LIVE"
+              ? "bg-red-600/20 text-red-400 border-red-500/30 animate-pulse"
+              : "bg-gray-700/30 text-gray-300 border-gray-600/30"
+              }`}
           >
             {t.variant}
           </span>
@@ -394,9 +392,8 @@ const ShareModal = ({ item, onClose }) => {
               />
               <button
                 onClick={copyLink}
-                className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${
-                  copied ? "bg-green-600" : "bg-[var(--orange)] hover:opacity-90"
-                }`}
+                className={`px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors ${copied ? "bg-green-600" : "bg-[var(--orange)] hover:opacity-90"
+                  }`}
               >
                 {copied ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -531,10 +528,10 @@ const Modal = ({ items, currentId, onClose, onNavigate, onShare }) => {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      modalRef.current?.requestFullscreen?.().catch(() => {});
+      modalRef.current?.requestFullscreen?.().catch(() => { });
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch(() => { });
       setIsFullscreen(false);
     }
   };
@@ -770,12 +767,10 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage === 1}
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
-            ${
-              currentPage === 1
-                ? "opacity-40 cursor-not-allowed"
-                : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${
-                    reducedMotion ? "" : "hover:scale-105"
-                  }`
+            ${currentPage === 1
+              ? "opacity-40 cursor-not-allowed"
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"
+              }`
             }
             transition-all`}
           aria-label="Previous page"
@@ -794,10 +789,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
               key={page}
               onClick={() => onPageChange(page)}
               className={`min-w-[2.5rem] px-3 py-1.5 rounded-lg text-sm font-medium transition-all
-                ${
-                  page === currentPage
-                    ? "bg-[var(--orange)] text-white border border-[var(--orange)]"
-                    : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"}`
+                ${page === currentPage
+                  ? "bg-[var(--orange)] text-white border border-[var(--orange)]"
+                  : `border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"}`
                 }`}
               aria-current={page === currentPage ? "page" : undefined}
             >
@@ -811,12 +805,10 @@ const Pagination = ({ currentPage, totalPages, onPageChange, itemsPerPage, total
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
           className={`px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-sm font-medium
-            ${
-              currentPage === totalPages
-                ? "opacity-40 cursor-not-allowed"
-                : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${
-                    reducedMotion ? "" : "hover:scale-105"
-                  }`
+            ${currentPage === totalPages
+              ? "opacity-40 cursor-not-allowed"
+              : `hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] ${reducedMotion ? "" : "hover:scale-105"
+              }`
             }
             transition-all`}
           aria-label="Next page"
@@ -892,7 +884,7 @@ export default function Thumbnails() {
   /* -------- Service worker registration (offline warm start) -------- */
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw-thumbnails.js").catch(() => {});
+      navigator.serviceWorker.register("/sw-thumbnails.js").catch(() => { });
     }
     preconnectTo(AUTH_BASE);
   }, []);
@@ -926,7 +918,7 @@ export default function Thumbnails() {
             setLoading(false);
           }
         }
-      } catch {}
+      } catch { }
     };
 
     const normalize = (arr) =>
@@ -956,7 +948,7 @@ export default function Thumbnails() {
         const cached = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
         etag = cached?.etag || null;
         cachedTs = cached?.ts || 0;
-      } catch {}
+      } catch { }
       try {
         setLoading((prev) => (items.length ? false : true));
 
@@ -978,7 +970,7 @@ export default function Thumbnails() {
                 STORAGE_KEY,
                 JSON.stringify({ etag: newEtag, items: normalized, ts: Date.now() })
               );
-            } catch {}
+            } catch { }
           }
         } else if (status === 304) {
           // freshness guard: if older than 14 days, treat as stale and force repaint (server should rotate ETags weekly anyway)
@@ -1111,13 +1103,21 @@ export default function Thumbnails() {
     if (cat !== "GAMING") setSub("ALL");
   }, [cat]);
 
+  /* -------- Prefetch images on next page (best effort) -------- */
+  const nextPageImages = useMemo(() => {
+    if (currentPage >= totalPages) return [];
+    const start = currentPage * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage).map((t) => t.imageUrl || t.image).filter(Boolean);
+  }, [filtered, currentPage, itemsPerPage, totalPages]);
+
+  useImagePrefetch(nextPageImages);
+
   const gridClasses = {
     small: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3",
     medium: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6",
     large: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8",
   };
 
-  const reducedMotion = prefersReducedMotion();
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
   const handlePageChange = (page) => {
     const next = Math.max(1, Math.min(page, totalPages || 1));
@@ -1125,16 +1125,22 @@ export default function Thumbnails() {
     scrollToTop();
   };
 
-  /* -------- Prefetch images on next page (best effort) -------- */
-  const nextPageImages = useMemo(() => {
-    if (currentPage >= totalPages) return [];
-    const start = currentPage * itemsPerPage;
-    return filtered.slice(start, start + itemsPerPage).map((t) => t.imageUrl || t.image).filter(Boolean);
-  }, [filtered, currentPage, itemsPerPage, totalPages]);
-  useImagePrefetch(nextPageImages);
+  const reducedMotion = prefersReducedMotion();
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
+      <MetaTags
+        title="High-CTR Thumbnail Design | Shinel Studios - Scroll-Stopping Visuals"
+        description="Premium YouTube thumbnails built for clicks and curiosity. Data-backed designs that increase your CTR and views."
+        keywords="thumbnail design, high ctr thumbnails, youtube gfx, viral packaging"
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Work', url: '/work' },
+          { name: 'Thumbnails', url: '/thumbnails' },
+        ]}
+      />
       <div
         onContextMenu={(e) => {
           e.preventDefault();
@@ -1149,16 +1155,14 @@ export default function Thumbnails() {
         <section className="pt-28 pb-8 text-center bg-hero">
           <div className="container mx-auto px-3 sm:px-4 md:px-6">
             <h1
-              className={`text-4xl sm:text-6xl font-extrabold text-[var(--text)] ${
-                reducedMotion ? "" : "animate-in fade-in duration-600"
-              }`}
+              className={`text-4xl sm:text-6xl font-extrabold text-[var(--text)] ${reducedMotion ? "" : "animate-in fade-in duration-600"
+                }`}
             >
               Thumbnail <span className="text-[var(--orange)]">Gallery</span>
             </h1>
             <p
-              className={`mt-3 text-base sm:text-lg text-[var(--text-muted)] ${
-                reducedMotion ? "" : "animate-in fade-in duration-600 delay-100"
-              }`}
+              className={`mt-3 text-base sm:text-lg text-[var(--text-muted)] ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-100"
+                }`}
             >
               Designed for clicks. Optimized for retention.
             </p>
@@ -1181,7 +1185,7 @@ export default function Thumbnails() {
                     onClick={() => {
                       try {
                         sessionStorage.removeItem(STORAGE_KEY);
-                      } catch {}
+                      } catch { }
                       revalidateThumbnailsRef.current?.();
                     }}
                   >
@@ -1230,9 +1234,8 @@ export default function Thumbnails() {
 
             {/* Controls (grid + result count) */}
             <div
-              className={`mt-4 flex flex-wrap items-center justify-center gap-3 ${
-                reducedMotion ? "" : "animate-in fade-in duration-600 delay-300"
-              }`}
+              className={`mt-4 flex flex-wrap items-center justify-center gap-3 ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-300"
+                }`}
             >
               {/* Grid size */}
               <div className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
@@ -1242,11 +1245,10 @@ export default function Thumbnails() {
                     type="button"
                     key={size}
                     onClick={() => setGridSize(size)}
-                    className={`px-2 py-0.5 rounded text-xs capitalize transition-colors ${
-                      gridSize === size
-                        ? "bg-[var(--orange)] text-white font-semibold"
-                        : "bg-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
-                    }`}
+                    className={`px-2 py-0.5 rounded text-xs capitalize transition-colors ${gridSize === size
+                      ? "bg-[var(--orange)] text-white font-semibold"
+                      : "bg-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+                      }`}
                     aria-pressed={gridSize === size}
                   >
                     {size}
@@ -1262,9 +1264,8 @@ export default function Thumbnails() {
 
             {/* Categories */}
             <div
-              className={`mt-4 flex flex-wrap justify-center gap-2 ${
-                reducedMotion ? "" : "animate-in fade-in duration-600 delay-400"
-              }`}
+              className={`mt-4 flex flex-wrap justify-center gap-2 ${reducedMotion ? "" : "animate-in fade-in duration-600 delay-400"
+                }`}
             >
               {CATEGORY_CHIPS.map((c) => (
                 <Chip key={c} active={c === cat} onClick={() => setCat(c)}>

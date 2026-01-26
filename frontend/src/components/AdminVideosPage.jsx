@@ -17,6 +17,7 @@ import {
   Filter,
   Check,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { createVideoStorage } from "./cloudflare-video-storage";
 
@@ -41,6 +42,8 @@ const DEFAULT_FORM = {
   subcategory: "",
   kind: "LONG", // LONG | SHORT | REEL | BRIEF etc
   tags: "",
+  isShinel: true,
+  attributedTo: "", // user email or handle
 };
 
 /* ---------------- utils ---------------- */
@@ -57,7 +60,7 @@ function extractYouTubeId(url = "") {
       const m = u.pathname.match(/\/shorts\/([^/]+)/);
       if (m) return m[1];
     }
-  } catch {} // non-URL strings ignored
+  } catch { } // non-URL strings ignored
   return null;
 }
 
@@ -82,7 +85,9 @@ function normalizeRow(r) {
     kind: r.kind || "LONG",
     category: r.category || "OTHER",
     subcategory: r.subcategory || "",
-    tags: Array.isArray(r.tags) ? r.tags : r.tags ? String(r.tags).split(",").map((s)=>s.trim()).filter(Boolean) : [],
+    isShinel: r.isShinel !== false,
+    attributedTo: r.attributedTo || "",
+    tags: Array.isArray(r.tags) ? r.tags : r.tags ? String(r.tags).split(",").map((s) => s.trim()).filter(Boolean) : [],
   };
 }
 
@@ -186,7 +191,7 @@ export default function AdminVideosPage() {
   useEffect(() => {
     try {
       localStorage.setItem(LS_FORM_DRAFT_KEY, JSON.stringify({ ...form }));
-    } catch {}
+    } catch { }
   }, [form]);
 
   // derived + filters
@@ -265,15 +270,15 @@ export default function AdminVideosPage() {
         kind: form.kind,
         tags: form.tags
           ? String(form.tags)
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
           : [],
       };
       if (editingId) {
-        await store.update(editingId, payload, { onProgress: () => {} });
+        await store.update(editingId, payload, { onProgress: () => { } });
       } else {
-        await store.add(payload, { onProgress: () => {} });
+        await store.add(payload, { onProgress: () => { } });
       }
       await loadVideos();
       setEditingId(null);
@@ -290,7 +295,7 @@ export default function AdminVideosPage() {
     setBusy(true);
     setBusyLabel("Deleting");
     try {
-      await store.remove(id, { onProgress: () => {} });
+      await store.remove(id, { onProgress: () => { } });
       await loadVideos();
     } catch (e) {
       surfaceError(e.message || "Delete failed", e);
@@ -316,7 +321,7 @@ export default function AdminVideosPage() {
     setBusy(true);
     setBusyLabel("Refreshing views");
     try {
-      await store.refreshOne(videoId, { onProgress: () => {} });
+      await store.refreshOne(videoId, { onProgress: () => { } });
       await loadVideos();
     } catch (e) {
       surfaceError(e.message || "Refresh failed", e);
@@ -334,7 +339,7 @@ export default function AdminVideosPage() {
     setBusy(true);
     setBusyLabel("Refreshing all views");
     try {
-      await store.refreshAll({ onProgress: () => {} });
+      await store.refreshAll({ onProgress: () => { } });
       await loadVideos();
     } catch (e) {
       surfaceError(e.message || "Bulk refresh failed", e);
@@ -571,6 +576,39 @@ export default function AdminVideosPage() {
               />
             </label>
 
+            <div className="grid gap-3 pt-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isShinel}
+                  onChange={e => setForm(f => ({ ...f, isShinel: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                />
+                <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                  Shinel Project <span className="text-[10px] text-gray-500 ml-1">(Show on main Work page)</span>
+                </span>
+              </label>
+
+              <label className="grid gap-1">
+                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Attributed To (Email/Handle)
+                </span>
+                <input
+                  value={form.attributedTo}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, attributedTo: e.target.value }))
+                  }
+                  placeholder="e.g. editor@shinelstudios.in"
+                  className="px-3 py-2 rounded border"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text)",
+                    background: "transparent",
+                  }}
+                />
+              </label>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={saveForm}
@@ -658,97 +696,127 @@ export default function AdminVideosPage() {
             </div>
           </div>
 
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: "var(--surface)" }}>
-                <th className="text-left p-3">Title</th>
-                <th className="text-left p-3">Category</th>
-                <th className="text-left p-3">Kind</th>
-                <th className="text-left p-3">Video ID</th>
-                <th className="text-left p-3">Views</th>
-                <th className="text-left p-3">Updated</th>
-                <th className="text-right p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((v) => (
-                <tr key={v.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="p-3">
-                    <div className="font-medium">{v.title || "(untitled)"}</div>
-                    <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {v.primaryUrl ? (
-                        <>
-                          <a href={v.primaryUrl} target="_blank" rel="noreferrer">Primary</a>
-                          {v.creatorUrl ? " • " : ""}
-                        </>
-                      ) : null}
-                      {v.creatorUrl && (
-                        <a href={v.creatorUrl} target="_blank" rel="noreferrer">Creator</a>
-                      )}
+          <div className="space-y-4">
+            {filtered.map((v) => (
+              <div
+                key={v.id}
+                className="p-5 rounded-2xl border flex flex-col md:flex-row gap-4 hover:bg-white/[0.02] transition-colors"
+                style={{
+                  borderColor: "var(--border)",
+                  background: "var(--surface)",
+                }}
+              >
+                {/* Main Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-bold text-lg leading-tight truncate pr-4" style={{ color: "var(--text)" }}>
+                      {v.title || "(untitled)"}
+                    </h3>
+                    {v.isShinel ? (
+                      <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
+                        SHINEL
+                      </span>
+                    ) : (
+                      <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                        FS
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+                    <div className="flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider">
+                        {v.kind || "LONG"}
+                      </span>
+                      <span className="font-medium">{v.category} {v.subcategory && `/ ${v.subcategory}`}</span>
                     </div>
-                  </td>
-                  <td className="p-3">
-                    {v.category}
-                    {v.subcategory ? ` / ${v.subcategory}` : ""}
-                  </td>
-                  <td className="p-3">{v.kind || "LONG"}</td>
-                  <td className="p-3">{v.videoId || "-"}</td>
-                  <td
-                    className="p-3"
-                    title={
-                      v.lastViewUpdate
-                        ? `Updated ${new Date(v.lastViewUpdate).toLocaleString()}`
-                        : ""
-                    }
-                  >
-                    {Number(v.views || 0).toLocaleString()}
-                  </td>
-                  <td className="p-3">
-                    {v.lastViewUpdate
-                      ? new Date(v.lastViewUpdate).toLocaleString()
-                      : "-"}
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="inline-flex gap-2">
-                      <button
-                        onClick={() => editRow(v)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                    {v.videoId && (
+                      <span className="font-mono text-[10px] opacity-70">ID: {v.videoId}</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                    {v.primaryUrl && (
+                      <a
+                        href={v.primaryUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 hover:underline"
+                        style={{ color: "var(--orange)" }}
                       >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => refreshViews(v.videoId || v.id)}
-                        className="px-2 py-1 rounded border"
-                        title="Refresh views for this video"
-                        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                        Primary <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {v.creatorUrl && (
+                      <a
+                        href={v.creatorUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 hover:underline opacity-70"
+                        style={{ color: "var(--text)" }}
                       >
-                        <RefreshCw size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteRow(v.id)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        Creator Link <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {v.attributedTo && (
+                      <span className="pl-2 border-l border-white/10 opacity-50">
+                        By @{v.attributedTo.split('@')[0]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stats & Actions */}
+                <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-4 min-w-[140px]">
+                  <div className="text-right">
+                    <div className="text-xl font-bold font-mono" style={{ color: "var(--text)" }}>
+                      {Number(v.views || 0).toLocaleString()}
                     </div>
-                  </td>
-                </tr>
-              ))}
-              {!filtered.length && (
-                <tr>
-                  <td
-                    className="p-6 text-center text-sm"
-                    colSpan={7}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    No videos yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <div className="text-[10px] uppercase tracking-wider opacity-50" style={{ color: "var(--text)" }}>
+                      {v.lastViewUpdate ? new Date(v.lastViewUpdate).toLocaleDateString() : "No Data"}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => editRow(v)}
+                      className="p-2.5 rounded-xl border hover:text-orange-500 transition-colors"
+                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
+                      title="Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => refreshViews(v.videoId || v.id)}
+                      className="p-2.5 rounded-xl border hover:text-blue-500 transition-colors"
+                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
+                      title="Refresh Views"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                    <button
+                      onClick={() => deleteRow(v.id)}
+                      className="p-2.5 rounded-xl border hover:bg-red-500 hover:text-white transition-all"
+                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {!filtered.length && (
+              <div className="py-24 text-center border-2 border-dashed rounded-[32px]" style={{ borderColor: "var(--border)" }}>
+                <div className="inline-flex p-4 rounded-full bg-orange-500/10 mb-4">
+                  <Search size={32} className="text-orange-500" />
+                </div>
+                <h3 className="text-lg font-bold" style={{ color: "var(--text)" }}>No videos found</h3>
+                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Try adjusting your filters or search terms.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
-const API_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "";
+const API_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
 
 // --- Safe JWT decode ---
 function parseJwt(token) {

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Image as IconImage } from "lucide-react";
 import { BeforeAfter } from './BeforeAfter'; // Assuming BeforeAfter.jsx is in the same folder
+import { LazyImage } from "./ProgressiveImage";
 import { SAMPLE_BEFORE, SAMPLE_AFTER } from '../lib/helpers'; // Import helpers
 
 // --- Import available images ---
@@ -82,8 +83,8 @@ const ProofSection = () => {
   // Animated counter effect with iOS optimization
   useEffect(() => {
     if (!currentShowcase?.stats?.ctrIncrease) {
-        setCountUp(0);
-        return;
+      setCountUp(0);
+      return;
     };
 
     if (!isInView || reduceMotion) {
@@ -112,7 +113,7 @@ const ProofSection = () => {
     };
 
     animationFrameRef.current = requestAnimationFrame(animate);
-    
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -131,8 +132,8 @@ const ProofSection = () => {
     {
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2"/>
-          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2" />
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
         </svg>
       ),
       label: "More Views",
@@ -142,7 +143,7 @@ const ProofSection = () => {
     {
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
       label: "Turnaround",
@@ -229,11 +230,10 @@ const ProofSection = () => {
             <motion.button
               key={showcase.category}
               onClick={() => setActiveIndex(index)}
-              className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors duration-300 ${
-                activeIndex === index
-                  ? "text-white"
-                  : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
-              }`}
+              className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors duration-300 ${activeIndex === index
+                ? "text-white"
+                : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
+                }`}
               style={{
                 border: "1px solid var(--border)",
                 background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #ff9357)" : "var(--surface)",
@@ -299,6 +299,25 @@ const ProofSection = () => {
               <div className="text-sm font-semibold text-white">{currentShowcase.category}</div>
             </div>
           </motion.div>
+        </motion.div>
+
+        {/* Action CTA */}
+        <motion.div
+          className="mt-6 text-center"
+          initial={reduceMotion ? {} : { opacity: 0 }}
+          whileInView={reduceMotion ? {} : { opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 text-sm font-bold ss-btn-pulse"
+            style={{ color: "var(--orange)" }}
+          >
+            Start Your Revamp
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
         </motion.div>
 
         {/* Stats Grid (Dynamic) */}

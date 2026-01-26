@@ -1,29 +1,75 @@
 /* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp
 } from "lucide-react";
 
-import RoiCalculator from "./RoiCalculator";
+// Component imports
+const RoiCalculator = React.lazy(() => import("./RoiCalculator"));
 import QuickQuoteBar from "./QuickQuoteBar";
-import CreatorsWorkedWithMarquee from "@/components/CreatorsWorkedWithMarquee.jsx";
-
-import ExitIntentLeadModal from "@/components/ExitIntentLeadModal.jsx";
+const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
+const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
 import HeroSection from "../components/HeroSection";
-import ServicesSection from "../components/ServicesSection.jsx";
-import ProofSection  from "../components/ProofSection";
-import { CalendlyModal } from "../components/CalendlyModal";
+const ServicesSection = React.lazy(() => import("../components/ServicesSection.jsx"));
+import QuickLeadForm from "./QuickLeadForm.jsx";
+const ProofSection = React.lazy(() => import("../components/ProofSection"));
+const CalendlyModal = React.lazy(() => import("../components/CalendlyModal").then(module => ({ default: module.CalendlyModal })));
+import { BeforeAfter } from './BeforeAfter';
 
-import { BeforeAfter } from './BeforeAfter'; // Assuming this component is in the same folder
+// New helper components
+import ErrorBoundary from './ErrorBoundary';
+import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema } from './MetaTags';
+import ProgressiveImage from './ProgressiveImage';
+import SkeletonLoader, { SectionSkeleton } from './SkeletonLoader';
 
-// --- STEP 1: Import your available images here ---
+// Mobile-first UI components
+import {
+  Container,
+  Section,
+  Grid,
+  Card,
+  Button,
+  Badge,
+  Heading,
+  Text,
+} from './MobileFirst';
+
+// Cinematic components
+import {
+  FilmStripTimeline,
+  MetricCounter,
+  BeforeAfterSlider,
+  SwipeableCarousel,
+  UrgencyIndicator,
+} from './CinematicComponents';
+import FestivalOfferBanner from './ui/FestivalOfferBanner';
+
+// Custom hooks
+import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
+
+// Configuration and constants
+import {
+  CONTACT,
+  SOCIAL_LINKS,
+  BRAND,
+  TIMING,
+  THRESHOLDS,
+  TURNAROUND,
+  COLORS,
+  TYPOGRAPHY,
+  BREAKPOINTS,
+  ANIMATIONS,
+  SPACING,
+  SHADOWS,
+  TRUST_BADGES,
+  META,
+  ANALYTICS_EVENTS,
+} from '../config/constants';
+
+// Sample images
 import SAMPLE_VLOG_BEFORE from '../assets/Vlog_sample_before.jpg';
 import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
-
-// Make sure to import your components and icons
-// import { BeforeAfter } from './BeforeAfter';
-// import { BarChart3, IconImage } from 'lucide-react';
 
 /**
  * Centralized asset glob (Vite)
@@ -79,18 +125,26 @@ export const svgPlaceholder = (label = "Image") => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-/** Lightweight analytics dispatcher (no-op safe) */
+/**
+ * Lightweight analytics dispatcher with error logging
+ * @param {string} ev - Event name
+ * @param {Object} detail - Event details
+ */
 export const track = (ev, detail = {}) => {
-  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } }));
+  } catch (error) {
+    console.error('Analytics tracking error:', error);
+  }
 };
 
 /* Motion variants (shared) */
 export const animations = {
-  fadeDown: { hidden:{opacity:0,y:-12}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
-  fadeUp:   { hidden:{opacity:0,y: 16}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
-  fadeIn:   { hidden:{opacity:0},       visible:{opacity:1,      transition:{duration:.35,ease:"easeOut"}} },
-  staggerParent: { hidden:{}, visible:{ transition:{ staggerChildren:.08 } } },
-  scaleIn: { hidden:{opacity:0,scale:.96,y:8}, visible:{opacity:1,scale:1,y:0,transition:{duration:.25,ease:"easeOut"}} },
+  fadeDown: { hidden: { opacity: 0, y: -12 }, visible: { opacity: 1, y: 0, transition: { duration: .35, ease: "easeOut" } } },
+  fadeUp: { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: .35, ease: "easeOut" } } },
+  fadeIn: { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: .35, ease: "easeOut" } } },
+  staggerParent: { hidden: {}, visible: { transition: { staggerChildren: .08 } } },
+  scaleIn: { hidden: { opacity: 0, scale: .96, y: 8 }, visible: { opacity: 1, scale: 1, y: 0, transition: { duration: .25, ease: "easeOut" } } },
 };
 
 // card hover polish for grids
@@ -101,7 +155,7 @@ export const tiltHover = {
 
 /* Resolve sample images via asset glob (fallbacks if missing) */
 export const SAMPLE_BEFORE = findAssetByBase("sample_before") || svgPlaceholder("Before");
-export const SAMPLE_AFTER  = findAssetByBase("sample_after")  || svgPlaceholder("After");
+export const SAMPLE_AFTER = findAssetByBase("sample_after") || svgPlaceholder("After");
 
 
 /* ===================== Enhanced Case Studies (metric-first) ===================== */
@@ -111,12 +165,12 @@ const CaseStudies = () => {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const MEDIA = import.meta.glob("../assets/case_studies/*.{png,jpg,jpeg,webp,avif,mp4,webm}", { 
-    eager: true, 
-    query: "?url", 
-    import: "default" 
+  const MEDIA = import.meta.glob("../assets/case_studies/*.{png,jpg,jpeg,webp,avif,mp4,webm}", {
+    eager: true,
+    query: "?url",
+    import: "default"
   });
-  
+
   const [open, setOpen] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
 
@@ -221,13 +275,13 @@ const CaseStudies = () => {
             Case Studies
           </motion.div>
 
-          <h2 
+          <h2
             className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
             style={{ color: "var(--text)" }}
           >
             Recent Wins
           </h2>
-          <p 
+          <p
             className="text-base md:text-lg max-w-2xl mx-auto"
             style={{ color: "var(--text-muted)" }}
           >
@@ -243,11 +297,11 @@ const CaseStudies = () => {
               <motion.article
                 key={i}
                 className="group relative rounded-2xl border overflow-hidden cursor-pointer"
-                style={{ 
-                  background: "var(--surface-alt)", 
+                style={{
+                  background: "var(--surface-alt)",
                   borderColor: isHovered ? "var(--orange)" : "var(--border)",
-                  boxShadow: isHovered 
-                    ? "0 20px 40px rgba(232,80,2,0.15)" 
+                  boxShadow: isHovered
+                    ? "0 20px 40px rgba(232,80,2,0.15)"
                     : "0 8px 20px rgba(0,0,0,.08)",
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
@@ -263,23 +317,23 @@ const CaseStudies = () => {
                 {/* Thumbnail */}
                 <div className="aspect-[16/9] relative overflow-hidden">
                   {it.media.thumb ? (
-                    <motion.img 
-                      src={it.media.thumb} 
+                    <motion.img
+                      src={it.media.thumb}
                       alt={it.title}
-                      className="absolute inset-0 w-full h-full object-cover" 
+                      className="absolute inset-0 w-full h-full object-cover"
                       loading="lazy"
                       whileHover={reduceMotion ? {} : { scale: 1.05 }}
                       transition={{ duration: 0.4 }}
                     />
                   ) : (
-                    <div 
-                      className="absolute inset-0" 
-                      style={{ background: "linear-gradient(135deg, #2c3e50, #34495e)" }} 
+                    <div
+                      className="absolute inset-0"
+                      style={{ background: "linear-gradient(135deg, #2c3e50, #34495e)" }}
                     />
                   )}
-                  
+
                   {/* Gradient overlay */}
-                  <div 
+                  <div
                     className="absolute inset-0"
                     style={{
                       background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%)",
@@ -288,10 +342,10 @@ const CaseStudies = () => {
                   />
 
                   {/* Metric badge */}
-                  <motion.div 
+                  <motion.div
                     className="absolute top-3 left-3 rounded-full text-xs font-bold px-3 py-1.5"
-                    style={{ 
-                      background: "rgba(0,0,0,.75)", 
+                    style={{
+                      background: "rgba(0,0,0,.75)",
                       color: "#fff",
                       backdropFilter: "blur(8px)",
                       border: "1px solid rgba(255,255,255,.2)",
@@ -335,14 +389,14 @@ const CaseStudies = () => {
 
                 {/* Content */}
                 <div className="p-5">
-                  <h3 
+                  <h3
                     className="text-lg font-bold mb-2 font-['Poppins']"
                     style={{ color: "var(--text)" }}
                   >
                     {it.title}
                   </h3>
 
-                  <p 
+                  <p
                     className="text-sm mb-3"
                     style={{ color: "var(--text-muted)" }}
                   >
@@ -364,11 +418,11 @@ const CaseStudies = () => {
                   >
                     View breakdown
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <path 
-                        d="M5 12h14M12 5l7 7-7 7" 
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
+                      <path
+                        d="M5 12h14M12 5l7 7-7 7"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </svg>
@@ -400,28 +454,28 @@ const CaseStudies = () => {
         {open != null && (
           <motion.div
             className="fixed inset-0 z-50 grid place-items-center p-4"
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             style={{ background: "rgba(0,0,0,.7)", backdropFilter: "blur(4px)" }}
             onClick={() => setOpen(null)}
           >
             <motion.div
               className="w-full max-w-4xl rounded-2xl overflow-hidden border-2"
-              initial={{ scale: 0.9, y: 20 }} 
-              animate={{ scale: 1, y: 0 }} 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              style={{ 
-                background: "var(--surface)", 
+              style={{
+                background: "var(--surface)",
                 borderColor: "var(--orange)",
                 boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
               }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div 
+              <div
                 className="p-6 border-b relative"
-                style={{ 
+                style={{
                   borderColor: "var(--border)",
                   background: items[open].gradient,
                 }}
@@ -452,29 +506,29 @@ const CaseStudies = () => {
                 {["hook", "edit", "thumb"].map((k, idx) => {
                   const src = items[open].media[k];
                   return (
-                    <div 
-                      key={k} 
+                    <div
+                      key={k}
                       className="aspect-[4/3] relative border-r md:last:border-r-0 group"
                       style={{ borderColor: "var(--border)" }}
                     >
                       {src ? (
-                        <img 
-                          src={src} 
+                        <img
+                          src={src}
                           alt={`${k} preview`}
-                          className="absolute inset-0 w-full h-full object-cover" 
+                          className="absolute inset-0 w-full h-full object-cover"
                         />
                       ) : (
-                        <div 
-                          className="absolute inset-0" 
-                          style={{ background: "linear-gradient(135deg, #2c3e50, #34495e)" }} 
+                        <div
+                          className="absolute inset-0"
+                          style={{ background: "linear-gradient(135deg, #2c3e50, #34495e)" }}
                         />
                       )}
-                      
+
                       {/* Label */}
-                      <div 
+                      <div
                         className="absolute bottom-3 left-3 text-xs font-semibold px-3 py-1.5 rounded-full capitalize"
-                        style={{ 
-                          background: "rgba(0,0,0,.75)", 
+                        style={{
+                          background: "rgba(0,0,0,.75)",
                           color: "#fff",
                           backdropFilter: "blur(8px)",
                           border: "1px solid rgba(255,255,255,.2)",
@@ -494,12 +548,12 @@ const CaseStudies = () => {
                 </h4>
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {items[open].highlights?.map((h, idx) => (
-                    <li 
+                    <li
                       key={idx}
                       className="flex items-center gap-2 text-sm"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      <span 
+                      <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ background: "var(--orange)" }}
                         aria-hidden="true"
@@ -512,11 +566,11 @@ const CaseStudies = () => {
 
               {/* Footer */}
               <div className="p-4 border-t flex justify-end" style={{ borderColor: "var(--border)" }}>
-                <button 
+                <button
                   className="px-5 py-2.5 rounded-xl font-semibold transition-all"
-                  style={{ 
-                    color: "var(--text)", 
-                    border: "1px solid var(--border)", 
+                  style={{
+                    color: "var(--text)",
+                    border: "1px solid var(--border)",
                     background: "var(--surface-alt)",
                   }}
                   onClick={() => setOpen(null)}
@@ -668,8 +722,8 @@ const ProcessSection = () => {
                 style={{
                   background: "var(--surface-alt)",
                   border: `2px solid ${isActive ? "var(--orange)" : "var(--border)"}`,
-                  boxShadow: isActive 
-                    ? "0 12px 30px rgba(232,80,2,0.2)" 
+                  boxShadow: isActive
+                    ? "0 12px 30px rgba(232,80,2,0.2)"
                     : "0 4px 12px rgba(0,0,0,0.05)",
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
@@ -696,7 +750,7 @@ const ProcessSection = () => {
                 <div className="flex items-center gap-3 mb-4">
                   <motion.div
                     className="w-12 h-12 rounded-xl flex items-center justify-center font-bold relative overflow-hidden"
-                    style={{ 
+                    style={{
                       background: s.gradient,
                       color: "#fff",
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
@@ -704,15 +758,15 @@ const ProcessSection = () => {
                     animate={
                       isActive && !reduceMotion
                         ? {
-                            scale: [1, 1.05, 1],
-                            rotate: [0, 5, -5, 0],
-                          }
+                          scale: [1, 1.05, 1],
+                          rotate: [0, 5, -5, 0],
+                        }
                         : {}
                     }
                     transition={{ duration: 0.6 }}
                   >
                     <span className="relative z-10">{s.n}</span>
-                    
+
                     {/* Pulse effect */}
                     {isActive && !reduceMotion && (
                       <motion.div
@@ -726,9 +780,9 @@ const ProcessSection = () => {
                     )}
                   </motion.div>
 
-                  <div 
+                  <div
                     className="p-2 rounded-lg"
-                    style={{ 
+                    style={{
                       background: `color-mix(in oklab, var(--orange) 10%, transparent)`,
                       color: "var(--orange)",
                     }}
@@ -746,7 +800,7 @@ const ProcessSection = () => {
                 </h3>
 
                 {/* Description */}
-                <p 
+                <p
                   className="text-sm mb-4 leading-relaxed"
                   style={{ color: "var(--text-muted)" }}
                 >
@@ -764,11 +818,11 @@ const ProcessSection = () => {
                   transition={{ duration: 0.3 }}
                   style={{ overflow: "hidden" }}
                 >
-                  <div 
+                  <div
                     className="pt-4 mt-4 border-t"
                     style={{ borderColor: "var(--border)" }}
                   >
-                    <div 
+                    <div
                       className="text-xs font-semibold mb-2"
                       style={{ color: "var(--orange)" }}
                     >
@@ -782,23 +836,23 @@ const ProcessSection = () => {
                           style={{ color: "var(--text-muted)" }}
                           initial={{ x: -10, opacity: 0 }}
                           animate={
-                            isActive 
-                              ? { x: 0, opacity: 1 } 
+                            isActive
+                              ? { x: 0, opacity: 1 }
                               : { x: -10, opacity: 0 }
                           }
                           transition={{ delay: di * 0.05 }}
                         >
-                          <svg 
-                            width="12" 
-                            height="12" 
-                            viewBox="0 0 24 24" 
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
                             fill="none"
                           >
-                            <path 
-                              d="M20 6L9 17l-5-5" 
-                              stroke="var(--orange)" 
-                              strokeWidth="2.5" 
-                              strokeLinecap="round" 
+                            <path
+                              d="M20 6L9 17l-5-5"
+                              stroke="var(--orange)"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
                               strokeLinejoin="round"
                             />
                           </svg>
@@ -811,22 +865,22 @@ const ProcessSection = () => {
 
                 {/* Arrow indicator */}
                 {idx < steps.length - 1 && (
-                  <div 
+                  <div
                     className="hidden lg:block absolute -right-3 top-1/2 -translate-y-1/2 z-20"
                     aria-hidden="true"
                   >
-                    <svg 
-                      width="24" 
-                      height="24" 
-                      viewBox="0 0 24 24" 
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
                       fill="none"
                       style={{ color: "var(--orange)" }}
                     >
-                      <path 
-                        d="M5 12h14M12 5l7 7-7 7" 
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
+                      <path
+                        d="M5 12h14M12 5l7 7-7 7"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </svg>
@@ -847,16 +901,16 @@ const ProcessSection = () => {
         >
           <div className="flex items-center justify-between relative">
             {/* Progress line */}
-            <div 
+            <div
               className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2"
-              style={{ 
+              style={{
                 background: "var(--border)",
               }}
               aria-hidden="true"
             >
               <motion.div
                 className="h-full"
-                style={{ 
+                style={{
                   background: "linear-gradient(90deg, var(--orange), #ff9357)",
                 }}
                 initial={{ width: "0%" }}
@@ -868,18 +922,18 @@ const ProcessSection = () => {
 
             {/* Time markers */}
             {["Day 1", "Day 2", "Day 10", "Ongoing"].map((time, i) => (
-              <div 
+              <div
                 key={i}
                 className="relative z-10 text-center"
               >
-                <div 
+                <div
                   className="w-3 h-3 rounded-full mx-auto mb-2"
-                  style={{ 
+                  style={{
                     background: "var(--orange)",
                     boxShadow: "0 0 0 4px var(--surface)",
                   }}
                 />
-                <div 
+                <div
                   className="text-xs font-medium"
                   style={{ color: "var(--text-muted)" }}
                 >
@@ -1072,7 +1126,7 @@ const TestimonialsSection = ({ isDark }) => {
 
   const VideoCard = ({ item, i }) => {
     const [isHovered, setIsHovered] = useState(false);
-    
+
     return (
       <motion.article
         initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
@@ -1105,7 +1159,7 @@ const TestimonialsSection = ({ isDark }) => {
             loading="lazy"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-          
+
           {/* Play button */}
           <motion.div
             className="absolute inset-0 flex items-center justify-center"
@@ -1144,7 +1198,7 @@ const TestimonialsSection = ({ isDark }) => {
 
         <div className="p-5">
           <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} />
-          
+
           <div className="flex items-start gap-2 mb-3">
             <Quote size={18} className="flex-shrink-0 mt-0.5" style={{ color: item.color, opacity: 0.6 }} />
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
@@ -1172,7 +1226,7 @@ const TestimonialsSection = ({ isDark }) => {
 
   const AnalyticsCard = ({ item, i }) => {
     const [isHovered, setIsHovered] = useState(false);
-    
+
     return (
       <motion.article
         initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
@@ -1202,7 +1256,7 @@ const TestimonialsSection = ({ isDark }) => {
             transition={{ duration: 0.4 }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-          
+
           {/* Metric overlay */}
           <div className="absolute top-3 left-3">
             {item.metrics?.slice(0, 1).map((m, idx) => (
@@ -1224,7 +1278,7 @@ const TestimonialsSection = ({ isDark }) => {
 
         <div className="p-5">
           <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} />
-          
+
           <div className="flex items-start gap-2 mb-3">
             <Quote size={18} className="flex-shrink-0 mt-0.5" style={{ color: item.color, opacity: 0.6 }} />
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
@@ -1381,7 +1435,7 @@ const TestimonialsSection = ({ isDark }) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             />
-            
+
             <motion.div
               className="relative w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl"
               style={{
@@ -1458,7 +1512,6 @@ const FAQSection = () => {
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const [openFAQ, setOpenFAQ] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const faqs = [
     {
@@ -1473,8 +1526,8 @@ const FAQSection = () => {
       category: 'Timeline',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-          <path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+          <path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       ),
     },
@@ -1484,9 +1537,9 @@ const FAQSection = () => {
       category: 'Pricing',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       ),
     },
@@ -1502,8 +1555,8 @@ const FAQSection = () => {
       category: 'Process',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -1519,7 +1572,7 @@ const FAQSection = () => {
       category: 'Process',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -1529,27 +1582,15 @@ const FAQSection = () => {
       category: 'Pricing',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <rect x="1" y="4" width="22" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
-          <path d="M1 10h22" stroke="currentColor" strokeWidth="2"/>
+          <rect x="1" y="4" width="22" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+          <path d="M1 10h22" stroke="currentColor" strokeWidth="2" />
         </svg>
       ),
     },
   ];
 
-  const filteredFaqs = useMemo(() => {
-    if (!searchQuery.trim()) return faqs;
-    const query = searchQuery.toLowerCase();
-    return faqs.filter(
-      (faq) =>
-        faq.question.toLowerCase().includes(query) ||
-        faq.answer.toLowerCase().includes(query) ||
-        faq.category.toLowerCase().includes(query)
-    );
-  }, [searchQuery]);
 
   const toggleFAQ = (idx) => setOpenFAQ((cur) => (cur === idx ? null : idx));
-
-  const categories = [...new Set(faqs.map((f) => f.category))];
 
   return (
     <section className="py-20 relative overflow-hidden" style={{ background: 'var(--surface)' }} itemScope itemType="https://schema.org/FAQPage">
@@ -1599,13 +1640,13 @@ const FAQSection = () => {
             whileHover={reduceMotion ? {} : { scale: 1.05, y: -2 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Got Questions?
           </motion.div>
 
-          <h2 
+          <h2
             className="text-4xl md:text-5xl font-bold mb-4 font-['Poppins']"
             style={{ color: 'var(--text)' }}
           >
@@ -1616,192 +1657,91 @@ const FAQSection = () => {
           </p>
         </motion.div>
 
-        {/* Search bar */}
-        <motion.div
-          className="mb-8"
-          initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-          whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <div className="relative max-w-2xl mx-auto">
-            <input
-              type="text"
-              placeholder="Search questions..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-5 py-3 pl-12 rounded-xl outline-none"
-              style={{
-                background: "var(--surface-alt)",
-                border: "2px solid var(--border)",
-                color: "var(--text)",
-              }}
-            />
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="absolute left-4 top-1/2 -translate-y-1/2"
-              style={{ color: "var(--text-muted)" }}
-            >
-              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
-              <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-sm"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          {/* Category pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSearchQuery(cat)}
-                className="px-3 py-1.5 rounded-full text-xs font-medium"
-                style={{
-                  border: "1px solid var(--border)",
-                  background: searchQuery.toLowerCase() === cat.toLowerCase()
-                    ? "rgba(232,80,2,0.14)"
-                    : "var(--surface-alt)",
-                  color: searchQuery.toLowerCase() === cat.toLowerCase()
-                    ? "var(--orange)"
-                    : "var(--text-muted)",
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Results count */}
-        {searchQuery && (
-          <motion.div
-            className="text-center text-sm mb-6"
-            style={{ color: "var(--text-muted)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            Found {filteredFaqs.length} {filteredFaqs.length === 1 ? "result" : "results"}
-          </motion.div>
-        )}
-
         {/* FAQ Items */}
         <div className="space-y-4">
-          {filteredFaqs.length > 0 ? (
-            filteredFaqs.map((f, i) => {
-              const open = openFAQ === i;
-              return (
-                <motion.div
-                  key={i}
-                  initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-                  whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  className="rounded-xl overflow-hidden"
-                  style={{
-                    border: `2px solid ${open ? "var(--orange)" : "var(--border)"}`,
-                    background: 'var(--surface-alt)',
-                    boxShadow: open ? "0 8px 20px rgba(232,80,2,0.15)" : "none",
-                    transition: "all 0.3s ease",
-                  }}
+          {faqs.map((f, i) => {
+            const open = openFAQ === i;
+            return (
+              <motion.div
+                key={i}
+                initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
+                whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                className="rounded-xl overflow-hidden"
+                style={{
+                  border: `2px solid ${open ? "var(--orange)" : "var(--border)"}`,
+                  background: 'var(--surface-alt)',
+                  boxShadow: open ? "0 8px 20px rgba(232,80,2,0.15)" : "none",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleFAQ(i)}
+                  aria-expanded={open}
+                  aria-controls={`faq-panel-${i}`}
+                  className="w-full flex items-center justify-between gap-4 p-5 text-left group"
+                  style={{ color: 'var(--text)' }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleFAQ(i)}
-                    aria-expanded={open}
-                    aria-controls={`faq-panel-${i}`}
-                    className="w-full flex items-center justify-between gap-4 p-5 text-left group"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    <div className="flex items-start gap-3 flex-1">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div
+                      className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{
+                        background: open
+                          ? "var(--orange)"
+                          : "color-mix(in oklab, var(--orange) 10%, transparent)",
+                        color: open ? "#fff" : "var(--orange)",
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      {f.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-base mb-1">{f.question}</div>
                       <div
-                        className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                        className="text-xs px-2 py-0.5 rounded-full inline-block"
                         style={{
-                          background: open
-                            ? "var(--orange)"
-                            : "color-mix(in oklab, var(--orange) 10%, transparent)",
-                          color: open ? "#fff" : "var(--orange)",
-                          transition: "all 0.3s ease",
+                          background: "color-mix(in oklab, var(--orange) 10%, transparent)",
+                          color: "var(--orange)",
                         }}
                       >
-                        {f.icon}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-semibold text-base mb-1">{f.question}</div>
-                        <div
-                          className="text-xs px-2 py-0.5 rounded-full inline-block"
-                          style={{
-                            background: "color-mix(in oklab, var(--orange) 10%, transparent)",
-                            color: "var(--orange)",
-                          }}
-                        >
-                          {f.category}
-                        </div>
+                        {f.category}
                       </div>
                     </div>
-
-                    <motion.div
-                      className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 font-bold text-lg"
-                      style={{
-                        borderColor: open ? "var(--orange)" : "var(--border)",
-                        background: open ? 'var(--orange)' : 'transparent',
-                        color: open ? '#fff' : 'var(--text-muted)',
-                      }}
-                      animate={{ rotate: open ? 45 : 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      +
-                    </motion.div>
-                  </button>
+                  </div>
 
                   <motion.div
-                    id={`faq-panel-${i}`}
-                    initial={false}
-                    animate={{
-                      height: open ? "auto" : 0,
-                      opacity: open ? 1 : 0,
+                    className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 font-bold text-lg"
+                    style={{
+                      borderColor: open ? "var(--orange)" : "var(--border)",
+                      background: open ? 'var(--orange)' : 'transparent',
+                      color: open ? '#fff' : 'var(--text-muted)',
                     }}
+                    animate={{ rotate: open ? 45 : 0 }}
                     transition={{ duration: 0.3 }}
-                    style={{ overflow: "hidden" }}
                   >
-                    <div className="px-5 pb-5 pl-[4.25rem]" style={{ color: 'var(--text-muted)' }}>
-                      {f.answer}
-                    </div>
+                    +
                   </motion.div>
-                </motion.div>
-              );
-            })
-          ) : (
-            <motion.div
-              className="text-center py-12"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <div className="text-4xl mb-3">🔍</div>
-              <div className="text-lg font-semibold mb-2" style={{ color: "var(--text)" }}>
-                No results found
-              </div>
-              <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Try a different search term or{" "}
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="font-semibold"
-                  style={{ color: "var(--orange)" }}
-                >
-                  clear your search
                 </button>
-              </div>
-            </motion.div>
-          )}
+
+                <motion.div
+                  id={`faq-panel-${i}`}
+                  initial={false}
+                  animate={{
+                    height: open ? "auto" : 0,
+                    opacity: open ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.3 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div className="px-5 pb-5 pl-[4.25rem]" style={{ color: 'var(--text-muted)' }}>
+                    {f.answer}
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* Still have questions CTA */}
@@ -1841,60 +1781,68 @@ const FAQSection = () => {
 /* ===================== Contact (polished + mobile-first + CPU-friendly) ===================== */
 const ContactCTA = ({ onBook }) => {
   const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
-  const buildWhatsApp = () => {
-    const base = "https://wa.me/918968141585";
-    let text = "Hi Shinel Studios! I want to grow my channel. Can we talk?";
+  const buildWhatsApp = useCallback(() => {
+    let text = CONTACT.whatsappDefaultMessage;
     try {
-      const utm = JSON.parse(localStorage.getItem("utm") || "{}");
-      const meta = Object.entries(utm).map(([k, v]) => `${k}=${v}`).join("&");
+      const utm = JSON.parse(localStorage.getItem('utm') || '{}');
+      const meta = Object.entries(utm).map(([k, v]) => `${k}=${v}`).join('&');
       if (meta) text += `\nUTM: ${meta}`;
-    } catch {}
-    return `${base}?text=${encodeURIComponent(text)}`;
-  };
+    } catch (error) {
+      console.error('Error building WhatsApp URL:', error);
+    }
+    return `${CONTACT.whatsappUrl}?text=${encodeURIComponent(text)}`;
+  }, []);
 
-  const buildMailto = () => {
-    const to = "hello@shinelstudiosofficial.com";
-    const subject = "Quick chat about my content growth";
+  const buildMailto = useCallback(() => {
+    const subject = 'Quick chat about my content growth';
     const body = [
-      "Hi Shinel Studios,",
-      "",
+      `Hi ${BRAND.name},`,
+      '',
       "I'd love to talk about improving my thumbnails/retention and overall growth.",
-      "Can we schedule a quick call?",
-      "",
-      "— Sent from Contact section",
-    ].join("\n");
-    return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  };
+      'Can we schedule a quick call?',
+      '',
+      '— Sent from Contact section',
+    ].join('\n');
+    return `mailto:${CONTACT.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, []);
 
-  const handleBook = () => {
+  const handleBook = useCallback(() => {
     try {
-      window.dispatchEvent(new Event("calendly:open"));
-      window.dispatchEvent(
-        new CustomEvent("analytics", { detail: { ev: "cta_click_audit", src: "contact" } })
-      );
-    } catch {}
+      window.dispatchEvent(new Event('calendly:open'));
+      track(ANALYTICS_EVENTS.ctaClickAudit, { src: 'contact' });
+    } catch (error) {
+      console.error('Error opening Calendly:', error);
+    }
     onBook?.();
-  };
+  }, [onBook]);
+
+  const handleWhatsAppClick = useCallback(() => {
+    track(ANALYTICS_EVENTS.ctaClickWhatsapp, { src: 'contact' });
+  }, []);
+
+  const handleEmailClick = useCallback(() => {
+    track(ANALYTICS_EVENTS.ctaClickEmail, { src: 'contact' });
+  }, []);
 
   return (
     <section
       id="contact"
       className="w-full py-16 md:py-20 relative overflow-hidden"
       style={{
-        backgroundImage: "linear-gradient(90deg, var(--orange), #ff9357)",
+        backgroundImage: `linear-gradient(90deg, var(--orange), ${COLORS.orangeLight})`,
       }}
       aria-labelledby="contact-heading"
     >
       {/* soft vignette for contrast */}
       <div
-        aria-hidden
+        aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(80% 120% at 50% 0%, rgba(0,0,0,.18) 0%, rgba(0,0,0,0) 55%), radial-gradient(120% 80% at 50% 100%, rgba(0,0,0,.20) 0%, rgba(0,0,0,0) 50%)",
+            'radial-gradient(80% 120% at 50% 0%, rgba(0,0,0,.18) 0%, rgba(0,0,0,0) 55%), radial-gradient(120% 80% at 50% 100%, rgba(0,0,0,.20) 0%, rgba(0,0,0,0) 50%)',
         }}
       />
 
@@ -1902,23 +1850,23 @@ const ContactCTA = ({ onBook }) => {
         <motion.div
           initial={reduceMotion ? {} : { opacity: 0, y: 30 }}
           whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
+          viewport={{ once: true, margin: '-10% 0px -10% 0px' }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
           className="max-w-4xl mx-auto text-center"
         >
           <h2
             id="contact-heading"
             className="text-3xl md:text-6xl font-bold mb-4 md:mb-6 font-['Poppins']"
-            style={{ color: "#fff", lineHeight: 1.08 }}
+            style={{ color: '#fff', lineHeight: 1.08 }}
           >
-            Let’s Build Something Amazing Together
+            Let's Build Something Amazing Together
           </h2>
 
           <p
             className="text-lg md:text-xl mb-6 md:mb-8 mx-auto max-w-2xl"
-            style={{ color: "rgba(255,255,255,0.9)" }}
+            style={{ color: 'rgba(255,255,255,0.9)' }}
           >
-            Ready to take your content to the next level? Reach out — we’ll map a plan and start shipping wins.
+            Ready to take your content to the next level? Reach out — we'll map a plan and start shipping wins.
           </p>
 
           {/* CTAs */}
@@ -1926,14 +1874,12 @@ const ContactCTA = ({ onBook }) => {
             <motion.a
               href={buildWhatsApp()}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="bg-white text-black px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg shadow-sm text-center"
               whileHover={reduceMotion ? {} : { y: -2 }}
               whileTap={reduceMotion ? {} : { scale: 0.98 }}
-              aria-label="Chat with us on WhatsApp"
-              onClick={() => {
-                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "contact" } })); } catch {}
-              }}
+              aria-label="Chat with us on WhatsApp - Opens in new window"
+              onClick={handleWhatsAppClick}
             >
               WhatsApp Us
             </motion.a>
@@ -1943,14 +1889,14 @@ const ContactCTA = ({ onBook }) => {
               onClick={handleBook}
               className="px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg text-white"
               style={{
-                border: "2px solid rgba(255,255,255,.9)",
+                border: '2px solid rgba(255,255,255,.9)',
                 background:
-                  "linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,.08))",
-                backdropFilter: "blur(4px)",
+                  'linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,.08))',
+                backdropFilter: 'blur(4px)',
               }}
               whileHover={reduceMotion ? {} : { y: -2 }}
               whileTap={reduceMotion ? {} : { scale: 0.98 }}
-              aria-label="Book a free 15-minute audit"
+              aria-label="Book a free 15-minute channel audit"
             >
               Book Free Audit
             </motion.button>
@@ -1960,10 +1906,8 @@ const ContactCTA = ({ onBook }) => {
               className="px-6 md:px-8 py-3.5 md:py-4 rounded-lg font-semibold text-base md:text-lg border-2 border-white text-white text-center"
               whileHover={reduceMotion ? {} : { y: -2 }}
               whileTap={reduceMotion ? {} : { scale: 0.98 }}
-              aria-label="Email us"
-              onClick={() => {
-                try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "cta_click_email", src: "contact" } })); } catch {}
-              }}
+              aria-label="Send us an email"
+              onClick={handleEmailClick}
             >
               Email Us
             </motion.a>
@@ -1971,22 +1915,17 @@ const ContactCTA = ({ onBook }) => {
 
           {/* Trust badges */}
           <div className="mt-5 md:mt-6 flex flex-wrap items-center justify-center gap-2.5 text-[12px] md:text-sm">
-            {[
-              "Reply in 24h",
-              "Consent-first AI",
-              "No spam",
-              "Project files on request",
-            ].map((t, i) => (
+            {TRUST_BADGES.map((badge, i) => (
               <span
                 key={i}
                 className="px-2.5 py-1 rounded-full"
                 style={{
-                  color: "rgba(255,255,255,0.92)",
-                  border: "1px solid rgba(255,255,255,0.5)",
-                  background: "rgba(255,255,255,0.08)",
+                  color: 'rgba(255,255,255,0.92)',
+                  border: '1px solid rgba(255,255,255,0.5)',
+                  background: 'rgba(255,255,255,0.08)',
                 }}
               >
-                {t}
+                {badge}
               </span>
             ))}
           </div>
@@ -2000,57 +1939,51 @@ const ContactCTA = ({ onBook }) => {
 const FloatingWhatsApp = () => {
   const [visible, setVisible] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [hideFromROI, setHideFromROI] = useState(false);
   const lastScrollY = useRef(0);
   const hideTimeout = useRef(null);
-  const ticking = useRef(false);
 
   const reduceMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
-  // Smart visibility logic - iOS optimized
+  // Simplified visibility logic
   useEffect(() => {
+    let ticking = false;
+
     const updateVisibility = () => {
       const currentScrollY = window.scrollY;
       const scrollHeight = document.documentElement.scrollHeight;
       const windowHeight = window.innerHeight;
       const scrollPercent = currentScrollY / (scrollHeight - windowHeight);
 
-      // Show after 15% scroll
-      const shouldShow = scrollPercent > 0.15;
-      
+      // Show after threshold scroll
+      const shouldShow = scrollPercent > THRESHOLDS.whatsappShowScroll;
+
       // Hide when scrolling down, show when scrolling up
       const scrollingUp = currentScrollY < lastScrollY.current;
-      
-      lastScrollY.current = currentScrollY;
 
-      // Don't show if ROI CTA is visible
-      if (hideFromROI) {
-        setVisible(false);
-        return;
-      }
+      lastScrollY.current = currentScrollY;
 
       if (shouldShow && scrollingUp) {
         setVisible(true);
         setMinimized(false);
-        
-        // Auto-minimize after 3 seconds
+
+        // Auto-minimize after delay
         clearTimeout(hideTimeout.current);
         hideTimeout.current = setTimeout(() => {
           setMinimized(true);
-        }, 3000);
+        }, TIMING.whatsappAutoMinimize);
       } else if (!scrollingUp && currentScrollY > lastScrollY.current) {
         setMinimized(true);
       }
 
-      ticking.current = false;
+      ticking = false;
     };
 
     const onScroll = () => {
-      if (!ticking.current) {
+      if (!ticking) {
         requestAnimationFrame(updateVisibility);
-        ticking.current = true;
+        ticking = true;
       }
     };
 
@@ -2062,9 +1995,9 @@ const FloatingWhatsApp = () => {
       window.removeEventListener('scroll', onScroll);
       clearTimeout(hideTimeout.current);
     };
-  }, [hideFromROI]);
+  }, []);
 
-  // Hide near footer/contact/leadform
+  // Hide near footer/contact sections
   useEffect(() => {
     const targets = ['#contact', '#leadform-section']
       .map(s => document.querySelector(s))
@@ -2074,12 +2007,12 @@ const FloatingWhatsApp = () => {
 
     const io = new IntersectionObserver(
       (entries) => {
-        const nearBottom = entries.some(e => e.isIntersecting && e.intersectionRatio > 0.05);
+        const nearBottom = entries.some(e => e.isIntersecting && e.intersectionRatio > THRESHOLDS.intersectionRatio);
         if (nearBottom) {
           setVisible(false);
         }
       },
-      { rootMargin: '0px 0px -15% 0px', threshold: [0, 0.05, 0.1] }
+      { rootMargin: '0px 0px -15% 0px', threshold: [0, THRESHOLDS.intersectionRatio, 0.1] }
     );
 
     targets.forEach(t => io.observe(t));
@@ -2090,7 +2023,7 @@ const FloatingWhatsApp = () => {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    
+
     const onResize = () => {
       const keyboardOpen = window.innerHeight - vv.height > 150;
       if (keyboardOpen) {
@@ -2099,7 +2032,7 @@ const FloatingWhatsApp = () => {
         setVisible(true);
       }
     };
-    
+
     vv.addEventListener('resize', onResize);
     vv.addEventListener('scroll', onResize);
     return () => {
@@ -2108,44 +2041,39 @@ const FloatingWhatsApp = () => {
     };
   }, []);
 
-  // Listen to calendar/form/ROI events
+  // Listen to calendar/form events
   useEffect(() => {
     const hide = () => setVisible(false);
     const show = () => setVisible(true);
-    const handleROI = (e) => setHideFromROI(e.detail?.visible || false);
-    
+
     window.addEventListener('calendly:open', hide);
     window.addEventListener('calendly:close', show);
-    window.addEventListener('roi:cta:visible', handleROI);
     document.addEventListener('leadform:visible', (e) => {
       if (e.detail?.visible) hide();
       else show();
     });
-    
+
     return () => {
       window.removeEventListener('calendly:open', hide);
       window.removeEventListener('calendly:close', show);
-      window.removeEventListener('roi:cta:visible', handleROI);
     };
   }, []);
 
-  const whatsappUrl = 
-    "https://wa.me/918968141585?text=" +
-    encodeURIComponent("Hi Shinel Studios! I want to grow my channel. Can we talk?");
+  const whatsappUrl = `${CONTACT.whatsappUrl}?text=${encodeURIComponent(CONTACT.whatsappDefaultMessage)}`;
 
-  const handleClick = () => {
+  const handleClick = useCallback(() => {
     try {
       window.dispatchEvent(
-        new CustomEvent("analytics", { detail: { ev: "cta_click_whatsapp", src: "floating" } })
+        new CustomEvent("analytics", { detail: { ev: ANALYTICS_EVENTS.ctaClickWhatsapp, src: 'floating' } })
       );
-    } catch {}
+    } catch { }
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-  };
+  }, [whatsappUrl]);
 
-  const handleMouseEnter = () => {
+  const handleMouseEnter = useCallback(() => {
     setMinimized(false);
     clearTimeout(hideTimeout.current);
-  };
+  }, []);
 
   if (!visible) return null;
 
@@ -2161,14 +2089,14 @@ const FloatingWhatsApp = () => {
           WebkitTransform: 'translate3d(0, 0, 0)',
         }}
         initial={{ scale: 0, opacity: 0 }}
-        animate={{ 
-          scale: minimized ? 0.9 : 1, 
+        animate={{
+          scale: minimized ? 0.9 : 1,
           opacity: 1,
         }}
         exit={{ scale: 0, opacity: 0 }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 300, 
+        transition={{
+          type: "spring",
+          stiffness: 300,
           damping: 25,
           mass: 0.8,
         }}
@@ -2179,7 +2107,7 @@ const FloatingWhatsApp = () => {
           onTouchStart={handleMouseEnter}
           className="relative rounded-full shadow-2xl"
           style={{
-            background: 'linear-gradient(135deg, #25D366, #128C7E)',
+            background: `linear-gradient(135deg, ${COLORS.whatsappGreen}, ${COLORS.whatsappGreenDark})`,
             width: minimized ? '56px' : '60px',
             height: minimized ? '56px' : '60px',
             willChange: 'transform',
@@ -2188,20 +2116,20 @@ const FloatingWhatsApp = () => {
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
             border: '3px solid rgba(255, 255, 255, 0.3)',
-            boxShadow: '0 8px 24px rgba(37, 211, 102, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2)',
+            boxShadow: `0 8px 24px rgba(37, 211, 102, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2)`,
           }}
-          whileHover={!reduceMotion ? { scale: 1.08 } : {}}
+          whileHover={!reduceMotion ? {} : {}}
           whileTap={{ scale: 0.92 }}
           aria-label="Chat on WhatsApp"
         >
           {/* WhatsApp Icon */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <svg 
-              width={minimized ? "26" : "30"} 
-              height={minimized ? "26" : "30"} 
-              viewBox="0 0 24 24" 
+            <svg
+              width={minimized ? "26" : "30"}
+              height={minimized ? "26" : "30"}
+              viewBox="0 0 24 24"
               fill="none"
-              style={{ 
+              style={{
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 transform: 'translate3d(0, 0, 0)',
                 WebkitTransform: 'translate3d(0, 0, 0)',
@@ -2219,14 +2147,14 @@ const FloatingWhatsApp = () => {
             <motion.div
               className="absolute inset-0 rounded-full"
               style={{
-                border: '2px solid #25D366',
+                border: `2px solid ${COLORS.whatsappGreen}`,
                 transform: 'translate3d(0, 0, 0)',
                 WebkitTransform: 'translate3d(0, 0, 0)',
               }}
               initial={{ scale: 1, opacity: 0.7 }}
               animate={{ scale: 1.5, opacity: 0 }}
-              transition={{ 
-                duration: 2.5, 
+              transition={{
+                duration: 2.5,
                 repeat: Infinity,
                 ease: "easeOut",
                 repeatDelay: 0.5,
@@ -2247,7 +2175,7 @@ const FloatingWhatsApp = () => {
               }}
               initial={{ scale: 0 }}
               animate={{ scale: [1, 1.1, 1] }}
-              transition={{ 
+              transition={{
                 duration: 2,
                 repeat: Infinity,
                 repeatDelay: 3,
@@ -2266,7 +2194,7 @@ const FloatingWhatsApp = () => {
               initial={{ opacity: 0, x: 10, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 10, scale: 0.9 }}
-              transition={{ 
+              transition={{
                 duration: 0.2,
                 ease: "easeOut",
               }}
@@ -2379,58 +2307,138 @@ export default function ShinelStudiosHomepage() {
   const isDark = document.documentElement.classList.contains("dark");
   const [showCalendly, setShowCalendly] = React.useState(false);
 
+  const handleOpenCalendly = useCallback((source) => {
+    setShowCalendly(true);
+    track(ANALYTICS_EVENTS.ctaClickAudit, { src: source });
+  }, []);
+
   return (
-    <div className="min-h-screen overflow-x-hidden">
-      {/* SEO first so bots see it immediately */}
-      <SeoSchema />
+    <ErrorBoundary>
+      <div className="min-h-screen overflow-x-hidden">
+        {/* SEO Meta Tags */}
+        <MetaTags
+          title={META.title}
+          description={META.description}
+          keywords={META.keywords}
+          ogImage={META.ogImage}
+        />
 
-      {/* 2) Hero (Above the fold, loads immediately) */}
-      <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
+        {/* Structured Data */}
+        <OrganizationSchema />
+        <BreadcrumbSchema
+          items={[
+            { name: 'Home', url: '/' },
+            { name: 'Services', url: '/#services' },
+            { name: 'Work', url: '/#work' },
+            { name: 'Contact', url: '/#contact' },
+          ]}
+        />
 
-      {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
-      <QuickQuoteBar onBook={() => setShowCalendly(true)} />
+        {/* Skip to main content link for accessibility */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+          style={{
+            background: 'var(--orange)',
+            color: '#fff',
+          }}
+        >
+          Skip to main content
+        </a>
 
-      {/* 3) Social proof (logos) */}
-      <CreatorsWorkedWithMarquee isDark={isDark} />
+        {/* Main content wrapper */}
+        <main id="main-content">
+          {/* 0) Festival Offer Banner (Sticky or Top) */}
+          <ErrorBoundary>
+            <FestivalOfferBanner />
+          </ErrorBoundary>
 
-      {/* 4) Proof (Before/After CTR lift) */}
-      <ProofSection />
+          {/* 1) Hero (Above the fold, loads immediately) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={1} />}>
+            <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
+          </ErrorBoundary>
 
-      {/* 5) Services (clear value props) */}
-      <ServicesSection />
+          {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
+          <ErrorBoundary>
+            <QuickQuoteBar onBook={() => setShowCalendly(true)} />
+          </ErrorBoundary>
 
-      {/* 6) Case studies (wins) */}
-      <CaseStudies />
+          {/* 3) Social proof (logos) */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
+              <CreatorsWorkedWithMarquee isDark={isDark} />
+            </React.Suspense>
+          </ErrorBoundary>
 
-      {/* 7) Testimonials (human proof + analytics) */}
-      <TestimonialsSection isDark={isDark} />
+          {/* 4) Services (clear value props) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={4} />}>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
+              <ServicesSection />
+            </React.Suspense>
+          </ErrorBoundary>
 
-      {/* 8.5) ROI / CTR Lift Calculator */}
-      <RoiCalculator onBook={() => setShowCalendly(true)} />
+          {/* 5) Proof (Before/After CTR lift) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="image" contentCount={2} />}>
+            <React.Suspense fallback={<SectionSkeleton content="image" contentCount={2} />}>
+              <ProofSection />
+            </React.Suspense>
+          </ErrorBoundary>
 
-      {/* 9) Single lead capture */}
-      <ExitIntentLeadModal
-        dwellMs={600000}      // 10 minutes
-        onceMode="session"    // or "user" for cross-session cool-down
-        userCooldownDays={7}
-      />
+          {/* 6) Case studies (wins) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={3} />}>
+            <CaseStudies />
+          </ErrorBoundary>
 
-      {/* 10) FAQ */}
-      <FAQSection />
+          {/* 7) Testimonials (human proof + analytics) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="testimonial" contentCount={4} />}>
+            <TestimonialsSection isDark={isDark} />
+          </ErrorBoundary>
 
-      {/* 11) Process */}
-      <ProcessSection />
+          {/* 8) ROI / CTR Lift Calculator */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
+              <RoiCalculator onBook={() => setShowCalendly(true)} />
+            </React.Suspense>
+          </ErrorBoundary>
 
-      {/* 12) Final CTA */}
-      <ContactCTA />
+          {/* 9) FAQ (Better for SEO - kept as requested) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="listItem" contentCount={5} />}>
+            <FAQSection />
+          </ErrorBoundary>
 
-      {/* Single smart floating WhatsApp button - replaces old conflicting CTAs */}
-      <FloatingWhatsApp />
-      <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
+          {/* 10) Process (Secondary trust) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="processStep" contentCount={4} />}>
+            <ProcessSection />
+          </ErrorBoundary>
 
+          {/* 11) Single lead capture */}
+          <ErrorBoundary>
+            <React.Suspense fallback={null}>
+              <ExitIntentLeadModal
+                dwellMs={TIMING.exitIntentDwell}
+                onceMode="session"
+                userCooldownDays={TIMING.userCooldownDays}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
 
-      {/* iOS and Performance Optimizations */}
-<style>{`
+          {/* 12) Final CTA */}
+          <ErrorBoundary>
+            <ContactCTA onBook={() => setShowCalendly(true)} />
+          </ErrorBoundary>
+        </main>
+
+        {/* Floating elements */}
+        <ErrorBoundary>
+          <FloatingWhatsApp />
+        </ErrorBoundary>
+
+        <ErrorBoundary>
+          <CalendlyModal open={showCalendly} onClose={() => setShowCalendly(false)} />
+        </ErrorBoundary>
+
+        {/* iOS and Performance Optimizations */}
+        <style>{`
   /* iOS-specific optimizations */
   @supports (-webkit-touch-callout: none) {
     /* Prevent iOS bounce/rubber-band on body */
@@ -2557,7 +2565,45 @@ export default function ShinelStudiosHomepage() {
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
   }
+
+  /* Screen reader only utility class */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .sr-only:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  /* Focus visible for better keyboard navigation */
+  *:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
+  }
+
+  /* Fallback for color-mix() - browser compatibility */
+  @supports not (background: color-mix(in oklab, red, blue)) {
+    [style*="color-mix"] {
+      background: rgba(232, 80, 2, 0.1) !important;
+    }
+  }
 `}</style>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

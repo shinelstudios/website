@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
  * Shorts & Reels page
@@ -67,7 +68,7 @@ async function fetchJSONWithETag(
           const j = await res.json();
           if (j?.error) msg = j.error;
           if (j?.message) msg = j.message;
-        } catch {}
+        } catch { }
         const err = new Error(msg);
         err.status = res.status;
         throw err;
@@ -121,7 +122,7 @@ function extractYouTubeId(url = "") {
       const m = u.pathname.match(/\/shorts\/([^/]+)/);
       if (m) return m[1];
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -175,7 +176,7 @@ function ProtectedImg({
       onLoad={onLoad}
       loading="lazy"
       decoding="async"
-      fetchpriority={fetchpriority}
+      fetchPriority={fetchpriority}
       draggable="false"
     />
   );
@@ -186,11 +187,10 @@ function FilterChip({ label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1 rounded-full text-[11px] sm:text-xs border transition-all ${
-        active
-          ? "bg-[var(--orange)] text-white border-[var(--orange)]"
-          : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
-      }`}
+      className={`px-3 py-1 rounded-full text-[11px] sm:text-xs border transition-all ${active
+        ? "bg-[var(--orange)] text-white border-[var(--orange)]"
+        : "bg-transparent text-[var(--orange)] border-[var(--orange)] hover:bg-[var(--orange)]/10"
+        }`}
     >
       {label}
     </button>
@@ -271,8 +271,8 @@ export default function Shorts() {
               typeof v.hype === "number"
                 ? v.hype
                 : typeof v.hypeScore === "number"
-                ? v.hypeScore
-                : null,
+                  ? v.hypeScore
+                  : null,
             thumb:
               v.thumb ||
               (youtubeId
@@ -454,6 +454,18 @@ export default function Shorts() {
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <MetaTags
+        title="Short-Form Video & Reels Editing | Shinel Studios - Viral Pacing"
+        description="Fast-paced editing for YouTube Shorts, Instagram Reels, and TikTok. High-retention hooks, kinetic captions, and batch delivery."
+        keywords="shorts editing, reels editor, tiktok video editor, vertical video production"
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Work', url: '/work' },
+          { name: 'Shorts & Reels', url: '/shorts' },
+        ]}
+      />
       <header className="mb-6 sm:mb-8">
         <h1
           className="text-3xl sm:text-4xl font-extrabold tracking-tight"
@@ -605,9 +617,8 @@ function ShortCard({ v, index, onPlay }) {
 
   return (
     <article
-      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${
-        canAnimate ? "hover:scale-[1.01]" : ""
-      } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
+      className={`group relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] transition-[transform,box-shadow,border-color] ${canAnimate ? "hover:scale-[1.01]" : ""
+        } hover:shadow-xl hover:border-[var(--orange)] will-change-transform`}
     >
       <button
         type="button"
@@ -626,9 +637,8 @@ function ShortCard({ v, index, onPlay }) {
               : "")
           }
           alt={v.title || v.subcategory || v.category}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${
-            imageLoaded ? "opacity-100" : "opacity-0"
-          }`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
           onLoad={() => setImageLoaded(true)}
         />
         {playable && (

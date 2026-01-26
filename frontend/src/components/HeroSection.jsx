@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useSpring, useMotionValue } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
@@ -317,9 +317,9 @@ function VideoTimeline({ preset = "growth", className = "" }) {
 
       {/* Tracks */}
       <div className="ss-tlTracks">
-	        {cfg.tracks.map((track, i) => {
-	          const isAudio = track?.type === "audio";
-	          const laneLabel = track?.lane || (isAudio ? "A1" : i === 0 ? "V1" : "V2");
+        {cfg.tracks.map((track, i) => {
+          const isAudio = track?.type === "audio";
+          const laneLabel = track?.lane || (isAudio ? "A1" : i === 0 ? "V1" : "V2");
 
           return (
             <div
@@ -330,29 +330,29 @@ function VideoTimeline({ preset = "growth", className = "" }) {
                 {laneLabel}
               </div>
 
-	              <div className="ss-tlTrackInner">
-	                {isAudio ? (
-	                  <div className="ss-wave" aria-hidden="true">
-	                    <span className="ss-waveFill" />
-	                    <span className="ss-waveCuts" />
-	                  </div>
-	                ) : (
-	                  (track?.clips || []).map((clip, idx) => (
-	                    <div
-	                      key={`${track?.lane || i}-${idx}`}
-	                      className={`ss-clip ${clip.hot ? "ss-clipHot" : ""}`}
-	                      style={{ left: `${clip.left}%`, width: `${clip.width}%` }}
-	                    >
-	                      <span className="ss-clipHandle ss-clipHandleL" />
-	                      <span className="ss-clipHandle ss-clipHandleR" />
-	                      <span className="ss-clipTitle">{clip.title || (clip.hot ? "KEY" : "CLIP")}</span>
-	                      {/* Diagonal stripes + tiny "cuts" to feel like an NLE timeline */}
-	                      <span className="ss-clipStripe" />
-	                      <span className="ss-clipCuts" aria-hidden="true" />
-	                    </div>
-	                  ))
-	                )}
-	              </div>
+              <div className="ss-tlTrackInner">
+                {isAudio ? (
+                  <div className="ss-wave" aria-hidden="true">
+                    <span className="ss-waveFill" />
+                    <span className="ss-waveCuts" />
+                  </div>
+                ) : (
+                  (track?.clips || []).map((clip, idx) => (
+                    <div
+                      key={`${track?.lane || i}-${idx}`}
+                      className={`ss-clip ${clip.hot ? "ss-clipHot" : ""}`}
+                      style={{ left: `${clip.left}%`, width: `${clip.width}%` }}
+                    >
+                      <span className="ss-clipHandle ss-clipHandleL" />
+                      <span className="ss-clipHandle ss-clipHandleR" />
+                      <span className="ss-clipTitle">{clip.title || (clip.hot ? "KEY" : "CLIP")}</span>
+                      {/* Diagonal stripes + tiny "cuts" to feel like an NLE timeline */}
+                      <span className="ss-clipStripe" />
+                      <span className="ss-clipCuts" aria-hidden="true" />
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           );
         })}
@@ -463,29 +463,27 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
   const isVisible = useIsInViewport(sectionRef);
 
   const [tier, setTier] = useState("growing");
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
 
-  // Mouse parallax only: fine pointer + visible + not reduced motion
+  // Use springs for smooth, CPU-friendly parallax
+  const springConfig = { damping: 25, stiffness: 150, mass: 0.5 };
+
+  const springX = useSpring(0, springConfig);
+  const springY = useSpring(0, springConfig);
+
   useEffect(() => {
     if (prefersReducedMotion || isCoarsePointer) return;
     if (!isVisible) return;
 
-    let ticking = false;
     const onMove = (e) => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        setMousePos({
-          x: e.clientX / window.innerWidth,
-          y: e.clientY / window.innerHeight,
-        });
-        ticking = false;
-      });
+      const x = (e.clientX / window.innerWidth) - 0.5;
+      const y = (e.clientY / window.innerHeight) - 0.5;
+      springX.set(x * 20);
+      springY.set(y * 15);
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });
     return () => window.removeEventListener("mousemove", onMove);
-  }, [prefersReducedMotion, isCoarsePointer, isVisible]);
+  }, [prefersReducedMotion, isCoarsePointer, isVisible, springX, springY]);
 
   const content = useMemo(() => {
     const growing = tier === "growing";
@@ -642,11 +640,11 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
       {/* Stars */}
       {!prefersReducedMotion && (
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          <div
+          <motion.div
             className="absolute inset-0"
             style={{
-              transform: `translate3d(${(mousePos.x - 0.5) * 12}px, ${(mousePos.y - 0.5) * 10}px, 0)`,
-              transition: isCoarsePointer ? "none" : "transform 300ms ease-out",
+              x: springX,
+              y: springY,
             }}
           >
             {sparkleStars.map((s, idx) => (
@@ -665,7 +663,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
                 data-animate={isVisible ? "1" : "0"}
               />
             ))}
-          </div>
+          </motion.div>
         </div>
       )}
 
@@ -802,7 +800,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               <button
                 type="button"
                 onClick={handleAudit}
-                className="ss-cta-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-bold"
+                className="ss-cta-primary ss-btn-pulse w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-bold"
                 aria-label="Book a Free Growth Audit"
               >
                 Book a Free Growth Audit
@@ -1389,9 +1387,17 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           100%{ transform: scale(2.2); opacity: 0; }
         }
 
+        .ss-btn-pulse {
+          animation: ss-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes ss-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.85; transform: scale(1.02); }
+        }
+
         /* Reduced motion: kill looping animations */
         @media (prefers-reduced-motion: reduce){
-          .ss-lensBloom, .ss-lensStreak, .ss-hudNoise, .ss-sparkle, .ss-cta-shine, .ss-playhead, .ss-cardHud:before {
+          .ss-lensBloom, .ss-lensStreak, .ss-hudNoise, .ss-sparkle, .ss-cta-shine, .ss-playhead, .ss-cardHud:before, .ss-btn-pulse {
             animation: none !important;
           }
           .ss-card:hover{ transform:none; }
