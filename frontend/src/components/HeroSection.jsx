@@ -16,6 +16,7 @@ import {
   Users,
   Activity,
 } from "lucide-react";
+import { useClientStats } from "../context/ClientStatsContext";
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -443,6 +444,15 @@ function PreviewCard({ title, badge, subtitle, points, icon: Icon }) {
 /* ------------------------------ Main Component ------------------------------ */
 
 export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) {
+  const { totalSubscribers } = useClientStats();
+
+  const formatCompactNumber = (number) => {
+    return new Intl.NumberFormat('en-US', {
+      notation: "compact",
+      maximumFractionDigits: 1
+    }).format(number);
+  };
+
   // Brand palette ONLY
   const brand = {
     orange: "#E85002",
@@ -731,8 +741,10 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               <span style={{ width: 1, height: 18, background: "rgba(249,249,249,0.10)" }} />
               <span className="inline-flex items-center gap-2 text-sm font-semibold">
                 <TrendingUp size={16} style={{ color: "var(--orange)" }} />
-                <span style={{ color: "var(--orange)" }}>288.7K+</span>
-                <span style={{ color: "var(--text-muted)" }}>Combined Reach</span>
+                <span style={{ color: "var(--orange)" }}>
+                  {totalSubscribers ? formatCompactNumber(totalSubscribers) : "0"}
+                </span>
+                <span style={{ color: "var(--text-muted)" }}>Total Subscribers Managed</span>
               </span>
             </motion.div>
 

@@ -8,8 +8,12 @@ export const CONTACT = {
     email: 'hello@shinelstudiosofficial.com',
     phone: '918968141585',
     whatsappUrl: 'https://wa.me/918968141585',
+    whatsappUrl: 'https://wa.me/918968141585',
     whatsappDefaultMessage: 'Hi Shinel Studios! I want to grow my channel. Can we talk?',
 };
+
+// API Configuration
+export const AUTH_BASE = import.meta.env.VITE_API_URL || "https://shinel-auth.raghav-ka.workers.dev"; // Fallback to production worker
 
 // Client Activity Registry (Pulse)
 export const CLIENT_REGISTRY = [

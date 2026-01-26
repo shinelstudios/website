@@ -6,7 +6,6 @@ import {
     Clock,
     ExternalLink,
     AlertCircle,
-    RefreshCw,
     Zap,
     TrendingUp,
     Youtube
@@ -122,15 +121,6 @@ const ClientPulsePage = () => {
                             <Clock size={12} />
                             24H Activity Window
                         </div>
-                        <div className="w-1 h-1 rounded-full bg-white/20" />
-                        <button
-                            onClick={fetchPulse}
-                            disabled={loading}
-                            className="flex items-center gap-2 hover:text-orange-500 transition-colors uppercase"
-                        >
-                            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                            {loading ? "Syncing..." : "Sync Now"}
-                        </button>
                     </div>
                 </div>
             </section>
