@@ -248,7 +248,7 @@ const Pricing = ({ onOpenCalendly }) => {
       child.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       setIdx(clamped);
     }
-  }, [currentPlans.length, reduceMotion]);
+  }, [currentPlans.length]);
 
   // 4. Sub-Components
   const MetricLabel = ({ icon: Icon, label, value }) => (
