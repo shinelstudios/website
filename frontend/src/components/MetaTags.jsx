@@ -17,10 +17,18 @@ const MetaTags = ({
     noIndex = false,
     structuredData,
 }) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : `https://${BRAND.domain}`;
+    const origin = `https://${BRAND.domain}`;
     const fullTitle = title.includes(BRAND.name) ? title : `${title} | ${BRAND.name}`;
     const fullOgImage = ogImage.startsWith('http') ? ogImage : `${origin}${ogImage}`;
-    const canonical = canonicalUrl || (typeof window !== 'undefined' ? window.location.href : origin);
+
+    // Clean canonical URL (no query, no hash, enforced primary domain)
+    let canonical = canonicalUrl;
+    if (!canonical && typeof window !== 'undefined') {
+        const path = window.location.pathname.replace(/\/+$/, '') || '/';
+        canonical = `${origin}${path}`;
+    } else if (!canonical) {
+        canonical = origin;
+    }
 
     return (
         <Helmet>
@@ -113,7 +121,7 @@ export const OrganizationSchema = () => {
         'contactPoint': [{
             '@type': 'ContactPoint',
             'contactType': 'customer support',
-            'email': 'hello@shinelstudiosofficial.com',
+            'email': 'hello@shinelstudios.in',
             'areaServed': 'IN',
             'availableLanguage': ['en', 'hi'],
         }],

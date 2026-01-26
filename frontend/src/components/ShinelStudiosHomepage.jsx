@@ -2217,7 +2217,7 @@ const FloatingWhatsApp = () => {
 /* ===================== SEO Schema (Organization + WebSite + Service + FAQPage) ===================== */
 const SeoSchema = () => {
   useEffect(() => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://shinelstudiosofficial.com";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://shinelstudios.in";
     const logoUrl = `${origin}/assets/logo_light.png`;
 
     const faq = [
@@ -2243,7 +2243,7 @@ const SeoSchema = () => {
         "contactPoint": [{
           "@type": "ContactPoint",
           "contactType": "customer support",
-          "email": "hello@shinelstudiosofficial.com",
+          "email": "hello@shinelstudios.in",
           "areaServed": "IN",
           "availableLanguage": ["en", "hi"]
         }]

@@ -87,7 +87,7 @@ const QuickLeadForm = () => {
   };
 
   const makeMailto = () => {
-    const to = "hello@shinelstudiosofficial.com";
+    const to = "hello@shinelstudios.in";
     const subject = `Quick Quote Request — ${clean(name) || "Creator"}`;
     const body = draftLines().join("\n");
     return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

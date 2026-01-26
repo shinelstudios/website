@@ -4,4 +4,4 @@ Disallow: /admin/
 Disallow: /studio/
 Disallow: /logout
 
-Sitemap: https://shinelstudiosofficial.com/sitemap.xml
+Sitemap: https://shinelstudios.in/sitemap.xml

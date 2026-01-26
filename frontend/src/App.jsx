@@ -67,6 +67,7 @@ const PortfolioPage = React.lazy(() => import("./components/PortfolioPage.jsx"))
 const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"));
 const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
+const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -406,7 +407,7 @@ export default function App() {
           <Route path="/admin/thumbnails" element={<Navigate to="/dashboard/thumbnails" replace />} />
 
           {/* ----------------------------- Fallback ------------------------------- */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </React.Suspense>

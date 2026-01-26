@@ -1687,7 +1687,7 @@ export default function LiveTemplates() {
                 </a>
 
                 <a
-                  href="mailto:hello@shinelstudiosofficial.com?subject=Live%20Template%20Inquiry"
+                  href="mailto:hello@shinelstudios.in?subject=Live%20Template%20Inquiry"
                   className="inline-flex items-center justify-center gap-2 rounded-xl font-bold"
                   style={{
                     padding: device.isMobile ? "18px 28px" : "20px 36px",

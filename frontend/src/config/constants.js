@@ -5,7 +5,7 @@
 
 // Contact Information
 export const CONTACT = {
-    email: 'hello@shinelstudiosofficial.com',
+    email: 'hello@shinelstudios.in',
     phone: '918968141585',
     whatsappUrl: 'https://wa.me/918968141585',
     whatsappUrl: 'https://wa.me/918968141585',
@@ -46,7 +46,7 @@ export const SOCIAL_LINKS = {
 export const BRAND = {
     name: 'Shinel Studios',
     tagline: 'AI-powered video editing for creators',
-    domain: 'shinelstudiosofficial.com',
+    domain: 'shinelstudios.in',
     logoLight: '/assets/logo_light.png',
     logoDark: '/assets/logo_dark.png',
 };

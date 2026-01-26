@@ -91,12 +91,12 @@ export default function LoginPage() {
         ["userRole", "userFirst", "userLast", "userFirstName", "userLastName"].forEach((k) =>
           localStorage.removeItem(k)
         );
-      } catch {}
+      } catch { }
 
       // Let header & guards react
       try {
         window.dispatchEvent(new Event("auth:changed"));
-      } catch {}
+      } catch { }
 
       // Navigate
       setTimeout(() => nav(next, { replace: true }), 80);
@@ -232,7 +232,7 @@ export default function LoginPage() {
 
           <div className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
             Need access?{" "}
-            <a href="mailto:hello@shinelstudiosofficial.com" style={{ color: "var(--orange)" }}>
+            <a href="mailto:hello@shinelstudios.in" style={{ color: "var(--orange)" }}>
               Contact us
             </a>
           </div>

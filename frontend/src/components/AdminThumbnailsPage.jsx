@@ -2249,8 +2249,8 @@ function SortBtn({ active, children, onClick, dir }) {
     <button
       onClick={onClick}
       className={`inline-flex items-center gap-1 px-3 h-[36px] rounded-lg border text-xs font-semibold transition-all ${active
-          ? "bg-[var(--orange)] border-[var(--orange)] text-white shadow-lg shadow-orange-500/20"
-          : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] bg-[var(--surface-alt)]"
+        ? "bg-[var(--orange)] border-[var(--orange)] text-white shadow-lg shadow-orange-500/20"
+        : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] bg-[var(--surface-alt)]"
         }`}
     >
       {children}
