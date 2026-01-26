@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, ArrowLeft, Search } from 'lucide-react';
-import MetaTags from '../MetaTags';
+import MetaTags from './MetaTags';
 
 const NotFound = () => {
     return (
