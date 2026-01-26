@@ -1,16 +1,21 @@
 // src/components/Pricing.jsx
 import React, { useState, useMemo, useCallback, useRef } from "react";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatINR, track } from "../lib/helpers";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { FESTIVAL_DATABASE, CONTACT, TYPOGRAPHY, COLORS } from "../config/constants";
-import { Check, ArrowRight, Zap, Star, Shield, Clock, Sparkles, Info, MessageCircle, Settings, Monitor, Activity, Cpu, Layers, BarChart, HardDrive } from "lucide-react";
+import {
+  Check, ArrowRight, Zap, Star, Shield, Clock, Sparkles, Info, MessageCircle,
+  Settings as SettingsIcon, Monitor, Activity, Cpu, Layers, BarChart, HardDrive
+} from "lucide-react";
 
 /**
  * Pricing - Elite Agency Optimized Version
  * High-contrast readability, 60fps animations, and new "Studio Pipeline" features.
  */
 const Pricing = ({ onOpenCalendly }) => {
+  const { config } = useGlobalConfig();
   const [cat, setCat] = useState("gaming");
   const [openIdx, setOpenIdx] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -222,11 +227,27 @@ const Pricing = ({ onOpenCalendly }) => {
   const POPULAR = { gaming: "highlights", vlog: "driver", talking: "clips" };
 
   // 3. Logic & Helpers
+  /* --- Global Price Sync --- */
   const calculateDiscountedPrice = useCallback((original) => {
     if (!original || !activeOffer) return original;
     const factor = (100 - activeOffer.discount) / 100;
     return Math.floor(original * factor);
   }, [activeOffer]);
+
+  // Merge dynamic prices into local object if available
+  const activePrices = useMemo(() => {
+    const fresh = config?.pricing || {};
+    const merged = JSON.parse(JSON.stringify(PLANS)); // Deep clone
+
+    Object.keys(merged).forEach(catKey => {
+      merged[catKey].forEach(plan => {
+        if (fresh[catKey]?.[plan.key]) {
+          plan.priceInr = fresh[catKey][plan.key];
+        }
+      });
+    });
+    return merged;
+  }, [config, PLANS]);
 
   const handleCTA = (plan) => {
     const discounted = calculateDiscountedPrice(plan.priceInr);
@@ -237,7 +258,7 @@ const Pricing = ({ onOpenCalendly }) => {
     window.open(waUrl, "_blank");
   };
 
-  const currentPlans = PLANS[cat] || [];
+  const currentPlans = activePrices[cat] || [];
   const railRef = useRef(null);
 
   const scrollToIndex = useCallback((i) => {
@@ -460,7 +481,7 @@ const Pricing = ({ onOpenCalendly }) => {
                             className="flex items-center justify-between w-full text-[10px] font-mono uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
                           >
                             <div className="flex items-center gap-2">
-                              <Settings size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-orange-500" : ""}`} />
+                              <SettingsIcon size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-orange-500" : ""}`} />
                               <span className={open ? 'text-orange-500 font-black' : ''}>Technical Specs</span>
                             </div>
                             <ArrowRight size={10} className={`transition-transform duration-300 ${open ? 'rotate-90' : ''}`} />
@@ -554,7 +575,7 @@ const Pricing = ({ onOpenCalendly }) => {
             className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-orange-500/30 transition-colors duration-500"
           >
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-20 transition-opacity">
-              <Settings size={60} />
+              <SettingsIcon size={60} />
             </div>
             <div className="flex items-center gap-4 mb-10">
               <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30">

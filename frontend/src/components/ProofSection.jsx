@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Image as IconImage } from "lucide-react";
-import { useClientStats } from "../context/ClientStatsContext";
 import { BeforeAfter } from './BeforeAfter'; // Assuming BeforeAfter.jsx is in the same folder
 import { LazyImage } from "./ProgressiveImage";
 import { SAMPLE_BEFORE, SAMPLE_AFTER } from '../lib/helpers'; // Import helpers
@@ -328,14 +327,14 @@ const ProofSection = () => {
           {stats.map((stat, idx) => (
             <motion.div
               key={idx}
-              className="p-5 rounded-xl border"
+              className="p-5 rounded-xl border backdrop-blur-xl"
               style={{
-                background: "var(--surface)",
+                background: "rgba(255, 255, 255, 0.05)",
                 borderColor: "var(--border)",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
                 willChange: "transform",
               }}
-              whileHover={{ y: -4, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
+              whileHover={{ y: -4, boxShadow: "0 12px 40px rgba(0, 0, 0, 0.15)" }}
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -387,58 +386,7 @@ const ProofSection = () => {
         </motion.div>
       </div>
 
-      {/* --- Partner Creators Grid --- */}
-      <div className="container mx-auto px-4 mt-20 border-t border-white/5 pt-12">
-        <div className="text-center mb-10">
-          <h3 className="text-xl font-bold text-white mb-2">Trusted by Serious Creators</h3>
-          <p className="text-sm text-gray-400">Driving growth for channels across every niche.</p>
-        </div>
-
-        <ClientGrid />
-      </div>
-
     </section>
-  );
-};
-
-const ClientGrid = () => {
-  const { stats, loading } = useClientStats();
-
-  if (loading) return null;
-  if (!stats || stats.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap justify-center gap-6">
-      {stats.map(client => (
-        <div key={client.id} className="group relative flex items-center gap-3 p-3 pr-6 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
-          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0">
-            {client.logo ? (
-              <img
-                src={client.logo}
-                alt={client.title || "Client Logo"}
-                width="40"
-                height="40"
-                className="w-full h-full object-cover"
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              <div className="w-full h-full bg-orange-500/10 flex items-center justify-center text-orange-500 font-bold">
-                {client.title?.charAt(0)}
-              </div>
-            )}
-          </div>
-          <div>
-            <div className="text-sm font-bold text-white leading-tight group-hover:text-orange-500 transition-colors">
-              {client.title}
-            </div>
-            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              {client.subscribers ? new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(client.subscribers) : "0"} Subs
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
   );
 };
 

@@ -8,6 +8,7 @@ import LoadingScreen from "./components/LoadingScreen.jsx";
 
 import AutoSRTTool from "./components/tools/AutoSRTTool.jsx";
 const AdminThumbnailsPage = React.lazy(() => import("./components/AdminThumbnailsPage.jsx"));
+const AdminSettingsPage = React.lazy(() => import("./components/AdminSettingsPage.jsx"));
 import Toaster from "./components/ui/Toaster.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 
@@ -398,6 +399,7 @@ export default function App() {
             <Route path="clients" element={<AdminClientsPage />} />
             <Route path="videos" element={<AdminVideosPage />} />
             <Route path="thumbnails" element={<AdminThumbnailsPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 
           <Route path="/admin" element={<Navigate to="/dashboard" replace />} />

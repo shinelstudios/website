@@ -13,6 +13,7 @@ import { Zap } from "lucide-react";
 const QuickQuoteBar = ({ onBook }) => {
   const [showBase, setShowBase] = React.useState(false);        // scrolled enough
   const [nearForm, setNearForm] = React.useState(false);        // hide near lead form
+  const [forcedHidden, setForcedHidden] = React.useState(false); // hide when lead form visible
   const [isMobile, setIsMobile] = React.useState(false);
 
   // Detect mobile for positioning
@@ -53,11 +54,12 @@ const QuickQuoteBar = ({ onBook }) => {
     };
   }, []);
 
-  // Hide when close to the lead form (both directions)
+  // Hide when close to the lead form or footer (both directions)
   React.useEffect(() => {
     const target = () =>
       document.getElementById("leadform") ||
-      document.getElementById("leadform-section");
+      document.getElementById("leadform-section") ||
+      document.querySelector("footer");
 
     let io;
     const fallbackHandler = () => {
@@ -101,7 +103,7 @@ const QuickQuoteBar = ({ onBook }) => {
     }
   }, []);
 
-  const visible = showBase && !nearForm && !forcedHidden;
+  const visible = showBase && !nearForm && !forcedHidden && !isMobile;
 
   // Broadcast visibility so Header/TrustBar can react
   React.useEffect(() => {
@@ -122,7 +124,7 @@ const QuickQuoteBar = ({ onBook }) => {
         animate={{ y: 0, opacity: 1 }}
         exit={isMobile ? { y: 100, opacity: 0 } : { y: -100, opacity: 0 }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed left-0 right-0 z-50 px-4"
+        className="fixed left-0 right-0 z-30 px-4"
         style={{
           top: isMobile ? "auto" : "calc(var(--header-offset, var(--header-h, 92px)) + 12px)",
           bottom: isMobile ? "max(16px, env(safe-area-inset-bottom, 16px))" : "auto",
@@ -151,7 +153,7 @@ const QuickQuoteBar = ({ onBook }) => {
                 <Zap size={16} />
               </div>
               <span className="text-sm md:text-base font-medium text-white/90">
-                {isMobile ? "Before you go — want a quick quote?" : "🚀 Before you go — want a quick quote? Free audit in 24h."}
+                {isMobile ? "Before you go — want a quick quote?" : "Before you go — want a quick quote? Free audit in 24h."}
               </span>
             </div>
 

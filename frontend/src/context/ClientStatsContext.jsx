@@ -33,17 +33,20 @@ export const ClientStatsProvider = ({ children }) => {
         'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }
     };
 
+    const [history, setHistory] = useState({});
+
     const fetchStats = async () => {
         try {
-            // Fetch both concurrently
-            // Note: If /stats fails (404 on production worker), we still want registry data
-            const [regRes, statsRes] = await Promise.allSettled([
+            // Fetch registry, stats, and history concurrently
+            const [regRes, statsRes, histRes] = await Promise.allSettled([
                 fetch(`${AUTH_BASE}/clients`),
-                fetch(`${AUTH_BASE}/clients/stats`)
+                fetch(`${AUTH_BASE}/clients/stats`),
+                fetch(`${AUTH_BASE}/clients/history`)
             ]);
 
             let remoteRegistry = [];
             let channelStats = [];
+            let historyData = {};
 
             if (regRes.status === 'fulfilled' && regRes.value.ok) {
                 const data = await regRes.value.json();
@@ -53,13 +56,17 @@ export const ClientStatsProvider = ({ children }) => {
             if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
                 const data = await statsRes.value.json();
                 channelStats = data.stats || [];
-            } else {
-                console.warn("ClientStats: /stats API failed or not supported. Using fallbacks.");
             }
 
-            // Index stats by YouTube ID
+            if (histRes.status === 'fulfilled' && histRes.value.ok) {
+                const data = await histRes.value.json();
+                historyData = data.history || {};
+            }
+
+            // Index stats by both YouTube ID and Handle for robust direct lookups
             const statsMap = channelStats.reduce((acc, s) => {
                 if (s.id) acc[s.id] = s;
+                if (s.handle) acc[s.handle.toLowerCase()] = s;
                 return acc;
             }, {});
 
@@ -85,6 +92,7 @@ export const ClientStatsProvider = ({ children }) => {
             });
 
             setStats(processedClients);
+            setHistory(historyData);
             localStorage.setItem(LS_KEY, JSON.stringify(processedClients));
             setLoading(false);
             setError(null);
@@ -115,13 +123,49 @@ export const ClientStatsProvider = ({ children }) => {
         return stats.find(s => s.id === youtubeId) || null;
     };
 
+    /**
+     * Get historical sub counts for a client (array of numbers)
+     * Useful for Sparklines.
+     */
+    const getHistory = (clientId, days = 7) => {
+        if (!history || !clientId) return [];
+        const dates = Object.keys(history).sort(); // Sort chronological "YYYY-MM-DD"
+        // Take last N days
+        const recentDates = dates.slice(-days);
+
+        return recentDates.map(date => {
+            const dayStats = history[date]?.stats || [];
+            // Find client in that day's snapshot
+            const match = dayStats.find(s => s.id === clientId);
+            return match ? Number(match.subscribers || 0) : 0;
+        });
+    };
+
+    /**
+     * Calculate growth percentage over period
+     */
+    const getGrowth = (clientId, days = 7) => {
+        const points = getHistory(clientId, days);
+        if (points.length < 2) return 0;
+
+        const start = points[0];
+        const end = points[points.length - 1];
+
+        if (start === 0) return 0;
+        return ((end - start) / start) * 100;
+    };
+
     const value = {
         stats,
+        history,
         loading,
         error,
         totalSubscribers,
         totalViews,
-        getClientStats
+        getClientStats,
+        getHistory,
+        getGrowth,
+        refreshStats: fetchStats
     };
 
     return (

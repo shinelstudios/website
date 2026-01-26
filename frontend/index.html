@@ -1,90 +1,88 @@
 <!doctype html>
 <html lang="en-IN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="format-detection" content="telephone=no,address=no,email=no" />
-    <meta http-equiv="x-dns-prefetch-control" content="on" />
 
-    <!-- DNS Prefetch (pairs with preconnects) -->
-    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-    <link rel="dns-prefetch" href="https://calendly.com">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no,address=no,email=no" />
+  <meta http-equiv="x-dns-prefetch-control" content="on" />
 
-    <!-- Preconnects (perf) -->
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
+  <!-- DNS Prefetch (pairs with preconnects) -->
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="dns-prefetch" href="https://calendly.com">
 
-    <!-- Fonts (optional: remove if you self-host Poppins) -->
-    <link 
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" 
-      rel="stylesheet"
-      media="print" 
-      onload="this.media='all'"
-    >
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-    </noscript>
+  <!-- Preconnects (perf) -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
 
-    <!-- Favicons -->
-    <!-- 1) System-controlled (fallback when JS is disabled) -->
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png"  media="(prefers-color-scheme: dark)">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  media="(prefers-color-scheme: dark)">
+  <!-- Fonts (optional: remove if you self-host Poppins) -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet"
+    media="print" onload="this.media='all'">
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  </noscript>
 
-    <!-- 2) JS-controlled (for live theme toggles) -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" data-theme="light">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png"  data-theme="dark">
+  <!-- Favicons -->
+  <!-- 1) System-controlled (fallback when JS is disabled) -->
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
 
-    <!-- 3) Single tag we also update as a universal fallback -->
-    <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
+  <!-- 2) JS-controlled (for live theme toggles) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" data-theme="light">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" data-theme="dark">
 
-    <!-- Apple touch icon -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <!-- 3) Single tag we also update as a universal fallback -->
+  <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
 
-    <!-- Theme colors (system). JS also sets the plain theme-color at runtime. -->
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
+  <!-- Apple touch icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 
-    <!-- PWA niceties (optional) -->
-    <!-- <link rel="manifest" href="/site.webmanifest"> -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
+  <!-- Theme colors (system). JS also sets the plain theme-color at runtime. -->
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
 
-    <!-- SEO -->
-    <title>Shinel Studios</title>
-    <meta name="description" content="Shinel Studios official site" />
-    <meta name="keywords" content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
-    <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://shinelstudios.in/" />
-    <!-- Hreflang (expand if you add locales) -->
-    <link rel="alternate" href="https://shinelstudios.in/" hreflang="en-IN" />
-    <link rel="alternate" href="https://shinelstudios.in/" hreflang="x-default" />
+  <!-- PWA niceties (optional) -->
+  <!-- <link rel="manifest" href="/site.webmanifest"> -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- Open Graph -->
-    <meta property="og:title" content="Shinel Studios | Video Editing & YouTube Growth" />
-    <meta property="og:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta property="og:url" content="https://shinelstudios.in/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Shinel Studios" />
-    <meta property="og:image" content="https://shinelstudios.in/og-image.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Shinel Studios — Video Editing & YouTube Growth" />
-    <meta property="og:locale" content="en_IN" />
+  <!-- SEO -->
+  <title>Shinel Studios</title>
+  <meta name="description" content="Shinel Studios official site" />
+  <meta name="keywords"
+    content="Shinel Studios, video editing agency, YouTube editing, thumbnail design, shorts editing, gfx design, YouTube growth" />
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://shinelstudios.in/" />
+  <!-- Hreflang (expand if you add locales) -->
+  <link rel="alternate" href="https://shinelstudios.in/" hreflang="en-IN" />
+  <link rel="alternate" href="https://shinelstudios.in/" hreflang="x-default" />
 
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
-    <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
-    <meta name="twitter:image" content="https://shinelstudios.in/og-image.png" />
-    <!-- <meta name="twitter:site" content="@shinelstudios" /> -->
+  <!-- Open Graph -->
+  <meta property="og:title" content="Shinel Studios | Video Editing & YouTube Growth" />
+  <meta property="og:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
+  <meta property="og:url" content="https://shinelstudios.in/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Shinel Studios" />
+  <meta property="og:image" content="https://shinelstudios.in/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Shinel Studios — Video Editing & YouTube Growth" />
+  <meta property="og:locale" content="en_IN" />
 
-    <!-- Schema Markup: Organization -->
-    <script type="application/ld+json">
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Shinel Studios | Video Editing & YouTube Growth" />
+  <meta name="twitter:description" content="Helping creators grow with Editing, Thumbnails, Shorts & GFX 🚀" />
+  <meta name="twitter:image" content="https://shinelstudios.in/og-image.png" />
+  <!-- <meta name="twitter:site" content="@shinelstudios" /> -->
+
+  <!-- Schema Markup: Organization -->
+  <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "Organization",
@@ -107,8 +105,8 @@
     }
     </script>
 
-    <!-- Schema Markup: Product/Offer (Shorts Pack & Creator Essentials) -->
-    <script type="application/ld+json">
+  <!-- Schema Markup: Product/Offer (Shorts Pack & Creator Essentials) -->
+  <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@graph": [
@@ -144,82 +142,82 @@
     }
     </script>
 
-    <!-- Staging safety: uncomment to avoid indexing on previews -->
-    <!-- <meta name="robots" content="noindex,nofollow"> -->
-  </head>
-  <body>
-    <script>
-      // --- Prepaint theme bootstrap (no dependencies) ---
-      (function () {
-        try {
-          var isDark =
-            (localStorage.getItem('theme') === 'dark') ||
-            (!localStorage.getItem('theme') &&
-              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  <!-- Staging safety: uncomment to avoid indexing on previews -->
+  <!-- <meta name="robots" content="noindex,nofollow"> -->
+</head>
 
-          var root = document.documentElement;
-          root.classList.toggle('dark', !!isDark);
+<body>
+  <script>
+    // --- Prepaint theme bootstrap (no dependencies) ---
+    (function () {
+      try {
+        var isDark =
+          (localStorage.getItem('theme') === 'dark') ||
+          (!localStorage.getItem('theme') &&
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-          // Sync theme-color (the *plain* one without media attr)
-          var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
-          if (!metaTheme) {
-            metaTheme = document.createElement('meta');
-            metaTheme.setAttribute('name', 'theme-color');
-            document.head.appendChild(metaTheme);
-          }
-          metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
+        var root = document.documentElement;
+        root.classList.toggle('dark', !!isDark);
 
-          // Swap favicon immediately
-          // (1) toggle data-theme icons if present
-          var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
-          var darkIcon  = document.querySelector('link[rel="icon"][data-theme="dark"]');
-          if (lightIcon && darkIcon) {
-            lightIcon.disabled = !!isDark;
-            darkIcon.disabled  = !isDark;
-          }
-          // (2) always update the single fallback tag too
-          var favicon = document.getElementById('favicon');
-          if (favicon) {
-            favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
-          }
-        } catch (e) { /* no-op */ }
-      })();
+        // Sync theme-color (the *plain* one without media attr)
+        var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
+        if (!metaTheme) {
+          metaTheme = document.createElement('meta');
+          metaTheme.setAttribute('name', 'theme-color');
+          document.head.appendChild(metaTheme);
+        }
+        metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
 
-      // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
-      (function () {
-        try {
-          var setVH = function () {
-            var vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', vh + 'px');
-          };
-          setVH();
-          window.addEventListener('resize', setVH, { passive: true });
-        } catch (e) { /* no-op */ }
-      })();
-    </script>
+        // Swap favicon immediately
+        // (1) toggle data-theme icons if present
+        var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
+        var darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
+        if (lightIcon && darkIcon) {
+          lightIcon.disabled = !!isDark;
+          darkIcon.disabled = !isDark;
+        }
+        // (2) always update the single fallback tag too
+        var favicon = document.getElementById('favicon');
+        if (favicon) {
+          favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
+        }
+      } catch (e) { /* no-op */ }
+    })();
 
-    <noscript>
-      <strong>Shinel Studios</strong> requires JavaScript for the best experience.
-      Please enable it to view our work, pricing and booking.
-    </noscript>
+    // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
+    (function () {
+      try {
+        var setVH = function () {
+          var vh = window.innerHeight * 0.01;
+          document.documentElement.style.setProperty('--vh', vh + 'px');
+        };
+        setVH();
+        window.addEventListener('resize', setVH, { passive: true });
+      } catch (e) { /* no-op */ }
+    })();
+  </script>
 
-    <div id="root"></div>
+  <noscript>
+    <strong>Shinel Studios</strong> requires JavaScript for the best experience.
+    Please enable it to view our work, pricing and booking.
+  </noscript>
 
-    <!-- Global subscriber counts used by CreatorsWorkedWith. -->
-    <script>
-      window.SS_SUBS = {
-        deadlox: 7000,
-        kundan: 7000,
-        aish: 13000,
-        gamermummy: 14800,
-        anchit: 1400,
-        maggie: 21280,
-        ankit: 2600,
-        kamz: 172000,
-        manav: 49600
-      };
-    </script>
+  <div id="root"></div>
 
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  <!-- Global subscriber counts used by CreatorsWorkedWith. -->
+  <script>
+    window.SS_SUBS = {
+      kamz: 1730000,
+      deadlox: 2100000,
+      manav: 151000,
+      gamermummy: 450000,
+      aish: 17100,
+      katka: 38600,
+      maggie: 21300
+    };
+  </script>
+
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>

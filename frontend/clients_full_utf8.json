@@ -1,0 +1,76 @@
+﻿{
+    "clients":  [
+                    {
+                        "id":  "c-1769386100459-mev6au64l9a",
+                        "name":  "Kamz Inkzone",
+                        "youtubeId":  "UC_N0eSX2RI_ah-6MjJIAyzA",
+                        "handle":  "https://www.instagram.com/kamzinkzone/",
+                        "dateAdded":  1769386100459,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386167740-542u5nmpedj",
+                        "name":  "Gamify With Anchit",
+                        "youtubeId":  "UCeKuPHM9XtsxORIliF5rc-Q",
+                        "handle":  "https://www.instagram.com/ig_gamify/",
+                        "dateAdded":  1769386167740,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386218940-qameic65c5",
+                        "name":  "Kundan Parashar",
+                        "youtubeId":  "UCgA5LtJYZu7Y0AA3UpNxetw",
+                        "handle":  "",
+                        "dateAdded":  1769386218940,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386245031-wuz79957zgq",
+                        "name":  "Katka Gaming",
+                        "youtubeId":  "UCxCm7PrHUc5yk7rJIh9j72A",
+                        "handle":  "",
+                        "dateAdded":  1769386245031,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386272708-z1xnv4k0tym",
+                        "name":  "Aish is Live",
+                        "youtubeId":  "UC5SBHYm8lHaRd-nwJRNWkrA",
+                        "handle":  "",
+                        "dateAdded":  1769386272708,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386376265-4nzw47aav",
+                        "name":  "Deadlox Gaming",
+                        "youtubeId":  "UCi88JinGRWdVWQPFscNUgOw",
+                        "handle":  "https://www.instagram.com/deadloxgaming89/",
+                        "dateAdded":  1769386376265,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769386405963-h7ixfqgveen",
+                        "name":  "Maggie Live",
+                        "youtubeId":  "UCaQ_GBZe5lVZjXA_DkdTzKA",
+                        "handle":  "",
+                        "dateAdded":  1769386405963,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769387547919-ff1j11r1bh5",
+                        "name":  "Gamer Mummy",
+                        "youtubeId":  "UCDLYqESVrBFdTDE8O_Z4Ysg",
+                        "handle":  "",
+                        "dateAdded":  1769387547919,
+                        "status":  "active"
+                    },
+                    {
+                        "id":  "c-1769387584173-qdtnij12ze",
+                        "name":  "Vib n Ric",
+                        "youtubeId":  "UC5XTxQsO3KapW09nOVE1TJQ",
+                        "handle":  "",
+                        "dateAdded":  1769387584173,
+                        "status":  "active"
+                    }
+                ]
+}

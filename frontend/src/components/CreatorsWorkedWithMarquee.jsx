@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Users, TrendingUp } from "lucide-react";
 import { LazyImage } from "./ProgressiveImage";
 import { useClientStats } from "../context/ClientStatsContext";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 /**
  * Reusable, responsive, auto-scrolling marquee for "Creators Worked With".
@@ -112,6 +113,7 @@ const CreatorsWorkedWithMarquee = ({
   direction = 'left',
 }) => {
   const { stats, loading } = useClientStats();
+  const { config } = useGlobalConfig();
   const prefersReduced = false;
 
   // State
@@ -156,10 +158,10 @@ const CreatorsWorkedWithMarquee = ({
   if (!finalCreators || finalCreators.length === 0) return null;
 
   // Calculate total combined reach for display
-  const totalSubs = useMemo(() =>
-    finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0),
-    [finalCreators]
-  );
+  const totalSubs = useMemo(() => {
+    const fromStats = finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0);
+    return fromStats || (config?.stats?.totalReach || 0);
+  }, [finalCreators, config]);
   const fmt = useCallback((n) => {
     if (n == null) return null;
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
@@ -264,7 +266,7 @@ const CreatorsWorkedWithMarquee = ({
             <div className="flex items-center gap-2">
               <Users size={14} style={{ color: "var(--orange)" }} />
               <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                {finalCreators.length}+ Creators
+                {config?.stats?.creatorsImpacted || finalCreators.length}+ Creators
               </span>
             </div>
             <span className="h-3 w-px hidden sm:inline-block" style={{ background: "var(--border)" }} />

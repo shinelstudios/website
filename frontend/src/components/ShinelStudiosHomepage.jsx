@@ -4,15 +4,30 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp
 } from "lucide-react";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 // Component imports
 const RoiCalculator = React.lazy(() => import("./RoiCalculator"));
 import QuickQuoteBar from "./QuickQuoteBar";
+import StickyFloatingCTA from "./StickyFloatingCTA";
+import SocialProofNotifications from "./SocialProofNotifications";
+import ScrollProgressBar from "./ScrollProgressBar";
+import ComparisonCalculator from "./ComparisonCalculator";
+import NewsletterSignup from "./NewsletterSignup";
+import MediaMentions from "./MediaMentions";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
 import HeroSection from "../components/HeroSection";
 const ServicesSection = React.lazy(() => import("../components/ServicesSection.jsx"));
 import QuickLeadForm from "./QuickLeadForm.jsx";
+import AISH_LOGO from '../assets/creators/aish.png';
+import MAGGIE_LOGO from '../assets/creators/maggie.png';
+import MANAV_LOGO from '../assets/creators/manav.png';
+import DEADLOX_LOGO from '../assets/creators/deadlox.png';
+import KAMZ_LOGO from '../assets/creators/kamz.png';
+import GAMERMUMMY_LOGO from '../assets/creators/gamermummy.png';
+import ANCHIT_LOGO from '../assets/creators/anchit.png';
+import KUNDAN_LOGO from '../assets/creators/kundan.png';
 const ProofSection = React.lazy(() => import("../components/ProofSection"));
 const CalendlyModal = React.lazy(() => import("../components/CalendlyModal").then(module => ({ default: module.CalendlyModal })));
 import { BeforeAfter } from './BeforeAfter';
@@ -22,6 +37,7 @@ import ErrorBoundary from './ErrorBoundary';
 import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema } from './MetaTags';
 import ProgressiveImage from './ProgressiveImage';
 import SkeletonLoader, { SectionSkeleton } from './SkeletonLoader';
+import { useClientStats } from '../context/ClientStatsContext';
 
 // Mobile-first UI components
 import {
@@ -984,50 +1000,65 @@ const ProcessSection = () => {
 /* ===================== Enhanced Testimonials (Video + Analytics, AI-first) ===================== */
 const TestimonialsSection = ({ isDark }) => {
   const reduceMotion = false;
+  const { stats } = useClientStats();
+  const { config } = useGlobalConfig();
+
+  // Helper to get client logo from stats
+  const getClientLogo = (avatarKey) => {
+    const client = stats.find(s => s.id === avatarKey || s.youtubeId === avatarKey);
+    return client?.logo || null;
+  };
+
+  const ctrMin = config?.stats?.ctrBoostMin || 3.1;
+  const ctrMax = config?.stats?.ctrBoostMax || 5.0;
 
   const TESTIMONIALS = [
     {
       type: "video",
-      name: "Kamz Inkzone",
-      tag: "Gaming • 172K",
-      avatarKey: "kamz",
-      video: "/assets/testimonials/kamz-45s.mp4",
-      poster: "/assets/testimonials/kamz-thumb.jpg",
-      quote: "These edits + motion graphics made my content feel premium. Retention lifted immediately.",
-      metrics: [{ label: "Avg View Dur.", value: "+38%" }],
-      ai: ["AI captions", "Motion presets"],
-      color: "#ff6b6b",
-    },
-    {
-      type: "analytics",
       name: "Aish is Live",
-      tag: "Streamer • 13K",
-      avatarKey: "aish",
-      image: "/assets/testimonials/aish-ctr.png",
-      alt: "YouTube Studio CTR uplift graph for Aish is Live",
+      tag: "Streamer • 17.1K",
+      avatarKey: "aishislive",
+      logo: AISH_LOGO,
+      video: "/assets/testimonials/aish-video.mp4",
+      poster: "/assets/testimonials/aish-thumb.jpg",
       quote: "Thumbnail iterations increased CTR consistently over three uploads.",
-      metrics: [{ label: "CTR", value: "3.1% → 5.0%" }],
-      cta: { label: "See case", href: "/work/aish" },
+      metrics: [{ label: "CTR", value: `${ctrMin}% → ${ctrMax}%` }],
       ai: ["Thumb ideation (AI)", "Title scoring"],
       color: "#4ecdc4",
     },
     {
+      type: "analytics",
+      name: "Katka Gaming",
+      tag: "Gaming • 38.6K",
+      avatarKey: "katkagaming",
+      logo: "https://yt3.ggpht.com/mCFOqYFCVGR3HJhMpCOh6aUmqM37b9P1yLVxfeHsa14fcUZZ30sCyhcGjkBFjBxYQBnPGpUj=s800-c-k-c0x00ffffff-no-rj",
+      image: "/assets/testimonials/katka-analytics.png",
+      alt: "YouTube Studio analytics for Katka Gaming",
+      quote: "Professional editing quality that elevated my gaming content.",
+      metrics: [{ label: "Avg View Dur.", value: "+32%" }],
+      cta: { label: "See case", href: "/work/katka" },
+      ai: ["Retention analysis", "Hook optimization"],
+      color: "#e74c3c",
+    },
+    {
       type: "video",
-      name: "Gamer Mummy",
-      tag: "Gaming • 14.8K",
-      avatarKey: "gamermummy",
-      video: "/assets/testimonials/gamermummy-35s.mp4",
-      poster: "/assets/testimonials/gamermummy-thumb.jpg",
-      quote: "The brand kit + overlays improved watch time and comments.",
-      metrics: [{ label: "Session Time", value: "+22%" }],
-      ai: ["Style-matched GFX", "Auto transcript"],
-      color: "#f7b731",
+      name: "Maggie Live",
+      tag: "Creator • 21.3K",
+      avatarKey: "maggielive",
+      logo: MAGGIE_LOGO,
+      video: "/assets/testimonials/maggie-video.mp4",
+      poster: "/assets/testimonials/maggie-thumb.jpg",
+      quote: "The editing style perfectly matches my brand. Watch time improved significantly.",
+      metrics: [{ label: "Session Time", value: "+28%" }],
+      ai: ["Style-matched edits", "Auto captions"],
+      color: "#9b59b6",
     },
     {
       type: "analytics",
       name: "Manav Sukhija",
-      tag: "Creator • 49.6K",
+      tag: "Creator • 21.3K",
       avatarKey: "manav",
+      logo: MANAV_LOGO,
       image: "/assets/testimonials/manav-shorts.png",
       alt: "Shorts growth from YouTube Studio for Manav",
       quote: "Hook-first shorts strategy drove predictable growth.",
@@ -1038,7 +1069,7 @@ const TestimonialsSection = ({ isDark }) => {
     },
   ];
 
-  const getAvatar = (key) => findAssetByBase(key);
+
 
   const [openVideo, setOpenVideo] = useState(null);
   const [tab, setTab] = useState("all");
@@ -1077,8 +1108,8 @@ const TestimonialsSection = ({ isDark }) => {
     </span>
   );
 
-  const HeaderRow = ({ name, tag, avatarKey, color }) => {
-    const avatar = getAvatar(avatarKey);
+  const HeaderRow = ({ name, tag, avatarKey, color, logoFallback }) => {
+    const avatar = getClientLogo(avatarKey) || logoFallback;
     const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
     return (
@@ -1193,7 +1224,7 @@ const TestimonialsSection = ({ isDark }) => {
         </button>
 
         <div className="p-5">
-          <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} />
+          <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} logoFallback={item.logo} />
 
           <div className="flex items-start gap-2 mb-3">
             <Quote size={18} className="flex-shrink-0 mt-0.5" style={{ color: item.color, opacity: 0.6 }} />
@@ -1268,12 +1299,12 @@ const TestimonialsSection = ({ isDark }) => {
               color: "#fff",
             }}
           >
-            📊 Real Data
+            <BarChart3 size={16} className="inline" /> Real Data
           </div>
         </div>
 
         <div className="p-5">
-          <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} />
+          <HeaderRow name={item.name} tag={item.tag} avatarKey={item.avatarKey} color={item.color} logoFallback={item.logo} />
 
           <div className="flex items-start gap-2 mb-3">
             <Quote size={18} className="flex-shrink-0 mt-0.5" style={{ color: item.color, opacity: 0.6 }} />
@@ -2197,7 +2228,7 @@ const FloatingWhatsApp = () => {
                   WebkitBackdropFilter: 'blur(8px)',
                 }}
               >
-                💬 Quick chat?
+                <MessageCircle size={16} className="inline" /> Quick chat?
                 {/* Arrow */}
                 <div
                   className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full"
@@ -2301,6 +2332,25 @@ export default function ShinelStudiosHomepage() {
     track(ANALYTICS_EVENTS.ctaClickAudit, { src: source });
   }, []);
 
+  // Listen for calendly:open event
+  React.useEffect(() => {
+    const handleCalendlyOpen = () => {
+      setShowCalendly(true);
+    };
+
+    const handleCalendlyClose = () => {
+      setShowCalendly(false);
+    };
+
+    window.addEventListener('calendly:open', handleCalendlyOpen);
+    window.addEventListener('calendly:close', handleCalendlyClose);
+
+    return () => {
+      window.removeEventListener('calendly:open', handleCalendlyOpen);
+      window.removeEventListener('calendly:close', handleCalendlyClose);
+    };
+  }, []);
+
   return (
     <ErrorBoundary>
       <div className="min-h-screen overflow-x-hidden">
@@ -2334,6 +2384,9 @@ export default function ShinelStudiosHomepage() {
         >
           Skip to main content
         </a>
+
+        {/* Scroll Progress Bar */}
+        <ScrollProgressBar />
 
         {/* Main content wrapper */}
         <main id="main-content">
@@ -2390,6 +2443,11 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
+          {/* 8.5) Comparison Calculator (DIY vs Shinel) */}
+          <ErrorBoundary>
+            <ComparisonCalculator onBook={() => setShowCalendly(true)} />
+          </ErrorBoundary>
+
           {/* 9) FAQ (Better for SEO - kept as requested) */}
           <ErrorBoundary fallback={<SectionSkeleton content="listItem" contentCount={5} />}>
             <FAQSection />
@@ -2398,6 +2456,16 @@ export default function ShinelStudiosHomepage() {
           {/* 10) Process (Secondary trust) */}
           <ErrorBoundary fallback={<SectionSkeleton content="processStep" contentCount={4} />}>
             <ProcessSection />
+          </ErrorBoundary>
+
+          {/* 10.5) Media Mentions / Trust Badges */}
+          <ErrorBoundary>
+            <MediaMentions />
+          </ErrorBoundary>
+
+          {/* 10.6) Newsletter Signup */}
+          <ErrorBoundary>
+            <NewsletterSignup />
           </ErrorBoundary>
 
           {/* 11) Single lead capture */}
@@ -2420,6 +2488,16 @@ export default function ShinelStudiosHomepage() {
         {/* Floating elements */}
         <ErrorBoundary>
           <FloatingWhatsApp />
+        </ErrorBoundary>
+
+        {/* Sticky Floating CTA */}
+        <ErrorBoundary>
+          <StickyFloatingCTA onBook={() => setShowCalendly(true)} scrollThreshold={0.3} />
+        </ErrorBoundary>
+
+        {/* Social Proof Notifications */}
+        <ErrorBoundary>
+          <SocialProofNotifications interval={15000} enabled={true} />
         </ErrorBoundary>
 
         <ErrorBoundary>

@@ -11,6 +11,7 @@ import {
   Zap
 } from "lucide-react";
 import { useClientStats } from "../context/ClientStatsContext";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -361,6 +362,7 @@ const ClientAvatar = ({ client, gradient, zIndex }) => {
 
 export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) {
   const { totalSubscribers, stats, loading } = useClientStats();
+  const { config } = useGlobalConfig();
   const sectionRef = useRef(null);
   const navigate = useNavigate();
 
@@ -370,6 +372,11 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
       maximumFractionDigits: 1
     }).format(number);
   };
+
+  const reachValue = useMemo(() => {
+    const combined = (totalSubscribers || 0) || (config?.stats?.totalReach || 0);
+    return combined > 0 ? formatCompactNumber(combined) : "3M+";
+  }, [totalSubscribers, config]);
 
   const handleSeeWork = useCallback((e) => {
     e.preventDefault();
@@ -453,7 +460,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               <div className="h-7 w-px bg-white/10" />
               <div className="flex flex-col items-start">
                 <span className="text-lg font-black text-white tabular-nums leading-none">
-                  {totalSubscribers > 0 ? formatCompactNumber(totalSubscribers) : "3M+"}
+                  {reachValue}
                 </span>
                 <span className="text-xs text-gray-400 font-semibold leading-none mt-1">Active Subs Managed</span>
               </div>
@@ -465,9 +472,55 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
             variants={item}
             className="text-6xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
           >
-            We <span className="text-[#E85002] drop-shadow-[0_0_40px_rgba(232,80,2,0.4)]">Engineer</span>
+            We <span className="animated-gradient-text">Engineer</span>
             <br />YouTube Growth
           </motion.h1>
+
+          {/* Add gradient animation styles */}
+          <style dangerouslySetInnerHTML={{
+            __html: `
+            .animated-gradient-text {
+              background: linear-gradient(
+                90deg,
+                #E85002 0%,
+                #ff6b35 25%,
+                #E85002 50%,
+                #ff6b35 75%,
+                #E85002 100%
+              );
+              background-size: 200% auto;
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+              background-clip: text;
+              animation: gradient-shift 3s ease infinite;
+              filter: drop-shadow(0 0 40px rgba(232, 80, 2, 0.4));
+            }
+
+            /* Fallback for browsers that don't support background-clip: text */
+            @supports not (-webkit-background-clip: text) {
+              .animated-gradient-text {
+                color: #E85002;
+                -webkit-text-fill-color: #E85002;
+              }
+            }
+
+            @keyframes gradient-shift {
+              0%, 100% {
+                background-position: 0% center;
+              }
+              50% {
+                background-position: 100% center;
+              }
+            }
+
+            /* Reduce motion for accessibility */
+            @media (prefers-reduced-motion: reduce) {
+              .animated-gradient-text {
+                animation: none;
+                background-position: 0% center;
+              }
+            }
+          `}} />
 
           {/* Subheadline */}
           <motion.p
@@ -481,25 +534,53 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           {/* CTAs */}
           <motion.div
             variants={item}
-            className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start pt-8"
+            className="space-y-6 pt-8"
           >
-            <button
-              onClick={onAudit}
-              className="group relative px-12 py-6 text-lg font-black text-white rounded-full bg-[#E85002] shadow-[0_20px_60px_-15px_rgba(232,80,2,0.7)] hover:shadow-[0_30px_70px_-10px_rgba(232,80,2,0.9)] hover:scale-105 active:scale-100 transition-all duration-300 w-full sm:w-auto overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/25 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-              <span className="relative flex items-center justify-center gap-2.5">
-                Get Free Audit
-                <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
-              </span>
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start">
+              <button
+                onClick={onAudit}
+                className="group relative px-12 py-6 text-lg font-black text-white rounded-full bg-[#E85002] shadow-[0_20px_60px_-15px_rgba(232,80,2,0.7)] hover:shadow-[0_30px_70px_-10px_rgba(232,80,2,0.9)] hover:scale-105 active:scale-100 transition-all duration-300 w-full sm:w-auto overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/25 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                <span className="relative flex items-center justify-center gap-2.5">
+                  Get Free Audit
+                  <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
 
-            <button
-              onClick={handleSeeWork}
-              className="px-12 py-6 text-lg font-bold rounded-full border-2 border-white/20 hover:border-white/40 hover:bg-white/5 transition-all duration-300 w-full sm:w-auto backdrop-blur-sm"
-            >
-              View Our Work
-            </button>
+              <button
+                onClick={handleSeeWork}
+                className="px-12 py-6 text-lg font-bold rounded-full border-2 border-white/20 hover:border-white/40 hover:bg-white/5 transition-all duration-300 w-full sm:w-auto backdrop-blur-sm"
+              >
+                View Our Work
+              </button>
+            </div>
+
+            {/* Trust micro-copy - Now properly aligned under buttons */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-8 gap-y-3 px-2">
+              <div className="flex items-center gap-4 text-xs text-gray-500 font-medium">
+                <div className="flex items-center gap-1.5">
+                  <Check size={14} className="text-green-500" />
+                  <span>No credit card</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check size={14} className="text-green-500" />
+                  <span>15-min call</span>
+                </div>
+              </div>
+
+              {/* Urgency indicator - Integrated with trust items */}
+              <div className="flex items-center gap-2.5">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping absolute" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 relative" />
+                </div>
+                <span className="text-xs text-gray-400 font-medium">
+                  <span className="text-[#E85002] font-extrabold uppercase tracking-widest text-[10px] mr-1">Limited:</span>
+                  Only 3 spots left this week
+                </span>
+              </div>
+            </div>
           </motion.div>
 
           {/* Trust Markers */}

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { TrendingUp, Zap, Star, Settings, Target, Eye, Video, Calendar, DollarSign } from "lucide-react";
 
 /* ---------- Formatters ---------- */
 const formatINR = (n) => {
@@ -104,7 +105,8 @@ export default function RoiCalculator({
   /* ---------- Quick presets ---------- */
   const stagePresets = useMemo(() => [
     {
-      label: "🌱 Starter",
+      label: "Starter",
+      icon: "Seedling",
       desc: "Starting out",
       views: 5000,
       posts: 4,
@@ -113,7 +115,8 @@ export default function RoiCalculator({
       color: "#10b981"
     },
     {
-      label: "📈 Growing",
+      label: "Growing",
+      icon: TrendingUp,
       desc: "Building audience",
       views: 10000,
       posts: 8,
@@ -122,7 +125,8 @@ export default function RoiCalculator({
       color: "#3b82f6"
     },
     {
-      label: "⭐ Established",
+      label: "Established",
+      icon: "Star",
       desc: "Consistent creator",
       views: 25000,
       posts: 12,
@@ -131,7 +135,8 @@ export default function RoiCalculator({
       color: "#f59e0b"
     },
     {
-      label: "🚀 Pro",
+      label: "Pro",
+      icon: Zap,
       desc: "High performer",
       views: 50000,
       posts: 16,
@@ -240,7 +245,7 @@ export default function RoiCalculator({
 
   const copySummary = useCallback(async () => {
     const text = [
-      `📊 CTR Uplift Estimate`,
+      `CTR Uplift Estimate`,
       ``,
       `Current Performance:`,
       `• CTR: ${ctr.toFixed(1)}%`,
@@ -417,7 +422,7 @@ export default function RoiCalculator({
                     className="text-xs sm:text-sm uppercase tracking-wide mb-2"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    💰 Monthly Revenue Increase
+                    Monthly Revenue Increase
                   </div>
                   <motion.div
                     className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold font-['Poppins']"
@@ -460,7 +465,7 @@ export default function RoiCalculator({
                   }}
                 >
                   <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                    📊 Extra views/month
+                    Extra views/month
                   </div>
                   <div className="text-lg sm:text-xl font-bold" style={{ color: "var(--text)" }}>
                     {formatNumber(m.deltaViews)}
@@ -475,7 +480,7 @@ export default function RoiCalculator({
                   }}
                 >
                   <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                    📈 Growth multiplier
+                    Growth multiplier
                   </div>
                   <div className="text-lg sm:text-xl font-bold" style={{ color: "var(--text)" }}>
                     {(m.liftMultiplier * 100).toFixed(0)}%
@@ -493,7 +498,7 @@ export default function RoiCalculator({
                   }}
                 >
                   <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                    🎯 Annualized impact
+                    Annualized impact
                   </div>
                   <div className="text-xl font-bold" style={{ color: "var(--text)" }}>
                     {formatINR(annualDelta)}
@@ -510,7 +515,7 @@ export default function RoiCalculator({
                   style={{ color: "var(--text)" }}
                   htmlFor="lift-slider"
                 >
-                  🎯 Expected CTR Lift
+                  Expected CTR Lift
                 </label>
                 <div className="relative">
                   <input
@@ -607,7 +612,7 @@ export default function RoiCalculator({
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <CompareStatEnhanced
                 label="Click-Through Rate"
-                icon="🎯"
+                icon="Target"
                 now={`${ctr.toFixed(1)}%`}
                 next={`${m.newCtr.toFixed(1)}%`}
                 pct={clamp((m.newCtr || 0) / Math.max(ctr || 0.1, 0.1), 0, 4)}
@@ -615,7 +620,7 @@ export default function RoiCalculator({
               />
               <CompareStatEnhanced
                 label="Views per Video"
-                icon="👁️"
+                icon="Eye"
                 now={formatNumber(m.perNow)}
                 next={formatNumber(m.perNew)}
                 pct={clamp((m.perNew || 0) / Math.max(m.perNow || 1, 1), 0, 4)}
@@ -647,7 +652,7 @@ export default function RoiCalculator({
         >
           <FieldEnhanced
             label="Avg views per video"
-            icon="📹"
+            icon="Video"
             value={views}
             onChange={(v) => {
               setViews(intOnly(v));
@@ -659,7 +664,7 @@ export default function RoiCalculator({
           />
           <FieldEnhanced
             label="Videos per month"
-            icon="📅"
+            icon="Calendar"
             value={posts}
             onChange={(v) => {
               setPosts(clamp(intOnly(v), 0, 120));
@@ -674,7 +679,7 @@ export default function RoiCalculator({
           <div className="sm:col-span-2 lg:col-span-1">
             <FieldEnhanced
               label="Revenue per 1K views (RPM)"
-              icon="💰"
+              icon="DollarSign"
               value={rpm}
               onChange={(v) => {
                 setRpm(intOnly(v));
@@ -707,7 +712,7 @@ export default function RoiCalculator({
             }}
           >
             <span className="flex items-center gap-2 text-sm sm:text-base">
-              ⚙️ Advanced Options
+              <Settings size={16} className="inline" /> Advanced Options
               <span
                 className="text-xs px-2 py-1 rounded-full"
                 style={{
@@ -740,7 +745,7 @@ export default function RoiCalculator({
               <div>
                 <FieldEnhanced
                   label="Current CTR"
-                  icon="🎯"
+                  icon="Target"
                   value={ctr}
                   onChange={(v) => {
                     setCtr(clamp(decOnly(v), 0.1, 50));
@@ -787,7 +792,7 @@ export default function RoiCalculator({
                 }}
               >
                 <div className="text-sm font-medium mb-2" style={{ color: "var(--text)" }}>
-                  📊 Typical CTR Ranges
+                  Typical CTR Ranges
                 </div>
                 <div className="space-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
                   <div>• 3-6%: Long-form content</div>
@@ -917,7 +922,7 @@ export default function RoiCalculator({
             aria-label="Book an audit to achieve this uplift"
           >
             <span className="flex items-center justify-center gap-2">
-              <span>🚀</span>
+              <Zap size={18} className="inline" />
               <span>Book Strategy Call</span>
               <span>→</span>
             </span>
@@ -1000,7 +1005,7 @@ export default function RoiCalculator({
             >
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
-                  💰 Monthly Potential
+                  Monthly Potential
                 </div>
                 <div className="text-lg font-bold leading-tight" style={{ color: "var(--orange)" }}>
                   {formatINR(m.deltaRevenue)}

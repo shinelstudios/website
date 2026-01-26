@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 /* ===================== Calendly Modal (focus-trap, ARIA polish, safer sandbox) ===================== */
 
 const buildCalendlyUrl = () => {
-  const base = "https://calendly.com/shinelstudios/15min-audit";
+  const base = "https://calendly.com/shinelstudioofficial/15-min-audit";
   try {
     const u = new URL(base);
     const utm = JSON.parse(localStorage.getItem("utm") || "{}");

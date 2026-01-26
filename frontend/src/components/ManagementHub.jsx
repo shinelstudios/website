@@ -17,7 +17,8 @@ import {
     Lightbulb,
     Brain,
     Search,
-    Languages
+    Languages,
+    Settings as SettingsIcon
 } from "lucide-react";
 
 /* ---------------- helpers: safe base64url + jwt ---------------- */
@@ -82,6 +83,13 @@ export default function ManagementHub() {
             path: '/dashboard/thumbnails',
             icon: ImageIcon,
             roles: ['admin', 'artist']
+        },
+        {
+            id: 'settings',
+            label: 'Global Settings',
+            path: '/dashboard/settings',
+            icon: SettingsIcon,
+            roles: ['admin']
         },
     ];
 

@@ -94,7 +94,8 @@ export const Grid = ({
             }}
             {...props}
         >
-            <style jsx>{`
+            <style dangerouslySetInnerHTML={{
+                __html: `
         @media (min-width: ${BREAKPOINTS.tablet}px) {
           div {
             grid-template-columns: repeat(${cols.tablet || cols.mobile}, 1fr);
@@ -105,7 +106,7 @@ export const Grid = ({
             grid-template-columns: repeat(${cols.desktop || cols.tablet || cols.mobile}, 1fr);
           }
         }
-      `}</style>
+      `}} />
             {children}
         </div>
     );

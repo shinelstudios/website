@@ -33,10 +33,18 @@ export default function AdminStats() {
             setStats(data.counts);
 
             // Also check pulse health
-            const pRes = await fetch(`${AUTH_BASE}/clients/pulse`);
+            const pRes = await fetch(`${AUTH_BASE}/clients/pulse?debug=1`);
             if (pRes.ok) {
                 const pData = await pRes.json();
                 setLastPulse(pData.ts);
+                if (pData.debug) {
+                    setTrace(pData.debug.trace);
+                    setKeyStatus({
+                        present: pData.debug.keyPresent,
+                        length: pData.debug.keyLength,
+                        valid: pData.debug.keyValid
+                    });
+                }
             }
         } catch (e) {
             console.error("Failed to load stats", e);
