@@ -681,7 +681,6 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
         style={{
           paddingTop: "clamp(74px, 9vw, 138px)",
           paddingBottom: "clamp(40px, 7vw, 92px)",
-          minHeight: "100vh",
           minHeight: "100svh",
         }}
       >
