@@ -329,6 +329,34 @@ const ThreeDVisuals = () => {
   );
 };
 
+/* Client Avatar Component - Fixes Hooks violation */
+const ClientAvatar = ({ client, gradient, zIndex }) => {
+  const [imageError, setImageError] = useState(false);
+
+  return (
+    <div
+      className="relative w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] overflow-hidden shadow-xl flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+      style={{ background: gradient, zIndex }}
+    >
+      {client.logo && !imageError && (
+        <img
+          src={client.logo}
+          alt={client.title || "Creator"}
+          width="44"
+          height="44"
+          loading="eager"
+          decoding="async"
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+        />
+      )}
+      {(!client.logo || imageError) && (
+        <span className="relative z-10 drop-shadow-md">{client.title?.charAt(0) || 'C'}</span>
+      )}
+    </div>
+  );
+};
+
 /* ------------------------------ Main Component ------------------------------ */
 
 export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) {
@@ -404,32 +432,14 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
             <div className="relative inline-flex items-center gap-4 pl-3 pr-7 py-3 rounded-full border border-white/10 bg-black/70 backdrop-blur-2xl shadow-2xl ring-1 ring-white/5 hover:scale-105 transition-transform duration-300">
               <div className="flex -space-x-4">
                 {displayClients.length > 0 ? (
-                  displayClients.map((client, i) => {
-                    const [imageError, setImageError] = useState(false);
-                    return (
-                      <div
-                        key={client.id || i}
-                        className="relative w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] overflow-hidden shadow-xl flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
-                        style={{ background: gradients[i % gradients.length], zIndex: 10 - i }}
-                      >
-                        {client.logo && !imageError && (
-                          <img
-                            src={client.logo}
-                            alt={client.title || "Creator"}
-                            width="44"
-                            height="44"
-                            loading="eager"
-                            decoding="async"
-                            className="w-full h-full object-cover"
-                            onError={() => setImageError(true)}
-                          />
-                        )}
-                        {(!client.logo || imageError) && (
-                          <span className="relative z-10 drop-shadow-md">{client.title?.charAt(0) || 'C'}</span>
-                        )}
-                      </div>
-                    );
-                  })
+                  displayClients.map((client, i) => (
+                    <ClientAvatar
+                      key={client.id || i}
+                      client={client}
+                      gradient={gradients[i % gradients.length]}
+                      zIndex={10 - i}
+                    />
+                  ))
                 ) : (
                   [0, 1, 2].map(i => (
                     <div
