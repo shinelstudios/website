@@ -78,7 +78,7 @@ import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
  * - Access via findAssetByBase()
  */
 const ALL_ASSETS = import.meta.glob(
-  "../assets/**/*.{png,jpg,jpeg,webp,svg}",
+  "../assets/*.{png,jpg,jpeg,webp,svg}",
   { eager: true, query: "?url", import: "default" }
 );
 
@@ -317,8 +317,11 @@ const CaseStudies = () => {
                     <motion.img
                       src={it.media.thumb}
                       alt={it.title}
+                      width="400"
+                      height="225"
                       className="absolute inset-0 w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
                       whileHover={reduceMotion ? {} : { scale: 1.05 }}
                       transition={{ duration: 0.4 }}
                     />
@@ -410,6 +413,7 @@ const CaseStudies = () => {
                   <motion.div
                     className="flex items-center gap-2 text-sm font-semibold"
                     style={{ color: "var(--orange)" }}
+                    aria-label={`View breakdown for ${it.title}`}
                     animate={isHovered && !reduceMotion ? { x: [0, 4, 0] } : {}}
                     transition={{ duration: 1, repeat: Infinity }}
                   >

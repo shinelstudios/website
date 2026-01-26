@@ -17,17 +17,17 @@ export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.
 
 // Client Activity Registry (Pulse)
 export const CLIENT_REGISTRY = [
-    { id: 'kamz', name: 'Kamz Inkzone', youtubeId: 'UC_x5XG1OV2P6uZZ5FSM9Ttw' },
-    { id: 'deadlox', name: 'Deadlox Gaming', youtubeId: 'UCbnkpVSNsBwET7mt1tgqEPQ' },
-    { id: 'manav', name: 'Manav Sukhija', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA' },
-    { id: 'gamermummy', name: 'Gamer Mummy', youtubeId: 'UCj-L_n7qM9cO67bYkFzQyQ' },
-    { id: 'c1', name: 'Client 1', youtubeId: 'UC_N0eSX2RI_ah-6MjJIAyzA' },
-    { id: 'c2', name: 'Client 2', youtubeId: 'UCgA5LtJYZu7Y0AA3UpNxetw' },
-    { id: 'c3', name: 'Client 3', youtubeId: 'UCxCm7PrHUc5yk7rJ' },
-    { id: 'c4', name: 'Client 4', youtubeId: 'UCeKuPHM9XtsxORIliF5rc-Q' },
-    { id: 'c5', name: 'Client 5', youtubeId: 'UC5SBHYm8lHaRd-nwJRNWkrA' },
-    { id: 'vibnric', name: 'VibnRic', handle: '@VibnRic' },
-    { id: 'c6', name: 'Client 6', youtubeId: 'UCi88JinGRWdVWQPFscNUgOw' }
+    { id: 'kamz', name: 'Kamz Inkzone', youtubeId: 'UCDLYqESVrBFdTDE8O_Z4Y_A', subscribers: 1730000 },
+    { id: 'deadlox', name: 'Deadlox Gaming', youtubeId: 'UCbnkpVSNsBwET7mt1tgqEPQ', subscribers: 2100000 },
+    { id: 'manav', name: 'Manav Sukhija', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA', subscribers: 151000 },
+    { id: 'gamermummy', name: 'Gamer Mummy', youtubeId: 'UCj-L_n7qM9cO67bYkFzQyQ', subscribers: 450000 },
+    { id: 'aishislive', name: 'Aish is Live', youtubeId: 'UC_N0eSX2RI_ah-6MjJIAyzA', subscribers: 17100 },
+    { id: 'katkagaming', name: 'Katka Gaming', youtubeId: 'UCi88JinGRWdVWQPFscNUgOw', subscribers: 38600 },
+    { id: 'maggielive', name: 'Maggie Live', youtubeId: 'UCgA5LtJYZu7Y0AA3UpNxetw', subscribers: 21300 },
+    { id: 'c3', name: 'Client 3', youtubeId: 'UCxCm7PrHUc5yk7rJ', subscribers: 30000 },
+    { id: 'c4', name: 'Client 4', youtubeId: 'UCeKuPHM9XtsxORIliF5rc-Q', subscribers: 85000 },
+    { id: 'c5', name: 'Client 5', youtubeId: 'UC5SBHYm8lHaRd-nwJRNWkrA', subscribers: 25000 },
+    { id: 'vibnric', name: 'VibnRic', handle: '@VibnRic', subscribers: 15000 }
 ];
 
 export const CLIENT_PULSE_CONFIG = {

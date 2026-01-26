@@ -413,7 +413,15 @@ const ClientGrid = () => {
         <div key={client.id} className="group relative flex items-center gap-3 p-3 pr-6 rounded-full border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0">
             {client.logo ? (
-              <img src={client.logo} alt={client.title} className="w-full h-full object-cover" loading="lazy" />
+              <img
+                src={client.logo}
+                alt={client.title || "Client Logo"}
+                width="40"
+                height="40"
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
               <div className="w-full h-full bg-orange-500/10 flex items-center justify-center text-orange-500 font-bold">
                 {client.title?.charAt(0)}

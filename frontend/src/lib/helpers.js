@@ -6,7 +6,7 @@ import {
  * Centralized asset glob (Vite)
  */
 export const ALL_ASSETS = import.meta.glob(
-  "../assets/**/*.{png,jpg,jpeg,webp,svg}",
+  "../assets/*.{png,jpg,jpeg,webp,svg}",
   { eager: true, query: "?url", import: "default" }
 );
 
@@ -53,16 +53,16 @@ export const formatINR = (num, options = {}) => {
 
 /** Lightweight analytics dispatcher (no-op safe) */
 export const track = (ev, detail = {}) => {
-  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch {}
+  try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev, ...detail } })); } catch { }
 };
 
 /* Motion variants (shared) */
 export const animations = {
-  fadeDown: { hidden:{opacity:0,y:-12}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
-  fadeUp:   { hidden:{opacity:0,y: 16}, visible:{opacity:1,y:0,transition:{duration:.35,ease:"easeOut"}} },
-  fadeIn:   { hidden:{opacity:0},       visible:{opacity:1,     transition:{duration:.35,ease:"easeOut"}} },
-  staggerParent: { hidden:{}, visible:{ transition:{ staggerChildren:.08 } } },
-  scaleIn: { hidden:{opacity:0,scale:.96,y:8}, visible:{opacity:1,scale:1,y:0,transition:{duration:.25,ease:"easeOut"}} },
+  fadeDown: { hidden: { opacity: 0, y: -12 }, visible: { opacity: 1, y: 0, transition: { duration: .35, ease: "easeOut" } } },
+  fadeUp: { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: .35, ease: "easeOut" } } },
+  fadeIn: { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: .35, ease: "easeOut" } } },
+  staggerParent: { hidden: {}, visible: { transition: { staggerChildren: .08 } } },
+  scaleIn: { hidden: { opacity: 0, scale: .96, y: 8 }, visible: { opacity: 1, scale: 1, y: 0, transition: { duration: .25, ease: "easeOut" } } },
 };
 
 // card hover polish for grids
@@ -74,4 +74,4 @@ export const tiltHover = {
 // --- [FIX] ADDED MISSING EXPORTS ---
 /* Resolve sample images via asset glob (fallbacks if missing) */
 export const SAMPLE_BEFORE = findAssetByBase("sample_before") || svgPlaceholder("Before");
-export const SAMPLE_AFTER  = findAssetByBase("sample_after")  || svgPlaceholder("After");
+export const SAMPLE_AFTER = findAssetByBase("sample_after") || svgPlaceholder("After");

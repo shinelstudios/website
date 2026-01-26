@@ -241,6 +241,8 @@ const SiteFooter = ({
               <motion.img
                 src={logoSrc}
                 alt="Shinel Studios"
+                width="256"
+                height="70"
                 className="w-48 sm:w-56 md:w-64 h-auto object-contain"
                 style={{
                   maxWidth: "100%",

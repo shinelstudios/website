@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 // [NEW] Imported new icons for social proof
 import { CheckCircle2, Users, TrendingUp } from "lucide-react";
 import { LazyImage } from "./ProgressiveImage";
+import { useClientStats } from "../context/ClientStatsContext";
 
 /**
  * Reusable, responsive, auto-scrolling marquee for "Creators Worked With".
@@ -29,15 +30,24 @@ function formatSubs(n) {
 
 // Creator badge component (pure component for better performance)
 const CreatorBadge = React.memo(({ creator, isHovered }) => {
+  const [imageError, setImageError] = useState(false);
+
   return (
     <>
-      <span className="cw-avatar">
-        <LazyImage
-          src={creator.url}
-          alt={`${creator.name} logo`}
-          className="w-full h-full object-cover"
-          style={{ filter: isHovered ? "grayscale(0)" : undefined }}
-        />
+      <span className="cw-avatar flex items-center justify-center text-xs font-bold text-white bg-[var(--surface-alt)]">
+        {creator.url && !imageError ? (
+          <img
+            src={creator.url}
+            alt={`${creator.name} logo`}
+            width="48"
+            height="48"
+            className="w-full h-full object-cover"
+            style={{ filter: isHovered ? "grayscale(0)" : undefined }}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <span className="relative z-10">{creator.name?.charAt(0) || 'C'}</span>
+        )}
         <span className="cw-ring" style={{ borderColor: isHovered ? creator.color : "transparent" }} />
         <span className="cw-badge" aria-label="Verified client">
           <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -101,6 +111,7 @@ const CreatorsWorkedWithMarquee = ({
   forceMotion = false,
   direction = 'left',
 }) => {
+  const { stats, loading } = useClientStats();
   const prefersReduced = false;
 
   // State
@@ -127,43 +138,21 @@ const CreatorsWorkedWithMarquee = ({
     setHoveredKey(null);
   }, []);
 
-  // Load creator logos
-  const LOGOS = useMemo(() => {
-    if (creatorsProp) return null;
-    return import.meta.glob("../assets/creators/*.{png,jpg,jpeg,webp,svg}", {
-      eager: true,
-      query: "?url",
-      import: "default",
-    });
-  }, [creatorsProp]);
-
-  // Global subscriber data
-  const SUBS = (typeof window !== "undefined" && window.SS_SUBS) || {};
-
-  // Memoized default creators
-  const defaultCreators = useMemo(() => {
-    if (!LOGOS) return [];
-    const base = [
-      { name: "Kamz Inkzone", key: "kamz", category: "Lifestyle", color: "#ff6b6b" },
-      { name: "Deadlox Gaming", key: "deadlox", category: "Gaming", color: "#4ecdc4" },
-      { name: "Kundan Parashar", key: "kundan", category: "Devotional", color: "#f7b731" },
-      { name: "Aish is Live", key: "aish", category: "Gaming", color: "#45b7d1" },
-      { name: "Gamer Mummy", key: "gamermummy", category: "Gaming", color: "#5f27cd" },
-      { name: "Gamify Anchit", key: "anchit", category: "Gaming", color: "#ff9ff3" },
-      { name: "Maggie Live", key: "maggie", category: "Lifestyle", color: "#ee5a6f" },
-      { name: "Crown Ankit", key: "ankit", category: "Gaming", color: "#48dbfb" },
-      { name: "Manav Maggie Sukhija", key: "manav", category: "Lifestyle", color: "#ff9357" },
-    ];
-    return base
-      .map((c) => {
-        const url = findAssetByBase(c.key, LOGOS);
-        return url ? { ...c, url, subs: SUBS[c.key] } : null;
-      })
-      .filter(Boolean);
-  }, [LOGOS, SUBS]);
-
   // Determine the final list of creators
-  const finalCreators = creatorsProp && creatorsProp.length ? creatorsProp : defaultCreators;
+  const finalCreators = useMemo(() => {
+    if (creatorsProp && creatorsProp.length) return creatorsProp;
+    if (loading) return [];
+
+    return stats.map(client => ({
+      name: client.title,
+      key: client.youtubeId || client.id, // Use youtubeId as unique key
+      url: client.logo,
+      subs: client.subscribers,
+      category: "Creator",
+      color: "var(--orange)",
+      href: client.youtubeId ? `https://youtube.com/channel/${client.youtubeId}` : null
+    }));
+  }, [creatorsProp, stats, loading]);
   if (!finalCreators || finalCreators.length === 0) return null;
 
   // Calculate total combined reach for display

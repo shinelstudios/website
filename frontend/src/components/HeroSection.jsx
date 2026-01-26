@@ -60,15 +60,17 @@ const Star = ({ delay, size, top, left }) => (
 );
 
 const Starfield = () => {
+  const isMobile = useMediaQuery("(max-width: 768px)");
   const stars = useMemo(() => {
-    return Array.from({ length: 40 }).map((_, i) => ({
+    const count = isMobile ? 15 : 40;
+    return Array.from({ length: count }).map((_, i) => ({
       id: i,
       size: Math.random() * 2.5 + 1,
       top: `${Math.random() * 100}%`,
       left: `${Math.random() * 100}%`,
       delay: Math.random() * 2
     }));
-  }, []);
+  }, [isMobile]);
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -347,6 +349,11 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
     navigate("/work");
   }, [navigate]);
 
+  const displayClients = useMemo(() => {
+    if (loading || !stats || stats.length === 0) return [];
+    return [...stats].sort(() => 0.5 - Math.random()).slice(0, 3);
+  }, [stats, loading]);
+
   // Brand color gradients for avatars
   const gradients = [
     'linear-gradient(135deg, #E85002 0%, #DC3A0B 100%)',
@@ -396,29 +403,39 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
 
             <div className="relative inline-flex items-center gap-4 pl-3 pr-7 py-3 rounded-full border border-white/10 bg-black/70 backdrop-blur-2xl shadow-2xl ring-1 ring-white/5 hover:scale-105 transition-transform duration-300">
               <div className="flex -space-x-4">
-                {!loading && stats && stats.length > 0 ? (
-                  stats.slice(0, 3).map((client, i) => (
-                    <div
-                      key={client.id || i}
-                      className="relative w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] overflow-hidden shadow-xl"
-                      style={{ background: gradients[i] }}
-                    >
-                      <img
-                        src={client.logo}
-                        alt={client.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.style.opacity = '0';
-                        }}
-                      />
-                    </div>
-                  ))
+                {displayClients.length > 0 ? (
+                  displayClients.map((client, i) => {
+                    const [imageError, setImageError] = useState(false);
+                    return (
+                      <div
+                        key={client.id || i}
+                        className="relative w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] overflow-hidden shadow-xl flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500"
+                        style={{ background: gradients[i % gradients.length], zIndex: 10 - i }}
+                      >
+                        {client.logo && !imageError && (
+                          <img
+                            src={client.logo}
+                            alt={client.title || "Creator"}
+                            width="44"
+                            height="44"
+                            loading="eager"
+                            decoding="async"
+                            className="w-full h-full object-cover"
+                            onError={() => setImageError(true)}
+                          />
+                        )}
+                        {(!client.logo || imageError) && (
+                          <span className="relative z-10 drop-shadow-md">{client.title?.charAt(0) || 'C'}</span>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   [0, 1, 2].map(i => (
                     <div
                       key={i}
-                      className="w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] shadow-xl"
-                      style={{ background: gradients[i] }}
+                      className="w-11 h-11 rounded-full border-[3px] border-[var(--surface)] ring-2 ring-[var(--border)] shadow-xl animate-pulse"
+                      style={{ background: gradients[i % gradients.length], zIndex: 10 - i, opacity: 0.3 }}
                     />
                   ))
                 )}
@@ -426,7 +443,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               <div className="h-7 w-px bg-white/10" />
               <div className="flex flex-col items-start">
                 <span className="text-lg font-black text-white tabular-nums leading-none">
-                  {totalSubscribers ? formatCompactNumber(totalSubscribers) : "3M+"}
+                  {totalSubscribers > 0 ? formatCompactNumber(totalSubscribers) : "3M+"}
                 </span>
                 <span className="text-xs text-gray-400 font-semibold leading-none mt-1">Active Subs Managed</span>
               </div>
