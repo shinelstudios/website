@@ -4,4 +4,17 @@ Disallow: /studio/
 Disallow: /logout
 Allow: /
 
-Sitemap: https://shinelstudios.in/sitemap.xml
+# Specifically allow AI crawlers to index content for AEO
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://www.shinelstudios.in/sitemap.xml

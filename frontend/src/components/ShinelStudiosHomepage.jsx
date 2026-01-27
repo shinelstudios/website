@@ -33,7 +33,7 @@ import { BeforeAfter } from './BeforeAfter';
 
 // New helper components
 import ErrorBoundary from './ErrorBoundary';
-import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema } from './MetaTags';
+import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema, LocalBusinessSchema, WebSiteSchema } from './MetaTags';
 import ProgressiveImage from './ProgressiveImage';
 import SkeletonLoader, { SectionSkeleton } from './SkeletonLoader';
 import { useClientStats } from '../context/ClientStatsContext';
@@ -1615,22 +1615,9 @@ const FAQSection = () => {
   const toggleFAQ = (idx) => setOpenFAQ((cur) => (cur === idx ? null : idx));
 
   return (
-    <section className="py-20 relative overflow-hidden" style={{ background: 'var(--surface)' }} itemScope itemType="https://schema.org/FAQPage">
-      {/* JSON-LD Schema for SEO */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "FAQPage",
-          "mainEntity": faqs.map((faq) => ({
-            "@type": "Question",
-            "name": faq.question,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": faq.answer
-            }
-          }))
-        })}
-      </script>
+    <section className="py-20 relative overflow-hidden" style={{ background: 'var(--surface)' }}>
+      {/* Centralized FAQ Schema */}
+      <FAQSchema faqs={faqs} />
       {/* Background decoration */}
       {!reduceMotion && (
         <div
@@ -2247,78 +2234,7 @@ const FloatingWhatsApp = () => {
   );
 };
 
-/* ===================== SEO Schema (Organization + WebSite + Service + FAQPage) ===================== */
-const SeoSchema = () => {
-  useEffect(() => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://shinelstudios.in";
-    const logoUrl = `${origin}/assets/logo_light.png`;
-
-    const faq = [
-      { q: "What services does Shinel Studios offer?", a: "We specialize in video editing, thumbnail design, SEO & marketing, and comprehensive content strategy." },
-      { q: "How long does a typical project take?", a: "Thumbnails in 24–48 hours; longer edits may take 1–2 weeks depending on scope." },
-      { q: "Do you work with small creators?", a: "Yes, we tailor packages for creators and brands of all sizes." },
-      { q: "What's included in content strategy?", a: "Research, competitor analysis, planning, schedules, and performance optimization." },
-      { q: "How do you ensure quality?", a: "Multi-stage QA with client reviews and revisions until approval." },
-    ];
-
-    const ld = [
-      {
-        "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "Shinel Studios",
-        "url": origin,
-        "logo": logoUrl,
-        "sameAs": [
-          "https://www.instagram.com/shinel.studios/",
-          "https://www.linkedin.com/company/shinel-studios/",
-          "https://linktr.ee/ShinelStudios"
-        ],
-        "contactPoint": [{
-          "@type": "ContactPoint",
-          "contactType": "customer support",
-          "email": "hello@shinelstudios.in",
-          "areaServed": "IN",
-          "availableLanguage": ["en", "hi"]
-        }]
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Shinel Studios",
-        "url": origin,
-        "potentialAction": [{
-          "@type": "SearchAction",
-          "target": `${origin}/?q={search_term_string}`,
-          "query-input": "required name=search_term_string"
-        }]
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "Service",
-        "name": "YouTube Editing & Packaging",
-        "provider": { "@type": "Organization", "name": "Shinel Studios", "url": origin },
-        "areaServed": "IN",
-        "url": `${origin}/#services`
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": faq.map(({ q, a }) => ({
-          "@type": "Question",
-          "name": q,
-          "acceptedAnswer": { "@type": "Answer", "text": a }
-        }))
-      }
-    ];
-
-    const s = document.createElement("script");
-    s.type = "application/ld+json";
-    s.text = JSON.stringify(ld);
-    document.head.appendChild(s);
-    return () => document.head.removeChild(s);
-  }, []);
-  return null;
-};
+// Simplified SEO Schema provided by MetaTags.jsx exports
 
 /* ===================== Page Component (conversion-first order) ===================== */
 export default function ShinelStudiosHomepage() {
@@ -2362,6 +2278,8 @@ export default function ShinelStudiosHomepage() {
 
         {/* Structured Data */}
         <OrganizationSchema />
+        <LocalBusinessSchema />
+        <WebSiteSchema />
         <BreadcrumbSchema
           items={[
             { name: 'Home', url: '/' },

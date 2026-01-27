@@ -91,13 +91,91 @@ export const BreadcrumbSchema = ({ items }) => {
             '@type': 'ListItem',
             'position': index + 1,
             'name': item.name,
-            'item': item.url ? `${origin}${item.url}` : undefined,
+            'item': item.url ? (item.url.startsWith('http') ? item.url : `${origin}${item.url}`) : undefined,
         })),
     };
 
     return (
         <script type="application/ld+json">
             {JSON.stringify(breadcrumbList)}
+        </script>
+    );
+};
+
+/**
+ * WebSite Schema Component
+ * Generates website structured data with sitelinks search box
+ */
+export const WebSiteSchema = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : `https://${BRAND.domain}`;
+
+    const website = {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        'name': BRAND.name,
+        'url': origin,
+        'potentialAction': {
+            '@type': 'SearchAction',
+            'target': `${origin}/?q={search_term_string}`,
+            'query-input': 'required name=search_term_string',
+        },
+    };
+
+    return (
+        <script type="application/ld+json">
+            {JSON.stringify(website)}
+        </script>
+    );
+};
+
+/**
+ * LocalBusiness Schema Component
+ * Generates local business structured data (ProfessionalService)
+ */
+export const LocalBusinessSchema = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : `https://${BRAND.domain}`;
+
+    const business = {
+        '@context': 'https://schema.org',
+        '@type': 'ProfessionalService',
+        'name': BRAND.name,
+        'image': `${origin}${BRAND.logoLight}`,
+        '@id': `${origin}/#organization`,
+        'url': origin,
+        'telephone': '+91-8968141585',
+        'address': {
+            '@type': 'PostalAddress',
+            'streetAddress': 'Mohali, Punjab',
+            'addressLocality': 'Mohali',
+            'addressRegion': 'Punjab',
+            'postalCode': '160055',
+            'addressCountry': 'IN',
+        },
+        'geo': {
+            '@type': 'GeoCoordinates',
+            'latitude': 30.7046,
+            'longitude': 76.7179,
+        },
+        'url': origin,
+        'sameAs': Object.values(SOCIAL_LINKS),
+        'openingHoursSpecification': {
+            '@type': 'OpeningHoursSpecification',
+            'dayOfWeek': [
+                'Monday',
+                'Tuesday',
+                'Wednesday',
+                'Thursday',
+                'Friday',
+                'Saturday'
+            ],
+            'opens': '10:00',
+            'closes': '21:00'
+        }
+    };
+
+    return (
+        <script type="application/ld+json">
+            {JSON.stringify(business)}
         </script>
     );
 };
