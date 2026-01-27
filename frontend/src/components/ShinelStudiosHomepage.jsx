@@ -13,6 +13,7 @@ import StickyFloatingCTA from "./StickyFloatingCTA";
 import SocialProofNotifications from "./SocialProofNotifications";
 import ScrollProgressBar from "./ScrollProgressBar";
 import ComparisonCalculator from "./ComparisonCalculator";
+import ResourcesSection from "./ResourcesSection";
 import NewsletterSignup from "./NewsletterSignup";
 import MediaMentions from "./MediaMentions";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
@@ -59,7 +60,6 @@ import {
   SwipeableCarousel,
   UrgencyIndicator,
 } from './CinematicComponents';
-import FestivalOfferBanner from './ui/FestivalOfferBanner';
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -2390,11 +2390,6 @@ export default function ShinelStudiosHomepage() {
 
         {/* Main content wrapper */}
         <main id="main-content">
-          {/* 0) Festival Offer Banner (Sticky or Top) */}
-          <ErrorBoundary>
-            <FestivalOfferBanner />
-          </ErrorBoundary>
-
           {/* 1) Hero (Above the fold, loads immediately) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={1} />}>
             <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
@@ -2447,6 +2442,14 @@ export default function ShinelStudiosHomepage() {
           <ErrorBoundary>
             <ComparisonCalculator onBook={() => setShowCalendly(true)} />
           </ErrorBoundary>
+
+          {/* 8.6) Free Creator Tools / Resources (SEO & Value) */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
+              <ResourcesSection />
+            </React.Suspense>
+          </ErrorBoundary>
+
 
           {/* 9) FAQ (Better for SEO - kept as requested) */}
           <ErrorBoundary fallback={<SectionSkeleton content="listItem" contentCount={5} />}>

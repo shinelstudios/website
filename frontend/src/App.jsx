@@ -1,4 +1,5 @@
 // frontend/src/App.jsx
+
 import React from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
@@ -45,7 +46,18 @@ const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
 const ThumbnailIdeation = React.lazy(() =>
   import("./components/tools/ThumbnailIdeation.jsx")
 );
+const ThumbnailPreviewer = React.lazy(() =>
+  import("./components/tools/ThumbnailPreviewer.jsx")
+);
+
 const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
+
+// Public SEO Tool Pages
+const RoiCalculatorPage = React.lazy(() => import("./components/pages/RoiCalculatorPage.jsx"));
+const ThumbnailPreviewerPage = React.lazy(() => import("./components/pages/ThumbnailPreviewerPage.jsx"));
+const SrtToolPage = React.lazy(() => import("./components/pages/SrtToolPage.jsx"));
+const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
+
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
 
@@ -68,7 +80,9 @@ const PortfolioPage = React.lazy(() => import("./components/PortfolioPage.jsx"))
 const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"));
 const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
+const AdminLeadsPage = React.lazy(() => import("./components/AdminLeadsPage.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
+
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -287,6 +301,12 @@ export default function App() {
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
 
+          {/* Public Tool Landing Pages (SEO) */}
+          <Route path="/roi-calculator" element={<RoiCalculatorPage />} />
+          <Route path="/tools/thumbnail-previewer" element={<ThumbnailPreviewerPage />} />
+          <Route path="/tools/srt" element={<SrtToolPage />} />
+          <Route path="/tools/seo" element={<SeoToolPage />} />
+
           {/* Redirect aliases to canonical paths */}
           <Route path="/videos/long" element={<Navigate to="/video-editing" replace />} />
           <Route path="/videos/shorts" element={<Navigate to="/shorts" replace />} />
@@ -330,21 +350,24 @@ export default function App() {
           {/* ------------------------------- Tools -------------------------------- */}
           {/* Keep tools index public or protected as you prefer.
               Header already gates tool links via /login?next=. */}
+          <Route path="/tools" element={<ToolsIndex />} />
+
+
+
           <Route
-            path="/tools"
+            path="/tools/thumbnail-ideation"
             element={
               <ProtectedRoute>
-                <ToolsIndex />
+                <ThumbnailIdeation />
               </ProtectedRoute>
             }
           />
 
-
           <Route
-            path="/tools/srt"
+            path="/tools/thumbnail-previewer"
             element={
               <ProtectedRoute>
-                <SrtTool />
+                <ThumbnailPreviewer />
               </ProtectedRoute>
             }
           />
@@ -358,26 +381,10 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/tools/seo"
-            element={
-              <ProtectedRoute>
-                <SeoTool />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/tools/thumbnail-ideation"
-            element={
-              <ProtectedRoute>
-                <ThumbnailIdeation />
-              </ProtectedRoute>
-            }
-          />
 
           <Route
             path="/tools/custom-ais"
+
             element={
               <ProtectedRoute>
                 <CustomAIs />
@@ -397,7 +404,9 @@ export default function App() {
             <Route index element={<AdminStats />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="clients" element={<AdminClientsPage />} />
+            <Route path="leads" element={<AdminLeadsPage />} />
             <Route path="videos" element={<AdminVideosPage />} />
+
             <Route path="thumbnails" element={<AdminThumbnailsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>

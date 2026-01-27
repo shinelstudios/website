@@ -163,7 +163,7 @@ export class CloudflareThumbnailStorage {
           const status = res.status;
           let msg = `HTTP ${status}`;
           let data = null;
-          try { data = await res.json(); } catch {}
+          try { data = await res.json(); } catch { }
           if (data?.error) msg = data.error;
           if (data?.message) msg = data.message;
 
@@ -228,7 +228,7 @@ export class CloudflareThumbnailStorage {
         const j = await res.json();
         if (j?.error) msg = j.error;
         if (j?.message) msg = j.message;
-      } catch {}
+      } catch { }
       throw new Error(msg);
     }
 
@@ -246,7 +246,7 @@ export class CloudflareThumbnailStorage {
   async _pollJobIfAny(result, { onProgress, timeoutMs = 15000 } = {}) {
     // Worker uses async jobs for view refresh only; keep a passthrough here.
     if (typeof onProgress === "function") {
-      try { onProgress({ status: "queued-or-done" }); } catch {}
+      try { onProgress({ status: "queued-or-done" }); } catch { }
     }
     return result;
   }
@@ -327,6 +327,18 @@ export class CloudflareThumbnailStorage {
     return { success: true, data: res ?? null };
   }
 
+  async bulkDelete(ids, opts = {}) {
+    const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null;
+    onProgress?.(10);
+    const res = await this._requestJSON("DELETE", "/thumbnails/bulk", { ids }, { useAuth: true });
+    onProgress?.(90);
+    await this._pollJobIfAny(res);
+    this._etags.delete(`${this.workerUrl}/thumbnails`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    onProgress?.(100);
+    return { success: true, data: res ?? null };
+  }
+
   /**
    * Simple bulk import (server handles replace/add mechanics)
    * @param {Array<object>} thumbnails
@@ -339,7 +351,7 @@ export class CloudflareThumbnailStorage {
     this._etags.delete(`${this.workerUrl}/thumbnails`);
     this._etags.delete(`${this.workerUrl}/stats`);
     if (typeof onProgress === "function") {
-      try { onProgress({ done: thumbnails.length, total: thumbnails.length }); } catch {}
+      try { onProgress({ done: thumbnails.length, total: thumbnails.length }); } catch { }
     }
     return res;
   }

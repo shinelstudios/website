@@ -72,8 +72,8 @@ export class CloudflareVideoStorage {
             headers: useAuth
               ? this._authHeaders(Boolean(body))
               : body
-              ? { "content-type": "application/json" }
-              : undefined,
+                ? { "content-type": "application/json" }
+                : undefined,
             body: body ? JSON.stringify(body) : undefined,
           },
           { timeoutMs }
@@ -86,7 +86,7 @@ export class CloudflareVideoStorage {
             const j = text ? JSON.parse(text) : null;
             if (j?.error) msg = j.error;
             if (j?.message) msg = j.message;
-          } catch {}
+          } catch { }
           const err = new Error(msg);
           err.status = res.status;
           throw err;
@@ -138,7 +138,7 @@ export class CloudflareVideoStorage {
         const j = await res.json();
         if (j?.error) msg = j.error;
         if (j?.message) msg = j.message;
-      } catch {}
+      } catch { }
       throw new Error(msg);
     }
 
@@ -208,6 +208,21 @@ export class CloudflareVideoStorage {
       { useAuth: true }
     );
     onProgress?.(85);
+    this._etags.delete(`${this.workerUrl}/videos`);
+    this._etags.delete(`${this.workerUrl}/stats`);
+    onProgress?.(100);
+    return res;
+  }
+
+  async bulkDelete(ids, { onProgress } = {}) {
+    onProgress?.(10);
+    const res = await this._requestJSON(
+      "DELETE",
+      "/videos/bulk",
+      { ids },
+      { useAuth: true }
+    );
+    onProgress?.(90);
     this._etags.delete(`${this.workerUrl}/videos`);
     this._etags.delete(`${this.workerUrl}/stats`);
     onProgress?.(100);

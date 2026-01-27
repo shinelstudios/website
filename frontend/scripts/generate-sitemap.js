@@ -8,11 +8,15 @@ async function generate() {
 
   // Add your routes
   const pages = [
-    "/", 
+    "/",
     "/video-editing",
     "/gfx",
     "/thumbnails",
     "/shorts",
+    "/tools/thumbnail-previewer",
+    "/roi-calculator",
+    "/tools/srt",
+    "/tools/seo",
     "/#services",
     "/#testimonials",
     "/#contact"

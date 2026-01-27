@@ -274,7 +274,8 @@ const ExitIntentLeadModal = ({
 
               {/* Form Container with shadow/depth */}
               <div className="relative z-10 rounded-3xl p-1" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                <QuickLeadForm />
+                <QuickLeadForm source="exit_intent" />
+
               </div>
 
               <div className="mt-10 pt-8 border-t border-white/5 flex flex-col items-center gap-6">

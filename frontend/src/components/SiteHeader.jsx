@@ -9,6 +9,7 @@ import {
   X,
   ChevronDown,
   Lock,
+  Layout,
   Wand2,
   Search,
   Languages,
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
+import FestivalOfferBanner from "./ui/FestivalOfferBanner.jsx";
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 
@@ -185,24 +187,31 @@ function useUnreadCount() {
 /* ---------------- tools matrix (role-gated) ---------------- */
 const toolsCatalog = [
   {
+    name: "YouTube ROI & CTR Calculator",
+    path: "/roi-calculator",
+    icon: DollarSign,
+    roles: ["admin", "editor", "client", "public"],
+    description: "Visualize potential revenue and growth lift",
+  },
+  {
     name: "Local SRT Builder",
     path: "/tools/srt",
     icon: Languages,
-    roles: ["admin", "editor"],
+    roles: ["admin", "editor", "client", "public"],
     description: "Paste transcript lines → export .srt with simple timing",
   },
   {
-    name: "YouTube Captions Fetcher",
-    path: "/tools/youtube-captions",
-    icon: Video,
-    roles: ["admin", "editor", "client"],
-    description: "Fetch manual + auto captions from a YouTube URL",
+    name: "Thumbnail A/B Previewer",
+    path: "/tools/thumbnail-previewer",
+    icon: Layout,
+    roles: ["admin", "editor", "client", "public"],
+    description: "Test how your designs look in YouTube search & Home grid.",
   },
   {
     name: "SEO Tool (Titles, Descriptions, Tags)",
     path: "/tools/seo",
     icon: Search,
-    roles: ["admin", "editor", "client"],
+    roles: ["admin", "editor", "client", "public"],
     description: "Optimize content for maximum discoverability",
   },
   {
@@ -233,7 +242,6 @@ const toolsCatalog = [
     roles: ["admin", "artist"],
     description: "Manage thumbnail entries & approvals",
   },
-
   {
     name: "Video Manager",
     path: "/dashboard/videos",
@@ -249,6 +257,7 @@ const toolsCatalog = [
     description: "Manage YouTube client list",
   },
 ];
+
 
 /* ---------------- SiteHeader ---------------- */
 const SiteHeader = ({ isDark, setIsDark }) => {
@@ -602,6 +611,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           overflow: "visible",
         }}
       >
+        <FestivalOfferBanner />
         <div
           className="absolute left-0 top-0 h-[2px] origin-left"
           style={{
@@ -662,10 +672,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
             <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
+            <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
             {auth.isAuthed && (
               <DesktopNavLink label="Hub" to="/dashboard" icon={Shield} />
             )}
             <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
+
           </div>
 
           {/* right actions */}
@@ -954,10 +966,17 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
+                  <MobileCardLink
+                    to="/tools"
+                    icon={Wand2}
+                    title="Tools"
+                    subtitle="Free utilities"
+                  />
                   {auth.isAuthed && (
                     <MobileCardLink to="/dashboard" icon={Shield} title="Hub" subtitle="Manage Studio" />
                   )}
                 </div>
+
 
                 {/* Tools */}
                 <div className="space-y-2">

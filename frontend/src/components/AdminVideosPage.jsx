@@ -1,822 +1,280 @@
 // src/components/AdminVideosPage.jsx
 import React, {
-  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
+  useCallback,
 } from "react";
 import {
-  Plus,
-  Trash2,
-  Edit2,
+  Download,
+  Upload,
   RefreshCw,
   AlertCircle,
-  Info,
-  Search,
-  Filter,
-  Check,
-  X,
-  ExternalLink,
+  Video as VideoIcon,
 } from "lucide-react";
 import { createVideoStorage } from "./cloudflare-video-storage";
+import { VIDEO_CATEGORIES, VIDEO_KINDS } from "../utils/constants";
+import { runWithConcurrency } from "../utils/helpers";
+import { LoadingOverlay } from "./AdminUIComponents";
 
-const AUTH_BASE =
-  import.meta.env.VITE_AUTH_BASE ||
-  "https://shinel-auth.your-account.workers.dev";
+// Sub-components
+import VideoCard from "./VideoCard";
+import VideoForm from "./VideoForm";
+import VideoFilters from "./VideoFilters";
+
+const AUTH_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
 const LS_TOKEN_KEY = "token";
-const LS_FORM_DRAFT_KEY = "admin-videos-form-draft";
-
-const TIMEOUTS = {
-  read: 70000,
-  save: 70000,
-  singleRefresh: 70000,
-  bulkRefresh: 180000,
-};
 
 const DEFAULT_FORM = {
   title: "",
-  primaryUrl: "", // plays on site (embedded)
-  creatorUrl: "", // same video uploaded by creator
+  primaryUrl: "",
+  creatorUrl: "",
   category: "GAMING",
   subcategory: "",
-  kind: "LONG", // LONG | SHORT | REEL | BRIEF etc
+  kind: "LONG",
   tags: "",
   isShinel: true,
-  attributedTo: "", // user email or handle
+  attributedTo: "",
 };
 
-/* ---------------- utils ---------------- */
-const getToken = () => localStorage.getItem(LS_TOKEN_KEY) || "";
+const store = createVideoStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));
 
-function extractYouTubeId(url = "") {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return v;
-      const m = u.pathname.match(/\/shorts\/([^/]+)/);
-      if (m) return m[1];
-    }
-  } catch { } // non-URL strings ignored
-  return null;
+function toast(type, message) {
+  window.dispatchEvent(
+    new CustomEvent("notify", { detail: { type: type === "error" ? "error" : "success", message: String(message || "") } })
+  );
 }
 
-function normalizeRow(r) {
-  // Resolve a usable videoId
-  const videoId =
-    r.videoId ||
-    r.youtubeId ||
-    extractYouTubeId(r.primaryUrl) ||
-    extractYouTubeId(r.creatorUrl) ||
-    null;
-
-  // Normalize view fields
-  const views = Number(r.youtubeViews ?? r.viewCount ?? r.views ?? 0);
-
-  return {
-    ...r,
-    id: r.id || videoId || crypto.randomUUID(),
-    videoId,
-    views,
-    lastViewUpdate: r.lastViewUpdate ?? r.updated ?? r.lastUpdated ?? null,
-    kind: r.kind || "LONG",
-    category: r.category || "OTHER",
-    subcategory: r.subcategory || "",
-    isShinel: r.isShinel !== false,
-    attributedTo: r.attributedTo || "",
-    tags: Array.isArray(r.tags) ? r.tags : r.tags ? String(r.tags).split(",").map((s) => s.trim()).filter(Boolean) : [],
-  };
-}
-
-/* ---------------- storage facade ---------------- */
-const store = new (class {
-  constructor() {
-    this._impl = createVideoStorage(AUTH_BASE, () =>
-      localStorage.getItem(LS_TOKEN_KEY)
-    );
-  }
-  testConnection = async () => {
-    try {
-      const s = await this._impl.getStats();
-      return Boolean(s);
-    } catch {
-      return false;
-    }
-  };
-  list = async () => this._impl.getAll();
-  add = async (row, opts) => this._impl.add(row, opts);
-  update = async (id, row, opts) => this._impl.update(id, row, opts);
-  remove = async (id, opts) => this._impl.delete(id, opts);
-  refreshOne = async (videoId, opts) => this._impl.refresh(videoId, opts);
-  refreshAll = async (opts) => this._impl.refreshAll(opts);
-})();
-
-/* ---------------- component ---------------- */
 export default function AdminVideosPage() {
   const [videos, setVideos] = useState([]);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [err, setErr] = useState("");
-  const [errDetails, setErrDetails] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState({ category: "ALL", kind: "ALL" });
-  const [sort, setSort] = useState({ field: "lastUpdated", dir: "desc" });
-  const [form, setForm] = useState(DEFAULT_FORM);
+  const [refreshingId, setRefreshingId] = useState(null);
+  const [refreshingAll, setRefreshingAll] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [flashKey, setFlashKey] = useState("");
+  const [viewMode, setViewMode] = useState("grid");
 
-  const surfaceError = (msg, details) => {
-    setErr(msg || "Something went wrong.");
-    setErrDetails(details ? String(details) : "");
-  };
-  const clearError = () => {
-    setErr("");
-    setErrDetails("");
-  };
+  // Search & Filters
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filters, setFilters] = useState({ category: "ALL", kind: "ALL" });
+  const [sort, setSort] = useState({ key: "updated", dir: "desc" });
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
+  const [form, setForm] = useState(DEFAULT_FORM);
+
+  // ---------- Data Loaders ----------
   const loadVideos = useCallback(async () => {
     setBusy(true);
-    setBusyLabel("Loading videos");
+    setBusyLabel("Syncing video inventory...");
     try {
-      const list = await store.list();
-      const normalized = (Array.isArray(list) ? list : []).map(normalizeRow);
-      setVideos(normalized);
+      const rows = await store.getAll();
+      startTransition(() => setVideos(rows || []));
     } catch (e) {
-      surfaceError(e.message || "Failed to load videos", e);
+      setErr(e.message || "Failed to load videos");
+      toast("error", "Failed to load videos");
     } finally {
       setBusy(false);
       setBusyLabel("");
     }
   }, []);
 
-  const loadStats = useCallback(async () => {
-    /* reserved for future stats */
-  }, []);
-
-  // connection check + initial load
   useEffect(() => {
-    (async () => {
-      const token = getToken();
-      if (!token) {
-        surfaceError("Missing token - Please login to access this page", {
-          hint: `Set "${LS_TOKEN_KEY}" in localStorage or ensure your login flow stores it.`,
-        });
-        return;
-      }
-      try {
-        setBusy(true);
-        setBusyLabel("Checking connection.");
-        const ok = await store.testConnection();
-        if (!ok) {
-          surfaceError(`Cannot reach Worker at ${AUTH_BASE}`, {
-            hint: "Verify VITE_AUTH_BASE, CORS, and that /stats endpoint returns 200.",
-          });
-          return;
-        }
-      } catch (e) {
-        surfaceError(`Connection check failed`, e?.message || e);
-        return;
-      } finally {
-        setBusy(false);
-        setBusyLabel("");
-      }
-      await Promise.all([loadVideos(), loadStats()]);
-    })();
-  }, [loadVideos, loadStats]);
+    loadVideos();
+  }, [loadVideos]);
 
-  // persist form draft
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_FORM_DRAFT_KEY, JSON.stringify({ ...form }));
-    } catch { }
-  }, [form]);
-
-  // derived + filters
-  const filtered = useMemo(() => {
-    let rows = [...videos];
-    const q = search.trim().toLowerCase();
-    if (q)
-      rows = rows.filter((v) =>
-        [
-          v.title,
-          v.category,
-          v.subcategory,
-          v.kind,
-          v.videoId,
-          v.primaryUrl,
-          v.creatorUrl,
-        ]
-          .filter(Boolean)
-          .some((s) => String(s).toLowerCase().includes(q))
-      );
-    if (filters.category !== "ALL")
-      rows = rows.filter((v) => v.category === filters.category);
-    if (filters.kind !== "ALL")
-      rows = rows.filter((v) => (v.kind || "LONG") === filters.kind);
-
-    rows.sort((a, b) => {
-      const dir = sort.dir === "asc" ? 1 : -1;
-      switch (sort.field) {
-        case "title":
-          return dir * String(a.title || "").localeCompare(b.title || "");
-        case "views":
-          return dir * (Number(a.views || 0) - Number(b.views || 0));
-        case "lastUpdated":
-        default:
-          return (
-            dir *
-            ((new Date(a.lastViewUpdate || 0)).valueOf() -
-              (new Date(b.lastViewUpdate || 0)).valueOf())
-          );
-      }
-    });
-    return rows;
-  }, [videos, search, filters, sort]);
-
-  // actions
-  const startNew = () => {
-    setEditingId(null);
-    setForm(DEFAULT_FORM);
-  };
-
-  const editRow = (row) => {
-    setEditingId(row.id);
-    setForm({
-      title: row.title || "",
-      primaryUrl: row.primaryUrl || row.youtubeUrl || "",
-      creatorUrl: row.creatorUrl || "",
-      category: row.category || "OTHER",
-      subcategory: row.subcategory || "",
-      kind: row.kind || "LONG",
-      tags: Array.isArray(row.tags)
-        ? row.tags.join(", ")
-        : row.tags || "",
-    });
-  };
-
-  const saveForm = async () => {
+  // ---------- Actions ----------
+  const handleSave = async () => {
     setBusy(true);
-    setBusyLabel(editingId ? "Updating" : "Saving");
+    setBusyLabel(editingId ? "Updating record..." : "Creating record...");
     try {
       const payload = {
-        title: form.title,
-        primaryUrl: form.primaryUrl,
-        creatorUrl: form.creatorUrl,
-        category: form.category,
-        subcategory: form.subcategory,
-        kind: form.kind,
-        tags: form.tags
-          ? String(form.tags)
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-          : [],
+        ...form,
+        tags: typeof form.tags === "string" ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : form.tags
       };
-      if (editingId) {
-        await store.update(editingId, payload, { onProgress: () => { } });
-      } else {
-        await store.add(payload, { onProgress: () => { } });
-      }
+
+      const out = editingId ? await store.update(editingId, payload) : await store.add(payload);
+      const saved = out.video || out.data || out;
+
       await loadVideos();
+      setFlashKey(String(saved?.id || ""));
+      setTimeout(() => setFlashKey(""), 3000);
+      toast("success", editingId ? "Updated video" : "Created video");
+
+      setForm(DEFAULT_FORM);
       setEditingId(null);
     } catch (e) {
-      surfaceError(e.message || "Save failed", e);
+      setErr(e.message || "Failed to save video");
+      toast("error", "Save failed");
     } finally {
       setBusy(false);
       setBusyLabel("");
     }
   };
 
-  const deleteRow = async (id) => {
-    if (!confirm("Delete this video?")) return;
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this video permanently?")) return;
     setBusy(true);
-    setBusyLabel("Deleting");
     try {
-      await store.remove(id, { onProgress: () => { } });
+      await store.delete(id);
       await loadVideos();
+      toast("success", "Video removed");
     } catch (e) {
-      surfaceError(e.message || "Delete failed", e);
+      toast("error", "Delete failed");
     } finally {
       setBusy(false);
-      setBusyLabel("");
     }
   };
 
-  const refreshViews = async (videoIdMaybe) => {
-    // Prefer a real videoId; if not present, extract from the row
-    const row = videos.find(
-      (v) => v.videoId === videoIdMaybe || v.id === videoIdMaybe
-    );
-    const videoId =
-      row?.videoId ||
-      extractYouTubeId(row?.primaryUrl) ||
-      extractYouTubeId(row?.creatorUrl);
-    if (!videoId) {
-      surfaceError("Cannot refresh views: missing YouTube video ID.");
-      return;
-    }
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length || !confirm(`Delete ${ids.length} selected videos?`)) return;
+
     setBusy(true);
-    setBusyLabel("Refreshing views");
+    setBusyLabel(`Batch deleting ${ids.length} items...`);
     try {
-      await store.refreshOne(videoId, { onProgress: () => { } });
+      await store.bulkDelete(ids);
+      setSelectedIds(new Set());
       await loadVideos();
+      toast("success", `Bulk removal complete`);
     } catch (e) {
-      surfaceError(e.message || "Refresh failed", e);
+      toast("error", "Bulk delete failed");
     } finally {
       setBusy(false);
-      setBusyLabel("");
     }
   };
 
-  const refreshAllViews = async () => {
-    if (
-      !confirm("Refresh all eligible videos' view counts now?")
-    )
-      return;
-    setBusy(true);
-    setBusyLabel("Refreshing all views");
+  const handleRefreshOne = async (videoId) => {
+    if (!videoId) return;
+    setRefreshingId(videoId);
     try {
-      await store.refreshAll({ onProgress: () => { } });
+      await store.refresh(videoId);
       await loadVideos();
-    } catch (e) {
-      surfaceError(e.message || "Bulk refresh failed", e);
-    } finally {
-      setBusy(false);
-      setBusyLabel("");
-    }
+      toast("success", "Views updated");
+    } catch (e) { toast("error", "Refresh failed"); }
+    finally { setRefreshingId(null); }
   };
 
+  const handleRefreshAll = async () => {
+    setRefreshingAll(true);
+    try {
+      await store.refreshAll();
+      await loadVideos();
+      toast("success", "Global refresh queued");
+    } catch (e) { toast("error", "Sync failed"); }
+    finally { setRefreshingAll(false); }
+  };
+
+  // ---------- Filters & Search ----------
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const filteredItems = useMemo(() => {
+    let list = [...videos];
+    if (debouncedSearch) {
+      list = list.filter(v =>
+        v.title?.toLowerCase().includes(debouncedSearch) ||
+        v.category?.toLowerCase().includes(debouncedSearch) ||
+        v.attributedTo?.toLowerCase().includes(debouncedSearch)
+      );
+    }
+    if (filters.category !== "ALL") list = list.filter(v => v.category === filters.category);
+    if (filters.kind !== "ALL") list = list.filter(v => v.kind === filters.kind);
+
+    list.sort((a, b) => {
+      const dir = sort.dir === "asc" ? 1 : -1;
+      if (sort.key === "views") return dir * ((a.youtubeViews || 0) - (b.youtubeViews || 0));
+      if (sort.key === "title") return dir * a.title.localeCompare(b.title);
+      return dir * ((a.lastUpdated || a.dateAdded || 0) - (b.lastUpdated || b.dateAdded || 0));
+    });
+    return list;
+  }, [videos, debouncedSearch, filters, sort]);
+
+  // ---------- Render ----------
   return (
-    <div className="min-h-[60vh]">
-      {/* Error banner */}
-      {err && (
-        <div
-          className="mb-4 rounded-lg p-3 text-sm flex items-start gap-3"
-          style={{
-            background: "rgba(255,59,48,0.08)",
-            border: "1px solid rgba(255,59,48,0.3)",
-          }}
-        >
-          <AlertCircle size={18} className="mt-0.5" style={{ color: "#ff3b30" }} />
-          <div className="flex-1">
-            <div className="font-medium" style={{ color: "#b91c1c" }}>
-              {err}
-            </div>
-            {errDetails && (
-              <pre
-                className="mt-1 p-2 rounded text-xs overflow-auto"
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text)",
-                }}
-              >
-                {errDetails}
-              </pre>
-            )}
-          </div>
-          <button
-            onClick={clearError}
-            className="px-2 py-1 text-xs rounded border"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+    <div className="min-h-screen bg-black">
+      <LoadingOverlay show={busy} label={busyLabel} />
 
-      {/* Info banner */}
-      <div
-        className="mb-4 rounded-lg p-3 text-sm flex items-start gap-2"
-        style={{
-          background: "rgba(232,80,2,0.1)",
-          color: "var(--text)",
-          border: "1px solid rgba(232,80,2,0.2)",
-        }}
-      >
-        <Info
-          size={16}
-          style={{ color: "var(--orange)", marginTop: "2px", flexShrink: 0 }}
-        />
-        <div>
-          <strong>View Count System:</strong> Counts are cached and
-          refreshed via the “Refresh” actions. Deleted videos keep last
-          known counts.
-        </div>
-      </div>
+      <div className="container mx-auto px-6 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10 items-start">
 
-      {/* Header & toolbar */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>
-          Admin · Videos Manager
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={refreshAllViews}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white"
-            style={{
-              background: "linear-gradient(90deg, var(--orange), #ff9357)",
-            }}
-          >
-            <RefreshCw size={16} /> Refresh Views
-          </button>
-          <button
-            onClick={startNew}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}
-          >
-            <Plus size={16} /> New
-          </button>
-        </div>
-      </div>
+          {/* Main Content Area */}
+          <div className="space-y-6 order-2 lg:order-1">
+            <VideoFilters
+              search={search}
+              setSearch={setSearch}
+              filters={filters}
+              setFilters={setFilters}
+              sort={sort}
+              setSort={setSort}
+              selectedCount={selectedIds.size}
+              onBulkDelete={handleBulkDelete}
+              onRefreshAll={handleRefreshAll}
+              busy={refreshingAll}
+              totalCount={videos.length}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+            />
 
-      {/* Editor + List */}
-      <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-        {/* Editor */}
-        <div
-          className="rounded-xl border p-4"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        >
-          <div className="font-semibold mb-3" style={{ color: "var(--text)" }}>
-            {editingId ? "Edit Video" : "Add Video"}
-          </div>
-          <div className="grid gap-3">
-            <label className="grid gap-1">
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Title
-              </span>
-              <input
-                value={form.title}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, title: e.target.value }))
-                }
-                className="px-3 py-2 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              />
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Primary YouTube URL (plays on site)
-              </span>
-              <input
-                value={form.primaryUrl}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, primaryUrl: e.target.value }))
-                }
-                className="px-3 py-2 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              />
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Creator’s YouTube URL (same video)
-              </span>
-              <input
-                value={form.creatorUrl}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, creatorUrl: e.target.value }))
-                }
-                className="px-3 py-2 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="grid gap-1">
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Category
-                </span>
-                <input
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, category: e.target.value }))
-                  }
-                  className="px-3 py-2 rounded border"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--text)",
-                    background: "transparent",
+            <div className={viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+              : "flex flex-col gap-3"
+            }>
+              {filteredItems.map(v => (
+                <VideoCard
+                  key={v.id}
+                  v={{ ...v, views: v.youtubeViews }}
+                  isSelected={selectedIds.has(v.id)}
+                  viewMode={viewMode}
+                  onToggleSelect={(id) => {
+                    const next = new Set(selectedIds);
+                    if (next.has(id)) next.delete(id); else next.add(id);
+                    setSelectedIds(next);
                   }}
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Subcategory
-                </span>
-                <input
-                  value={form.subcategory}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, subcategory: e.target.value }))
-                  }
-                  className="px-3 py-2 rounded border"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--text)",
-                    background: "transparent",
+                  onEdit={(item) => {
+                    setEditingId(item.id);
+                    setForm({ ...item, tags: (item.tags || []).join(", ") });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
+                  onDelete={handleDelete}
+                  onRefresh={handleRefreshOne}
+                  busy={refreshingId === (v.videoId || v.id)}
+                  flashKey={flashKey}
                 />
-              </label>
-            </div>
+              ))}
 
-            <label className="grid gap-1">
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Kind
-              </span>
-              <select
-                value={form.kind}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, kind: e.target.value }))
-                }
-                className="px-3 py-2 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              >
-                <option>LONG</option>
-                <option>SHORT</option>
-                <option>REEL</option>
-                <option>BRIEF</option>
-              </select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Tags (comma separated)
-              </span>
-              <input
-                value={form.tags}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, tags: e.target.value }))
-                }
-                className="px-3 py-2 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              />
-            </label>
-
-            <div className="grid gap-3 pt-2">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isShinel}
-                  onChange={e => setForm(f => ({ ...f, isShinel: e.target.checked }))}
-                  className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-                />
-                <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                  Shinel Project <span className="text-[10px] text-gray-500 ml-1">(Show on main Work page)</span>
-                </span>
-              </label>
-
-              <label className="grid gap-1">
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Attributed To (Email/Handle)
-                </span>
-                <input
-                  value={form.attributedTo}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, attributedTo: e.target.value }))
-                  }
-                  placeholder="e.g. editor@shinelstudios.in"
-                  className="px-3 py-2 rounded border"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--text)",
-                    background: "transparent",
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={saveForm}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white"
-                style={{
-                  background:
-                    "linear-gradient(90deg, var(--orange), #ff9357)",
-                }}
-              >
-                <Check size={16} /> {editingId ? "Update" : "Save"}
-              </button>
-              {editingId && (
-                <button
-                  onClick={() => setEditingId(null)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium"
-                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                >
-                  <X size={16} /> Cancel
-                </button>
+              {filteredItems.length === 0 && !busy && (
+                <div className="p-20 rounded-3xl border border-dashed border-white/5 bg-white/[0.01] flex flex-col items-center text-center col-span-full">
+                  <div className="p-4 rounded-full bg-white/5 mb-4 text-gray-700">
+                    <VideoIcon size={32} />
+                  </div>
+                  <h3 className="font-bold text-gray-500">No matching videos</h3>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-600 mt-2">Check filters or adjust search terms</p>
+                </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* List */}
-        <div
-          className="rounded-xl border"
-          style={{ borderColor: "var(--border)", overflow: "hidden" }}
-        >
-          <div
-            className="p-3 flex flex-wrap gap-2 items-center"
-            style={{ background: "var(--surface)" }}
-          >
-            <div className="flex items-center gap-2 flex-1">
-              <Search size={16} style={{ color: "var(--text-muted)" }} />
-              <input
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="px-2 py-1 rounded border w-full"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter size={16} style={{ color: "var(--text-muted)" }} />
-              <select
-                value={filters.category}
-                onChange={(e) =>
-                  setFilters((f) => ({ ...f, category: e.target.value }))
-                }
-                className="px-2 py-1 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              >
-                <option>ALL</option>
-                <option>GAMING</option>
-                <option>VLOG</option>
-                <option>OTHER</option>
-              </select>
-              <select
-                value={filters.kind}
-                onChange={(e) =>
-                  setFilters((f) => ({ ...f, kind: e.target.value }))
-                }
-                className="px-2 py-1 rounded border"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--text)",
-                  background: "transparent",
-                }}
-              >
-                <option>ALL</option>
-                <option>LONG</option>
-                <option>SHORT</option>
-                <option>REEL</option>
-                <option>BRIEF</option>
-              </select>
-            </div>
+          {/* Sidebar Form */}
+          <div className="order-1 lg:order-2">
+            <VideoForm
+              editingId={editingId}
+              form={form}
+              setForm={setForm}
+              onSave={handleSave}
+              onCancel={() => { setEditingId(null); setForm(DEFAULT_FORM); }}
+              busy={busy}
+              busyLabel={busyLabel}
+            />
           </div>
 
-          <div className="space-y-4">
-            {filtered.map((v) => (
-              <div
-                key={v.id}
-                className="p-5 rounded-2xl border flex flex-col md:flex-row gap-4 hover:bg-white/[0.02] transition-colors"
-                style={{
-                  borderColor: "var(--border)",
-                  background: "var(--surface)",
-                }}
-              >
-                {/* Main Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-bold text-lg leading-tight truncate pr-4" style={{ color: "var(--text)" }}>
-                      {v.title || "(untitled)"}
-                    </h3>
-                    {v.isShinel ? (
-                      <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
-                        SHINEL
-                      </span>
-                    ) : (
-                      <span className="shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                        FS
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-                    <div className="flex items-center gap-1">
-                      <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider">
-                        {v.kind || "LONG"}
-                      </span>
-                      <span className="font-medium">{v.category} {v.subcategory && `/ ${v.subcategory}`}</span>
-                    </div>
-                    {v.videoId && (
-                      <span className="font-mono text-[10px] opacity-70">ID: {v.videoId}</span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs">
-                    {v.primaryUrl && (
-                      <a
-                        href={v.primaryUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 hover:underline"
-                        style={{ color: "var(--orange)" }}
-                      >
-                        Primary <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {v.creatorUrl && (
-                      <a
-                        href={v.creatorUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 hover:underline opacity-70"
-                        style={{ color: "var(--text)" }}
-                      >
-                        Creator Link <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {v.attributedTo && (
-                      <span className="pl-2 border-l border-white/10 opacity-50">
-                        By @{v.attributedTo.split('@')[0]}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Stats & Actions */}
-                <div className="flex flex-row md:flex-col items-center md:items-end justify-between gap-4 border-t md:border-t-0 md:border-l border-white/5 pt-4 md:pt-0 md:pl-4 min-w-[140px]">
-                  <div className="text-right">
-                    <div className="text-xl font-bold font-mono" style={{ color: "var(--text)" }}>
-                      {Number(v.views || 0).toLocaleString()}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-wider opacity-50" style={{ color: "var(--text)" }}>
-                      {v.lastViewUpdate ? new Date(v.lastViewUpdate).toLocaleDateString() : "No Data"}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => editRow(v)}
-                      className="p-2.5 rounded-xl border hover:text-orange-500 transition-colors"
-                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
-                      title="Edit"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={() => refreshViews(v.videoId || v.id)}
-                      className="p-2.5 rounded-xl border hover:text-blue-500 transition-colors"
-                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
-                      title="Refresh Views"
-                    >
-                      <RefreshCw size={16} />
-                    </button>
-                    <button
-                      onClick={() => deleteRow(v.id)}
-                      className="p-2.5 rounded-xl border hover:bg-red-500 hover:text-white transition-all"
-                      style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-alt)" }}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {!filtered.length && (
-              <div className="py-24 text-center border-2 border-dashed rounded-[32px]" style={{ borderColor: "var(--border)" }}>
-                <div className="inline-flex p-4 rounded-full bg-orange-500/10 mb-4">
-                  <Search size={32} className="text-orange-500" />
-                </div>
-                <h3 className="text-lg font-bold" style={{ color: "var(--text)" }}>No videos found</h3>
-                <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Try adjusting your filters or search terms.</p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

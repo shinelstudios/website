@@ -21,7 +21,8 @@ function useCompact() {
   return compact;
 }
 
-const QuickLeadForm = () => {
+const QuickLeadForm = ({ source = "quick_quote" }) => {
+
   const isCompact = useCompact();
 
   const [name, setName] = React.useState("");
@@ -166,6 +167,28 @@ const QuickLeadForm = () => {
 
     setSending(true);
     try {
+      // ✅ Capture lead in CRM
+      try {
+        await fetch(`${import.meta.env.VITE_AUTH_BASE || ""}/leads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: clean(name),
+            email: clean(email),
+            handle: clean(handle),
+            interests: selected,
+            message: clean(msg),
+            contactMethod,
+            utm: getUTM(),
+            source
+          }),
+
+        });
+      } catch (crmErr) {
+        console.error("CRM Capture failed", crmErr);
+        // Continue regardless of CRM failure to ensure user gets their quote
+      }
+
       if (contactMethod === "whatsapp") {
         const href = whatsappURL();
         setTimeout(() => {
@@ -174,6 +197,7 @@ const QuickLeadForm = () => {
           showToast("success", "Opening WhatsApp…");
           try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "lead_submit", method: "whatsapp" } })); } catch { }
         }, 120);
+
       } else {
         const href = makeMailto();
         const openedViaMailto = () => {

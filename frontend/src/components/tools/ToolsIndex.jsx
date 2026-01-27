@@ -1,21 +1,29 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon } from "lucide-react";
+
 
 const tiles = [
+  {
+    to: "/roi-calculator",
+    title: "YouTube ROI & CTR Calculator",
+    desc: "Visualize potential revenue and growth lift from better click-through rates.",
+    icon: Search,
+    roles: ["admin", "editor", "client", "public"],
+  },
   {
     to: "/tools/srt",
     title: "Auto SRT (Multi-Language)",
     desc: "Paste or upload transcript and export .srt — quick timing presets.",
     icon: Languages,
-    roles: ["admin", "editor"], // clients don’t see this
+    roles: ["admin", "editor", "public"],
   },
   {
     to: "/tools/seo",
     title: "SEO Tool",
     desc: "10 titles, 1 high-CTR description, 15 tags. Export & copy.",
     icon: Search,
-    roles: ["admin", "editor", "client"],
+    roles: ["admin", "editor", "client", "public"],
   },
   {
     to: "/tools/thumbnail-ideation",
@@ -29,12 +37,21 @@ const tiles = [
     title: "Custom AIs",
     desc: "Internal assistants & automations for Shinel Studios.",
     icon: Wand2,
-    roles: ["admin"], // admin-only
+    roles: ["admin"],
+  },
+  {
+    to: "/tools/thumbnail-previewer",
+    title: "Thumbnail A/B Previewer",
+    desc: "Test how your designs look in YouTube search & Home grid.",
+    icon: ImageIcon,
+    roles: ["admin", "editor", "client", "public"],
   },
 ];
 
+
+
 export default function ToolsIndex() {
-  const role = (localStorage.getItem("userRole") || "").toLowerCase();
+  const role = (localStorage.getItem("userRole") || "public").toLowerCase();
   const allowed = tiles.filter(t => t.roles.includes(role));
 
   return (
@@ -57,7 +74,7 @@ export default function ToolsIndex() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl grid place-items-center"
-                     style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
+                  style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
                   <Icon size={18} style={{ color: "var(--orange)" }} />
                 </div>
                 <div className="font-semibold">{title}</div>
@@ -69,7 +86,7 @@ export default function ToolsIndex() {
 
         {allowed.length === 0 && (
           <div className="mt-6 rounded-xl p-4 border text-sm"
-               style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text-muted)" }}>
+            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text-muted)" }}>
             Your role doesn’t have access to any tools yet.
           </div>
         )}

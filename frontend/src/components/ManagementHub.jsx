@@ -18,8 +18,10 @@ import {
     Brain,
     Search,
     Languages,
+    Mail,
     Settings as SettingsIcon
 } from "lucide-react";
+
 
 /* ---------------- helpers: safe base64url + jwt ---------------- */
 function base64UrlDecode(str) {
@@ -70,6 +72,14 @@ export default function ManagementHub() {
             icon: Youtube,
             roles: ['admin']
         },
+        {
+            id: 'leads',
+            label: 'Leads CRM',
+            path: '/dashboard/leads',
+            icon: Mail,
+            roles: ['admin']
+        },
+
         {
             id: 'videos',
             label: 'Video Manager',

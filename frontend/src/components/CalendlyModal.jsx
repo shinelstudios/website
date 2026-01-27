@@ -51,13 +51,26 @@ export const CalendlyModal = ({ open, onClose }) => {
         }
       }
     };
+
+    const handleMessage = (e) => {
+      if (!e.data?.event?.startsWith("calendly.")) return;
+      if (e.data.event === "calendly.event_scheduled") {
+        try { window.dispatchEvent(new CustomEvent("analytics", { detail: { ev: "calendly_booked" } })); } catch { }
+        try { window.dispatchEvent(new CustomEvent("notify", { detail: { type: "success", message: "Audit booked! Check your email." } })); } catch { }
+        setTimeout(() => onClose?.(), 2000);
+      }
+    };
+
     document.addEventListener("keydown", onKeydown);
+    window.addEventListener("message", handleMessage);
 
     return () => {
       document.documentElement.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeydown);
+      window.removeEventListener("message", handleMessage);
     };
   }, [open, onClose]);
+
 
   if (!open) return null;
   const onOverlay = (e) => { if (e.currentTarget === e.target) onClose?.(); };
