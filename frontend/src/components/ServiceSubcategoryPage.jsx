@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { findCategory, findItem, findSubcategory } from "../data/servicesConfig";
 import { ChevronRight } from "lucide-react";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 const WHATSAPP_NUMBER = "918968141585";
 const wa = (message) =>
@@ -30,6 +31,7 @@ export default function ServiceSubcategoryPage() {
   if (!category || !item) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10" style={{ color: "var(--text)" }}>
+        <MetaTags title="Service Not Found" noIndex={true} />
         <h1 className="text-2xl font-extrabold">Service not found</h1>
         <Link to="/work" style={{ color: "var(--orange)" }}>Go back</Link>
       </div>
@@ -42,6 +44,17 @@ export default function ServiceSubcategoryPage() {
   if (!subKey) {
     return (
       <div className="min-h-screen bg-[var(--surface)]">
+        <MetaTags
+          title={`${item.title} | ${category.title} Services`}
+          description={item.sub || `${item.title} services by Shinel Studios`}
+          keywords={`${item.title}, ${category.title}, Shinel Studios`}
+        />
+        <BreadcrumbSchema items={[
+          { name: "Home", url: "/" },
+          { name: "Services", url: "/#services" },
+          { name: category.title, url: `/services/${categoryKey}` },
+          { name: item.title, url: `/services/${categoryKey}/${itemKey}` }
+        ]} />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
           {/* Breadcrumb */}
           <div className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
@@ -132,6 +145,7 @@ export default function ServiceSubcategoryPage() {
   if (!sub) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10" style={{ color: "var(--text)" }}>
+        <MetaTags title="Sub-service Not Found" noIndex={true} />
         <h1 className="text-2xl font-extrabold">Service not found</h1>
         <Link to="/work" style={{ color: "var(--orange)" }}>Go back</Link>
       </div>
@@ -142,6 +156,18 @@ export default function ServiceSubcategoryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
+      <MetaTags
+        title={`${sub.title} - ${item.title}`}
+        description={sub.sub || sub.description || `${sub.title} services`}
+        keywords={`${sub.title}, ${item.title}, Shinel Studios`}
+      />
+      <BreadcrumbSchema items={[
+        { name: "Home", url: "/" },
+        { name: "Services", url: "/#services" },
+        { name: category.title, url: `/services/${categoryKey}` },
+        { name: item.title, url: `/services/${categoryKey}/${itemKey}` },
+        { name: sub.title, url: `/services/${categoryKey}/${itemKey}/${subKey}` }
+      ]} />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         {/* Breadcrumb */}
         <div className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>

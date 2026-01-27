@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { services, findCategory } from "../data/servicesConfig";
 import { ChevronRight, MessageCircle } from "lucide-react";
 import { CONTACT } from "../config/constants";
+import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 export default function ServiceCategoryPage() {
   const { categoryKey } = useParams();
@@ -11,6 +12,7 @@ export default function ServiceCategoryPage() {
   if (!category) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10" style={{ color: "var(--text)" }}>
+        <MetaTags title="Category Not Found" noIndex={true} />
         <h1 className="text-2xl font-extrabold">Category not found</h1>
         <Link to="/work" style={{ color: "var(--orange)" }}>Go back</Link>
       </div>
@@ -22,6 +24,16 @@ export default function ServiceCategoryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
+      <MetaTags
+        title={`${category.title} Services`}
+        description={category.tagline}
+        keywords={`${category.title}, Shinel Studios, Services`}
+      />
+      <BreadcrumbSchema items={[
+        { name: "Home", url: "/" },
+        { name: "Services", url: "/#services" },
+        { name: category.title, url: `/services/${categoryKey}` }
+      ]} />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
           <div className="flex items-start gap-3">

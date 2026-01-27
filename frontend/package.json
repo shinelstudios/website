@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run generate-sitemap && vite build",
+    "build": "vite build && npm run generate-sitemap && node scripts/prerender.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate-sitemap": "node scripts/generate-sitemap.js"
@@ -34,6 +34,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
     "postcss": "^8.5.6",
+    "puppeteer": "^24.36.0",
     "sitemap": "^8.0.0",
     "tailwindcss": "^3.4.17",
     "terser": "^5.46.0",
