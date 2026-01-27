@@ -135,18 +135,18 @@ function preconnectTo(url) {
 /* ---------------- Skeleton ---------------- */
 const SkeletonCard = () => (
   <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
-    <div className="w-full aspect-[16/9] bg-gray-700/30" />
+    <div className="w-full aspect-[16/9] bg-[var(--text-muted)]/10" />
     <div className="p-3 sm:p-4 space-y-2.5">
       <div className="flex gap-2">
-        <div className="h-5 bg-gray-700/30 rounded w-20"></div>
-        <div className="h-5 bg-gray-700/30 rounded w-14"></div>
+        <div className="h-5 bg-[var(--text-muted)]/10 rounded w-20"></div>
+        <div className="h-5 bg-[var(--text-muted)]/10 rounded w-14"></div>
       </div>
-      <div className="h-8 bg-gray-700/30 rounded w-3/4"></div>
+      <div className="h-8 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
       <div className="flex items-center gap-3">
-        <div className="h-4 bg-gray-700/30 rounded w-16"></div>
-        <div className="h-4 bg-gray-700/30 rounded flex-1"></div>
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded w-16"></div>
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded flex-1"></div>
       </div>
-      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
+      <div className="h-9 bg-[var(--text-muted)]/10 rounded w-full"></div>
     </div>
   </div>
 );
@@ -208,8 +208,8 @@ const ThumbCard = ({ t, onOpen, onBroken, fetchPriority = "auto" }) => {
       aria-label={`Open ${t.youtubeTitle || t.filename || "thumbnail"}`}
     >
       {/* Media */}
-      <div className="relative w-full aspect-[16/9] bg-gray-900 overflow-hidden">
-        {!imageLoaded && <div className="absolute inset-0 bg-gray-700/30 animate-pulse" />}
+      <div className="relative w-full aspect-[16/9] bg-[var(--surface-alt)] overflow-hidden">
+        {!imageLoaded && <div className="absolute inset-0 bg-[var(--text-muted)]/10 animate-pulse" />}
         <ProtectedImg
           src={t.imageUrl || t.image}
           alt={`${t.category} ${t.subcategory || ""}`}
@@ -233,7 +233,7 @@ const ThumbCard = ({ t, onOpen, onBroken, fetchPriority = "auto" }) => {
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${t.variant === "LIVE"
               ? "bg-red-600/20 text-red-400 border-red-500/30 animate-pulse"
-              : "bg-gray-700/30 text-gray-300 border-gray-600/30"
+              : "bg-[var(--surface-alt)] text-[var(--text-muted)] border-[var(--border)]"
               }`}
           >
             {t.variant}

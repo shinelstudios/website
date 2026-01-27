@@ -156,7 +156,6 @@ export const LocalBusinessSchema = () => {
             'latitude': 30.7046,
             'longitude': 76.7179,
         },
-        'url': origin,
         'sameAs': Object.values(SOCIAL_LINKS),
         'openingHoursSpecification': {
             '@type': 'OpeningHoursSpecification',
@@ -193,7 +192,17 @@ export const OrganizationSchema = () => {
         'name': BRAND.name,
         'url': origin,
         'logo': `${origin}${BRAND.logoLight}`,
+        'description': 'Shinel Studios is a premier video production and AI-powered growth agency for the world\'s top YouTube creators, including Kamz Inkzone, Deadlox Gaming, Manav Sukhija, and Gamer Mummy. We specialize in high-conversion editing, thumbnail design, and content strategy.',
         'sameAs': Object.values(SOCIAL_LINKS),
+        'knowsAbout': [
+            'Kamz Inkzone',
+            'Deadlox Gaming',
+            'Manav Sukhija',
+            'Gamer Mummy',
+            'Aish is Live',
+            'Video Editing for YouTube',
+            'Thumbnail Design for Creators'
+        ],
         'contactPoint': [{
             '@type': 'ContactPoint',
             'contactType': 'customer support',

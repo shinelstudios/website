@@ -69,7 +69,7 @@ export default function SrtTool() {
   return (
     <section style={{ background: "var(--surface)" }}>
       <div className="container mx-auto px-4 py-12 max-w-5xl">
-        <h1 className="text-2xl md:text-3xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
+        <h1 className="text-2xl md:text-3xl font-bold font-heading" style={{ color: "var(--text)" }}>
           Auto SRT (Local)
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -78,12 +78,12 @@ export default function SrtTool() {
 
         <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 rounded-2xl p-4 border"
-               style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+            style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
             <div className="flex items-center justify-between gap-2 mb-2">
               <label className="text-sm font-medium" style={{ color: "var(--text)" }}>Transcript</label>
               <input type="file" accept=".txt,.md,text/plain"
-                     onChange={onFile}
-                     className="text-xs" />
+                onChange={onFile}
+                className="text-xs" />
             </div>
             <textarea
               value={text}
@@ -96,46 +96,46 @@ export default function SrtTool() {
             <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
               <div>
                 <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Start time (ms)</div>
-                <input type="number" value={start} onChange={(e)=>setStart(Number(e.target.value)||0)}
+                <input type="number" value={start} onChange={(e) => setStart(Number(e.target.value) || 0)}
                   className="w-full h-10 rounded-lg px-2"
-                  style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text)" }} />
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
               </div>
               <div>
                 <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Seconds / caption</div>
-                <input type="number" value={secPerCap} onChange={(e)=>setSecPerCap(Number(e.target.value)||3)}
+                <input type="number" value={secPerCap} onChange={(e) => setSecPerCap(Number(e.target.value) || 3)}
                   className="w-full h-10 rounded-lg px-2"
-                  style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text)" }} />
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
               </div>
               <div className="md:col-span-2">
                 <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>File name</div>
-                <input type="text" value={fileName} onChange={(e)=>setFileName(e.target.value)}
+                <input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)}
                   className="w-full h-10 rounded-lg px-2"
-                  style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text)" }} />
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
               </div>
             </div>
             <div className="mt-3 flex gap-2 flex-wrap">
               <button onClick={generate}
-                      className="rounded-xl px-4 py-2 font-semibold text-white"
-                      style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}>
+                className="rounded-xl px-4 py-2 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}>
                 Generate SRT
               </button>
               <button onClick={() => { setText(""); setResult(""); }}
-                      className="rounded-xl px-4 py-2 font-semibold"
-                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color:"var(--text)" }}>
+                className="rounded-xl px-4 py-2 font-semibold"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
                 Reset
               </button>
             </div>
           </div>
 
           <div className="rounded-2xl p-4 border"
-               style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
+            style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
             <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Preview / Export</div>
             <textarea readOnly value={result} rows={16}
-              className="mt-2 w-full rounded-xl p-3 outline-none"
-              style={{ background:"var(--surface)", border:"1px solid var(--border)", color:"var(--text)", fontFamily:"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }} />
+              className="mt-2 w-full rounded-xl p-3 outline-none font-accent text-sm"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
             <button disabled={!result} onClick={download}
-                    className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white disabled:opacity-60"
-                    style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}>
+              className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white disabled:opacity-60"
+              style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}>
               Download .srt
             </button>
             <div className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>

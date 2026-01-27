@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import logoLight from "../assets/logo_light.png"; // WHITE logo (dark bg)
 import logoDark from "../assets/logo_dark.png";   // DARK logo (light bg)
 import { CONTACT } from "../config/constants";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 /* -------------------------------- analytics (no-op safe) ------------------------------- */
 const track = (ev, detail = {}) => {
@@ -101,12 +102,14 @@ const SiteFooter = ({
     { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter, color: "#1DA1F2" },
   ]), []);
 
+  const { config } = useGlobalConfig();
+
   const FEATURES = useMemo(() => ([
-    { icon: Users, text: "20+ Active Clients" },
-    { icon: TrendingUp, text: "7M+ Views Driven" },
-    { icon: Award, text: "+40% CTR Boost" },
+    { icon: Users, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Clients` },
+    { icon: TrendingUp, text: `${config?.stats?.totalReach || "7M+"} Views Driven` },
+    { icon: Award, text: `+${config?.stats?.ctrBoostMax || "40"}% CTR Boost` },
     { icon: Clock, text: "48–72 hr Turnaround" },
-  ]), []);
+  ]), [config]);
 
   // [IMPROVED] Newsletter submission logic
   const onSubscribe = async (e) => {

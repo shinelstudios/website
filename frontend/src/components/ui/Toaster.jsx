@@ -57,19 +57,19 @@ function ToastItem({ toast, onRemove }) {
 
     const getIcon = () => {
         switch (toast.type) {
-            case "success": return <CheckCircle size={18} className="text-green-400" />;
-            case "error": return <AlertCircle size={18} className="text-red-400" />;
-            case "warning": return <AlertCircle size={18} className="text-yellow-400" />;
-            default: return <Bell size={18} className="text-blue-400" />;
+            case "success": return <CheckCircle size={18} className="text-[var(--orange)]" />;
+            case "error": return <AlertCircle size={18} className="text-[#C10801]" />;
+            case "warning": return <AlertCircle size={18} className="text-[#F16001]" />;
+            default: return <Bell size={18} className="text-[var(--brand-light-gray)]" />;
         }
     };
 
     const getGlow = () => {
         switch (toast.type) {
-            case "success": return "rgba(34, 197, 94, 0.15)";
-            case "error": return "rgba(239, 68, 68, 0.15)";
-            case "warning": return "rgba(234, 179, 8, 0.15)";
-            default: return "rgba(59, 130, 246, 0.15)";
+            case "success": return "rgba(232, 80, 2, 0.15)";
+            case "error": return "rgba(193, 8, 1, 0.15)";
+            case "warning": return "rgba(241, 96, 1, 0.15)";
+            default: return "rgba(167, 167, 167, 0.15)";
         }
     };
 
@@ -116,9 +116,9 @@ function ToastItem({ toast, onRemove }) {
                     transition={{ duration: toast.duration / 1000, ease: "linear" }}
                     className="h-full"
                     style={{
-                        background: toast.type === "success" ? "#22c55e" :
-                            toast.type === "error" ? "#ef4444" :
-                                toast.type === "warning" ? "#eab308" : "#3b82f6"
+                        background: toast.type === "success" ? "var(--orange)" :
+                            toast.type === "error" ? "#C10801" :
+                                toast.type === "warning" ? "#F16001" : "var(--brand-light-gray)"
                     }}
                 />
             </div>

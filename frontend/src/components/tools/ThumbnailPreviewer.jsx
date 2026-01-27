@@ -360,7 +360,7 @@ function SimulatorSidebar({
         <aside className={`w-[300px] border-r ${bgClass} flex flex-col shrink-0 h-screen sticky top-0 overflow-hidden transition-colors duration-500`}>
             <div className={`p-6 border-b ${isLight ? 'border-gray-200' : 'border-[#222]'} shrink-0`}>
                 <div className="flex items-center gap-3 mb-8">
-                    <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-lg shadow-red-600/20">
+                    <div className="w-8 h-8 bg-[var(--orange)] rounded-lg flex items-center justify-center shadow-lg shadow-[var(--orange)]/20">
                         <Youtube size={20} className="text-white fill-current" />
                     </div>
                     <span className={`font-black text-xl tracking-tighter uppercase ${textClass}`}>Simulator</span>
@@ -511,7 +511,7 @@ function YouTubeUIHeader({ device, avatar, theme }) {
             <div className="flex items-center gap-4">
                 <Menu size={20} className={`${textClass} cursor-pointer`} />
                 <div className="flex items-center gap-1 cursor-pointer">
-                    <Youtube size={28} className="text-[#ff0000] fill-current" />
+                    <Youtube size={28} className="text-[var(--orange)] fill-current" />
                     <span className={`font-black text-lg tracking-tighter ${textClass}`}>YouTube</span>
                     <span className={`text-[10px] ${isLight ? 'text-gray-500' : 'text-white/40'} self-start mt-1 ml-0.5`}>IN</span>
                 </div>
@@ -707,9 +707,9 @@ function ProAnalysisControls({ filter, setFilter, showHeatmap, setShowHeatmap, s
 
 function NotificationMockup({ meta, image }) {
     return (
-        <div className="w-full max-w-sm bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-[32px] p-4 shadow-2xl animate-in slide-in-from-top duration-500 pointer-events-auto">
+        <div className="w-full max-w-sm bg-[var(--primary-black)]/95 backdrop-blur-xl border border-white/10 rounded-[32px] p-4 shadow-2xl animate-in slide-in-from-top duration-500 pointer-events-auto">
             <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-[#cc0000] flex items-center justify-center p-2 shadow-lg shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-[var(--orange)] flex items-center justify-center p-2 shadow-lg shrink-0">
                     <Youtube size={24} className="text-white fill-current" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -833,7 +833,7 @@ function ThumbItem({ image, title, creator, views, time, duration, filter, avata
                 )}
 
                 {showHeatmap && (
-                    <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-blue-500/0 via-red-500/80 to-yellow-400/90 animate-pulse" />
+                    <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-[#000000] via-[#C10801] to-[#F16001] animate-pulse" />
                 )}
 
                 {!isLive && (
@@ -843,7 +843,7 @@ function ThumbItem({ image, title, creator, views, time, duration, filter, avata
                 )}
 
                 {isLive && (
-                    <div className="absolute bottom-3 right-3 px-2 py-0.5 bg-[#cc0000] rounded-sm text-[11px] font-black text-white uppercase tracking-tighter">
+                    <div className="absolute bottom-3 right-3 px-2 py-0.5 bg-[#C10801] rounded-sm text-[11px] font-black text-white uppercase tracking-tighter">
                         Live
                     </div>
                 )}
@@ -851,7 +851,7 @@ function ThumbItem({ image, title, creator, views, time, duration, filter, avata
 
             <div className={`flex gap-3 ${isMobile ? "px-4 pb-4" : "px-0"}`}>
                 <div className={`w-10 h-10 rounded-full ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-white/5 border-white/10'} border overflow-hidden flex-shrink-0`}>
-                    {avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] font-black bg-gradient-to-tr from-orange-500/20 to-red-500/20 text-white/20">JD</div>}
+                    {avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] font-black bg-gradient-to-tr from-[#C10801]/20 to-[#F16001]/20 text-white/20">JD</div>}
                 </div>
                 <div className="flex flex-col flex-1 min-w-0 pr-4">
                     <h3 className={`text-[14px] sm:text-[16px] font-bold ${textClass} line-clamp-2 leading-tight mb-1.5 group-hover:text-white transition-colors`}>
@@ -908,10 +908,10 @@ function YouTubeSearchList({ thumbA, thumbB, filter, meta, device, showHeatmap, 
             <div className={`${isMobile ? "w-full" : "w-[360px]"} aspect-video ${isLight ? 'bg-gray-100' : 'bg-[#2f2f2f]'} sm:rounded-2xl overflow-hidden shrink-0 relative transition-all duration-300 group-hover:rounded-none`}>
                 {image ? <img src={image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" style={{ filter: filter === 'blur' ? 'blur(8px)' : 'none' }} /> : <div className="w-full h-full bg-[#1a1a1a]" />}
                 <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 rounded text-[12px] font-black text-white">{duration || "15:00"}</div>
-                {showHeatmap && <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-blue-500/0 via-red-500/80 to-yellow-400/90 animate-pulse" />}
+                {showHeatmap && <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-[#000000] via-[#C10801] to-[#F16001] animate-pulse" />}
             </div>
             <div className={`flex-1 py-1 ${isMobile ? "px-4" : "px-0"}`}>
-                <h3 className={`text-lg font-bold ${textClass} line-clamp-2 mb-1 group-hover:text-blue-500 transition-colors`}>{title}</h3>
+                <h3 className={`text-lg font-bold ${textClass} line-clamp-2 mb-1 group-hover:text-[var(--orange)] transition-colors`}>{title}</h3>
                 <div className={`flex items-center gap-1 text-[13px] ${mutedText} mb-3`}>
                     <span>{views} views</span><span>•</span><span>{time}</span>
                 </div>
@@ -985,10 +985,10 @@ function YouTubeSidebar({ thumbA, thumbB, filter, meta, device, showHeatmap, the
             <div className={`w-40 aspect-video ${isLight ? 'bg-gray-100' : 'bg-[#2f2f2f]'} rounded-lg overflow-hidden shrink-0 relative border border-white/5`}>
                 {image ? <img src={image} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full" />}
                 <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[10px] font-black text-white">{duration || "10:00"}</div>
-                {showHeatmap && <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-blue-500/0 via-red-500/80 to-yellow-400/90 animate-pulse" />}
+                {showHeatmap && <div className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen bg-gradient-to-tr from-[#000000] via-[#C10801] to-[#F16001] animate-pulse" />}
             </div>
             <div className="flex-1 min-w-0 pr-4">
-                <h4 className={`text-[13px] font-bold ${textClass} line-clamp-2 leading-tight group-hover:text-blue-500 transition-colors`}>{title}</h4>
+                <h4 className={`text-[13px] font-bold ${textClass} line-clamp-2 leading-tight group-hover:text-[var(--orange)] transition-colors`}>{title}</h4>
                 <p className={`text-[11px] ${mutedText} mt-1 hover:opacity-100 transition-opacity`}>{creator}</p>
                 <div className={`flex items-center gap-1 text-[11px] ${mutedText}`}>
                     <span>{views} views</span><span>•</span><span>{time}</span>
@@ -1027,7 +1027,7 @@ function YouTubeSidebar({ thumbA, thumbB, filter, meta, device, showHeatmap, the
                         {/* Player UI Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="h-1 bg-white/30 w-full rounded-full mb-3 relative overflow-hidden">
-                                <div className="absolute inset-y-0 left-0 bg-red-600 w-1/3 shadow-[0_0_10px_rgba(255,0,0,0.5)]" />
+                                <div className="absolute inset-y-0 left-0 bg-[var(--orange)] w-1/3 shadow-[0_0_10px_rgba(232,80,2,0.5)]" />
                             </div>
                             <div className="flex items-center justify-between text-white">
                                 <div className="flex items-center gap-4">
@@ -1144,7 +1144,7 @@ function YouTubeCompareView({ thumbA, thumbB, filter, meta, device, showHeatmap,
                 </div>
                 <div className="space-y-6">
                     <div className={`py-2 text-center ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} rounded-xl border`}>
-                        <span className="text-[10px] font-black uppercase text-blue-500 tracking-widest">Variation B</span>
+                        <span className="text-[10px] font-black uppercase text-[var(--orange)] tracking-widest">Variation B</span>
                     </div>
                     <ThumbItem image={thumbB} title={meta.title} creator={meta.channel} views={meta.views} time={meta.time} duration={meta.duration} avatar={meta.avatar} verified={meta.verified} filter={filter} showHeatmap={showHeatmap} theme={theme} />
 
@@ -1172,7 +1172,7 @@ function YouTubeCompareView({ thumbA, thumbB, filter, meta, device, showHeatmap,
                         <MetricItem label="Standard View" value="84%" score="good" theme={theme} />
                         <MetricItem label="Mobile View" value="96%" score="great" theme={theme} />
                     </div>
-                    <div className="p-6 bg-gradient-to-br from-[var(--orange)] to-red-600 rounded-2xl flex flex-col justify-between shadow-lg shadow-[var(--orange)]/20 text-white">
+                    <div className="p-6 bg-gradient-to-br from-[#000000] via-[#C10801] to-[#F16001] rounded-2xl flex flex-col justify-between shadow-lg shadow-[var(--orange)]/20 text-white">
                         <div>
                             <span className="text-xs font-black uppercase text-white/60 tracking-widest mb-2 block">Executive Summary</span>
                             <p className="text-sm font-bold leading-tight">Variation B's high-saturation orange and centered subject focus results in a 24% higher visual saliency compared to Variation A.</p>
@@ -1220,7 +1220,7 @@ function ColorPalette({ colors, theme }) {
 
 function MetricItem({ label, value, score, theme }) {
     const isLight = theme === 'light';
-    const color = score === "great" ? "text-green-500" : score === "good" ? "text-blue-500" : "text-red-500";
+    const color = score === "great" ? "text-[#F16001]" : score === "good" ? "text-[var(--orange)]" : "text-[#C10801]";
     return (
         <div className={`flex items-center justify-between p-4 ${isLight ? 'bg-white border-gray-200 shadow-sm' : 'bg-black/40 border-white/5'} rounded-xl border`}>
             <span className={`text-sm font-bold ${isLight ? 'text-gray-600' : 'opacity-60 text-white'}`}>{label}</span>

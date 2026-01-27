@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, IconImage, BarChart3, Bot, Zap, HelpCircle } from "lucide-react";
 
@@ -12,6 +13,19 @@ const FAQSection = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const searchInputRef = useRef(null);
+
+  const { config } = useGlobalConfig();
+  const stats = config?.stats || {};
+  const pricing = config?.pricing || {};
+
+  // Calculate lowest starter price dynamically
+  const minPrice = useMemo(() => {
+    try {
+      const p = pricing;
+      const prices = [p.gaming?.starter, p.vlog?.starter, p.talking?.starter].filter(n => n).map(n => Number(n));
+      return prices.length ? Math.min(...prices) : 2500;
+    } catch { return 2500; }
+  }, [pricing]);
 
   const faqs = [
     {
@@ -30,7 +44,7 @@ const FAQSection = () => {
       category: "Pricing",
       icon: BarChart3,
       q: "What are your pricing plans?",
-      a: "Pricing varies based on services and volume. We offer flexible packages starting from ₹2,500 per video for editing. Contact us for a custom quote tailored to your needs and goals.",
+      a: `Pricing varies based on services and volume. We offer flexible packages starting from ₹${minPrice} for editing. Contact us for a custom quote tailored to your needs and goals.`,
     },
     {
       category: "Pricing",
@@ -66,7 +80,7 @@ const FAQSection = () => {
       category: "Results",
       icon: BarChart3,
       q: "What kind of results can I expect?",
-      a: "Our clients see an average CTR improvement of 62% and retention increase of 38% within the first month. Results vary by niche, but we focus on data-driven optimizations.",
+      a: `Our clients see an average CTR improvement of ${stats.ctrBoostMax || 62}% and retention increase of 38% within the first month. Results vary by niche, but we focus on data-driven optimizations.`,
     },
     {
       category: "Results",

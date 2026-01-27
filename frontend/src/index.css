@@ -1,4 +1,5 @@
-/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,68 +10,101 @@
   /* Brand variables (light & dark) */
   :root {
     --orange: #E85002;
+    --primary-black: #000000;
+    --primary-white: #F9F9F9;
+    --brand-gray: #646464;
+    --brand-light-gray: #A7A7A7;
+    --brand-dark-gray: #333333;
 
     /* -------- FOOTER tokens (keeps footer dark on both themes) -------- */
-    --footer-bg: #0d0d0d;
-    /* dark footer even on light theme */
-    --footer-text: #fff;
-    --footer-muted: rgba(255, 255, 255, .7);
-    --footer-input-bg: rgba(255, 255, 255, .06);
+    --footer-bg: var(--primary-black);
+    --footer-text: var(--primary-white);
+    --footer-muted: rgba(249, 249, 249, .7);
+    --footer-input-bg: rgba(249, 249, 249, .06);
 
     /* light tokens */
-    --text: #0D0D0D;
-    --text-muted: rgba(13, 13, 13, .70);
-    --surface: #FFFFFF;
-    --surface-alt: #FFF9F6;
-    --border: rgba(0, 0, 0, .10);
-    --header-bg: rgba(255, 255, 255, .85);
+    --text: var(--primary-black);
+    --text-muted: var(--brand-gray);
+    --surface: var(--primary-white);
+    --surface-alt: #EDEDED;
+    /* A lighter version for subtle contrast in light mode */
+    --border: rgba(51, 51, 51, 0.15);
+    /* Dark gray border with low opacity */
+    --header-bg: rgba(249, 249, 249, .85);
 
-    /* LIGHT hero background (multi-layer, richer) */
+    /* LIGHT hero background (Updated with brand gradient elements) */
     --hero-bg:
-      linear-gradient(180deg, #fffdfb 0%, #fff8f2 55%, #fff3ea 100%),
-      radial-gradient(750px 420px at 0% -10%, rgba(232, 80, 2, .06), transparent 60%),
-      radial-gradient(750px 420px at 100% -10%, rgba(255, 147, 87, .05), transparent 60%);
+      linear-gradient(180deg, var(--primary-white) 0%, #F0F0F0 100%),
+      radial-gradient(750px 420px at 0% -10%, rgba(232, 80, 2, .05), transparent 60%);
 
-    --nav-link: rgba(13, 13, 13, .72);
+    --nav-link: var(--brand-dark-gray);
     --nav-hover: var(--orange);
 
     /* Layout tokens */
     --header-h: 72px;
-    /* updated dynamically by header via ResizeObserver */
     --radius-xl: 16px;
-    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .10);
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .05);
 
-    /* NEW: help form controls & UA styles pick correct palette */
+    /* UI Shades mapping to brand colors */
+    --film-noir: var(--primary-white);
+    --slate: #EEEEEE;
+    --charcoal: var(--brand-light-gray);
+    --silver: var(--brand-gray);
+    --gold: #F16001;
+    /* From brand gradient */
+    --crimson: #C10801;
+    /* From brand gradient */
+    --midnight: var(--brand-dark-gray);
+
+    --gradient-cinematic: linear-gradient(135deg, var(--primary-white) 0%, #E8E8E8 100%);
+    --gradient-brand: linear-gradient(90deg, #000000, #C10801, #F16001, #D9C3AB);
+    --gradient-spotlight: radial-gradient(circle at center, rgba(232, 80, 2, 0.05) 0%, transparent 70%);
+    --gradient-film-strip: repeating-linear-gradient(90deg, #F0F0F0 0px, #F0F0F0 10px, var(--primary-white) 10px, var(--primary-white) 20px);
+
     color-scheme: light;
   }
 
   .dark {
-    /* -------- FOOTER tokens (slightly deeper in dark) -------- */
-    --footer-bg: #000;
-    --footer-text: #fff;
-    --footer-muted: rgba(255, 255, 255, .72);
-    --footer-input-bg: rgba(255, 255, 255, .08);
+    /* -------- FOOTER tokens -------- */
+    --footer-bg: var(--primary-black);
+    --footer-text: var(--primary-white);
+    --footer-muted: rgba(249, 249, 249, .7);
+    --footer-input-bg: rgba(249, 249, 249, .08);
 
     /* dark tokens */
-    --text: #FFFFFF;
-    --text-muted: rgba(255, 255, 255, .72);
-    --surface: #0F0F0F;
-    --surface-alt: #0B0B0B;
-    --border: rgba(255, 255, 255, .12);
-    --header-bg: rgba(0, 0, 0, .75);
+    --text: var(--primary-white);
+    --text-muted: var(--brand-light-gray);
+    --surface: var(--primary-black);
+    --surface-alt: var(--brand-dark-gray);
+    --border: rgba(167, 167, 167, .15);
+    /* Light gray with opacity */
+    --header-bg: rgba(0, 0, 0, .8);
 
-    /* DARK hero background (multi-layer, richer) */
+    /* DARK hero background */
     --hero-bg:
-      radial-gradient(900px 500px at -10% -20%, rgba(232, 80, 2, .14), transparent 55%),
-      radial-gradient(900px 500px at 110% -20%, rgba(232, 80, 2, .08), transparent 55%),
-      linear-gradient(180deg, #0b0b0b, #101010 45%, #0e0e0e);
+      radial-gradient(900px 500px at -10% -20%, rgba(232, 80, 2, .12), transparent 55%),
+      linear-gradient(180deg, var(--primary-black), #0A0A0A 45%, var(--primary-black));
 
-    --nav-link: rgba(255, 255, 255, .72);
-    --nav-hover: #FFB48A;
+    --nav-link: var(--brand-light-gray);
+    --nav-hover: #F16001;
 
-    --shadow-soft: 0 8px 24px rgba(0, 0, 0, .30);
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, .50);
 
-    /* NEW */
+    /* UI Shades mapping to brand colors */
+    --film-noir: var(--primary-black);
+    --slate: var(--brand-dark-gray);
+    --charcoal: #2A2A2A;
+    --silver: var(--brand-gray);
+    --gold: #F16001;
+    /* From brand gradient */
+    --crimson: #C10801;
+    /* From brand gradient */
+    --midnight: #050505;
+
+    --gradient-cinematic: linear-gradient(135deg, var(--primary-black) 0%, var(--brand-dark-gray) 100%);
+    --gradient-spotlight: radial-gradient(circle at center, rgba(232, 80, 2, 0.1) 0%, transparent 70%);
+    --gradient-film-strip: repeating-linear-gradient(90deg, var(--brand-dark-gray) 0px, var(--brand-dark-gray) 10px, var(--primary-black) 10px, var(--primary-black) 20px);
+
     color-scheme: dark;
   }
 
@@ -103,7 +137,7 @@
 
   /* CHANGED: keep selector consistent with Tailwind's .dark on <html> */
   .dark .ss-sparkle {
-    background: radial-gradient(circle, rgba(255, 255, 255, 1) 0%, rgba(255, 147, 87, .95) 45%, rgba(255, 147, 87, 0) 70%);
+    background: radial-gradient(circle, rgba(255, 255, 255, 1) 0%, rgba(241, 96, 1, .95) 45%, rgba(241, 96, 1, 0) 70%);
     filter: drop-shadow(0 2px 12px rgba(232, 80, 2, .35));
     mix-blend-mode: screen;
   }
@@ -208,7 +242,7 @@
   /* Brand button (use on all CTAs) */
   .btn-brand {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)];
-    background: linear-gradient(90deg, var(--orange), #ff9357);
+    background: linear-gradient(90deg, var(--orange), #F16001);
     box-shadow: 0 10px 26px rgba(232, 80, 2, .35), inset 0 0 0 1px rgba(255, 255, 255, .08);
     transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
     will-change: transform, box-shadow;

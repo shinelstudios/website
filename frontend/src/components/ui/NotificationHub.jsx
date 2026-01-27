@@ -82,10 +82,10 @@ export default function NotificationHub({ isOpen, onClose }) {
 
     const getIcon = (type) => {
         switch (type) {
-            case "success": return <CheckCircle size={16} className="text-green-400" />;
-            case "error": return <AlertCircle size={16} className="text-red-400" />;
-            case "warning": return <AlertCircle size={16} className="text-yellow-400" />;
-            default: return <Bell size={16} className="text-blue-400" />;
+            case "success": return <CheckCircle size={16} className="text-[var(--orange)]" />;
+            case "error": return <AlertCircle size={16} className="text-[#C10801]" />;
+            case "warning": return <AlertCircle size={16} className="text-[#F16001]" />;
+            default: return <Bell size={16} className="text-[var(--brand-light-gray)]" />;
         }
     };
 
@@ -125,7 +125,7 @@ export default function NotificationHub({ isOpen, onClose }) {
                                 {history.length > 0 && (
                                     <button
                                         onClick={clearAll}
-                                        className="p-2 rounded-lg hover:bg-white/5 text-white/30 hover:text-red-400 transition-all"
+                                        className="p-2 rounded-lg hover:bg-white/5 text-white/30 hover:text-[#C10801] transition-all"
                                         title="Clear all"
                                     >
                                         <Trash2 size={18} />
@@ -151,7 +151,7 @@ export default function NotificationHub({ isOpen, onClose }) {
                                 history.map((n) => (
                                     <div
                                         key={n.id}
-                                        className={`group p-4 rounded-2xl border transition-all hover:bg-white/[0.02] ${n.read ? "border-white/5" : "border-orange-500/20 bg-orange-500/[0.02]"
+                                        className={`group p-4 rounded-2xl border transition-all hover:bg-white/[0.02] ${n.read ? "border-white/5" : "border-[var(--orange)]/20 bg-[var(--orange)]/[0.02]"
                                             }`}
                                     >
                                         <div className="flex items-start gap-4">
@@ -166,8 +166,8 @@ export default function NotificationHub({ isOpen, onClose }) {
                                                         {timeAgo(n.timestamp)}
                                                     </span>
                                                     {!n.read && (
-                                                        <span className="text-orange-500 flex items-center gap-1">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                                                        <span className="text-[var(--orange)] flex items-center gap-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--orange)] animate-pulse" />
                                                             New
                                                         </span>
                                                     )}

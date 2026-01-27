@@ -12,13 +12,13 @@ const MediaMentions = () => {
             name: "Top Rated",
             icon: Star,
             description: "4.9/5 Rating",
-            color: "#FFD700",
+            color: "#F16001",
         },
         {
             name: "Trusted by 100+",
             icon: Users,
             description: "Active Creators",
-            color: "#10B981",
+            color: "#E85002",
         },
         {
             name: "Proven Results",
@@ -30,7 +30,7 @@ const MediaMentions = () => {
             name: "Professional",
             icon: Award,
             description: "Certified Team",
-            color: "#3B82F6",
+            color: "#C10801",
         },
     ];
 

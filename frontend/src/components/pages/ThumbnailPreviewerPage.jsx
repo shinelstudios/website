@@ -1,6 +1,7 @@
 // src/components/pages/ThumbnailPreviewerPage.jsx
 import React from "react";
 import ThumbnailPreviewer from "../tools/ThumbnailPreviewer";
+import RelatedTools from "../tools/RelatedTools";
 import MetaTags, { FAQSchema } from "../MetaTags";
 import { Youtube, Search, Layout, Sparkles, Smartphone, Monitor, Zap, Target, Eye } from "lucide-react";
 import { motion } from "framer-motion";
@@ -105,7 +106,7 @@ const ThumbnailPreviewerPage = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="order-1 lg:order-2 bg-gradient-to-br from-[var(--orange)]/10 to-red-600/10 p-12 rounded-[48px] border border-[var(--orange)]/20 relative overflow-hidden group">
+                        <div className="order-1 lg:order-2 bg-gradient-to-br from-[var(--orange)]/10 to-[var(--orange)]/5 p-12 rounded-[48px] border border-[var(--orange)]/20 relative overflow-hidden group">
                             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:rotate-12 transition-transform">
                                 <Search size={160} />
                             </div>
@@ -141,6 +142,8 @@ const ThumbnailPreviewerPage = () => {
                         </div>
                     </section>
                 </div>
+
+                <RelatedTools />
             </div>
         </div>
     );

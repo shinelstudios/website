@@ -61,6 +61,8 @@ const ComparisonToolPage = React.lazy(() => import("./components/pages/Compariso
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
+const BlogIndex = React.lazy(() => import("./components/blog/BlogIndex.jsx"));
+const BlogPost = React.lazy(() => import("./components/blog/BlogPost.jsx"));
 
 const AdminVideosPage = React.lazy(() =>
   import("./components/AdminVideosPage.jsx")
@@ -301,6 +303,10 @@ export default function App() {
           <Route path="/branding" element={<Branding />} />
           <Route path="/thumbnails" element={<Thumbnails />} />
           <Route path="/shorts" element={<Shorts />} />
+
+          {/* Blog & Insights */}
+          <Route path="/blog" element={<BlogIndex />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
 
           {/* Public Tool Landing Pages (SEO) */}
           <Route path="/roi-calculator" element={<RoiCalculatorPage />} />

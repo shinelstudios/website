@@ -64,11 +64,22 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
         onBook?.();
     };
 
+    const [isQQBVisible, setIsQQBVisible] = useState(false);
+
+    useEffect(() => {
+        const onQQB = (e) => setIsQQBVisible(e.detail.visible);
+        document.addEventListener("qqb:visible", onQQB);
+        return () => document.removeEventListener("qqb:visible", onQQB);
+    }, []);
+
     if (isDismissed) return null;
+
+    // Only show if scrolled past threshold AND QuickQuoteBar is NOT visible
+    const shouldShow = isVisible && !isQQBVisible;
 
     return (
         <AnimatePresence>
-            {isVisible && (
+            {shouldShow && (
                 <motion.div
                     className="fixed bottom-20 right-6 z-30 md:bottom-6"
                     initial={{ opacity: 0, y: 100, scale: 0.8 }}
@@ -80,9 +91,9 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                     <div className="hidden md:block relative pt-4">
                         <motion.button
                             onClick={handleClick}
-                            className="group relative px-8 py-4 rounded-full font-bold text-white shadow-2xl overflow-hidden"
+                            className="group relative px-8 py-4 rounded-full font-bold font-heading text-white shadow-2xl overflow-hidden"
                             style={{
-                                background: "linear-gradient(135deg, #E85002, #ff6b35)",
+                                background: "linear-gradient(135deg, #E85002, #F16001)",
                                 boxShadow: "0 10px 40px rgba(232, 80, 2, 0.4)",
                             }}
                             whileHover={{ scale: 1.05, boxShadow: "0 15px 50px rgba(232, 80, 2, 0.5)" }}
@@ -113,8 +124,8 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                         <motion.div
                             className="absolute -top-4 left-4 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em] text-white whitespace-nowrap shadow-lg"
                             style={{
-                                background: "linear-gradient(135deg, #DC2626, #B91C1C)",
-                                boxShadow: "0 4px 15px rgba(220, 38, 38, 0.4)"
+                                background: "linear-gradient(135deg, #C10801, #F16001)",
+                                boxShadow: "0 4px 15px rgba(193, 8, 1, 0.4)"
                             }}
                             initial={{ y: -10, opacity: 0 }}
                             animate={{
@@ -136,7 +147,7 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                             onClick={isMinimized ? () => setIsMinimized(false) : handleClick}
                             className="relative w-16 h-16 rounded-full font-bold text-white shadow-2xl flex items-center justify-center"
                             style={{
-                                background: "linear-gradient(135deg, #E85002, #ff6b35)",
+                                background: "linear-gradient(135deg, #E85002, #F16001)",
                                 boxShadow: "0 8px 30px rgba(232, 80, 2, 0.4)",
                             }}
                             whileTap={{ scale: 0.9 }}

@@ -148,7 +148,10 @@ const TrustBar = ({
     <div
       className="w-full trustbar"
       style={{
-        background: "var(--header-bg)",
+        background: "rgba(0, 0, 0, 0.2)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        borderTop: "1px solid rgba(255, 255, 255, 0.05)",
         boxShadow: "inset 0 1px 0 var(--border)",
         position: "relative",
         zIndex: 2,
@@ -209,15 +212,23 @@ const TrustBar = ({
           ref={trackRef}
           className={`marquee-track ${isPaused || !isVisible ? "paused" : ""}`}
           style={{
-            display: "flex", // Use flex for the track
+            display: "flex",
             width: "max-content",
             alignItems: "center",
             willChange: "transform",
-            transform: "translate3d(0,0,0)",
+            /* GPU Acceleration Forces */
+            transform: "translate3d(0,0,0) translateZ(0)",
+            WebkitTransform: "translate3d(0,0,0) translateZ(0)",
+            transformStyle: "preserve-3d",
+            WebkitTransformStyle: "preserve-3d",
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            perspective: "1000px",
+            WebkitPerspective: "1000px",
             animation: "marquee-scroll var(--animation-duration) linear infinite",
             animationDirection: animateDir === 'rtl' ? 'normal' : 'reverse',
             animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
-            transition: "animation-duration 0.3s ease-out", // Smooth speed boost
+            transition: "animation-duration 0.3s ease-out",
           }}
         >
           {/* Segment A (Measured) */}
@@ -256,8 +267,13 @@ const TrustBar = ({
 
 /* [NEW] Keyframes driven by CSS vars */
 @keyframes marquee-scroll {
-  from { transform: translate3d(0,0,0); }
-  to   { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+}
+
+@-webkit-keyframes marquee-scroll {
+  0% { -webkit-transform: translate3d(0, 0, 0); }
+  100% { -webkit-transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
 }
 
 .trustbar .marquee-track.paused {
@@ -268,10 +284,11 @@ const TrustBar = ({
 .trustbar .marquee-segment {
   display: inline-flex;
   align-items: center;
-  padding: 0.625rem 0;
+  padding: 0.75rem 0;
   white-space: nowrap;
   flex-shrink: 0;
-  /* 'gap' replaced by margin on items */
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
 }
 
 /* [NEW] Margin fallback for gap between segments */
@@ -283,13 +300,18 @@ const TrustBar = ({
 .trustbar .marquee-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem; /* gap inside item is fine */
-  font-size: clamp(0.6875rem, 1.5vw, 0.875rem);
-  line-height: 1.2;
+  gap: 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text);
   white-space: nowrap;
   flex-shrink: 0;
-  padding-inline: 0.1rem; /* Slight touch target increase */
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
 }
 
 /* [NEW] Margin fallback for gap between items */
@@ -309,11 +331,6 @@ const TrustBar = ({
 .trustbar .static-trust-bar::-webkit-scrollbar { display: none; }
 .trustbar .static-trust-bar { scrollbar-width: none; -ms-overflow-style: none; }
 
-/* iOS-specific smoothing (still useful) */
-.trustbar .marquee-track {
-  -webkit-backface-visibility: hidden;
-  -webkit-perspective: 1000;
-}
       `}</style>
     </div>
   );

@@ -134,7 +134,7 @@ export const svgPlaceholder = (label = "Image") => {
     `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
     `<stop offset='0%' stop-color='#FFF1E8'/><stop offset='100%' stop-color='#FFE4D6'/></linearGradient></defs>` +
     `<rect fill='url(#g)' width='800' height='450'/>` +
-    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#E85002' font-family='Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial' font-size='28' font-weight='700'>${safe}</text>` +
+    `<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='#E85002' font-family='Outfit, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial' font-size='28' font-weight='700'>${safe}</text>` +
     `</svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
@@ -176,7 +176,7 @@ export const SAMPLE_AFTER = findAssetByBase("sample_after") || svgPlaceholder("A
 const CaseStudies = () => {
   const reduceMotion = false;
 
-  const MEDIA = import.meta.glob("../assets/case_studies/*.{png,jpg,jpeg,webp,avif,mp4,webm}", {
+  const MEDIA = import.meta.glob("../assets/*.{png,jpg,jpeg,webp,avif,mp4,webm}", {
     eager: true,
     query: "?url",
     import: "default"
@@ -185,16 +185,16 @@ const CaseStudies = () => {
   const [open, setOpen] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
 
-  const items = [
+  const DEFAULT_CASE_STUDIES = [
     {
       metric: "+62% CTR",
       metricNum: 62,
       period: "in 6 weeks",
-      title: "Packaging revamp for Gaming creator",
+      title: "Packaging revamp for Kamz Inkzone",
       description: "Complete thumbnail redesign with A/B testing framework",
       category: "Thumbnails",
-      gradient: "linear-gradient(135deg, #ff6b6b, #ee5a6f)",
-      keys: { hook: "cs1_hook", edit: "cs1_edit", thumb: "cs1_thumb" },
+      gradient: "linear-gradient(135deg, #E85002, #C10801)",
+      keys: { hook: "creator3", edit: "creator3", thumb: "creator3" },
       highlights: [
         "15 design iterations tested",
         "Color psychology optimization",
@@ -206,11 +206,11 @@ const CaseStudies = () => {
       metric: "+38% retention",
       metricNum: 38,
       period: "in 4 weeks",
-      title: "Hook-first shorts strategy",
+      title: "Hook-first strategy for Manav Sukhija",
       description: "Restructured content opening for immediate engagement",
       category: "Editing",
-      gradient: "linear-gradient(135deg, #4ecdc4, #45b7d1)",
-      keys: { hook: "cs2_hook", edit: "cs2_edit", thumb: "cs2_thumb" },
+      gradient: "linear-gradient(135deg, #F16001, #E85002)",
+      keys: { hook: "creator4", edit: "creator4", thumb: "creator4" },
       highlights: [
         "First 3s hook optimization",
         "Pattern interrupt technique",
@@ -222,11 +222,11 @@ const CaseStudies = () => {
       metric: "3.1x views",
       metricNum: 210,
       period: "in 8 weeks",
-      title: "Title/Thumb alignment & cadence",
+      title: "Growth alignment for Deadlox Gaming",
       description: "Systematic content strategy with consistent posting schedule",
       category: "Strategy",
-      gradient: "linear-gradient(135deg, #f7b731, #f39c12)",
-      keys: { hook: "cs3_hook", edit: "cs3_edit", thumb: "cs3_thumb" },
+      gradient: "linear-gradient(135deg, #E85002, #F16001)",
+      keys: { hook: "base2", edit: "base2", thumb: "base2" },
       highlights: [
         "Title-thumbnail consistency",
         "Upload schedule optimization",
@@ -234,7 +234,17 @@ const CaseStudies = () => {
         "Cross-platform distribution"
       ],
     },
-  ].map((it) => {
+  ];
+
+  const { config } = useGlobalConfig();
+
+  const caseStudies = useMemo(() => {
+    return (config?.caseStudies && config.caseStudies.length > 0)
+      ? config.caseStudies
+      : DEFAULT_CASE_STUDIES;
+  }, [config.caseStudies]);
+
+  const items = caseStudies.map((it) => {
     const hook = findAssetByBase(it.keys.hook, MEDIA);
     const edit = findAssetByBase(it.keys.edit, MEDIA);
     const thumb = findAssetByBase(it.keys.thumb, MEDIA);
@@ -256,7 +266,7 @@ const CaseStudies = () => {
           <div
             className="absolute bottom-20 left-10 w-80 h-80 rounded-full opacity-10 blur-3xl pointer-events-none"
             style={{
-              background: "radial-gradient(circle, #ff9357, transparent 60%)",
+              background: "radial-gradient(circle, #C10801, transparent 60%)",
             }}
             aria-hidden="true"
           />
@@ -287,7 +297,7 @@ const CaseStudies = () => {
           </motion.div>
 
           <h2
-            className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
+            className="text-3xl md:text-5xl font-bold font-heading mb-3"
             style={{ color: "var(--text)" }}
           >
             Recent Wins
@@ -404,7 +414,7 @@ const CaseStudies = () => {
                 {/* Content */}
                 <div className="p-5">
                   <h3
-                    className="text-lg font-bold mb-2 font-['Poppins']"
+                    className="text-lg font-bold mb-2 font-heading"
                     style={{ color: "var(--text)" }}
                   >
                     {it.title}
@@ -614,7 +624,7 @@ const ProcessSection = () => {
       title: "Discovery Call (15–20 min)",
       desc: "Rapid channel audit, goals, constraints, and assets. We align on north-star metrics (CTR, Retention, Subs/Upload) and success criteria.",
       icon: <MessageCircle size={24} />,
-      gradient: "linear-gradient(135deg, #ff6b6b, #ee5a6f)",
+      gradient: "linear-gradient(135deg, #E85002, #C10801)",
       deliverables: [
         "Channel audit report",
         "Success metrics defined",
@@ -627,7 +637,7 @@ const ProcessSection = () => {
       title: "AI Setup & Guardrails (1–2 days)",
       desc: "Brand kit, motion/pacing presets, auto-transcriptions, metadata assistant, and thumbnail ideation loops. Consent-first voice/face features with review gates.",
       icon: <Bot size={24} />,
-      gradient: "linear-gradient(135deg, #4ecdc4, #45b7d1)",
+      gradient: "linear-gradient(135deg, #F16001, #E85002)",
       deliverables: [
         "Brand style guide",
         "AI workflow setup",
@@ -640,7 +650,7 @@ const ProcessSection = () => {
       title: "Pilot Sprint (7–10 days)",
       desc: "2–3 edited videos + thumbnails/shorts. Hook testing, clean cuts, captioning. Structured A/B for title/thumbnail. 48–72 hr standard turnaround.",
       icon: <Zap size={24} />,
-      gradient: "linear-gradient(135deg, #f7b731, #f39c12)",
+      gradient: "linear-gradient(135deg, #E85002, #F16001)",
       deliverables: [
         "2-3 full edits delivered",
         "A/B thumbnail variants",
@@ -653,7 +663,7 @@ const ProcessSection = () => {
       title: "Measure → Systemize",
       desc: "CTR/retention dashboard, weekly iteration loop, and workflow automations (handoff, posts, assets). Scale what wins; sunset what doesn't.",
       icon: <BarChart3 size={24} />,
-      gradient: "linear-gradient(135deg, #5f27cd, #341f97)",
+      gradient: "linear-gradient(135deg, #C10801, #E85002)",
       deliverables: [
         "Analytics dashboard",
         "Automated workflows",
@@ -678,7 +688,7 @@ const ProcessSection = () => {
           <div
             className="absolute bottom-1/4 right-10 w-72 h-72 rounded-full opacity-10 blur-3xl pointer-events-none"
             style={{
-              background: "radial-gradient(circle, #ff9357, transparent 60%)",
+              background: "radial-gradient(circle, #C10801, transparent 60%)",
             }}
             aria-hidden="true"
           />
@@ -709,7 +719,7 @@ const ProcessSection = () => {
           </motion.div>
 
           <h2
-            className="text-4xl md:text-5xl font-bold font-['Poppins'] mb-3"
+            className="text-4xl md:text-5xl font-bold font-heading mb-3"
             style={{ color: "var(--text)" }}
           >
             How We Work
@@ -923,7 +933,7 @@ const ProcessSection = () => {
               <motion.div
                 className="h-full"
                 style={{
-                  background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                  background: "linear-gradient(90deg, var(--orange), #F16001)",
                 }}
                 initial={{ width: "0%" }}
                 whileInView={{ width: "100%" }}
@@ -1022,7 +1032,7 @@ const TestimonialsSection = ({ isDark }) => {
       quote: "Thumbnail iterations increased CTR consistently over three uploads.",
       metrics: [{ label: "CTR", value: `${ctrMin}% → ${ctrMax}%` }],
       ai: ["Thumb ideation (AI)", "Title scoring"],
-      color: "#4ecdc4",
+      color: "#F16001",
     },
     {
       type: "analytics",
@@ -1036,7 +1046,7 @@ const TestimonialsSection = ({ isDark }) => {
       metrics: [{ label: "Avg View Dur.", value: "+32%" }],
       cta: { label: "See case", href: "/work/katka" },
       ai: ["Retention analysis", "Hook optimization"],
-      color: "#e74c3c",
+      color: "#C10801",
     },
     {
       type: "video",
@@ -1049,7 +1059,7 @@ const TestimonialsSection = ({ isDark }) => {
       quote: "The editing style perfectly matches my brand. Watch time improved significantly.",
       metrics: [{ label: "Session Time", value: "+28%" }],
       ai: ["Style-matched edits", "Auto captions"],
-      color: "#9b59b6",
+      color: "#E85002",
     },
     {
       type: "analytics",
@@ -1063,7 +1073,7 @@ const TestimonialsSection = ({ isDark }) => {
       metrics: [{ label: "Subs from Shorts", value: "+9.4k" }],
       cta: { label: "See case", href: "/work/manav" },
       ai: ["Hook scoring", "Auto captions"],
-      color: "#5f27cd",
+      color: "#F16001",
     },
   ];
 
@@ -1543,6 +1553,19 @@ const FAQSection = () => {
       icon: <IconImage size={20} />,
     },
     {
+      question: 'Who are some creators Shinel Studios has worked with?',
+      answer: 'We have had the privilege to collaborate with leading YouTube creators like Kamz Inkzone, Deadlox Gaming, Manav Sukhija, and Gamer Mummy, providing them with professional video editing and growth strategy.',
+      category: 'Clients',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
       question: 'How long does video editing take?',
       answer: 'Our video editing turnaround time is 24-48 hours for thumbnail design, 48-72 hours for short-form content (YouTube Shorts, Instagram Reels), and 5-10 days for long-form video projects. Rush delivery is available for urgent projects.',
       category: 'Timeline',
@@ -1775,7 +1798,7 @@ const FAQSection = () => {
             href="#contact"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white"
             style={{
-              background: "linear-gradient(90deg, var(--orange), #ff9357)",
+              background: "linear-gradient(90deg, var(--orange), #F16001)",
             }}
           >
             <MessageCircle size={18} />
@@ -1839,7 +1862,7 @@ const ContactCTA = ({ onBook }) => {
       id="contact"
       className="w-full py-16 md:py-20 relative overflow-hidden"
       style={{
-        backgroundImage: `linear-gradient(90deg, var(--orange), ${COLORS.orangeLight})`,
+        backgroundImage: `linear-gradient(90deg, var(--orange), #F16001)`,
       }}
       aria-labelledby="contact-heading"
     >
@@ -2373,7 +2396,7 @@ export default function ShinelStudiosHomepage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/tools"
-                  className="px-10 py-5 rounded-2xl bg-[var(--orange)] text-white font-bold text-lg shadow-xl hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2"
+                  className="px-10 py-5 rounded-2xl bg-[var(--orange)] text-white font-bold text-lg shadow-xl hover:shadow-[var(--orange)]/20 transition-all flex items-center justify-center gap-2"
                 >
                   Explore All Tools <ArrowRight size={20} />
                 </Link>

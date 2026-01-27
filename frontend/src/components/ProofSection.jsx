@@ -5,17 +5,21 @@ import { BarChart3, Image as IconImage } from "lucide-react";
 import { BeforeAfter } from './BeforeAfter'; // Assuming BeforeAfter.jsx is in the same folder
 import { LazyImage } from "./ProgressiveImage";
 import { SAMPLE_BEFORE, SAMPLE_AFTER } from '../lib/helpers'; // Import helpers
+import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 // --- Import available images ---
 import SAMPLE_VLOG_BEFORE from '../assets/Vlog_sample_before.jpg';
 import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
+import BGMI_BEFORE from '../assets/bgmi-thumbnail-base.jpg';
+import BGMI_AFTER from '../assets/bgmi-thumbnail-creator1.jpg';
+import BGMI_AFTER_2 from '../assets/bgmi-thumbnail-creator2.jpg';
 
 // --- Showcase Data ---
-const showcases = [
+const DEFAULT_SHOWCASES = [
   {
-    category: "Gaming (BGMI)",
-    beforeImage: SAMPLE_BEFORE, // Use helper placeholder
-    afterImage: SAMPLE_AFTER,   // Use helper placeholder
+    category: "Gaming (BGMI - Rank Push)",
+    beforeImage: BGMI_BEFORE,
+    afterImage: BGMI_AFTER,
     stats: {
       ctrIncrease: 78,
       viewsMultiplier: "3.1x",
@@ -23,9 +27,9 @@ const showcases = [
     },
   },
   {
-    category: "Vlog",
-    beforeImage: SAMPLE_VLOG_BEFORE, // This uses your actual imported image
-    afterImage: SAMPLE_VLOG_AFTER,   // This uses your actual imported image
+    category: "Lifestyle Vlog",
+    beforeImage: SAMPLE_VLOG_BEFORE,
+    afterImage: SAMPLE_VLOG_AFTER,
     stats: {
       ctrIncrease: 62,
       viewsMultiplier: "2.3x",
@@ -33,9 +37,9 @@ const showcases = [
     },
   },
   {
-    category: "Gaming (Valorant)",
-    beforeImage: SAMPLE_BEFORE, // Use helper placeholder
-    afterImage: SAMPLE_AFTER,   // Use helper placeholder
+    category: "Gaming (BGMI - Montage)",
+    beforeImage: BGMI_BEFORE,
+    afterImage: BGMI_AFTER_2,
     stats: {
       ctrIncrease: 94,
       viewsMultiplier: "4.5x",
@@ -47,6 +51,13 @@ const showcases = [
 
 /* ===================== Enhanced Proof Section ===================== */
 const ProofSection = () => {
+  const { config } = useGlobalConfig();
+  const showcases = useMemo(() => {
+    return (config?.proofShowcases && config.proofShowcases.length > 0)
+      ? config.proofShowcases
+      : DEFAULT_SHOWCASES;
+  }, [config.proofShowcases]);
+
   // State to manage the currently selected showcase
   const [activeIndex, setActiveIndex] = useState(0);
   const [countUp, setCountUp] = useState(0);
@@ -176,7 +187,7 @@ const ProofSection = () => {
         <div
           className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
           style={{
-            background: "radial-gradient(circle, #ff9357, transparent 60%)",
+            background: "radial-gradient(circle, #F16001, transparent 60%)",
           }}
           aria-hidden="true"
         />
@@ -230,7 +241,7 @@ const ProofSection = () => {
                 }`}
               style={{
                 border: "1px solid var(--border)",
-                background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #ff9357)" : "var(--surface)",
+                background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #F16001)" : "var(--surface)",
                 willChange: "transform",
                 WebkitTapHighlightColor: "transparent",
               }}
@@ -274,7 +285,7 @@ const ProofSection = () => {
           <motion.div
             className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl"
             style={{
-              background: "linear-gradient(135deg, var(--orange), #ff9357)",
+              background: "linear-gradient(135deg, var(--orange), #F16001)",
               boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
               willChange: "transform",
               WebkitTapHighlightColor: "transparent",

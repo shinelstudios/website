@@ -328,14 +328,14 @@ export default function AdminThumbnailsPage() {
 
   // ---------- Render ----------
   return (
-    <div className="min-h-screen pb-20 bg-black">
+    <div className="min-h-screen pb-20 bg-[var(--surface)]">
       <LoadingOverlay show={busy} label={busyLabel} />
 
       {/* Progress Bar */}
       {op && (
-        <div className="fixed top-20 left-0 right-0 z-[110] h-1 bg-white/5">
+        <div className="fixed top-20 left-0 right-0 z-[110] h-1 bg-[var(--surface-alt)]">
           <div
-            className="h-full bg-orange-500 transition-all duration-300"
+            className="h-full bg-[var(--orange)] transition-all duration-300"
             style={{ width: `${op.pct}%` }}
           />
         </div>
@@ -362,19 +362,19 @@ export default function AdminThumbnailsPage() {
 
             {/* View Mode Toggle */}
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">
                 Showing {filteredItems.length} Assets
               </p>
-              <div className="flex p-1 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex p-1 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)]">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:text-white'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? 'bg-[var(--orange)] text-white shadow-lg shadow-[var(--orange)]/20' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
                 >
                   <LayoutGrid size={16} />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-lg transition-all ${viewMode === "list" ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:text-white'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === "list" ? 'bg-[var(--orange)] text-white shadow-lg shadow-[var(--orange)]/20' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
                 >
                   <List size={16} />
                 </button>
@@ -423,12 +423,12 @@ export default function AdminThumbnailsPage() {
                 />
               ))}
               {filteredItems.length === 0 && !busy && (
-                <div className="col-span-full py-20 rounded-3xl border border-dashed border-white/5 bg-white/[0.01] flex flex-col items-center justify-center text-center">
-                  <div className="p-4 rounded-full bg-white/5 mb-4">
-                    <LayoutGrid size={32} className="text-gray-700" />
+                <div className="col-span-full py-20 rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface-alt)]/50 flex flex-col items-center justify-center text-center">
+                  <div className="p-4 rounded-full bg-[var(--surface-alt)] mb-4">
+                    <LayoutGrid size={32} className="text-[var(--text-muted)]/20" />
                   </div>
-                  <h3 className="font-bold text-gray-500">No assets found</h3>
-                  <p className="text-xs text-gray-600 mt-1 uppercase tracking-widest font-black">Try adjusting your filters or search</p>
+                  <h3 className="font-bold text-[var(--text-muted)]">No assets found</h3>
+                  <p className="text-xs text-[var(--text-muted)]/60 mt-1 uppercase tracking-widest font-black">Try adjusting your filters or search</p>
                 </div>
               )}
             </div>
@@ -453,19 +453,19 @@ export default function AdminThumbnailsPage() {
 
             {/* Quick Stats Widget */}
             {stats && (
-              <div className="mt-8 p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-4">
+              <div className="mt-8 p-6 rounded-3xl bg-[var(--surface-alt)] border border-[var(--border)] space-y-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Storage Insights</h3>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--orange)]" />
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">Storage Insights</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs font-bold text-white leading-none">{stats.count || 0}</p>
-                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-tighter mt-1">Total Assets</p>
+                    <p className="text-xs font-bold text-[var(--text)] leading-none">{stats.count || 0}</p>
+                    <p className="text-[9px] font-black text-[var(--text-muted)] uppercase tracking-tighter mt-1">Total Assets</p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white leading-none">{formatBytes(stats.size || 0)}</p>
-                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-tighter mt-1">Storage Used</p>
+                    <p className="text-xs font-bold text-[var(--text)] leading-none">{formatBytes(stats.size || 0)}</p>
+                    <p className="text-[9px] font-black text-[var(--text-muted)] uppercase tracking-tighter mt-1">Storage Used</p>
                   </div>
                 </div>
               </div>

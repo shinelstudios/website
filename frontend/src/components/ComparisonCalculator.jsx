@@ -135,9 +135,9 @@ const ComparisonCalculator = ({ onBook }) => {
                             <div className="flex items-center gap-3 mb-2">
                                 <div
                                     className="w-10 h-10 rounded-full flex items-center justify-center"
-                                    style={{ background: "rgba(16, 185, 129, 0.1)" }}
+                                    style={{ background: "rgba(232, 80, 2, 0.1)" }}
                                 >
-                                    <Clock size={20} style={{ color: "#10B981" }} />
+                                    <Clock size={20} style={{ color: "var(--orange)" }} />
                                 </div>
                                 <div>
                                     <div className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -170,7 +170,7 @@ const ComparisonCalculator = ({ onBook }) => {
                                         Expected CTR
                                     </div>
                                     <div className="text-2xl font-bold" style={{ color: "var(--text)" }}>
-                                        {newCTR.toFixed(1)}% <span className="text-sm text-green-500">(+{ctrImprovement}%)</span>
+                                        {newCTR.toFixed(1)}% <span className="text-sm" style={{ color: "var(--orange)" }}>(+{ctrImprovement}%)</span>
                                     </div>
                                 </div>
                             </div>
@@ -187,9 +187,9 @@ const ComparisonCalculator = ({ onBook }) => {
                             <div className="flex items-center gap-3 mb-2">
                                 <div
                                     className="w-10 h-10 rounded-full flex items-center justify-center"
-                                    style={{ background: "rgba(59, 130, 246, 0.1)" }}
+                                    style={{ background: "rgba(232, 80, 2, 0.1)" }}
                                 >
-                                    <DollarSign size={20} style={{ color: "#3B82F6" }} />
+                                    <DollarSign size={20} style={{ color: "var(--orange)" }} />
                                 </div>
                                 <div className="w-full">
                                     <div className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>

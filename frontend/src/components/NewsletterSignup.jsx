@@ -74,7 +74,7 @@ const NewsletterSignup = () => {
                     <motion.div
                         className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-6"
                         style={{
-                            background: "linear-gradient(135deg, var(--orange), #ff6b35)",
+                            background: "linear-gradient(135deg, var(--orange), #F16001)",
                             boxShadow: "0 10px 30px rgba(232, 80, 2, 0.3)",
                         }}
                         whileHover={{ scale: 1.1, rotate: 5 }}
@@ -109,7 +109,7 @@ const NewsletterSignup = () => {
                                     className="w-full pl-12 pr-4 py-4 rounded-xl border text-base transition-all"
                                     style={{
                                         background: "var(--surface)",
-                                        borderColor: status === "error" ? "#DC2626" : "var(--border)",
+                                        borderColor: status === "error" ? "#C10801" : "var(--border)",
                                         color: "var(--text)",
                                     }}
                                     required
@@ -120,7 +120,7 @@ const NewsletterSignup = () => {
                                 disabled={status === "loading" || status === "success"}
                                 className="group px-8 py-4 rounded-xl font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 style={{
-                                    background: "linear-gradient(135deg, var(--orange), #ff6b35)",
+                                    background: "linear-gradient(135deg, var(--orange), #F16001)",
                                     boxShadow: "0 4px 15px rgba(232, 80, 2, 0.3)",
                                 }}
                             >
@@ -144,7 +144,7 @@ const NewsletterSignup = () => {
                         {message && (
                             <motion.p
                                 className="mt-3 text-sm"
-                                style={{ color: status === "error" ? "#DC2626" : "#10B981" }}
+                                style={{ color: status === "error" ? "#C10801" : "var(--orange)" }}
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
@@ -156,11 +156,11 @@ const NewsletterSignup = () => {
                     {/* Trust indicators */}
                     <div className="flex flex-wrap items-center justify-center gap-6 mt-8 text-xs" style={{ color: "var(--text-muted)" }}>
                         <div className="flex items-center gap-2">
-                            <CheckCircle2 size={16} className="text-green-500" />
+                            <CheckCircle2 size={16} className="text-[var(--orange)]" />
                             <span>No spam, ever</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <CheckCircle2 size={16} className="text-green-500" />
+                            <CheckCircle2 size={16} className="text-[var(--orange)]" />
                             <span>Unsubscribe anytime</span>
                         </div>
                         <div className="flex items-center gap-2">

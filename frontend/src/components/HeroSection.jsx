@@ -39,20 +39,20 @@ function emitAnalytics(payload) {
 // Bright Stars
 const Star = ({ delay, size, top, left }) => (
   <motion.div
-    className="absolute rounded-full bg-[var(--orange)] dark:bg-white"
+    className="absolute rounded-full bg-[var(--orange)] dark:bg-[var(--text)]"
     style={{
       width: size,
       height: size,
       top,
       left,
-      boxShadow: `0 0 ${size * 3}px rgba(255,255,255,0.6)`
+      boxShadow: `0 0 ${size * 3}px var(--orange)`
     }}
     animate={{
-      opacity: [0.2, 1, 0.2],
-      scale: [0.8, 1.3, 0.8]
+      opacity: [0.2, 0.8, 0.2],
+      scale: [0.8, 1.2, 0.8]
     }}
     transition={{
-      duration: 2 + delay,
+      duration: 3 + delay,
       repeat: Infinity,
       ease: "easeInOut",
       delay: delay
@@ -129,13 +129,13 @@ const AuroraBackground = () => (
 
 const GlassCard = ({ children, className = "", style = {}, noBorder = false }) => (
   <div
-    className={`relative overflow-hidden rounded-xl ${noBorder ? '' : 'border border-white/10'} bg-black/50 backdrop-blur-xl shadow-2xl ${className}`}
+    className={`relative overflow-hidden rounded-xl ${noBorder ? '' : 'border border-[var(--border)]'} bg-[var(--surface-alt)]/80 backdrop-blur-xl shadow-2xl ${className}`}
     style={{
-      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
+      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
       ...style
     }}
   >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
+    <div className="absolute inset-0 bg-gradient-to-br from-[var(--text)]/[0.03] via-transparent to-transparent pointer-events-none" />
     {children}
   </div>
 );
@@ -144,18 +144,18 @@ const GlassCard = ({ children, className = "", style = {}, noBorder = false }) =
 const MockTimeline = () => (
   <div className="w-full h-full flex flex-col bg-[#0a0a0a] relative font-mono text-[9px] overflow-hidden">
     {/* Toolbar */}
-    <div className="h-9 border-b border-white/10 flex items-center justify-between px-3 bg-gradient-to-b from-[#1a1a1a] to-[#0f0f0f]">
+    <div className="h-9 border-b border-[var(--border)] flex items-center justify-between px-3 bg-gradient-to-b from-[var(--surface-alt)] to-[var(--surface)]">
       <div className="flex items-center gap-3">
         <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#E85002]" />
-          <div className="w-2.5 h-2.5 rounded-full bg-gray-600" />
-          <div className="w-2.5 h-2.5 rounded-full bg-gray-700" />
+          <div className="w-2.5 h-2.5 rounded-full bg-[var(--orange)]" />
+          <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-gray-500" />
         </div>
-        <div className="text-gray-400 text-[10px] font-semibold">Final_Edit_v4.mp4</div>
+        <div className="text-[var(--text-muted)] text-[10px] font-semibold">Final_Edit_v4.mp4</div>
       </div>
-      <div className="flex items-center gap-2 px-2.5 py-1 bg-[#E85002]/10 rounded border border-[#E85002]/30">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#E85002] animate-pulse" />
-        <span className="text-[#E85002] font-bold tracking-wider text-[10px]">00:04:32:18</span>
+      <div className="flex items-center gap-2 px-2.5 py-1 bg-[var(--orange)]/10 rounded border border-[var(--orange)]/30">
+        <div className="w-1.5 h-1.5 rounded-full bg-[var(--orange)] animate-pulse" />
+        <span className="text-[var(--orange)] font-bold tracking-wider text-[10px]">00:04:32:18</span>
       </div>
     </div>
 
@@ -316,12 +316,12 @@ const ThreeDVisuals = () => {
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
         >
-          <GlassCard className="px-5 py-4 !bg-black/80 !border-white/20">
-            <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Avg CTR</div>
-            <div className="text-2xl font-black text-white">12.8%</div>
+          <GlassCard className="px-5 py-4 !bg-[var(--surface)]/90 !border-[var(--border)]">
+            <div className="text-[9px] text-[var(--text-muted)] font-bold uppercase tracking-widest mb-1">Avg CTR</div>
+            <div className="text-2xl font-black text-[var(--text)]">12.8%</div>
             <div className="flex items-center gap-1 mt-1">
-              <Zap size={10} className="text-[#E85002]" />
-              <span className="text-[9px] text-[#E85002] font-bold">+4.2%</span>
+              <Zap size={10} className="text-[var(--orange)]" />
+              <span className="text-[9px] text-[var(--orange)] font-bold">+4.2%</span>
             </div>
           </GlassCard>
         </motion.div>
@@ -470,7 +470,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           {/* Headline */}
           <motion.h1
             variants={item}
-            className="text-6xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
+            className="text-6xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl text-[var(--text)]"
           >
             We <span className="animated-gradient-text">Engineer</span>
             <br />YouTube Growth
@@ -525,10 +525,10 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           {/* Subheadline */}
           <motion.p
             variants={item}
-            className="text-xl lg:text-2xl text-gray-300 leading-relaxed max-w-xl mx-auto lg:mx-0"
+            className="text-xl lg:text-2xl text-[var(--text-muted)] leading-relaxed max-w-xl mx-auto lg:mx-0"
           >
             Premium editing & strategy that drives measurable results.
-            <span className="block text-gray-500 text-lg mt-3 font-light">Data-backed. Performance-focused. No templates.</span>
+            <span className="block opacity-60 text-lg mt-3 font-light">Data-backed. Performance-focused. No templates.</span>
           </motion.p>
 
           {/* CTAs */}
@@ -558,13 +558,13 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
 
             {/* Trust micro-copy - Now properly aligned under buttons */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-8 gap-y-3 px-2">
-              <div className="flex items-center gap-4 text-xs text-gray-500 font-medium">
+              <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] font-medium">
                 <div className="flex items-center gap-1.5">
-                  <Check size={14} className="text-green-500" />
+                  <Check size={14} className="text-[var(--orange)]" />
                   <span>No credit card</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check size={14} className="text-green-500" />
+                  <Check size={14} className="text-[var(--orange)]" />
                   <span>15-min call</span>
                 </div>
               </div>
@@ -572,11 +572,11 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               {/* Urgency indicator - Integrated with trust items */}
               <div className="flex items-center gap-2.5">
                 <div className="relative flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping absolute" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 relative" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#C10801] animate-ping absolute" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#C10801] relative" />
                 </div>
-                <span className="text-xs text-gray-400 font-medium">
-                  <span className="text-[#E85002] font-extrabold uppercase tracking-widest text-[10px] mr-1">Limited:</span>
+                <span className="text-xs text-[var(--text-muted)] font-medium">
+                  <span className="text-[var(--orange)] font-extrabold uppercase tracking-widest text-[10px] mr-1">Limited:</span>
                   Only 3 spots left this week
                 </span>
               </div>
@@ -589,12 +589,12 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
             className="flex items-center justify-center lg:justify-start gap-12 pt-6"
           >
             <div className="flex items-center gap-2.5">
-              <Sparkles size={18} className="text-[#E85002]" />
-              <span className="text-sm text-gray-400 font-semibold">AI-Enhanced</span>
+              <Sparkles size={18} className="text-[var(--orange)]" />
+              <span className="text-sm text-[var(--text-muted)] font-semibold">AI-Enhanced</span>
             </div>
             <div className="flex items-center gap-2.5">
-              <Users size={18} className="text-[#E85002]" />
-              <span className="text-sm text-gray-400 font-semibold">Human Perfected</span>
+              <Users size={18} className="text-[var(--orange)]" />
+              <span className="text-sm text-[var(--text-muted)] font-semibold">Human Perfected</span>
             </div>
           </motion.div>
         </motion.div>

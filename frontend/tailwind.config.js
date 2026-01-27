@@ -8,13 +8,18 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        heading: ['Outfit', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
+        accent: ['"Space Grotesk"', 'sans-serif'],
+      },
       keyframes: {
         'marquee-rtl': {
-          '0%':   { transform: 'translate3d(0,0,0)' },
+          '0%': { transform: 'translate3d(0,0,0)' },
           '100%': { transform: 'translate3d(-50%,0,0)' },
         },
         'marquee-ltr': {
-          '0%':   { transform: 'translate3d(-50%,0,0)' },
+          '0%': { transform: 'translate3d(-50%,0,0)' },
           '100%': { transform: 'translate3d(0,0,0)' },
         },
       },

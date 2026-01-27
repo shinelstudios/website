@@ -264,8 +264,8 @@ const QuickLeadForm = ({ source = "quick_quote" }) => {
               style={{
                 background:
                   toast.type === "success"
-                    ? "linear-gradient(90deg,#16a34a,#22c55e)"
-                    : "linear-gradient(90deg,#e11d48,#f97316)",
+                    ? "linear-gradient(90deg,#E85002,#F16001)"
+                    : "linear-gradient(90deg,#C10801,#E85002)",
                 boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
               }}
               role="status"
@@ -458,7 +458,7 @@ const QuickLeadForm = ({ source = "quick_quote" }) => {
               disabled={!valid || sending}
               className={`rounded-xl py-3 font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed ${isCompact ? "" : "flex-1"}`}
               style={{
-                background: "linear-gradient(90deg, var(--orange), #ff9357)",
+                background: "linear-gradient(90deg, var(--orange), #F16001)",
                 boxShadow: "0 4px 12px rgba(232,80,2,0.25)",
               }}
               whileHover={!sending ? { y: -2, boxShadow: "0 10px 24px rgba(232,80,2,0.35)" } : {}}

@@ -12,7 +12,7 @@ const NOTIFICATION_TEMPLATES = [
     {
         icon: CheckCircle2,
         message: "Someone from {city} just booked a free audit",
-        color: "#10B981",
+        color: "#E85002",
     },
     {
         icon: TrendingUp,
@@ -22,7 +22,7 @@ const NOTIFICATION_TEMPLATES = [
     {
         icon: Users,
         message: "{count} creators joined this week",
-        color: "#3B82F6",
+        color: "#C10801",
     },
 ];
 

@@ -85,26 +85,28 @@ export const SERVICES = {
     aiTools: 'AI-Powered Tools',
 };
 
-// Color Palette - Cinematic Post-Production Theme
+// Color Palette - Official Shinel Studios Brand Palette
 export const COLORS = {
     // Primary brand colors
     orange: '#E85002',
-    orangeLight: '#ff9357',
-    orangeRgb: '232, 80, 2',
+    black: '#000000',
+    white: '#F9F9F9',
+    gray: '#646464',
+    lightGray: '#A7A7A7',
+    darkGray: '#333333',
 
-    // Cinematic palette
-    filmNoir: '#0A0A0A',        // Deep black backgrounds
-    slate: '#1A1A1A',            // Dark slate for cards
-    charcoal: '#2A2A2A',         // Lighter charcoal
-    silver: '#C0C0C0',           // Film silver accents
-    gold: '#D4AF37',             // Award gold
-    crimson: '#DC143C',          // Director's cut red
-    midnight: '#191970',         // Midnight blue
+    // Functional theme-aware exports
+    text: 'var(--text)',
+    textMuted: 'var(--text-muted)',
+    surface: 'var(--surface)',
+    surfaceAlt: 'var(--surface-alt)',
+    border: 'var(--border)',
 
     // Gradients
-    cinematic: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)',
-    spotlight: 'radial-gradient(circle at center, rgba(212,175,55,0.1) 0%, transparent 70%)',
-    filmStrip: 'repeating-linear-gradient(90deg, #1A1A1A 0px, #1A1A1A 10px, #0A0A0A 10px, #0A0A0A 20px)',
+    brandGradient: 'linear-gradient(90deg, #000000, #C10801, #F16001, #D9C3AB)',
+    cinematic: 'var(--gradient-cinematic)',
+    spotlight: 'var(--gradient-spotlight)',
+    filmStrip: 'var(--gradient-film-strip)',
 
     // WhatsApp
     whatsappGreen: '#25D366',
@@ -254,7 +256,7 @@ export const TRUST_BADGES = [
 export const META = {
     title: 'Shinel Studios - AI-Powered Video Editing for YouTube Creators',
     description: 'Professional video editing, thumbnail design, and content strategy for YouTube creators. AI-assisted workflow with human creativity. Grow your channel with data-driven results.',
-    keywords: 'video editing, youtube editing, thumbnail design, content strategy, AI video editing, youtube growth, creator services',
+    keywords: 'video editing, youtube editing, thumbnail design, content strategy, AI video editing, youtube growth, creator services, Kamz Inkzone video editor, Deadlox Gaming thumbnails, Manav Sukhija editing, Gamer Mummy visuals, youtube growth agency India',
     ogImage: '/assets/og-image.jpg',
     twitterCard: 'summary_large_image',
     twitterSite: '@shinelstudios',

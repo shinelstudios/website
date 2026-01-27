@@ -13,8 +13,11 @@ import {
 import { Link } from "react-router-dom";
 import { animations } from "../lib/helpers"; // Assuming helpers are in src/lib/helpers.js
 
+import { useGlobalConfig } from "../context/GlobalConfigContext";
+
 /* ===================== Enhanced Services Section ===================== */
 const ServicesSection = () => {
+  const { config } = useGlobalConfig();
   const [activeService, setActiveService] = useState(null);
 
   const services = [
@@ -199,7 +202,7 @@ const ServicesSection = () => {
           {/* Stats row */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm">
             {[
-              { label: "Average CTR Lift", value: "+62%" },
+              { label: "Average CTR Lift", value: `+${config?.stats?.ctrBoostMax || 62}%` },
               { label: "Faster Turnaround", value: "48-72h" },
               { label: "Client Retention", value: "94%" },
             ].map((stat, i) => (

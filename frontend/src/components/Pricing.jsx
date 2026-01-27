@@ -274,20 +274,20 @@ const Pricing = ({ onOpenCalendly }) => {
   // 4. Sub-Components
   const MetricLabel = ({ icon: Icon, label, value }) => (
     <div className="flex items-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity duration-300">
-      <Icon size={12} className="text-orange-500" />
+      <Icon size={12} className="text-[var(--orange)]" />
       <span className="text-[10px] font-mono leading-none tracking-widest uppercase font-bold">{label}: {value}</span>
     </div>
   );
 
   const StatusStage = ({ label, active, complete }) => (
     <div className="flex flex-col items-center gap-2">
-      <div className={`w-2.5 h-2.5 rounded-full border ${complete ? 'bg-orange-500 border-orange-500' : active ? 'bg-orange-500 animate-pulse border-orange-500 shadow-[0_0_10px_rgba(232,80,2,0.8)]' : 'border-white/20'}`} />
-      <span className={`text-[8px] font-mono uppercase tracking-widest ${active || complete ? 'text-white font-black' : 'text-white/20'}`}>{label}</span>
+      <div className={`w-2.5 h-2.5 rounded-full border ${complete ? 'bg-[var(--orange)] border-[var(--orange)]' : active ? 'bg-[var(--orange)] animate-pulse border-[var(--orange)] shadow-[0_0_10px_rgba(232,80,2,0.8)]' : 'border-white/20'}`} />
+      <span className={`text-[8px] font-mono uppercase tracking-widest ${active || complete ? 'text-[var(--text)] font-black' : 'text-[var(--text-muted)]/20'}`}>{label}</span>
     </div>
   );
 
   return (
-    <section id="pricing" className="py-24 md:py-32 relative bg-[#020202] overflow-hidden min-h-screen cursor-default">
+    <section id="pricing" className="py-24 md:py-32 relative bg-[var(--surface)] text-[var(--text)] overflow-hidden min-h-screen cursor-default selection:bg-[var(--orange)]/30">
       <MetaTags
         title="Production Pricing | Shinel Studios - Elite Video Editing Agency"
         description="Transparent production pricing for top-tier creators. AI-powered, human-directed, post-production excellence. High-contrast, 60fps experience."
@@ -298,7 +298,7 @@ const Pricing = ({ onOpenCalendly }) => {
 
       {/* Spotlight Lighting */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-screen bg-[radial-gradient(circle_at_50%_0%,rgba(232,80,2,0.1)_0%,transparent_70%)] pointer-events-none" />
-      <div className="absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] bg-blue-500/5 blur-[150px] pointer-events-none rounded-full" />
+      <div className="absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] bg-[var(--orange)]/5 blur-[150px] pointer-events-none rounded-full" />
 
       <div className="container mx-auto px-6 max-w-7xl relative z-10">
         {/* Header Section */}
@@ -307,10 +307,10 @@ const Pricing = ({ onOpenCalendly }) => {
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="flex items-center gap-3 px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] mb-8"
+            className="flex items-center gap-3 px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--surface-alt)] mb-8"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-[0.4em] text-white/50 font-black">Production Standards v4.2 // OPTIMIZED</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[var(--orange)] animate-pulse" />
+            <span className="text-[10px] font-mono uppercase tracking-[0.4em] text-[var(--text-muted)] font-black">Production Standards v4.2 // OPTIMIZED</span>
           </motion.div>
 
           <motion.h1
@@ -319,16 +319,16 @@ const Pricing = ({ onOpenCalendly }) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="text-5xl md:text-8xl lg:text-9xl text-white mb-6 tracking-tight leading-none"
+            className="text-5xl md:text-8xl lg:text-9xl text-[var(--text)] mb-6 tracking-tight leading-none"
           >
-            Elite <span className="italic text-orange-500">Value.</span>
+            Elite <span className="italic text-[var(--orange)]">Value.</span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, scale: 0.98 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="text-white/50 text-[10px] md:text-xs font-mono uppercase tracking-[0.5em] max-w-2xl font-bold"
+            className="text-[var(--text-muted)] text-[10px] md:text-xs font-mono uppercase tracking-[0.5em] max-w-2xl font-bold"
           >
             Tiered output pipelines for high-performance channels.
           </motion.p>
@@ -340,27 +340,27 @@ const Pricing = ({ onOpenCalendly }) => {
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-20 rounded-[2.5rem] border border-orange-500/30 bg-orange-500/[0.04] p-10 relative overflow-hidden group backdrop-blur-xl"
+              className="mb-20 rounded-[2.5rem] border border-[var(--orange)]/30 bg-[var(--surface-alt)] p-10 relative overflow-hidden group backdrop-blur-xl"
             >
               {/* Decorative Brackets */}
-              <div className="absolute top-6 left-6 w-6 h-6 border-t-2 border-l-2 border-orange-500/40" />
-              <div className="absolute top-6 right-6 w-6 h-6 border-t-2 border-r-2 border-orange-500/40" />
-              <div className="absolute bottom-6 left-6 w-6 h-6 border-b-2 border-l-2 border-orange-500/40" />
-              <div className="absolute bottom-6 right-6 w-6 h-6 border-b-2 border-r-2 border-orange-500/40" />
+              <div className="absolute top-6 left-6 w-6 h-6 border-t-2 border-l-2 border-[var(--orange)]/40" />
+              <div className="absolute top-6 right-6 w-6 h-6 border-t-2 border-r-2 border-[var(--orange)]/40" />
+              <div className="absolute bottom-6 left-6 w-6 h-6 border-b-2 border-l-2 border-[var(--orange)]/40" />
+              <div className="absolute bottom-6 right-6 w-6 h-6 border-b-2 border-r-2 border-[var(--orange)]/40" />
 
               <div className="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
                 <div className="flex items-center gap-8">
-                  <div className="w-20 h-20 rounded-3xl bg-orange-500/10 flex items-center justify-center border border-orange-500/40 shadow-[0_0_50px_rgba(232,80,2,0.1)]">
-                    <Zap className="text-orange-500 drop-shadow-glow" size={40} />
+                  <div className="w-20 h-20 rounded-3xl bg-[var(--orange)]/10 flex items-center justify-center border border-[var(--orange)]/40 shadow-[0_0_50px_rgba(232,80,2,0.1)]">
+                    <Zap className="text-[var(--orange)] drop-shadow-glow" size={40} />
                   </div>
                   <div>
-                    <span className="text-[11px] font-mono text-orange-500 uppercase tracking-widest block mb-1 font-black">Incoming Transmission // Offer Active</span>
-                    <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">{activeOffer.title}</h2>
+                    <span className="text-[11px] font-mono text-[var(--orange)] uppercase tracking-widest block mb-1 font-black">Incoming Transmission // Offer Active</span>
+                    <h2 className="text-3xl md:text-5xl font-black text-[var(--text)] uppercase tracking-tighter leading-none">{activeOffer.title}</h2>
                   </div>
                 </div>
-                <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-white/10 pt-8 md:pt-0 md:pl-12">
-                  <div className="text-[11px] font-mono text-white/40 uppercase tracking-[0.3em] mb-2 font-black">Discount Multiplier</div>
-                  <div className="text-6xl font-black text-white leading-none tracking-tighter">-{activeOffer.discount}%</div>
+                <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-[var(--border)] pt-8 md:pt-0 md:pl-12">
+                  <div className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-[0.3em] mb-2 font-black">Discount Multiplier</div>
+                  <div className="text-6xl font-black text-[var(--text)] leading-none tracking-tighter">-{activeOffer.discount}%</div>
                 </div>
               </div>
             </motion.div>
@@ -374,8 +374,8 @@ const Pricing = ({ onOpenCalendly }) => {
               key={c.k}
               onClick={() => { setCat(c.k); setIdx(0); setOpenIdx(null); }}
               className={`group relative flex items-center gap-3 px-10 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${cat === c.k
-                ? "bg-white text-black scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
-                : "bg-white/[0.04] border border-white/10 text-white/40 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
+                ? "bg-[var(--text)] text-[var(--surface)] scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
+                : "bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-alt)]/80 hover:text-[var(--text)] active:scale-95"
                 }`}
               style={{ willChange: 'transform, opacity' }}
             >
@@ -387,8 +387,8 @@ const Pricing = ({ onOpenCalendly }) => {
 
         {/* Studio Plans Display Header */}
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-black text-white uppercase tracking-[0.2em] mb-4 drop-shadow-glow">{CATS.find(x => x.k === cat)?.headline}</h2>
-          <p className="text-white/40 text-[11px] uppercase tracking-[0.4em] font-mono font-black">{CATS.find(x => x.k === cat)?.sub}</p>
+          <h2 className="text-3xl font-black text-[var(--text)] uppercase tracking-[0.2em] mb-4 drop-shadow-glow">{CATS.find(x => x.k === cat)?.headline}</h2>
+          <p className="text-[var(--text-muted)] text-[11px] uppercase tracking-[0.4em] font-mono font-black">{CATS.find(x => x.k === cat)?.sub}</p>
         </div>
 
         <div className="relative">
@@ -414,8 +414,8 @@ const Pricing = ({ onOpenCalendly }) => {
                 >
                   {/* Studio Spec Card - Enhanced Hovers & Contrast */}
                   <div className={`h-full rounded-[2.5rem] p-8 border transition-all duration-500 flex flex-col relative overflow-hidden ${isPopular
-                    ? "border-orange-500/40 bg-orange-500/[0.02]"
-                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/30"
+                    ? "border-[var(--orange)]/40 bg-[var(--surface-alt)]"
+                    : "border-[var(--border)] bg-[var(--surface-alt)]/50 hover:bg-[var(--surface-alt)] hover:border-[var(--text-muted)]/30"
                     }`}
                     style={{ willChange: 'transform' }}>
 
@@ -428,36 +428,36 @@ const Pricing = ({ onOpenCalendly }) => {
                     <div className="flex justify-between items-center mb-10 relative z-10">
                       <div className="flex items-center gap-2">
                         <Activity size={12} className="text-orange-500 animate-pulse" />
-                        <span className="text-[9px] font-mono text-white/40 uppercase tracking-[0.2em] font-black">{p.key.padStart(8, '0')}</span>
+                        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-[0.2em] font-black">{p.key.padStart(8, '0')}</span>
                       </div>
                       {isPopular && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-orange-500/40 bg-orange-500/10">
-                          <Star size={8} className="text-orange-500 fill-orange-500" />
-                          <span className="text-[9px] font-mono text-orange-500 uppercase tracking-widest font-black">Elite choice</span>
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[var(--orange)]/40 bg-[var(--orange)]/10">
+                          <Star size={8} className="text-[var(--orange)] fill-[var(--orange)]" />
+                          <span className="text-[9px] font-mono text-[var(--orange)] uppercase tracking-widest font-black">Elite choice</span>
                         </div>
                       )}
                     </div>
 
                     <div className="mb-10 relative z-10">
-                      <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-orange-500 font-black block mb-2">{p.tag}</span>
-                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-6 leading-none">{p.name}</h3>
+                      <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-[var(--orange)] font-black block mb-2">{p.tag}</span>
+                      <h3 className="text-2xl font-black text-[var(--text)] uppercase tracking-tighter mb-6 leading-none">{p.name}</h3>
 
                       <div className="flex flex-col">
                         {originalPrice ? (
                           <>
                             <div className="flex items-baseline gap-2">
-                              <span className="text-4xl font-black text-white tracking-tighter">{formatINR(finalPrice)}</span>
-                              {p.billing === 'monthly' && <span className="text-[11px] font-mono text-white/40 uppercase tracking-widest font-bold">/mo</span>}
+                              <span className="text-4xl font-black text-[var(--text)] tracking-tighter">{formatINR(finalPrice)}</span>
+                              {p.billing === 'monthly' && <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">/mo</span>}
                             </div>
                             {originalPrice !== finalPrice && (
                               <div className="flex items-center gap-2 mt-1.5">
-                                <span className="text-xs font-mono text-white/20 line-through tracking-wider font-medium">{formatINR(originalPrice)}</span>
-                                <span className="text-[10px] font-mono text-orange-500 font-black tracking-widest">FLAT -{activeOffer.discount}%</span>
+                                <span className="text-xs font-mono text-[var(--text-muted)]/50 line-through tracking-wider font-medium">{formatINR(originalPrice)}</span>
+                                <span className="text-[10px] font-mono text-[var(--orange)] font-black tracking-widest">FLAT -{activeOffer.discount}%</span>
                               </div>
                             )}
                           </>
                         ) : (
-                          <span className="text-xl font-black text-white/90 uppercase tracking-[0.2em] drop-shadow-glow">Consult Studio</span>
+                          <span className="text-xl font-black text-[var(--text)]/90 uppercase tracking-[0.2em] drop-shadow-glow">Consult Studio</span>
                         )}
                       </div>
                     </div>
@@ -467,8 +467,8 @@ const Pricing = ({ onOpenCalendly }) => {
                       <ul className="space-y-4 mb-10">
                         {p.bullets.map((b, bi) => (
                           <li key={bi} className="flex items-start gap-4 group/item">
-                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_5px_rgba(232,80,2,0.5)] group-hover/item:scale-150 transition-transform duration-300" />
-                            <span className="text-xs text-white/60 leading-relaxed font-mono uppercase tracking-tight group-hover/item:text-white font-bold transition-colors duration-300">{b}</span>
+                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--orange)] shadow-[0_0_5px_rgba(232,80,2,0.5)] group-hover/item:scale-150 transition-transform duration-300" />
+                            <span className="text-xs text-[var(--text-muted)] leading-relaxed font-mono uppercase tracking-tight group-hover/item:text-[var(--text)] font-bold transition-colors duration-300">{b}</span>
                           </li>
                         ))}
                       </ul>
@@ -478,11 +478,11 @@ const Pricing = ({ onOpenCalendly }) => {
                         <div className="mt-6 pt-6 border-t border-white/10">
                           <button
                             onClick={(e) => { e.stopPropagation(); setOpenIdx(open ? null : i); }}
-                            className="flex items-center justify-between w-full text-[10px] font-mono uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors"
+                            className="flex items-center justify-between w-full text-[10px] font-mono uppercase tracking-[0.3em] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
                           >
                             <div className="flex items-center gap-2">
-                              <SettingsIcon size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-orange-500" : ""}`} />
-                              <span className={open ? 'text-orange-500 font-black' : ''}>Technical Specs</span>
+                              <SettingsIcon size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-[var(--orange)]" : ""}`} />
+                              <span className={open ? 'text-[var(--orange)] font-black' : ''}>Technical Specs</span>
                             </div>
                             <ArrowRight size={10} className={`transition-transform duration-300 ${open ? 'rotate-90' : ''}`} />
                           </button>
@@ -496,8 +496,8 @@ const Pricing = ({ onOpenCalendly }) => {
                               >
                                 <ul className="mt-6 space-y-3.5 pl-2 border-l border-white/5">
                                   {p.includes.map((inc, ii) => (
-                                    <li key={ii} className="text-[10px] text-white/40 font-mono uppercase flex items-center gap-2 tracking-wide leading-relaxed font-medium hover:text-white/80 transition-colors">
-                                      <div className="w-1 h-1 rotate-45 border border-orange-500/30 shrink-0" />
+                                    <li key={ii} className="text-[10px] text-[var(--text-muted)] font-mono uppercase flex items-center gap-2 tracking-wide leading-relaxed font-medium hover:text-[var(--text)]/80 transition-colors">
+                                      <div className="w-1 h-1 rotate-45 border border-[var(--orange)]/30 shrink-0" />
                                       {inc}
                                     </li>
                                   ))}
@@ -513,8 +513,8 @@ const Pricing = ({ onOpenCalendly }) => {
                     <button
                       onClick={() => handleCTA(p)}
                       className={`w-full mt-10 py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn active:scale-95 z-20 ${isPopular
-                        ? "bg-white text-black hover:bg-orange-600 hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
-                        : "bg-white/[0.05] text-white hover:bg-white/[0.1] border border-white/10"
+                        ? "bg-[var(--text)] text-[var(--surface)] hover:bg-[var(--brand-red)] hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
+                        : "bg-[var(--surface-alt)] text-[var(--text)] hover:bg-[var(--surface-alt)]/80 border border-[var(--border)]"
                         }`}
                       style={{ willChange: 'transform' }}
                     >
@@ -535,19 +535,19 @@ const Pricing = ({ onOpenCalendly }) => {
         </div>
 
         {/* Feature 1: The Production Pipeline Visualizer */}
-        <div className="mt-32 p-10 rounded-[3rem] border border-white/10 bg-white/[0.02] backdrop-blur-md relative overflow-hidden">
+        <div className="mt-32 p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Monitor size={100} />
           </div>
 
           <div className="text-center mb-12">
-            <span className="text-[10px] font-mono text-orange-500 font-black uppercase tracking-[0.5em] block mb-2">Live Production Logic</span>
-            <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Your Pipeline Journey</h3>
+            <span className="text-[10px] font-mono text-[var(--orange)] font-black uppercase tracking-[0.5em] block mb-2">Live Production Logic</span>
+            <h3 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter">Your Pipeline Journey</h3>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 relative px-4">
             {/* Connector Line */}
-            <div className="absolute top-1.5 left-10 right-10 h-[1px] bg-white/10 hidden md:block" />
+            <div className="absolute top-1.5 left-10 right-10 h-[1px] bg-[var(--border)] hidden md:block" />
 
             <StatusStage label="Ingestion" complete />
             <StatusStage label="A-Cut Logic" complete />
@@ -556,14 +556,14 @@ const Pricing = ({ onOpenCalendly }) => {
             <StatusStage label="Master Handoff" />
           </div>
 
-          <div className="mt-12 flex flex-col md:flex-row items-center justify-center gap-10 border-t border-white/5 pt-10">
+          <div className="mt-12 flex flex-col md:flex-row items-center justify-center gap-10 border-t border-[var(--border)] pt-10">
             <div className="flex items-center gap-3">
-              <Shield size={20} className="text-orange-500" />
-              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest font-black">Secure Data Vault Included</span>
+              <Shield size={20} className="text-[var(--orange)]" />
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-black">Secure Data Vault Included</span>
             </div>
             <div className="flex items-center gap-3">
-              <HardDrive size={20} className="text-orange-500" />
-              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest font-black">All Project Assets Preserved</span>
+              <HardDrive size={20} className="text-[var(--orange)]" />
+              <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-black">All Project Assets Preserved</span>
             </div>
           </div>
         </div>
@@ -572,16 +572,16 @@ const Pricing = ({ onOpenCalendly }) => {
         <div className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-10">
           <motion.div
             whileHover={{ y: -5 }}
-            className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-orange-500/30 transition-colors duration-500"
+            className="p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] relative overflow-hidden group hover:border-[var(--orange)]/30 transition-colors duration-500"
           >
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-20 transition-opacity">
               <SettingsIcon size={60} />
             </div>
             <div className="flex items-center gap-4 mb-10">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30">
-                <Zap size={24} className="text-orange-500" />
+              <div className="w-12 h-12 rounded-2xl bg-[var(--orange)]/10 flex items-center justify-center border border-[var(--orange)]/30">
+                <Zap size={24} className="text-[var(--orange)]" />
               </div>
-              <h4 className="text-2xl font-black text-white uppercase tracking-widest">Expansion Modules</h4>
+              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest">Expansion Modules</h4>
             </div>
             <div className="space-y-8">
               {[
@@ -589,12 +589,12 @@ const Pricing = ({ onOpenCalendly }) => {
                 { label: "Motion Graphic Mastery", val: "₹200/min", desc: "Complex kinetic typography & custom VFX" },
                 { label: "Global Content Adaptation", val: "₹1,000", desc: "A/B testing for multi-region performance" },
               ].map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between group/line border-b border-white/5 pb-6 last:border-0 last:pb-0">
+                <div key={idx} className="flex items-center justify-between group/line border-b border-[var(--border)] pb-6 last:border-0 last:pb-0">
                   <div className="flex-1">
-                    <span className="text-[12px] font-mono text-white uppercase tracking-widest block mb-1 group-hover/line:text-orange-500 transition-colors font-black">{item.label}</span>
-                    <span className="text-[10px] font-mono text-white/40 uppercase tracking-tight font-medium leading-relaxed max-w-xs block">{item.desc}</span>
+                    <span className="text-[12px] font-mono text-[var(--text)] uppercase tracking-widest block mb-1 group-hover/line:text-[var(--orange)] transition-colors font-black">{item.label}</span>
+                    <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-tight font-medium leading-relaxed max-w-xs block">{item.desc}</span>
                   </div>
-                  <span className="text-2xl font-black text-white ml-6">{item.val}</span>
+                  <span className="text-2xl font-black text-[var(--text)] ml-6">{item.val}</span>
                 </div>
               ))}
             </div>
@@ -602,16 +602,16 @@ const Pricing = ({ onOpenCalendly }) => {
 
           <motion.div
             whileHover={{ y: -5 }}
-            className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-orange-500/30 transition-colors duration-500"
+            className="p-10 rounded-[3rem] border border-white/10 bg-white/[0.03] relative overflow-hidden group hover:border-[var(--orange)]/30 transition-colors duration-500"
           >
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-20 transition-opacity">
               <Layers size={60} />
             </div>
             <div className="flex items-center gap-4 mb-10">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30">
-                <BarChart size={24} className="text-orange-500" />
+              <div className="w-12 h-12 rounded-2xl bg-[var(--orange)]/10 flex items-center justify-center border border-[var(--orange)]/30">
+                <BarChart size={24} className="text-[var(--orange)]" />
               </div>
-              <h4 className="text-2xl font-black text-white uppercase tracking-widest">Standard Specs</h4>
+              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest">Standard Specs</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
               {[
@@ -622,9 +622,9 @@ const Pricing = ({ onOpenCalendly }) => {
                 { l: "Initial Sync", v: "15 MIN STRATEGY CALL" },
                 { l: "Output Opt", v: "4K / VERTICAL / HDR" },
               ].map((item, idx) => (
-                <div key={idx} className="space-y-1.5 border-l-2 border-orange-500/20 pl-4 py-1">
-                  <span className="text-[10px] font-mono text-orange-500 uppercase tracking-widest font-black">{item.l}</span>
-                  <span className="text-[11px] font-mono text-white uppercase tracking-tight block font-black">{item.v}</span>
+                <div key={idx} className="space-y-1.5 border-l-2 border-[var(--orange)]/20 pl-4 py-1">
+                  <span className="text-[10px] font-mono text-[var(--orange)] uppercase tracking-widest font-black">{item.l}</span>
+                  <span className="text-[11px] font-mono text-[var(--text)] uppercase tracking-tight block font-black">{item.v}</span>
                 </div>
               ))}
             </div>
@@ -632,50 +632,50 @@ const Pricing = ({ onOpenCalendly }) => {
         </div>
 
         {/* Feature 2: Standard vs Shinel Elite Comparison Overlay */}
-        <div className="mt-32 border-t border-white/10 pt-32">
+        <div className="mt-32 border-t border-[var(--border)] pt-32">
           <div className="text-center mb-16">
-            <h4 className="text-3xl font-black text-white uppercase tracking-tighter">Why the Industry Switches to Shinel</h4>
+            <h4 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter">Why the Industry Switches to Shinel</h4>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-5xl mx-auto">
             {/* Feature 1 */}
             <div className="text-center group">
-              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+              <div className="mb-6 text-[var(--text-muted)]/20 group-hover:text-[var(--orange)] transition-colors">
                 <Zap size={32} />
               </div>
-              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">Turnaround</div>
-              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-orange-500 w-[95%]" />
+              <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">Turnaround</div>
+              <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-[var(--orange)] w-[95%]" />
               </div>
-              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Industry: 7 Days vs Shinel: 48H</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Industry: 7 Days vs Shinel: 48H</p>
             </div>
             {/* Feature 2 */}
             <div className="text-center group">
-              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+              <div className="mb-6 text-[var(--text-muted)]/20 group-hover:text-[var(--orange)] transition-colors">
                 <Star size={32} />
               </div>
-              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">Creative Index</div>
-              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-orange-500 w-[88%]" />
+              <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">Creative Index</div>
+              <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-[var(--orange)] w-[88%]" />
               </div>
-              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Shinel Human-in-Loop Logic</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Shinel Human-in-Loop Logic</p>
             </div>
             {/* Feature 3 */}
             <div className="text-center group">
-              <div className="mb-6 text-white/10 group-hover:text-orange-500 transition-colors">
+              <div className="mb-6 text-[var(--text-muted)]/20 group-hover:text-[var(--orange)] transition-colors">
                 <Shield size={32} />
               </div>
-              <div className="text-[11px] font-mono text-white font-black uppercase tracking-widest mb-2">QA Reliability</div>
-              <div className="h-2 w-full bg-white/5 rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-orange-500 w-[99%]" />
+              <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">QA Reliability</div>
+              <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
+                <div className="h-full bg-[var(--orange)] w-[99%]" />
               </div>
-              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">10-Point Internal Audit</p>
+              <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">10-Point Internal Audit</p>
             </div>
           </div>
         </div>
 
         <div className="mt-40 text-center opacity-30 pb-20">
-          <p className="text-[10px] font-mono uppercase tracking-[0.8em] text-white font-black">
+          <p className="text-[10px] font-mono uppercase tracking-[0.8em] text-[var(--text)] font-black">
             SHINEL STUDIOS // ELITE CREATIVE PRODUCTION // 2026 // ALL ANALYTICS ACTIVE
           </p>
         </div>

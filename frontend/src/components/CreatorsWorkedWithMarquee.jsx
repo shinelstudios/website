@@ -98,8 +98,8 @@ const itemVariant = {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.4,
-      ease: "easeOut",
+      duration: 0.6,
+      ease: [0.22, 1, 0.36, 1], // Custom cubic-bezier for more professional feel
     },
   },
 };
@@ -150,20 +150,27 @@ const CreatorsWorkedWithMarquee = ({
       key: client.youtubeId || client.id, // Use youtubeId as unique key
       url: client.logo,
       subs: client.subscribers,
-      category: "Creator",
+      category: client.category || "Creator",
       color: "var(--orange)",
       href: client.youtubeId ? `https://youtube.com/channel/${client.youtubeId}` : null
     }));
   }, [creatorsProp, stats, loading]);
   if (!finalCreators || finalCreators.length === 0) return null;
 
-  // Calculate total combined reach for display
+  // Calculate total combined reach for display, prioritizing Admin Config
   const totalSubs = useMemo(() => {
-    const fromStats = finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0);
-    return fromStats || (config?.stats?.totalReach || 0);
+    // If Admin has set a manual override text (e.g. "100M+"), use that directly if possible,
+    // though this formatting function expects a number. 
+    // If the config value is a string that looks like a number, parse it.
+    // However, the upstream component now allows text. 
+    // We should probably check if `config.stats.totalReach` exists and use it directly in the render
+    // instead of passing it through `fmt`.
+    return config?.stats?.totalReach || finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0);
   }, [finalCreators, config]);
+
   const fmt = useCallback((n) => {
     if (n == null) return null;
+    if (typeof n === 'string') return n; // Allow direct string strings from admin
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 ? 1 : 0)}K`;
     return `${n}`;
@@ -250,49 +257,64 @@ const CreatorsWorkedWithMarquee = ({
           variants={headerVariants}
           viewport={{ once: true }}
         >
-          {/* [MODIFIED] Social proof pills */}
+          {/* [MODIFIED] Social proof pills - More Professional/Branded */}
           <motion.div
-            className="inline-flex flex-wrap justify-center items-center gap-4 px-5 py-2 rounded-full mb-5"
-            style={{ background: "var(--surface-alt)", border: "1px solid var(--border)" }}
+            className="inline-flex flex-wrap justify-center items-center gap-6 px-8 py-3 rounded-2xl mb-8"
+            style={{
+              background: "rgba(255, 255, 255, 0.03)",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)"
+            }}
             variants={itemVariant}
           >
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={14} style={{ color: "var(--orange)" }} />
-              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center">
+                <CheckCircle2 size={16} className="text-[var(--orange)]" />
+              </div>
+              <span className="text-sm font-black uppercase tracking-widest text-white">
                 Proven Results
               </span>
             </div>
-            <span className="h-3 w-px hidden sm:inline-block" style={{ background: "var(--border)" }} />
-            <div className="flex items-center gap-2">
-              <Users size={14} style={{ color: "var(--orange)" }} />
-              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
+
+            <span className="h-4 w-px bg-white/10 hidden sm:block" />
+
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center">
+                <Users size={16} className="text-[var(--orange)]" />
+              </div>
+              <span className="text-sm font-black uppercase tracking-widest text-white">
                 {config?.stats?.creatorsImpacted || finalCreators.length}+ Creators
               </span>
             </div>
-            <span className="h-3 w-px hidden sm:inline-block" style={{ background: "var(--border)" }} />
-            <div className="flex items-center gap-2">
-              <TrendingUp size={14} style={{ color: "var(--orange)" }} />
-              <span className="text-sm font-medium" style={{ color: "var(--orange)" }}>
-                {fmt(totalSubs)}+ Combined Reach
+
+            <span className="h-4 w-px bg-white/10 hidden sm:block" />
+
+            <div className="flex items-center gap-2.5 group cursor-default">
+              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center group-hover:bg-[var(--orange)] transition-colors duration-300">
+                <TrendingUp size={16} className="text-[var(--orange)] group-hover:text-white transition-colors duration-300" />
+              </div>
+              <span className="text-sm font-black uppercase tracking-widest text-[var(--orange)]">
+                {fmt(totalSubs)}+ Total Reach
               </span>
             </div>
           </motion.div>
 
           <motion.h2
             id="marquee-heading"
-            className="text-3xl md:text-4xl lg:text-5xl font-bold font-['Poppins'] mb-3"
+            className="text-4xl md:text-5xl lg:text-7xl font-black italic uppercase tracking-tighter mb-4"
             style={{ color: "var(--text)" }}
             variants={itemVariant}
           >
-            The Visual Engine for Top-Tier Creators
+            The <span className="text-[var(--orange)]">Visual Engine.</span>
           </motion.h2>
           <motion.p
-            className="text-base md:text-lg max-w-2xl mx-auto"
+            className="text-base md:text-lg max-w-2xl mx-auto font-medium"
             style={{ color: "var(--text-muted)" }}
             variants={itemVariant}
           >
-            We craft the visuals that stop the scroll, build your brand, and
-            turn viewers into loyal fans. We speak your niche.
+            We craft visuals that stop the scroll, build authority, and
+            transform viewers into loyal communities.
           </motion.p>
         </motion.div>
 
@@ -318,9 +340,9 @@ const CreatorsWorkedWithMarquee = ({
             onBlur={() => setIsPaused(false)}
             style={{
               maskImage:
-                "linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
+                "linear-gradient(90deg, transparent 0%, black 15%, black 85%, transparent 100%)",
               WebkitMaskImage:
-                "-webkit-linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%)",
+                "-webkit-linear-gradient(90deg, transparent 0%, black 15%, black 85%, transparent 100%)",
             }}
           >
             {/* Edge gradient overlays */}
@@ -465,11 +487,21 @@ const CreatorsWorkedWithMarquee = ({
           align-items: center;
           width: max-content;
           will-change: transform;
-          transform: translate3d(0,0,0);
+          /* GPU Acceleration Forces */
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
+          transform-style: preserve-3d;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          perspective: 1000px;
+          -webkit-perspective: 1000px;
         }
+        
         .cw-track.cw-animated {
           animation: cw-marquee var(--animation-duration) linear infinite;
+          -webkit-animation: cw-marquee var(--animation-duration) linear infinite;
         }
+
         .cw-track.cw-animated.direction-right {
           animation-direction: reverse;
         }
@@ -483,7 +515,6 @@ const CreatorsWorkedWithMarquee = ({
             width: 100%;
         }
         
-        /* Fallback for 'gap' on segments */
         .cw-track > .cw-segment:not(:first-child) {
           margin-left: calc(var(--gap-rem) * 1rem);
         }
@@ -492,11 +523,12 @@ const CreatorsWorkedWithMarquee = ({
           display: inline-flex;
           align-items: center;
           white-space: nowrap;
-          padding: 0.5rem 0;
+          padding: 1rem 0;
           flex-shrink: 0;
+          transform-style: preserve-3d;
+          backface-visibility: hidden;
         }
         
-        /* Static mode segment styling */
         .cw-track.cw-static .cw-segment {
            white-space: normal;
            gap: calc(var(--gap-rem) * 0.5rem) calc(var(--gap-rem) * 1rem);
@@ -505,29 +537,37 @@ const CreatorsWorkedWithMarquee = ({
            justify-content: center;
         }
 
-        /* Fallback for 'gap' on items */
         .cw-track:not(.cw-static) .cw-segment > .cw-item:not(:first-child) {
           margin-left: calc(var(--gap-rem) * 1rem);
         }
 
         .cw-item {
           display: block;
-          border-radius: 14px;
-          transition: background 180ms ease, border 180ms ease, transform 180ms ease;
+          border-radius: 20px;
+          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
           outline: 2px solid transparent;
           outline-offset: 2px;
-          transition: outline-color 0.2s ease;
-          will-change: transform; /* [NEW] Hint for hover animation */
+          will-change: transform, background-color;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.05);
         }
+        
+        .cw-item:hover {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: rgba(255, 255, 255, 0.1);
+          transform: translateY(-4px) translateZ(0);
+        }
+
         .cw-item:focus-within {
           outline-color: var(--orange);
+          background: rgba(255, 255, 255, 0.08);
         }
 
         .cw-item-link {
           display: inline-flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 0.625rem 0.875rem;
+          gap: 1rem;
+          padding: 1rem 1.25rem;
           min-width: max-content;
           text-decoration: none;
           color: inherit;
@@ -537,46 +577,70 @@ const CreatorsWorkedWithMarquee = ({
 
         .cw-avatar {
           position: relative;
-          width: 48px;
-          height: 48px;
-          border-radius: 999px;
+          width: 52px;
+          height: 52px;
+          border-radius: 16px;
           overflow: hidden;
           flex-shrink: 0;
+          background: #111;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
         .cw-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: filter 200ms ease;
-          filter: grayscale(0.05);
+          transition: all 0.3s ease;
+          filter: grayscale(0.2);
         }
+        .cw-item:hover img {
+          filter: grayscale(0);
+        }
+
         .cw-ring {
           position: absolute;
           inset: 0;
-          border-radius: 999px;
+          border-radius: inherit;
           border: 2px solid transparent;
           pointer-events: none;
-          transition: border 200ms ease;
+          transition: border 300ms ease;
         }
         .cw-badge {
           position: absolute;
-          bottom: -2px;
-          right: -2px;
-          width: 16px;
-          height: 16px;
-          border-radius: 999px;
+          bottom: -4px;
+          right: -4px;
+          width: 18px;
+          height: 18px;
+          border-radius: 6px;
           background: var(--orange);
-          border: 2px solid var(--surface);
+          border: 2px solid #000;
           display: grid;
           place-items: center;
+          z-index: 2;
         }
 
-        .cw-title { color: var(--text); font-weight: 600; font-size: 0.9375rem; line-height: 1; }
-        .cw-meta  { color: var(--text-muted); font-size: 0.6875rem; }
+        .cw-title { 
+          color: var(--text); 
+          font-weight: 800; 
+          font-size: 1rem; 
+          line-height: 1.2; 
+          letter-spacing: -0.01em;
+        }
+        .cw-meta  { 
+          color: var(--text-muted); 
+          font-size: 0.75rem; 
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
 
         @keyframes cw-marquee {
-          from { transform: translate3d(0,0,0); }
-          to   { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+        }
+        
+        @-webkit-keyframes cw-marquee {
+          0% { -webkit-transform: translate3d(0, 0, 0); }
+          100% { -webkit-transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
         }
 
       `}</style>

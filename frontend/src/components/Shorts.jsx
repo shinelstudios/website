@@ -148,11 +148,11 @@ function formatHype(n) {
 
 const SkeletonCard = () => (
   <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
-    <div className="w-full aspect-[9/16] bg-gray-700/30" />
+    <div className="w-full aspect-[9/16] bg-[var(--text-muted)]/10" />
     <div className="p-4 space-y-2.5">
-      <div className="h-6 bg-gray-700/30 rounded w-3/4"></div>
-      <div className="h-4 bg-gray-700/30 rounded w-1/2"></div>
-      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
+      <div className="h-6 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
+      <div className="h-4 bg-[var(--text-muted)]/10 rounded w-1/2"></div>
+      <div className="h-9 bg-[var(--text-muted)]/10 rounded w-full"></div>
     </div>
   </div>
 );
@@ -623,11 +623,11 @@ function ShortCard({ v, index, onPlay }) {
       <button
         type="button"
         onClick={() => playable && onPlay(index, youtubeId, v.title)}
-        className="relative w-full aspect-[9/16] bg-black/30 overflow-hidden text-left"
+        className="relative w-full aspect-[9/16] bg-[var(--surface-alt)] overflow-hidden text-left"
         aria-label={playable ? "Play video" : "Thumbnail"}
       >
         {!imageLoaded && (
-          <div className="absolute inset-0 bg-gray-700/30 animate-pulse" />
+          <div className="absolute inset-0 bg-[var(--text-muted)]/10 animate-pulse" />
         )}
         <ProtectedImg
           src={
@@ -662,7 +662,7 @@ function ShortCard({ v, index, onPlay }) {
       <div className="p-3 sm:p-4">
         <div className="flex items-center gap-2 flex-wrap mb-1.5">
           {v.subcategory && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-blue-600/20 text-blue-200 border border-blue-500/30">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
               {v.subcategory}
             </span>
           )}

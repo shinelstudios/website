@@ -62,10 +62,7 @@ async function generate() {
     "/tools/seo",
     "/tools/comparison",
 
-    // Anchors
-    "/#services",
-    "/#testimonials",
-    "/#contact"
+    // Anchors removed (not valid pages)
   ];
 
   // Write each page into sitemap

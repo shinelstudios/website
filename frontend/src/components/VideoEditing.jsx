@@ -431,7 +431,7 @@ function VideoCard({ v, onPlay }) {
         aria-label={playable ? "Play video" : "Thumbnail"}
       >
         {!imageLoaded && (
-          <div className="absolute inset-0 bg-gray-700/30 animate-pulse" />
+          <div className="absolute inset-0 bg-[var(--surface-alt)] animate-pulse" />
         )}
         <ProtectedImg
           src={
@@ -471,7 +471,7 @@ function VideoCard({ v, onPlay }) {
               <span className="opacity-70"> • {v.subcategory}</span>
             ) : null}
           </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-gray-700/30 text-gray-300 border-gray-600/30">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-[var(--surface-alt)] text-[var(--text-muted)] border-[var(--border)]">
             {v.kind || "LONG"}
           </span>
           {hype != null && (
@@ -571,7 +571,7 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
     >
       <div
         className="relative w-full max-w-5xl rounded-xl overflow-hidden border"
-        style={{ borderColor: "var(--border)", background: "black" }}
+        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
       >
         {/* 16:9 responsive iframe box */}
         <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
@@ -591,15 +591,15 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-semibold"
-          style={{ background: "rgba(255,255,255,0.9)", color: "#111" }}
+          className="absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-semibold border border-[var(--border)]"
+          style={{ background: "var(--surface-alt)", color: "var(--text)" }}
           aria-label="Close player"
         >
           ✕
         </button>
 
         {title ? (
-          <div className="px-3 py-2 text-xs sm:text-sm" style={{ color: "#ddd" }}>
+          <div className="px-3 py-2 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
             {title}
           </div>
         ) : null}
@@ -647,11 +647,11 @@ function formatHype(n) {
 /* ---------------- Reusable bits ---------------- */
 const SkeletonCard = () => (
   <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
-    <div className="w-full aspect-[16/9] bg-gray-700/30" />
+    <div className="w-full aspect-[16/9] bg-[var(--text-muted)]/10" />
     <div className="p-4 space-y-2.5">
-      <div className="h-6 bg-gray-700/30 rounded w-3/4"></div>
-      <div className="h-4 bg-gray-700/30 rounded w-1/2"></div>
-      <div className="h-9 bg-gray-700/30 rounded w-full"></div>
+      <div className="h-6 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
+      <div className="h-4 bg-[var(--text-muted)]/10 rounded w-1/2"></div>
+      <div className="h-9 bg-[var(--text-muted)]/10 rounded w-full"></div>
     </div>
   </div>
 );

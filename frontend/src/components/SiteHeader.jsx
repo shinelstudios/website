@@ -40,6 +40,8 @@ import FestivalOfferBanner from "./ui/FestivalOfferBanner.jsx";
 import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 
+import { useGlobalConfig } from "../context/GlobalConfigContext";
+
 /* ---------------- helpers: safe base64url + jwt + theme favicon ---------------- */
 function base64UrlDecode(str) {
   try {
@@ -476,21 +478,24 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     navigate("/");
   }, [closeAllMenus, navigate]);
 
+  // [MODIFIED] Use config for dynamic stats
+  const { config } = useGlobalConfig();
+
   const trustItems = useMemo(
     () => [
-      { icon: Wand2, text: "AI-first studio • human-directed quality" },
-      { icon: UserCog, text: "20+ active clients across niches" },
-      { icon: BarChart3, text: "Thumbnails delivering +40% CTR" },
-      { icon: Zap, text: "Edits driving 2× watch time" },
-      { icon: ExternalLink, text: "7M+ views driven for clients" },
-      { icon: Languages, text: "Auto-captions & multi-language subs" },
-      { icon: Shield, text: "Consent-first face/voice features" },
-      { icon: Lightbulb, text: "Hook scoring & title testing" },
-      { icon: Brain, text: "Script co-pilot for ideation" },
-      { text: "48–72 hr standard turnaround" },
-      { text: "Dedicated PM & weekly checkpoints" },
+      { icon: Wand2, text: "AI-First Studio • Human-Directed Quality" },
+      { icon: UserCog, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Creators Across Niches` },
+      { icon: BarChart3, text: `Thumbnails Delivering +${config?.stats?.ctrBoostMax || "60"}% CTR Lift` },
+      { icon: Zap, text: "Edits Driving 2× Average Watch Time" },
+      { icon: ExternalLink, text: `${config?.stats?.totalReach || "1.2B"}${typeof config?.stats?.totalReach === 'string' ? '' : '+'} Total Views Driven for Clients` },
+      { icon: Languages, text: "Auto-Captions & Multi-Language Support" },
+      { icon: Shield, text: "Consent-First Face & Voice AI Features" },
+      { icon: Lightbulb, text: "Hook Scoring & Title Testing" },
+      { icon: Brain, text: "AI Script Co-Pilot for Viral Ideation" },
+      { icon: Zap, text: "48–72 HR Standard Project Turnaround" },
+      { icon: UserCog, text: "Dedicated PM & Weekly Checkpoints" },
     ],
-    []
+    [config]
   );
 
   const DesktopNavLink = ({ label, to, icon: Icon }) => {
@@ -676,6 +681,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             {auth.isAuthed && (
               <DesktopNavLink label="Hub" to="/dashboard" icon={Shield} />
             )}
+            <DesktopNavLink label="Blog" to="/blog" icon={Lightbulb} />
             <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
 
           </div>
@@ -1069,7 +1075,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
         <TrustBar
           items={trustItems}
-          speed={45}
+          speedPps={45}
           direction="rtl"
         />
       </header>
