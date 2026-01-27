@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet-async';
+import { useLocation } from 'react-router-dom';
 import { BRAND, META, SOCIAL_LINKS } from '../config/constants';
 
 /**
@@ -17,18 +18,15 @@ const MetaTags = ({
     noIndex = false,
     structuredData,
 }) => {
+    const location = useLocation();
     const origin = `https://${BRAND.domain}`;
     const fullTitle = title.includes(BRAND.name) ? title : `${title} | ${BRAND.name}`;
     const fullOgImage = ogImage.startsWith('http') ? ogImage : `${origin}${ogImage}`;
 
     // Clean canonical URL (no query, no hash, enforced primary domain)
-    let canonical = canonicalUrl;
-    if (!canonical && typeof window !== 'undefined') {
-        const path = window.location.pathname.replace(/\/+$/, '') || '/';
-        canonical = `${origin}${path}`;
-    } else if (!canonical) {
-        canonical = origin;
-    }
+    // Preference: Prop > useLocation (Router) > Origin fallback
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    const canonical = canonicalUrl || `${origin}${path}`;
 
     return (
         <Helmet>

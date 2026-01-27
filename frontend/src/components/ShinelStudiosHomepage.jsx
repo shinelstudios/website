@@ -1,20 +1,18 @@
 /* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp
+  X, Play, Image as IconImage, Zap, Wand2, PenTool, Bot, Megaphone, BarChart3, Quote, ExternalLink, MessageCircle, FileText, ChevronUp, ArrowRight
 } from "lucide-react";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 // Component imports
-const RoiCalculator = React.lazy(() => import("./RoiCalculator"));
-import QuickQuoteBar from "./QuickQuoteBar";
 import StickyFloatingCTA from "./StickyFloatingCTA";
 import SocialProofNotifications from "./SocialProofNotifications";
 import ScrollProgressBar from "./ScrollProgressBar";
-import ComparisonCalculator from "./ComparisonCalculator";
-import ResourcesSection from "./ResourcesSection";
 import NewsletterSignup from "./NewsletterSignup";
+import QuickQuoteBar from "./QuickQuoteBar";
 import MediaMentions from "./MediaMentions";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
@@ -2431,24 +2429,46 @@ export default function ShinelStudiosHomepage() {
             <TestimonialsSection isDark={isDark} />
           </ErrorBoundary>
 
-          {/* 8) ROI / CTR Lift Calculator */}
-          <ErrorBoundary>
-            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
-              <RoiCalculator onBook={() => setShowCalendly(true)} />
-            </React.Suspense>
-          </ErrorBoundary>
-
-          {/* 8.5) Comparison Calculator (DIY vs Shinel) */}
-          <ErrorBoundary>
-            <ComparisonCalculator onBook={() => setShowCalendly(true)} />
-          </ErrorBoundary>
-
-          {/* 8.6) Free Creator Tools / Resources (SEO & Value) */}
-          <ErrorBoundary>
-            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
-              <ResourcesSection />
-            </React.Suspense>
-          </ErrorBoundary>
+          {/* 8) AI Tools CTA Section (New Central Hub) */}
+          <section className="py-24 relative overflow-hidden" style={{ background: "var(--surface-alt)" }}>
+            <div className="container mx-auto px-4 max-w-6xl text-center">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-6"
+                style={{
+                  color: "var(--orange)",
+                  border: "1px solid var(--border)",
+                  background: "rgba(232,80,2,0.08)",
+                }}
+              >
+                <Wand2 size={14} />
+                Creator Suite
+              </motion.div>
+              <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-6">
+                Master Your <span className="text-[var(--orange)]">Growth</span> with AI
+              </h2>
+              <p className="text-[var(--text-muted)] text-lg mb-10 max-w-2xl mx-auto">
+                Access our full suite of public creator tools including ROI calculators, SEO optimizers, and thumbnail previewers.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  to="/tools"
+                  className="px-10 py-5 rounded-2xl bg-[var(--orange)] text-white font-bold text-lg shadow-xl hover:shadow-orange-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  Explore All Tools <ArrowRight size={20} />
+                </Link>
+                <Link
+                  to="/roi-calculator"
+                  className="px-10 py-5 rounded-2xl border-2 border-[var(--border)] font-bold text-lg hover:border-[var(--orange)] transition-all flex items-center justify-center gap-2"
+                  style={{ color: "var(--text)" }}
+                >
+                  <BarChart3 size={20} /> ROI Calculator
+                </Link>
+              </div>
+            </div>
+          </section>
 
 
           {/* 9) FAQ (Better for SEO - kept as requested) */}

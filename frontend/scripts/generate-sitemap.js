@@ -14,6 +14,9 @@ async function generate() {
     "/pricing",
     "/live",
     "/contact",
+    "/privacy",
+    "/terms",
+    "/live-templates",
 
     // Service Category Pages
     "/services/gfx",
@@ -52,10 +55,12 @@ async function generate() {
     "/services/growth/captions/styles",
 
     // Tools & Resources
+    "/tools",
     "/tools/thumbnail-previewer",
     "/roi-calculator",
     "/tools/srt",
     "/tools/seo",
+    "/tools/comparison",
 
     // Anchors
     "/#services",

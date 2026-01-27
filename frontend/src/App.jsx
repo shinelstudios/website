@@ -57,6 +57,7 @@ const RoiCalculatorPage = React.lazy(() => import("./components/pages/RoiCalcula
 const ThumbnailPreviewerPage = React.lazy(() => import("./components/pages/ThumbnailPreviewerPage.jsx"));
 const SrtToolPage = React.lazy(() => import("./components/pages/SrtToolPage.jsx"));
 const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
+const ComparisonToolPage = React.lazy(() => import("./components/pages/ComparisonToolPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
@@ -306,6 +307,7 @@ export default function App() {
           <Route path="/tools/thumbnail-previewer" element={<ThumbnailPreviewerPage />} />
           <Route path="/tools/srt" element={<SrtToolPage />} />
           <Route path="/tools/seo" element={<SeoToolPage />} />
+          <Route path="/tools/comparison" element={<ComparisonToolPage />} />
 
           {/* Redirect aliases to canonical paths */}
           <Route path="/videos/long" element={<Navigate to="/video-editing" replace />} />
@@ -363,14 +365,6 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/tools/thumbnail-previewer"
-            element={
-              <ProtectedRoute>
-                <ThumbnailPreviewer />
-              </ProtectedRoute>
-            }
-          />
 
           <Route
             path="/tools/youtube-captions"

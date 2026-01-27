@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp } from "lucide-react";
 
 
 const tiles = [
@@ -44,6 +44,13 @@ const tiles = [
     title: "Thumbnail A/B Previewer",
     desc: "Test how your designs look in YouTube search & Home grid.",
     icon: ImageIcon,
+    roles: ["admin", "editor", "client", "public"],
+  },
+  {
+    to: "/tools/comparison",
+    title: "DIY vs Shinel ROI",
+    desc: "See how much time and money you save by outsourcing to pro editors.",
+    icon: TrendingUp,
     roles: ["admin", "editor", "client", "public"],
   },
 ];

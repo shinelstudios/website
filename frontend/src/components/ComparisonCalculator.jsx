@@ -107,10 +107,8 @@ const ComparisonCalculator = ({ onBook }) => {
                             <input
                                 type="range"
                                 min="1"
-                                max="15"
-                                step="0.5"
                                 value={currentCTR}
-                                onChange={(e) => setVideosPerMonth(Number(e.target.value))}
+                                onChange={(e) => setCurrentCTR(Number(e.target.value))}
                                 className="w-full h-2 rounded-lg appearance-none cursor-pointer"
                                 style={{
                                     background: `linear-gradient(to right, var(--orange) 0%, var(--orange) ${(currentCTR / 15) * 100}%, var(--border) ${(currentCTR / 15) * 100}%, var(--border) 100%)`,

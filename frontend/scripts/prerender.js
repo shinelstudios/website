@@ -52,10 +52,17 @@ const ROUTES = [
     '/services/growth/captions/styles',
 
     // Tools
-    '/tools/thumbnail-previewer',
-    '/roi-calculator',
-    '/tools/srt',
-    '/tools/seo',
+    "/tools",
+    "/tools/thumbnail-previewer",
+    "/roi-calculator",
+    "/tools/srt",
+    "/tools/seo",
+    "/tools/comparison",
+
+    // Legal & Other
+    "/privacy",
+    "/terms",
+    "/live-templates",
 ];
 
 (async () => {

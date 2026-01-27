@@ -45,7 +45,7 @@ export const SOCIAL_LINKS = {
 export const BRAND = {
     name: 'Shinel Studios',
     tagline: 'AI-powered video editing for creators',
-    domain: 'shinelstudios.in',
+    domain: 'www.shinelstudios.in',
     logoLight: '/assets/logo_light.png',
     logoDark: '/assets/logo_dark.png',
 };
