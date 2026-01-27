@@ -1,7 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useLocation } from 'react-router-dom';
-import { BRAND, META, SOCIAL_LINKS } from '../config/constants';
+import { BRAND, META, SOCIAL_LINKS, CONTACT } from '../config/constants';
 
 /**
  * MetaTags Component
@@ -206,7 +206,7 @@ export const OrganizationSchema = () => {
         'contactPoint': [{
             '@type': 'ContactPoint',
             'contactType': 'customer support',
-            'email': 'hello@shinelstudios.in',
+            'email': CONTACT.email,
             'areaServed': 'IN',
             'availableLanguage': ['en', 'hi'],
         }],

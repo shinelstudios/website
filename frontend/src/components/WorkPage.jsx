@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import PortfolioItem from "./PortfolioItem";
 import { services } from "../data/servicesConfig";
+import GradientWaves from "./animations/GradientWaves";
 
 /* ------------------------------ Portfolio API ------------------------------ */
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
@@ -112,6 +113,13 @@ export default function WorkPage() {
 
       {/* --- HERO SECTION --- */}
       <section className="relative pt-32 pb-20 overflow-hidden">
+        {/* Gradient Waves Background Animation */}
+        <GradientWaves
+          colors={['#E85002', '#FF6B35', '#000000']}
+          opacity={0.15}
+          speed="medium"
+        />
+
         {/* Background Decorative Elements */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none opacity-20">
           <div className="absolute top-40 left-0 w-96 h-96 bg-[var(--orange)]/20 rounded-full blur-[120px]" />

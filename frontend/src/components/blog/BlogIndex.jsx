@@ -4,6 +4,7 @@ import { Search, Hash } from 'lucide-react';
 import { getAllPosts } from '../../lib/blog';
 import BlogCard from './BlogCard';
 import MetaTags from '../MetaTags';
+import ScanLines from '../animations/ScanLines';
 
 const BlogIndex = () => {
     const [posts, setPosts] = useState([]);
@@ -49,13 +50,21 @@ const BlogIndex = () => {
     }, [selectedTag, searchQuery, posts]);
 
     return (
-        <div className="min-h-screen pt-24 pb-20 bg-[var(--surface)] text-[var(--text)]">
+        <div className="min-h-screen pt-24 pb-20 bg-[var(--surface)] text-[var(--text)] relative overflow-hidden">
+            {/* Scan Lines Background Animation */}
+            <ScanLines
+                color="#E85002"
+                opacity={0.08}
+                lineCount={20}
+                speed="medium"
+            />
+
             <MetaTags
                 title="Insights & Strategies | Shinel Studios Blog"
                 description="Expert guides on YouTube growth, video editing, retention strategies, and thumbnail design."
             />
 
-            <div className="container mx-auto px-4 max-w-7xl">
+            <div className="container mx-auto px-4 max-w-7xl relative z-10">
                 {/* Header */}
                 <div className="text-center max-w-3xl mx-auto mb-16">
                     <motion.div
@@ -96,8 +105,8 @@ const BlogIndex = () => {
                                 key={tag}
                                 onClick={() => setSelectedTag(tag)}
                                 className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${selectedTag === tag
-                                        ? 'bg-[var(--orange)] text-white shadow-lg shadow-orange-500/20'
-                                        : 'bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)]'
+                                    ? 'bg-[var(--orange)] text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-[var(--surface-alt)] text-[var(--text-muted)] hover:text-[var(--text)] border border-[var(--border)]'
                                     }`}
                             >
                                 {tag}

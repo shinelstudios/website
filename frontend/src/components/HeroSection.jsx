@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useClientStats } from "../context/ClientStatsContext";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
+import ParticleNetwork from "./animations/ParticleNetwork";
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -421,6 +422,13 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
       aria-label="Shinel Studios Hero"
     >
       <AuroraBackground />
+      <ParticleNetwork
+        particleCount={40}
+        color="#E85002"
+        connectionDistance={120}
+        speed={0.3}
+        opacity={0.25}
+      />
 
       <div className="container mx-auto px-6 relative z-10 grid lg:grid-cols-2 gap-20 lg:gap-32 items-center py-32 lg:py-0">
 

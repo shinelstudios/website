@@ -9,6 +9,7 @@ import {
   Check, ArrowRight, Zap, Star, Shield, Clock, Sparkles, Info, MessageCircle,
   Settings as SettingsIcon, Monitor, Activity, Cpu, Layers, BarChart, HardDrive
 } from "lucide-react";
+import FloatingOrbs from "./animations/FloatingOrbs";
 
 /**
  * Pricing - Elite Agency Optimized Version
@@ -299,6 +300,14 @@ const Pricing = ({ onOpenCalendly }) => {
       {/* Spotlight Lighting */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-screen bg-[radial-gradient(circle_at_50%_0%,rgba(232,80,2,0.1)_0%,transparent_70%)] pointer-events-none" />
       <div className="absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] bg-[var(--orange)]/5 blur-[150px] pointer-events-none rounded-full" />
+
+      {/* Floating Orbs Animation */}
+      <FloatingOrbs
+        orbCount={12}
+        color="#E85002"
+        opacity={0.4}
+        speed="medium"
+      />
 
       <div className="container mx-auto px-6 max-w-7xl relative z-10">
         {/* Header Section */}

@@ -5,9 +5,9 @@
 
 // Contact Information
 export const CONTACT = {
-    email: 'hello@shinelstudios.in',
+    email: 'shinelstudioofficial@gmail.com',
     phone: '918968141585',
-    whatsappUrl: 'https://wa.me/918968141585',
+    phoneFormatted: '+91 89681 41585',
     whatsappUrl: 'https://wa.me/918968141585',
     whatsappDefaultMessage: 'Hi Shinel Studios! I want to grow my channel. Can we talk?',
 };
@@ -113,12 +113,13 @@ export const COLORS = {
     whatsappGreenDark: '#128C7E',
 };
 
-// Typography System
+// Typography System - Three Creative Fonts with Variations
 export const TYPOGRAPHY = {
-    display: "'Playfair Display', serif",  // Cinematic headers
-    heading: "'Poppins', sans-serif",      // Section headings
-    body: "'Inter', sans-serif",           // Body text
-    mono: "'JetBrains Mono', monospace",   // Technical specs/code
+    display: "'Outfit', sans-serif",        // Display text and main headings (bold, impactful)
+    heading: "'Outfit', sans-serif",        // Section headings (same as display for consistency)
+    body: "'Inter', sans-serif",            // Body text and UI elements (readable, clean)
+    accent: "'Space Grotesk', sans-serif",  // Accent text and special elements (modern, geometric)
+    mono: "'Space Grotesk', monospace",     // Technical specs (using Space Grotesk for consistency)
 };
 
 // Responsive Breakpoints (Mobile-First)

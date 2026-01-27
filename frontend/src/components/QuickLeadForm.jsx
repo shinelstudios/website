@@ -1,6 +1,7 @@
 // src/components/QuickLeadForm.jsx
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { CONTACT } from "../config/constants";
 
 /** Detect compact (mobile-ish) screens safely (SSR-friendly) */
 function useCompact() {
@@ -88,7 +89,7 @@ const QuickLeadForm = ({ source = "quick_quote" }) => {
   };
 
   const makeMailto = () => {
-    const to = "hello@shinelstudios.in";
+    const to = CONTACT.email;
     const subject = `Quick Quote Request — ${clean(name) || "Creator"}`;
     const body = draftLines().join("\n");
     return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

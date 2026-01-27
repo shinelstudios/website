@@ -190,7 +190,7 @@ class ErrorBoundary extends React.Component {
                         <p className="mt-6 text-xs" style={{ color: 'var(--text-muted)' }}>
                             Need help?{' '}
                             <a
-                                href="mailto:hello@shinelstudios.in"
+                                href="mailto:shinelstudioofficial@gmail.com"
                                 className="font-semibold"
                                 style={{ color: 'var(--orange)' }}
                             >

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { CONTACT } from "../config/constants";
 
 // (This component is small and can be defined in the main homepage file,
 // but for true modularity, here it is)
@@ -31,7 +32,7 @@ export const SeoSchema = () => {
         "contactPoint": [{
           "@type": "ContactPoint",
           "contactType": "customer support",
-          "email": "hello@shinelstudios.in",
+          "email": CONTACT.email,
           "areaServed": "IN",
           "availableLanguage": ["en", "hi"]
         }]

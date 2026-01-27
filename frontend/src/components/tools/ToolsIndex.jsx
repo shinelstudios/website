@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp } from "lucide-react";
+import GridMatrix from "../animations/GridMatrix";
 
 
 const tiles = [
@@ -62,8 +63,16 @@ export default function ToolsIndex() {
   const allowed = tiles.filter(t => t.roles.includes(role));
 
   return (
-    <section style={{ background: "var(--surface)" }}>
-      <div className="container mx-auto px-4 py-12">
+    <section style={{ background: "var(--surface)", position: "relative", overflow: "hidden", minHeight: "100vh" }}>
+      {/* Grid Matrix Background Animation */}
+      <GridMatrix
+        color="#E85002"
+        opacity={0.15}
+        gridSize={50}
+        nodeCount={15}
+      />
+
+      <div className="container mx-auto px-4 py-12 relative z-10">
         <h1 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
           AI Tools
         </h1>

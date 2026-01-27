@@ -138,7 +138,7 @@ const SiteFooter = ({
       } else {
         // Fallback mailto: logic
         console.warn("VITE_NEWSLETTER_ENDPOINT not set, using mailto: fallback.");
-        const to = "hello@shinelstudios.in";
+        const to = CONTACT.email;
         window.open(`mailto:${to}?subject=${encodeURIComponent("Newsletter Subscribe")}&body=${encodeURIComponent(`Please subscribe me.\nEmail: ${email}\nSource: footer`)}`, "_blank");
         // Simulate success for mailto
         await new Promise(res => setTimeout(res, 500));

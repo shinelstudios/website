@@ -3,6 +3,7 @@ import {
   Sparkles, Layers, BadgeCheck, Wallet, Clock, Users, TrendingUp, Award,
   Shield, ChevronDown, CheckCircle, Percent, Tag, Gift, Timer
 } from "lucide-react";
+import SpotlightSweep from "./animations/SpotlightSweep";
 
 /* ---------------- Local images (BGMI only) ---------------- */
 import bgmiBase from "@/assets/bgmi-thumbnail-base.jpg";
@@ -1056,11 +1057,19 @@ export default function LiveTemplates() {
   }, [festival.active, festival.endsAt]);
 
   return (
-    <div style={{ background: "var(--bg)", color: "var(--text)", minHeight: "100vh" }}>
+    <div style={{ background: "var(--bg)", color: "var(--text)", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+      {/* Spotlight Sweep Background Animation */}
+      <SpotlightSweep
+        color="#E85002"
+        opacity={0.35}
+        beamCount={5}
+        speed="fast"
+      />
+
       <FloatingCTA device={device} festival={festival} />
 
       {/* HERO */}
-      <section className="container mx-auto px-4 py-8 md:py-12 lg:py-16" style={{ paddingTop: "calc(var(--header-h,72px) + 16px)" }}>
+      <section className="container mx-auto px-4 py-8 md:py-12 lg:py-16" style={{ paddingTop: "calc(var(--header-h,72px) + 16px)", position: "relative", zIndex: 1 }}>
         <div className="max-w-4xl mx-auto text-center">
           <div
             className="inline-flex items-center gap-2 rounded-full font-bold mb-4 md:mb-6"
@@ -1687,7 +1696,7 @@ export default function LiveTemplates() {
                 </a>
 
                 <a
-                  href="mailto:hello@shinelstudios.in?subject=Live%20Template%20Inquiry"
+                  href="mailto:shinelstudioofficial@gmail.com?subject=Live%20Template%20Inquiry"
                   className="inline-flex items-center justify-center gap-2 rounded-xl font-bold"
                   style={{
                     padding: device.isMobile ? "18px 28px" : "20px 36px",

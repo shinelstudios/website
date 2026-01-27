@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { getPostBySlug } from '../../lib/blog';
 import { Calendar, Clock, ArrowLeft, Share2, Tag } from 'lucide-react';
 import MetaTags, { BreadcrumbSchema } from '../MetaTags';
+import ScanLines from '../animations/ScanLines';
 
 const BlogPost = () => {
     const { slug } = useParams();
@@ -34,7 +35,15 @@ const BlogPost = () => {
     const { frontmatter, content } = post;
 
     return (
-        <div className="min-h-screen pt-24 pb-20 bg-[var(--surface)] text-[var(--text)]">
+        <div className="min-h-screen pt-24 pb-20 bg-[var(--surface)] text-[var(--text)] relative overflow-hidden">
+            {/* Scan Lines Background Animation */}
+            <ScanLines
+                color="#E85002"
+                opacity={0.08}
+                lineCount={20}
+                speed="medium"
+            />
+
             <MetaTags
                 title={`${frontmatter.title} | Shinel Studios Blog`}
                 description={frontmatter.excerpt}
@@ -48,7 +57,7 @@ const BlogPost = () => {
                 { name: frontmatter.title, url: `/blog/${slug}` },
             ]} />
 
-            <article className="container mx-auto px-4 max-w-4xl">
+            <article className="container mx-auto px-4 max-w-4xl relative z-10">
                 {/* Back Link */}
                 <Link to="/blog" className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--orange)] transition-colors mb-8 font-medium">
                     <ArrowLeft size={18} />

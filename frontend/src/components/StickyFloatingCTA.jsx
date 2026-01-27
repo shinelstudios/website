@@ -81,7 +81,7 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
         <AnimatePresence>
             {shouldShow && (
                 <motion.div
-                    className="fixed bottom-20 right-6 z-30 md:bottom-6"
+                    className="fixed bottom-28 right-4 z-30 md:bottom-6 md:right-6"
                     initial={{ opacity: 0, y: 100, scale: 0.8 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 100, scale: 0.8 }}

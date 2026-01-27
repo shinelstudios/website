@@ -972,16 +972,37 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <MobileCardLink
-                    to="/tools"
-                    icon={Wand2}
-                    title="Tools"
-                    subtitle="Free utilities"
-                  />
-                  {auth.isAuthed && (
-                    <MobileCardLink to="/dashboard" icon={Shield} title="Hub" subtitle="Manage Studio" />
-                  )}
+                  <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
+                  {/* Tools removed from here as it is listed below with search */}
                 </div>
+
+                {/* Authenticated User Links (Mobile) */}
+                {auth.isAuthed && (
+                  <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
+                    <SectionHeader icon={User} title="Account" subtitle={`${auth.firstName || "User"}`} right={null} />
+                    <div className="grid grid-cols-1 gap-2">
+                      <MobileCardLink to="/profile" icon={User} title="Profile" subtitle="Personal details" />
+                      <MobileCardLink to="/settings" icon={Settings} title="Settings" subtitle="Preferences" />
+                      {['admin', 'editor', 'artist'].includes(role) && (
+                        <MobileCardLink to="/dashboard" icon={Shield} title="Management Hub" subtitle="Studio Control" />
+                      )}
+                      <button
+                        onClick={handleLogout}
+                        className="group w-full rounded-xl p-3.5 min-h-[56px] flex items-center justify-between"
+                        style={{
+                          background: "rgba(255, 59, 48, 0.1)",
+                          border: "1px solid rgba(255, 59, 48, 0.2)",
+                          color: "#ff3b30",
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <LogOut size={18} />
+                          <div className="text-[15px] font-semibold">Logout</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
 
                 {/* Tools */}
@@ -1019,53 +1040,55 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   </div>
 
                   <div className="grid grid-cols-1 gap-2">
-                    {(searchQuery.trim() ? filteredTools : allToolsForMenu).map((t) => {
-                      const Icon = t.icon;
-                      const allowed = auth.isAuthed && t.roles.includes(role);
-                      const to = allowed ? t.path : `/login?next=${encodeURIComponent(t.path)}`;
-                      return (
-                        <Link
-                          key={t.name}
-                          to={to}
-                          className="group rounded-xl p-3.5 flex items-center justify-between"
-                          style={{
-                            background: "var(--surface-alt)",
-                            border: "1px solid var(--border)",
-                            color: "var(--text)",
-                          }}
-                          onClick={haptic}
-                        >
-                          <span className="flex items-center gap-3 min-w-0">
-                            <div
-                              className="h-9 w-9 rounded-lg grid place-items-center"
-                              style={{
-                                background: "rgba(232,80,2,0.10)",
-                                border: "1px solid var(--border)",
-                              }}
-                            >
-                              {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
-                            </div>
+                    {(searchQuery.trim() ? filteredTools : allToolsForMenu)
+                      .filter(t => t.roles.includes("public") || (auth.isAuthed && t.roles.includes(role)))
+                      .map((t) => {
+                        const Icon = t.icon;
+                        const allowed = true; // Since we filtered, all remaining are allowed
+                        const to = t.path;
+                        return (
+                          <Link
+                            key={t.name}
+                            to={to}
+                            className="group rounded-xl p-3.5 flex items-center justify-between"
+                            style={{
+                              background: "var(--surface-alt)",
+                              border: "1px solid var(--border)",
+                              color: "var(--text)",
+                            }}
+                            onClick={haptic}
+                          >
+                            <span className="flex items-center gap-3 min-w-0">
+                              <div
+                                className="h-9 w-9 rounded-lg grid place-items-center"
+                                style={{
+                                  background: "rgba(232,80,2,0.10)",
+                                  border: "1px solid var(--border)",
+                                }}
+                              >
+                                {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
+                              </div>
 
-                            <span className="min-w-0">
-                              <div className="text-[15px] font-semibold truncate">{t.name}</div>
-                              {t.description && (
-                                <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-                                  {t.description}
-                                </div>
-                              )}
+                              <span className="min-w-0">
+                                <div className="text-[15px] font-semibold truncate">{t.name}</div>
+                                {t.description && (
+                                  <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+                                    {t.description}
+                                  </div>
+                                )}
+                              </span>
+
+                              {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
                             </span>
 
-                            {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
-                          </span>
-
-                          <ArrowRight
-                            size={18}
-                            className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150"
-                            style={{ color: "var(--orange)" }}
-                          />
-                        </Link>
-                      );
-                    })}
+                            <ArrowRight
+                              size={18}
+                              className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150"
+                              style={{ color: "var(--orange)" }}
+                            />
+                          </Link>
+                        );
+                      })}
                   </div>
                 </div>
               </nav>
