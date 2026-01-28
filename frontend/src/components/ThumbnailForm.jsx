@@ -11,6 +11,7 @@ import {
     Check
 } from "lucide-react";
 import { THUMBNAIL_VARIANTS, VIDEO_CATEGORIES } from "../utils/constants";
+import { Input, SelectWithPresets, InputWithPresets } from "./AdminUIComponents";
 
 const ThumbnailForm = ({
     editingId,
@@ -24,15 +25,17 @@ const ThumbnailForm = ({
     busy,
     busyLabel,
     vErrs,
-    presets
+    presets,
+    user
 }) => {
+
+    const { isAdmin, email: userEmail } = user || { isAdmin: false, email: "" };
     const fileInputRef = useRef(null);
 
-    const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
+    const handleInputChange = (name, value) => {
         setForm((f) => ({
             ...f,
-            [name]: type === "checkbox" ? checked : value,
+            [name]: value,
         }));
     };
 
@@ -97,44 +100,33 @@ const ThumbnailForm = ({
                             className="hidden"
                         />
                     </div>
-                    {vErrs.imageUrl && <p className="text-[10px] font-bold text-red-500 ml-1">{vErrs.imageUrl}</p>}
                 </div>
 
                 {/* Basic Info */}
                 <div className="space-y-4">
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Project Name</label>
-                        <input
-                            name="filename"
-                            value={form.filename}
-                            onChange={handleInputChange}
-                            list="filename-presets"
-                            placeholder="e.g. Minecraft Survival #1"
-                            className={`w-full px-4 py-3 rounded-xl bg-white/[0.03] border transition-all outline-none text-sm font-medium ${vErrs.filename ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-orange-500/50'
-                                }`}
-                        />
-                        <datalist id="filename-presets">
-                            {presets.filenameTemplates.map(v => <option key={v} value={v} />)}
-                        </datalist>
-                        {vErrs.filename && <p className="text-[10px] font-bold text-red-500 ml-1">{vErrs.filename}</p>}
-                    </div>
+                    <InputWithPresets
+                        label="Project Name"
+                        value={form.filename}
+                        onChange={(v) => handleInputChange("filename", v)}
+                        recent={presets.filenameTemplates}
+                        placeholder="e.g. Minecraft Survival #1"
+                        error={vErrs.filename}
+                    />
 
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">YouTube URL (Automatic Views)</label>
+                    <div className="flex flex-col gap-1 w-full">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">YouTube URL (Automatic Views)</label>
                         <div className="relative">
-                            <input
-                                name="youtubeUrl"
+                            <Input
                                 value={form.youtubeUrl}
-                                onChange={handleInputChange}
+                                onChange={(v) => handleInputChange("youtubeUrl", v)}
                                 placeholder="https://youtube.com/watch?v=..."
-                                className="w-full pl-4 pr-12 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
                             />
                             {form.youtubeUrl && (
                                 <button
                                     type="button"
                                     onClick={() => onFetchYouTube(form.youtubeUrl)}
                                     disabled={busy}
-                                    className="absolute right-2 top-2 p-1.5 rounded-lg bg-white/5 text-gray-400 hover:text-orange-500 transition-all"
+                                    className="absolute right-2 top-2 p-2 rounded-lg bg-orange-500/10 text-orange-500 hover:bg-orange-500 hover:text-white transition-all z-10"
                                 >
                                     <RefreshCw size={14} className={busy ? 'animate-spin' : ''} />
                                 </button>
@@ -144,28 +136,19 @@ const ThumbnailForm = ({
                 </div>
 
                 {/* Categorization */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Category</label>
-                        <select
-                            name="category"
-                            value={form.category}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 rounded-xl bg-[#0F0F0F] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium appearance-none cursor-pointer"
-                        >
-                            {VIDEO_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Subcategory</label>
-                        <input
-                            name="subcategory"
-                            value={form.subcategory}
-                            onChange={handleInputChange}
-                            placeholder="e.g. Bedwars"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                        />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <SelectWithPresets
+                        label="Category"
+                        value={form.category}
+                        onChange={(v) => handleInputChange("category", v)}
+                        options={VIDEO_CATEGORIES.map(c => ({ label: c, value: c }))}
+                    />
+                    <Input
+                        label="Subcategory"
+                        value={form.subcategory}
+                        onChange={(v) => handleInputChange("subcategory", v)}
+                        placeholder="e.g. Bedwars"
+                    />
                 </div>
 
                 <div className="grid gap-2">
@@ -175,10 +158,10 @@ const ThumbnailForm = ({
                             <button
                                 key={v}
                                 type="button"
-                                onClick={() => setForm(f => ({ ...f, variant: v }))}
+                                onClick={() => handleInputChange("variant", v)}
                                 className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${form.variant === v
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+                                    ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
                                     }`}
                             >
                                 {v}
@@ -196,27 +179,41 @@ const ThumbnailForm = ({
                         </div>
                         <input
                             type="checkbox"
-                            name="isShinel"
                             checked={form.isShinel}
-                            onChange={handleInputChange}
+                            onChange={(e) => handleInputChange("isShinel", e.target.checked)}
                             className="hidden"
                         />
                         <div className="flex flex-col">
                             <span className="text-xs font-bold text-white">Shinel Studios Ownership</span>
-                            <span className="text-[10px] text-gray-500">Enable this to show asset in Portfolio</span>
+                            <span className="text-[10px] text-gray-500">Show on main work portal</span>
                         </div>
                     </label>
 
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Editor Attribution</label>
+                    {/* Visibility Toggle for personal portfolio */}
+                    <label className="flex items-center gap-3 cursor-pointer group px-1">
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${form.isVisibleOnPersonal !== false ? 'bg-blue-600 border-blue-600' : 'bg-white/5 border-white/10 group-hover:border-blue-500/30'
+                            }`}>
+                            {form.isVisibleOnPersonal !== false && <Check size={12} className="text-white" strokeWidth={4} />}
+                        </div>
                         <input
-                            name="attributedTo"
-                            value={form.attributedTo}
-                            onChange={handleInputChange}
-                            placeholder="email@shinel.in or @handle"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
+                            type="checkbox"
+                            checked={form.isVisibleOnPersonal !== false}
+                            onChange={(e) => handleInputChange("isVisibleOnPersonal", e.target.checked)}
+                            className="hidden"
                         />
-                    </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-white">Visible on Personal Portfolio</span>
+                            <span className="text-[10px] text-gray-500">Enable/Disable on your public page</span>
+                        </div>
+                    </label>
+
+                    <Input
+                        label="GFX Artist Attribution (Email)"
+                        value={editingId ? (form.attributedTo || "") : (isAdmin ? form.attributedTo : userEmail)}
+                        onChange={(v) => handleInputChange("attributedTo", v)}
+                        placeholder="artist@shinel.in"
+                        disabled={!isAdmin}
+                    />
                 </div>
 
                 {/* Submit */}

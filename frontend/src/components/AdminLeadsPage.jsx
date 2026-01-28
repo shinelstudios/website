@@ -202,11 +202,11 @@ export default function AdminLeadsPage() {
                         <select
                             value={filters.status}
                             onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-                            className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl py-2.5 pl-10 pr-4 text-sm appearance-none outline-none focus:border-[var(--orange)]"
+                            className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl py-2.5 pl-10 pr-4 text-sm appearance-none outline-none focus:border-[var(--orange)] text-[var(--text)]"
                         >
-                            <option value="ALL">All Statuses</option>
+                            <option value="ALL" className="bg-[#1A1A1A]">All Statuses</option>
                             {Object.keys(STATUS_COLORS).map((s) => (
-                                <option key={s} value={s}>
+                                <option key={s} value={s} className="bg-[#1A1A1A]">
                                     {STATUS_COLORS[s].label}
                                 </option>
                             ))}
@@ -218,12 +218,12 @@ export default function AdminLeadsPage() {
                         <select
                             value={filters.source}
                             onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}
-                            className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl py-2.5 pl-10 pr-4 text-sm appearance-none outline-none focus:border-[var(--orange)]"
+                            className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl py-2.5 pl-10 pr-4 text-sm appearance-none outline-none focus:border-[var(--orange)] text-[var(--text)]"
                         >
-                            <option value="ALL">All Sources</option>
-                            <option value="quick_quote">Quick Quote Bar</option>
-                            <option value="roi_calc">ROI Calculator</option>
-                            <option value="exit_intent">Exit Intent Modal</option>
+                            <option value="ALL" className="bg-[#1A1A1A]">All Sources</option>
+                            <option value="quick_quote" className="bg-[#1A1A1A]">Quick Quote Bar</option>
+                            <option value="roi_calc" className="bg-[#1A1A1A]">ROI Calculator</option>
+                            <option value="exit_intent" className="bg-[#1A1A1A]">Exit Intent Modal</option>
                         </select>
                     </div>
                 </div>

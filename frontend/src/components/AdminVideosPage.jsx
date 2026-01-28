@@ -56,8 +56,24 @@ export default function AdminVideosPage() {
   const [refreshingId, setRefreshingId] = useState(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [flashKey, setFlashKey] = useState("");
   const [viewMode, setViewMode] = useState("grid");
+
+  // Auth & Roles
+  const token = localStorage.getItem("token") || "";
+  const payload = useMemo(() => {
+    try {
+      const parts = token.split(".");
+      if (parts.length < 2) return null;
+      const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[1].length + 3) % 4);
+      return JSON.parse(decodeURIComponent(escape(atob(b64))));
+    } catch { return null; }
+  }, [token]);
+
+  const userEmail = payload?.email || localStorage.getItem("userEmail") || "";
+  const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+  const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
+  const isAdmin = userRoles.includes("admin");
+  const isEditor = userRoles.includes("editor");
 
   // Search & Filters
   const [search, setSearch] = useState("");
@@ -74,7 +90,8 @@ export default function AdminVideosPage() {
     setBusyLabel("Syncing video inventory...");
     try {
       const rows = await store.getAll();
-      startTransition(() => setVideos(rows || []));
+      const filtered = isAdmin ? (rows || []) : (rows || []).filter(v => v.attributedTo === userEmail);
+      startTransition(() => setVideos(filtered));
     } catch (e) {
       setErr(e.message || "Failed to load videos");
       toast("error", "Failed to load videos");
@@ -117,8 +134,12 @@ export default function AdminVideosPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this video permanently?")) return;
+  const handleDelete = async (id, video) => {
+    if (!isAdmin && video?.isShinel) {
+      toast("error", "Only Admin can delete Shinel Studios assets.");
+      return;
+    }
+    if (!confirm("Are you sure? This is permanent.")) return;
     setBusy(true);
     try {
       await store.delete(id);
@@ -149,7 +170,7 @@ export default function AdminVideosPage() {
     }
   };
 
-  const handleRefreshOne = async (videoId) => {
+  const handleRefresh = async (videoId) => {
     if (!videoId) return;
     setRefreshingId(videoId);
     try {
@@ -229,8 +250,20 @@ export default function AdminVideosPage() {
             }>
               {filteredItems.map(v => (
                 <VideoCard
-                  key={v.id}
-                  v={{ ...v, views: v.youtubeViews }}
+                  key={v.id || v.videoId}
+                  v={v}
+                  onEdit={(item) => {
+                    setEditingId(item.id || item.videoId);
+                    setForm({
+                      ...item,
+                      tags: Array.isArray(item.tags) ? item.tags.join(", ") : item.tags || "",
+                      isVisibleOnPersonal: item.isVisibleOnPersonal !== false
+                    });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onDelete={() => handleDelete(v.id || v.videoId, v)}
+                  onRefresh={() => handleRefresh(v.id || v.videoId)}
+                  busy={refreshingId === (v.id || v.videoId)}
                   isSelected={selectedIds.has(v.id)}
                   viewMode={viewMode}
                   onToggleSelect={(id) => {
@@ -238,14 +271,6 @@ export default function AdminVideosPage() {
                     if (next.has(id)) next.delete(id); else next.add(id);
                     setSelectedIds(next);
                   }}
-                  onEdit={(item) => {
-                    setEditingId(item.id);
-                    setForm({ ...item, tags: (item.tags || []).join(", ") });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  onDelete={handleDelete}
-                  onRefresh={handleRefreshOne}
-                  busy={refreshingId === (v.videoId || v.id)}
                   flashKey={flashKey}
                 />
               ))}
@@ -269,9 +294,13 @@ export default function AdminVideosPage() {
               form={form}
               setForm={setForm}
               onSave={handleSave}
-              onCancel={() => { setEditingId(null); setForm(DEFAULT_FORM); }}
+              onCancel={() => {
+                setEditingId(null);
+                setForm(DEFAULT_FORM);
+              }}
               busy={busy}
               busyLabel={busyLabel}
+              user={{ email: userEmail, roles: userRoles, isAdmin, isEditor }}
             />
           </div>
 

@@ -103,7 +103,28 @@ const QuickQuoteBar = ({ onBook }) => {
     }
   }, []);
 
-  const visible = showBase && !nearForm && !forcedHidden && !isMobile;
+  // Hide when ProofSection (thumbnail showcase) is visible
+  const [nearProofSection, setNearProofSection] = React.useState(false);
+  React.useEffect(() => {
+    const proofSection = document.getElementById("proof");
+    if (!proofSection) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setNearProofSection(entry.isIntersecting);
+      },
+      {
+        root: null,
+        rootMargin: "-100px 0px -100px 0px", // Hide when proof section is in center of viewport
+        threshold: [0, 0.1, 0.5, 1]
+      }
+    );
+
+    observer.observe(proofSection);
+    return () => observer.disconnect();
+  }, []);
+
+  const visible = showBase && !nearForm && !forcedHidden && !isMobile && !nearProofSection;
 
   // Broadcast visibility so Header/TrustBar can react
   React.useEffect(() => {

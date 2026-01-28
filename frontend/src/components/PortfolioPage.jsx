@@ -14,7 +14,12 @@ import {
     MessageSquare,
     Link as LinkIcon,
     Search,
-    Filter
+    Filter,
+    Linkedin,
+    Twitter,
+    Globe,
+    Star,
+    Briefcase
 } from "lucide-react";
 import PortfolioItem from "./PortfolioItem";
 import MetaTags from "./MetaTags";
@@ -34,7 +39,9 @@ function normalizeWork(item, type) {
         link: isVideo ? "/video-editing" : "/thumbnails",
         kind: isVideo ? "video" : "gfx",
         isShinel: item.isShinel !== false,
-        attributedTo: item.attributedTo
+        attributedTo: item.attributedTo,
+        isVisibleOnPersonal: item.isVisibleOnPersonal !== false,
+        views: Number(item.views || 0)
     };
 }
 
@@ -70,8 +77,8 @@ export default function PortfolioPage() {
 
                 // 3. Filter for this user
                 const userWork = [...vMapped, ...tMapped].filter(w =>
-                    w.attributedTo === user.email ||
-                    w.attributedTo === slug
+                    (w.attributedTo === user.email || w.attributedTo === slug) &&
+                    w.isVisibleOnPersonal
                 );
                 setProjects(userWork);
 
@@ -94,6 +101,18 @@ export default function PortfolioPage() {
             return matchesSearch && matchesFilter;
         });
     }, [projects, activeFilter, searchQuery]);
+
+    // Impact calculation
+    const impactStats = useMemo(() => {
+        const totalViews = projects.reduce((sum, p) => sum + (p.views || 0), 0);
+        const count = projects.length;
+        return {
+            totalReach: totalViews > 1000000 ? `${(totalViews / 1000000).toFixed(1)}M+` :
+                totalViews > 1000 ? `${(totalViews / 1000).toFixed(1)}K+` : totalViews,
+            avgReach: count ? Math.round(totalViews / count).toLocaleString() : 0,
+            projectCount: count
+        };
+    }, [projects]);
 
     if (loading && !profile) {
         return (
@@ -148,7 +167,7 @@ export default function PortfolioPage() {
                         <div className="flex-grow">
                             <div className="flex items-center gap-3 mb-4">
                                 <span className="px-3 py-1 rounded-full bg-[var(--orange)]/10 border border-[var(--orange)]/20 text-[var(--orange)] text-[10px] font-black uppercase tracking-widest">
-                                    {profile.role}
+                                    {profile.role || "Creator"}
                                 </span>
                                 {profile.isTeam && (
                                     <span className="flex items-center gap-1.5 text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-widest">
@@ -160,14 +179,57 @@ export default function PortfolioPage() {
                             <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-4 text-[var(--text)]">
                                 {profile.firstName} <span className="text-[var(--orange)] italic">{profile.lastName}.</span>
                             </h1>
-                            <p className="text-[var(--text-muted)] text-lg md:text-xl max-w-xl font-medium leading-relaxed">
-                                Professional {profile.role} focused on high-retention viral storytelling and visual brand dominance at Shinel Studios.
+                            <p className="text-[var(--text-muted)] text-lg md:text-xl max-w-xl font-medium leading-relaxed mb-6">
+                                {profile.bio || `Professional ${profile.role || 'Creative'} focused on high-retention viral storytelling and visual brand dominance at Shinel Studios.`}
                             </p>
+
+                            {profile.skills && (
+                                <div className="flex flex-wrap gap-2 mb-8">
+                                    {profile.skills.split(",").map(s => (
+                                        <span key={s} className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                            {s.trim()}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            {profile.experience && (
+                                <div className="flex items-start gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/5 max-w-xl mb-8">
+                                    <Briefcase size={18} className="text-orange-500 shrink-0 mt-1" />
+                                    <div>
+                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Professional Background</h4>
+                                        <p className="text-sm font-medium text-gray-300 leading-relaxed italic">{profile.experience}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {impactStats.projectCount > 0 && (
+                                <div className="flex gap-8 mt-8 border-t border-[var(--border)] pt-8">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--orange)] mb-1">Total Reach</span>
+                                        <span className="text-3xl font-black text-[var(--text)]">{impactStats.totalReach}</span>
+                                    </div>
+                                    <div className="flex flex-col border-l border-[var(--border)] pl-8">
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Avg per Project</span>
+                                        <span className="text-3xl font-black text-[var(--text)]">{impactStats.avgReach}</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="flex flex-wrap md:flex-col gap-4">
-                            <SocialButton icon={<MessageSquare size={16} />} label="Inquiry" href="https://wa.me/918968141585" />
-                            <SocialButton icon={<LinkIcon size={16} />} label="Socials" href="#" />
+                        <div className="flex flex-col gap-3 min-w-[200px]">
+                            <SocialButton
+                                icon={<Zap size={16} />}
+                                label="Commission via Shinel"
+                                href={`https://wa.me/918968141585?text=Hi, I'm interested in working with ${profile.firstName} for a project.`}
+                                primary
+                            />
+                            <div className="grid grid-cols-2 gap-3">
+                                {profile.linkedin && <SocialButton icon={<Linkedin size={16} />} label="LinkedIn" href={profile.linkedin} />}
+                                {profile.twitter && <SocialButton icon={<Twitter size={16} />} label="X" href={profile.twitter} />}
+                                {profile.website && <SocialButton icon={<Globe size={16} />} label="Web" href={profile.website} />}
+                                <SocialButton icon={<MessageSquare size={16} />} label="Inquiry" href="https://wa.me/918968141585" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -245,18 +307,21 @@ function FilterBtn({ label, active, onClick }) {
     );
 }
 
-function SocialButton({ icon, label, href }) {
+function SocialButton({ icon, label, href, primary }) {
     return (
         <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] hover:bg-[var(--surface)] hover:border-[var(--orange)]/30 transition-all group"
+            className={`flex items-center justify-center gap-3 px-6 py-3 rounded-2xl border transition-all group ${primary
+                ? "bg-[var(--orange)] border-[var(--orange)] text-white shadow-lg shadow-[var(--orange)]/20 hover:scale-[1.02]"
+                : "bg-[var(--surface-alt)] border-[var(--border)] hover:bg-[var(--surface)] hover:border-[var(--orange)]/30 text-[var(--text-muted)]"
+                }`}
         >
-            <span className="text-[var(--text-muted)] group-hover:text-[var(--orange)] transition-colors">
+            <span className={`${primary ? "text-white" : "group-hover:text-[var(--orange)]"} transition-colors`}>
                 {icon}
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors">
+            <span className={`text-[10px] font-black uppercase tracking-widest ${primary ? "text-white" : "group-hover:text-[var(--text)]"} transition-colors`}>
                 {label}
             </span>
         </a>

@@ -290,8 +290,8 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     if (!searchQuery.trim()) return allToolsForMenu;
     const q = searchQuery.toLowerCase();
     return allToolsForMenu.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.description.toLowerCase().includes(q)
+      (t.roles.some(r => userRoles.includes(r.toLowerCase())) || t.roles.includes("public")) &&
+      (t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q))
     );
   }, [searchQuery, allToolsForMenu]);
 
@@ -443,7 +443,8 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [closeAllMenus, setIsDark]);
 
-  const role = (auth.role || "client").toLowerCase();
+  const rawRole = (auth.role || "client").toLowerCase();
+  const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
   const logoSrc = isDark ? logoLight : logoDark;
   const initials = initialsFrom(auth.firstName, auth.lastName, auth.email);
 
@@ -779,16 +780,21 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                               >
                                 {auth.email}
                               </div>
-                              {role && (
-                                <span
-                                  className="inline-block mt-1 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
-                                  style={{
-                                    background: "rgba(232,80,2,0.15)",
-                                    color: "var(--orange)",
-                                  }}
-                                >
-                                  {role}
-                                </span>
+                              {userRoles.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {userRoles.map(r => (
+                                    <span
+                                      key={r}
+                                      className="inline-block text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
+                                      style={{
+                                        background: "rgba(232,80,2,0.15)",
+                                        color: "var(--orange)",
+                                      }}
+                                    >
+                                      {r}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -813,6 +819,17 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                             <span>Profile</span>
                           </Link>
 
+                          {userRoles.some(r => ['editor', 'artist'].includes(r)) && (
+                            <Link
+                              to={`/portfolio/${auth.email}`}
+                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                              style={{ color: "var(--text)" }}
+                            >
+                              <User size={18} style={{ color: "var(--orange)" }} />
+                              <span>Public Portfolio</span>
+                            </Link>
+                          )}
+
                           <Link
                             to="/settings"
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
@@ -822,7 +839,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                             <span>Settings</span>
                           </Link>
 
-                          {['admin', 'editor', 'artist'].includes(role) && (
+                          {userRoles.some(r => ['admin', 'editor', 'artist'].includes(r)) && (
                             <Link
                               to="/dashboard"
                               className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"

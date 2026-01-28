@@ -24,6 +24,11 @@ export const GlobalConfigProvider = ({ children }) => {
             if (res.ok) {
                 setConfig(data.config || {});
                 localStorage.setItem(LS_KEY, JSON.stringify(data.config || {}));
+            } else {
+                // If it's a 500 or auth error related to token expiration
+                if (data.error?.includes("exp") || data.error?.includes("token")) {
+                    console.warn("Session expired or invalid token during fetch");
+                }
             }
             setLoading(false);
         } catch (err) {
@@ -50,6 +55,13 @@ export const GlobalConfigProvider = ({ children }) => {
                 localStorage.setItem(LS_KEY, JSON.stringify(data.config));
                 return { success: true };
             } else {
+                // Handle session expiration
+                if (data.error?.includes("exp") || res.status === 401) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("role");
+                    window.location.href = "/login?expired=true";
+                    return { success: false, error: "Session expired. Please login again." };
+                }
                 return { success: false, error: data.error };
             }
         } catch (err) {

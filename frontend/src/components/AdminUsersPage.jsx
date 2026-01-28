@@ -1,6 +1,7 @@
 // src/components/AdminUsersPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle, Linkedin, Twitter, Globe, Star, Briefcase } from "lucide-react";
+import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
 
@@ -22,6 +23,12 @@ const daysLeftFromExp = (payload) => {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 };
 
+function toast(type, message) {
+  window.dispatchEvent(
+    new CustomEvent("notify", { detail: { type: type === "error" ? "error" : "success", message: String(message || "") } })
+  );
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -33,16 +40,27 @@ export default function AdminUsersPage() {
     email: "",
     role: "client",
     password: "",
+    bio: "",
+    slug: "",
+    linkedin: "",
+    twitter: "",
+    website: "",
+    skills: "",
+    experience: "",
   });
+  const [editingEmail, setEditingEmail] = useState(null);
 
   // --- token state that updates when auth changes ---
   const [token, setToken] = useState(() => localStorage.getItem("token") || "");
   const payload = useMemo(() => (token ? parseJwt(token) : null), [token]);
-  const role = (payload?.role || localStorage.getItem("role") || "").toLowerCase();
+  const rawRole = (payload?.role || localStorage.getItem("role") || "").toLowerCase();
+  const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
+  const role = useMemo(() => userRoles[0] || "client", [userRoles]);
+  const isAdmin = userRoles.includes("admin");
   const daysLeft = daysLeftFromExp(payload);
 
   // --- derived banner conditions ---
-  const showExpiringBanner = role === "admin" && Number.isFinite(daysLeft) && daysLeft <= 14;
+  const showExpiringBanner = isAdmin && Number.isFinite(daysLeft) && daysLeft <= 14;
 
   // --- recompute headers whenever token changes ---
   const authHeaders = useMemo(() => ({ authorization: `Bearer ${token}` }), [token]);
@@ -59,7 +77,7 @@ export default function AdminUsersPage() {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed)) setUsers(parsed);
         }
-      } catch {}
+      } catch { }
     }
 
     // Cancel ongoing request
@@ -79,19 +97,28 @@ export default function AdminUsersPage() {
       setUsers(list);
       sessionStorage.setItem("adminUsersCache", JSON.stringify(list));
     } catch (e) {
-      if (e.name !== "AbortError") setErr(e.message || "Error");
+      if (e.name !== "AbortError") {
+        setErr(e.message || "Error");
+        toast("error", e.message || "Failed to load users");
+      }
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
   }
 
-  async function createUser(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setBusy(true);
     setErr("");
     try {
-      const res = await fetch(`${AUTH_BASE}/admin/users`, {
-        method: "POST",
+      const url = editingEmail
+        ? `${AUTH_BASE}/admin/users/${encodeURIComponent(editingEmail)}`
+        : `${AUTH_BASE}/admin/users`;
+
+      const method = editingEmail ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: {
           "content-type": "application/json",
           ...authHeaders,
@@ -99,9 +126,15 @@ export default function AdminUsersPage() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to create user");
-      setForm({ firstName: "", lastName: "", email: "", role: "client", password: "" });
+      if (!res.ok) throw new Error(data?.error || `Failed to ${editingEmail ? 'update' : 'create'} user`);
+
+      setForm({
+        firstName: "", lastName: "", email: "", role: "client", password: "",
+        bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: ""
+      });
+      setEditingEmail(null);
       await loadUsers();
+      toast("success", `User ${editingEmail ? 'updated' : 'created'} successfully`);
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -121,8 +154,10 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to delete");
       await loadUsers();
+      toast("success", "User deleted successfully");
     } catch (e) {
       setErr(e.message || "Error");
+      toast("error", e.message || "Delete failed");
     } finally {
       setBusy(false);
     }
@@ -226,33 +261,153 @@ export default function AdminUsersPage() {
 
         {/* Create user */}
         <form
-          onSubmit={createUser}
+          onSubmit={handleSubmit}
           className="rounded-2xl p-4 border mb-6"
           style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}
         >
-          <div className="text-base font-semibold mb-3" style={{ color: "var(--text)" }}>
-            Create user
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-base font-semibold" style={{ color: "var(--text)" }}>
+              {editingEmail ? "Edit user" : "Create user"}
+            </div>
+            {editingEmail && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingEmail(null);
+                  setForm({
+                    firstName: "", lastName: "", email: "", role: "client", password: "",
+                    bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: ""
+                  });
+                }}
+                className="text-xs text-[var(--orange)] font-bold hover:underline"
+              >
+                Cancel Edit
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <Input label="First name" value={form.firstName} onChange={(v) => setForm({ ...form, firstName: v })} />
-            <Input label="Last name" value={form.lastName} onChange={(v) => setForm({ ...form, lastName: v })} />
-            <Input label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} type="email" />
-            <Select
-              label="Role"
-              value={form.role}
-              onChange={(v) => setForm({ ...form, role: v })}
-              options={[
-                { value: "admin", label: "Admin" },
-                { value: "editor", label: "Editor" },
-                { value: "client", label: "Client" },
-              ]}
-            />
-            <Input
-              label="Password"
-              value={form.password}
-              onChange={(v) => setForm({ ...form, password: v })}
-              type="password"
-            />
+            <div className="md:col-span-1">
+              <Input
+                label="First name"
+                value={form.firstName}
+                onChange={(v) => setForm({ ...form, firstName: v })}
+              />
+            </div>
+            <div className="md:col-span-1">
+              <Input
+                label="Last name"
+                value={form.lastName}
+                onChange={(v) => setForm({ ...form, lastName: v })}
+              />
+            </div>
+            <div className="md:col-span-1">
+              <Input
+                label="Email"
+                value={form.email}
+                onChange={(v) => setForm({ ...form, email: v })}
+                type="email"
+                disabled={!!editingEmail}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest ml-1 mb-2">
+                Roles (Select all that apply)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {["admin", "editor", "artist", "client"].map((r) => {
+                  const active = form.role.split(",").includes(r);
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        const roles = form.role.split(",").filter(Boolean);
+                        const next = roles.includes(r)
+                          ? roles.filter((x) => x !== r)
+                          : [...roles, r];
+                        setForm({ ...form, role: next.join(",") || "client" });
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${active
+                        ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20"
+                        : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
+                        }`}
+                    >
+                      {r}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="md:col-span-1">
+              <Input
+                label="Password"
+                placeholder={editingEmail ? "Leave blank to keep" : "Enter password"}
+                value={form.password}
+                onChange={(v) => setForm({ ...form, password: v })}
+                type="password"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <Input
+                label="Custom Slug (Staff Page)"
+                value={form.slug}
+                onChange={v => setForm({ ...form, slug: v })}
+                placeholder="e.g. jhon-doe"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <Input
+                label="Skills (Comma separated)"
+                value={form.skills}
+                onChange={v => setForm({ ...form, skills: v })}
+                placeholder="e.g. Editing, Color Grading, VFX"
+              />
+            </div>
+
+            {/* Socials Group */}
+            <div className="md:col-span-5 grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-white/5 pt-3 mt-1">
+              <Input
+                label="LinkedIn URL"
+                value={form.linkedin}
+                onChange={v => setForm({ ...form, linkedin: v })}
+                placeholder="https://linkedin.com/in/..."
+              />
+              <Input
+                label="X (Twitter) URL"
+                value={form.twitter}
+                onChange={v => setForm({ ...form, twitter: v })}
+                placeholder="https://x.com/..."
+              />
+              <Input
+                label="Personal Website"
+                value={form.website}
+                onChange={v => setForm({ ...form, website: v })}
+                placeholder="https://yourpage.com"
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <TextArea
+                label="Bio / Tagline"
+                value={form.bio}
+                onChange={v => setForm({ ...form, bio: v })}
+                placeholder="Tell clients about your expertise..."
+                rows={4}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <TextArea
+                label="Experience Highlights"
+                value={form.experience}
+                onChange={v => setForm({ ...form, experience: v })}
+                placeholder="Software, notable projects, years..."
+                rows={4}
+              />
+            </div>
           </div>
           <div className="mt-3">
             <button
@@ -260,7 +415,8 @@ export default function AdminUsersPage() {
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
             >
-              <Plus size={16} /> Create
+              {editingEmail ? <ShieldCheck size={16} /> : <Plus size={16} />}
+              {editingEmail ? "Update User" : "Create User"}
             </button>
           </div>
         </form>
@@ -284,16 +440,46 @@ export default function AdminUsersPage() {
                 <tr key={u.email} className="border-t" style={{ borderColor: "var(--border)" }}>
                   <td className="p-3">{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</td>
                   <td className="p-3">{u.email}</td>
-                  <td className="p-3 capitalize">{u.role}</td>
                   <td className="p-3">
-                    <button
-                      onClick={() => deleteUser(u.email)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border"
-                      style={{ borderColor: "var(--border)", color: "var(--text)" }}
-                      title="Delete user"
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
+                    <div className="flex flex-wrap gap-1">
+                      {u.role.split(",").map(r => (
+                        <span key={r} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] uppercase font-bold text-gray-400">
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingEmail(u.email);
+                          setForm({
+                            firstName: u.firstName || "",
+                            lastName: u.lastName || "",
+                            email: u.email || "",
+                            role: u.role || "client",
+                            password: "",
+                            bio: u.bio || "",
+                            slug: u.slug || "",
+                          });
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border"
+                        style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                        title="Edit user"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteUser(u.email)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded border text-red-500/70 hover:text-red-500"
+                        style={{ borderColor: "var(--border)" }}
+                        title="Delete user"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -312,51 +498,3 @@ export default function AdminUsersPage() {
   );
 }
 
-// ---- UI helpers ----
-function Input({ label, value, onChange, type = "text" }) {
-  return (
-    <label className="block">
-      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
-        {label}
-      </span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-[42px] rounded-lg px-3"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--text)",
-        }}
-        required={label !== "Last name"}
-      />
-    </label>
-  );
-}
-
-function Select({ label, value, onChange, options }) {
-  return (
-    <label className="block">
-      <span className="block text-sm mb-1" style={{ color: "var(--text)" }}>
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-[42px] rounded-lg px-3"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--text)",
-        }}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}

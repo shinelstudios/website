@@ -54,42 +54,42 @@ const VideoFilters = ({
             {/* Advanced Filters */}
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                 <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/10">
-                        <Filter size={14} className="text-orange-500" />
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/10 focus-within:border-orange-500/50 transition-all">
+                        <Filter size={12} className="text-orange-500" />
                         <select
                             value={filters.category}
                             onChange={(e) => setFilters(f => ({ ...f, category: e.target.value }))}
-                            className="bg-transparent outline-none text-[11px] font-bold text-gray-300 uppercase tracking-widest cursor-pointer"
+                            className="bg-transparent outline-none text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer pr-2"
                         >
-                            <option value="ALL">ALL CATEGORIES</option>
-                            {VIDEO_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            <option value="ALL" className="bg-[#1A1A1A]">ALL CATEGORIES</option>
+                            {VIDEO_CATEGORIES.map(c => <option key={c} value={c} className="bg-[#1A1A1A]">{c}</option>)}
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/10">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/10 focus-within:border-orange-500/50 transition-all">
                         <select
                             value={filters.kind}
                             onChange={(e) => setFilters(f => ({ ...f, kind: e.target.value }))}
-                            className="bg-transparent outline-none text-[11px] font-bold text-gray-300 uppercase tracking-widest cursor-pointer"
+                            className="bg-transparent outline-none text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer pr-2"
                         >
-                            <option value="ALL">ALL TYPES</option>
-                            {VIDEO_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+                            <option value="ALL" className="bg-[#1A1A1A]">ALL TYPES</option>
+                            {VIDEO_KINDS.map(k => <option key={k} value={k} className="bg-[#1A1A1A]">{k}</option>)}
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/10">
-                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sort:</span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/10 focus-within:border-orange-500/50 transition-all">
+                        <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Sort:</span>
                         <select
                             value={`${sort.key}-${sort.dir}`}
                             onChange={(e) => {
                                 const [key, dir] = e.target.value.split('-');
                                 setSort({ key, dir });
                             }}
-                            className="bg-transparent outline-none text-[11px] font-bold text-orange-500 uppercase tracking-widest cursor-pointer"
+                            className="bg-transparent outline-none text-[10px] font-black text-orange-500 uppercase tracking-widest cursor-pointer pr-2"
                         >
-                            <option value="updated-desc">LATEST UPDATED</option>
-                            <option value="views-desc">MOST VIEWED</option>
-                            <option value="title-asc">TITLE (A-Z)</option>
+                            <option value="updated-desc" className="bg-[#1A1A1A]">LATEST UPDATED</option>
+                            <option value="views-desc" className="bg-[#1A1A1A]">MOST VIEWED</option>
+                            <option value="title-asc" className="bg-[#1A1A1A]">TITLE (A-Z)</option>
                         </select>
                     </div>
                 </div>

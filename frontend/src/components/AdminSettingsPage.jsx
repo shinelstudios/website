@@ -14,18 +14,78 @@ import {
     DollarSign,
     Plus,
     Trash2,
-    Image as IconImage
+    Image as IconImage,
+    Sparkles,
+    Search,
+    Instagram,
+    Youtube,
+    Twitter,
+    Linkedin,
+    Facebook,
+    Music,
+    MessageCircle,
+    Twitch as TwitchIcon,
+    Github,
+    Dribbble,
+    Globe,
+    ShieldCheck
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
+
+// Platform icon mapping
+const PLATFORM_ICONS = {
+    instagram: Instagram,
+    youtube: Youtube,
+    twitter: Twitter,
+    linkedin: Linkedin,
+    facebook: Facebook,
+    tiktok: Music,
+    discord: MessageCircle,
+    twitch: TwitchIcon,
+    github: Github,
+    behance: IconImage,
+    dribbble: Dribbble,
+    other: Globe
+};
+
+/* ---------------- helpers: safe base64url + jwt ---------------- */
+function base64UrlDecode(str) {
+    try {
+        if (!str) return "";
+        const b64 = str.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((str.length + 3) % 4);
+        return decodeURIComponent(escape(atob(b64)));
+    } catch { return ""; }
+}
+function parseJwt(token) {
+    try {
+        const parts = String(token || "").split(".");
+        if (parts.length < 2) return null;
+        return JSON.parse(base64UrlDecode(parts[1]));
+    } catch { return null; }
+}
 
 export default function AdminSettingsPage() {
     const { config, updateConfig, loading, refreshConfig } = useGlobalConfig();
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
+    // Role detection
+    const token = localStorage.getItem("token") || "";
+    const payload = parseJwt(token);
+    const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+    const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
+    const isAdmin = userRoles.includes('admin');
+    const isStaff = userRoles.some(r => ['admin', 'staff', 'editor'].includes(r));
+
     // Local form state
     const [formData, setFormData] = useState({
+        // === SOCIAL LINKS ===
+        socialLinks: [
+            // Example: { platform: "instagram", label: "Main Account", url: "https://instagram.com/shinelstudios" }
+        ],
+
+        // === STATS ===
         stats: {
             videosDelivered: 300,
             totalReach: 10000000,
@@ -34,11 +94,21 @@ export default function AdminSettingsPage() {
             ctrBoostMin: 3.1,
             ctrBoostMax: 5.0
         },
+        workPageStats: {
+            projectsDelivered: 0,
+            happyClients: 0,
+            viewsGenerated: 0,
+            useCalculated: true
+        },
+
+        // === PRICING ===
         pricing: {
             gaming: { starter: 599, highlights: 6999, rankup: 5499, pro: 13499 },
             vlog: { starter: 699, driver: 9999, story: 7499, suite: 17999 },
             talking: { starter: 999, studio: 13999, clips: 14999, network: 24999 }
         },
+
+        // === SOCIAL PROOF ===
         proofShowcases: [],
         caseStudies: []
     });
@@ -72,16 +142,26 @@ export default function AdminSettingsPage() {
         </div>
     );
 
+    if (!isAdmin) return (
+        <div className="flex flex-col items-center justify-center py-32 text-center space-y-4">
+            <ShieldCheck size={48} className="text-red-500" />
+            <h1 className="text-2xl font-black uppercase tracking-tighter italic">Access <span className="text-red-500">Denied.</span></h1>
+            <p className="text-[var(--text-muted)] text-xs font-black uppercase tracking-widest max-w-md">
+                Only administrators can modify global website variables and production statistics.
+            </p>
+        </div>
+    );
+
     return (
         <section className="space-y-10 pb-20">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-black tracking-tighter uppercase italic">Control <span className="text-orange-500">Center.</span></h1>
-                    <p className="text-gray-500 text-xs font-black uppercase tracking-widest mt-1">Global Website Variables & Production Stats</p>
+                    <h1 className="text-3xl font-black tracking-tighter uppercase italic text-[var(--text)]">Control <span className="text-orange-500">Center.</span></h1>
+                    <p className="text-[var(--text-muted)] text-xs font-black uppercase tracking-widest mt-1">Global Website Variables & Production Stats</p>
                 </div>
                 <button
                     onClick={refreshConfig}
-                    className="p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                    className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:bg-[var(--surface-alt)] transition-colors text-[var(--text)]"
                     title="Refresh from server"
                 >
                     <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
@@ -98,9 +178,135 @@ export default function AdminSettingsPage() {
 
             <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
-                {/* --- Production Stats --- */}
+                {/* LEFT COLUMN */}
                 <div className="space-y-6">
-                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 space-y-8">
+                    {/* --- Social Links --- */}
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                                    <Users size={20} />
+                                </div>
+                                <h2 className="text-lg font-black uppercase tracking-widest">Social Links</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({
+                                    ...formData,
+                                    socialLinks: [...formData.socialLinks, { platform: "instagram", label: "", url: "" }]
+                                })}
+                                className="p-2 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-all"
+                            >
+                                <Plus size={18} />
+                            </button>
+                        </div>
+
+                        {formData.socialLinks.length === 0 ? (
+                            <div className="text-center py-8 text-[var(--text-muted)] text-sm">
+                                No social links added. Click + to add one.
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {formData.socialLinks.map((link, idx) => {
+                                    const PlatformIcon = PLATFORM_ICONS[link.platform] || Globe;
+                                    return (
+                                        <div key={idx} className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] space-y-3 relative z-10">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-500">
+                                                        <PlatformIcon size={16} />
+                                                    </div>
+                                                    <h3 className="text-[9px] font-black uppercase tracking-widest text-orange-500">
+                                                        Link #{idx + 1}
+                                                    </h3>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({
+                                                        ...formData,
+                                                        socialLinks: formData.socialLinks.filter((_, i) => i !== idx)
+                                                    })}
+                                                    className="p-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="space-y-1.5 relative">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Platform</label>
+                                                    <select
+                                                        value={link.platform}
+                                                        onChange={e => {
+                                                            const updated = [...formData.socialLinks];
+                                                            updated[idx].platform = e.target.value;
+                                                            setFormData({ ...formData, socialLinks: updated });
+                                                        }}
+                                                        className="w-full px-4 py-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
+                                                        style={{
+                                                            position: 'relative',
+                                                            zIndex: 50,
+                                                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='${encodeURIComponent(getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || 'white')}'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundPosition: 'right 1rem center',
+                                                            backgroundSize: '1.25rem',
+                                                            paddingRight: '3rem'
+                                                        }}
+                                                    >
+                                                        <option value="instagram" className="bg-[#1A1A1A] text-[var(--text)]">Instagram</option>
+                                                        <option value="youtube" className="bg-[#1A1A1A] text-[var(--text)]">YouTube</option>
+                                                        <option value="twitter" className="bg-[#1A1A1A] text-[var(--text)]">Twitter</option>
+                                                        <option value="linkedin" className="bg-[#1A1A1A] text-[var(--text)]">LinkedIn</option>
+                                                        <option value="facebook" className="bg-[#1A1A1A] text-[var(--text)]">Facebook</option>
+                                                        <option value="tiktok" className="bg-[#1A1A1A] text-[var(--text)]">TikTok</option>
+                                                        <option value="discord" className="bg-[#1A1A1A] text-[var(--text)]">Discord</option>
+                                                        <option value="twitch" className="bg-[#1A1A1A] text-[var(--text)]">Twitch</option>
+                                                        <option value="github" className="bg-[#1A1A1A] text-[var(--text)]">GitHub</option>
+                                                        <option value="behance" className="bg-[#1A1A1A] text-[var(--text)]">Behance</option>
+                                                        <option value="dribbble" className="bg-[#1A1A1A] text-[var(--text)]">Dribbble</option>
+                                                        <option value="other" className="bg-[#1A1A1A] text-[var(--text)]">Other</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Label</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. Main Account"
+                                                        value={link.label}
+                                                        onChange={e => {
+                                                            const updated = [...formData.socialLinks];
+                                                            updated[idx].label = e.target.value;
+                                                            setFormData({ ...formData, socialLinks: updated });
+                                                        }}
+                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1.5 col-span-1">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">URL</label>
+                                                    <input
+                                                        type="url"
+                                                        placeholder="https://..."
+                                                        value={link.url}
+                                                        onChange={e => {
+                                                            const updated = [...formData.socialLinks];
+                                                            updated[idx].url = e.target.value;
+                                                            setFormData({ ...formData, socialLinks: updated });
+                                                        }}
+                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- Production Stats --- */}
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-xl bg-orange-500/10 text-orange-500">
                                 <Activity size={20} />
@@ -137,8 +343,83 @@ export default function AdminSettingsPage() {
                         </div>
                     </div>
 
+                    {/* --- Work Page Stats --- */}
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-orange-500/10 text-orange-500">
+                                <BarChart3 size={20} />
+                            </div>
+                            <h2 className="text-lg font-black uppercase tracking-widest">Work Page Stats</h2>
+                        </div>
+
+                        {/* Toggle for Manual vs Calculated */}
+                        <div className="flex items-center justify-between p-4 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)]">
+                            <div>
+                                <p className="text-sm font-bold text-[var(--text)]">Use Calculated Stats</p>
+                                <p className="text-[9px] text-[var(--text-muted)] font-black uppercase tracking-widest mt-1">
+                                    Auto-calculate from project data
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({
+                                    ...formData,
+                                    workPageStats: {
+                                        ...formData.workPageStats,
+                                        useCalculated: !formData.workPageStats.useCalculated
+                                    }
+                                })}
+                                className={`relative w-14 h-7 rounded-full transition-colors ${formData.workPageStats.useCalculated ? 'bg-orange-500' : 'bg-[var(--surface)] border border-[var(--border)]'
+                                    }`}
+                            >
+                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${formData.workPageStats.useCalculated ? 'translate-x-7' : ''
+                                    }`} />
+                            </button>
+                        </div>
+
+                        {!formData.workPageStats.useCalculated && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <StatInput
+                                    label="Projects Delivered"
+                                    icon={Video}
+                                    value={formData.workPageStats.projectsDelivered}
+                                    onChange={v => setFormData({
+                                        ...formData,
+                                        workPageStats: { ...formData.workPageStats, projectsDelivered: Number(v) }
+                                    })}
+                                />
+                                <StatInput
+                                    label="Happy Clients"
+                                    icon={Users}
+                                    value={formData.workPageStats.happyClients}
+                                    onChange={v => setFormData({
+                                        ...formData,
+                                        workPageStats: { ...formData.workPageStats, happyClients: Number(v) }
+                                    })}
+                                />
+                                <StatInput
+                                    label="Views Generated (Millions)"
+                                    icon={TrendingUp}
+                                    value={formData.workPageStats.viewsGenerated}
+                                    onChange={v => setFormData({
+                                        ...formData,
+                                        workPageStats: { ...formData.workPageStats, viewsGenerated: Number(v) }
+                                    })}
+                                />
+                            </div>
+                        )}
+
+                        {formData.workPageStats.useCalculated && (
+                            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                                <p className="text-xs text-blue-600 dark:text-blue-400 font-bold">
+                                    ✓ Stats will be automatically calculated from your project data (videos + thumbnails with isShinel=true)
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
                     {/* --- CTR Optimization --- */}
-                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 space-y-8">
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
                                 <Zap size={20} />
@@ -158,11 +439,11 @@ export default function AdminSettingsPage() {
                                 onChange={v => setFormData({ ...formData, stats: { ...formData.stats, ctrBoostMax: Number(v) } })}
                             />
                         </div>
-                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">These values control the baseline CTR transformation shown in the testimonials section.</p>
+                        <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest">These values control the baseline CTR transformation shown in the testimonials section.</p>
                     </div>
 
                     {/* --- Proof Section Management --- */}
-                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 space-y-8">
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-purple-500/10 text-purple-500">
@@ -181,7 +462,7 @@ export default function AdminSettingsPage() {
 
                         <div className="space-y-6">
                             {(formData.proofShowcases || []).map((s, idx) => (
-                                <div key={idx} className="p-6 rounded-2xl bg-black border border-white/10 relative group">
+                                <div key={idx} className="p-6 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] relative group">
                                     <button
                                         type="button"
                                         onClick={() => removeShowcase(idx)}
@@ -192,63 +473,63 @@ export default function AdminSettingsPage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="md:col-span-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Category & Hook</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Category & Hook</label>
                                             <input
                                                 type="text"
                                                 value={s.category}
                                                 placeholder="e.g. Gaming (BGMI - Rank Push)"
                                                 onChange={e => updateShowcase(idx, 'category', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Before Image URL</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Before Image URL</label>
                                             <input
                                                 type="text"
                                                 value={s.beforeImage}
                                                 placeholder="Asset path or URL"
                                                 onChange={e => updateShowcase(idx, 'beforeImage', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">After Image URL</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">After Image URL</label>
                                             <input
                                                 type="text"
                                                 value={s.afterImage}
                                                 placeholder="Asset path or URL"
                                                 onChange={e => updateShowcase(idx, 'afterImage', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="grid grid-cols-3 gap-3 md:col-span-2">
                                             <div>
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">CTR %</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">CTR %</label>
                                                 <input
                                                     type="number"
                                                     value={s.stats?.ctrIncrease}
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, ctrIncrease: Number(e.target.value) })}
-                                                    className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Views</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Views</label>
                                                 <input
                                                     type="text"
                                                     value={s.stats?.viewsMultiplier}
                                                     placeholder="e.g. 3.1x"
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, viewsMultiplier: e.target.value })}
-                                                    className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Days</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Days</label>
                                                 <input
                                                     type="text"
                                                     value={s.stats?.turnaroundDays}
                                                     placeholder="e.g. 2"
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, turnaroundDays: e.target.value })}
-                                                    className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                         </div>
@@ -257,7 +538,7 @@ export default function AdminSettingsPage() {
                             ))}
 
                             {(formData.proofShowcases || []).length === 0 && (
-                                <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
+                                <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-2xl">
                                     <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">No active showcases. Defaults will be used site-wide.</p>
                                 </div>
                             )}
@@ -265,7 +546,7 @@ export default function AdminSettingsPage() {
                     </div>
 
                     {/* --- Case Studies Management --- */}
-                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 space-y-8">
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
@@ -284,7 +565,7 @@ export default function AdminSettingsPage() {
 
                         <div className="space-y-6">
                             {(formData.caseStudies || []).map((cs, idx) => (
-                                <div key={idx} className="p-6 rounded-2xl bg-black border border-white/10 relative group">
+                                <div key={idx} className="p-6 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] relative group">
                                     <button
                                         type="button"
                                         onClick={() => removeCaseStudy(idx)}
@@ -295,70 +576,70 @@ export default function AdminSettingsPage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="md:col-span-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Title</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Title</label>
                                             <input
                                                 type="text"
                                                 value={cs.title}
                                                 placeholder="e.g. Packaging revamp for Kamz Inkzone"
                                                 onChange={e => updateCaseStudy(idx, 'title', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="md:col-span-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Description</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Description</label>
                                             <textarea
                                                 value={cs.description}
                                                 onChange={e => updateCaseStudy(idx, 'description', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1 min-h-[80px]"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1 min-h-[80px]"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Metric (High-level)</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Metric (High-level)</label>
                                             <input
                                                 type="text"
                                                 value={cs.metric}
                                                 placeholder="+62% CTR"
                                                 onChange={e => updateCaseStudy(idx, 'metric', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Period</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Period</label>
                                             <input
                                                 type="text"
                                                 value={cs.period}
                                                 placeholder="in 6 weeks"
                                                 onChange={e => updateCaseStudy(idx, 'period', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Asset Key (Thumbnail)</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Asset Key (Thumbnail)</label>
                                             <input
                                                 type="text"
                                                 value={cs.keys?.thumb}
                                                 placeholder="e.g. creator3"
                                                 onChange={e => updateCaseStudy(idx, 'keys', { ...cs.keys, thumb: e.target.value })}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Category</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Category</label>
                                             <input
                                                 type="text"
                                                 value={cs.category}
                                                 placeholder="Thumbnails"
                                                 onChange={e => updateCaseStudy(idx, 'category', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="md:col-span-2">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">Highlights (comma separated)</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">Highlights (comma separated)</label>
                                             <input
                                                 type="text"
                                                 value={cs.highlights?.join(', ')}
                                                 onChange={e => updateCaseStudy(idx, 'highlights', e.target.value.split(',').map(h => h.trim()))}
-                                                className="w-full px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
                                             />
                                         </div>
                                     </div>
@@ -366,7 +647,7 @@ export default function AdminSettingsPage() {
                             ))}
 
                             {(formData.caseStudies || []).length === 0 && (
-                                <div className="text-center py-10 border border-dashed border-white/10 rounded-2xl">
+                                <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-2xl">
                                     <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest">No custom case studies. Defaults will be used site-wide.</p>
                                 </div>
                             )}
@@ -376,7 +657,7 @@ export default function AdminSettingsPage() {
 
                 {/* --- Pricing Controls --- */}
                 <div className="space-y-6">
-                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 space-y-8">
+                    <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-xl bg-green-500/10 text-green-500">
                                 <DollarSign size={20} />
@@ -421,7 +702,7 @@ export default function AdminSettingsPage() {
                     <button
                         type="submit"
                         disabled={busy}
-                        className="w-full py-6 bg-white text-black font-black uppercase tracking-[0.4em] rounded-[24px] hover:bg-orange-500 hover:text-white transition-all shadow-xl flex items-center justify-center gap-3 group active:scale-95"
+                        className="w-full py-6 bg-orange-600 text-white font-black uppercase tracking-[0.4em] rounded-[24px] hover:bg-orange-500 transition-all shadow-xl shadow-orange-600/20 flex items-center justify-center gap-3 group active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                     >
                         {busy ? <RefreshCw className="animate-spin" /> : <Save size={20} className="group-hover:scale-110 transition-transform" />}
                         {busy ? "Applying Changes..." : "Deploy Config Site-wide"}
@@ -512,14 +793,14 @@ export default function AdminSettingsPage() {
 function StatInput({ label, value, onChange, icon: Icon, type = "number" }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest text-gray-600 ml-1">{label}</label>
+            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] ml-1">{label}</label>
             <div className="relative">
-                {Icon && <Icon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />}
+                {Icon && <Icon size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />}
                 <input
                     type={type}
                     value={value || ""}
                     onChange={e => onChange(e.target.value)}
-                    className={`w-full ${Icon ? 'pl-10' : 'px-4'} py-3.5 bg-black border border-white/10 rounded-2xl text-sm font-bold focus:border-orange-500 outline-none transition-all`}
+                    className={`w-full ${Icon ? 'pl-10' : 'px-4'} py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all`}
                 />
             </div>
         </div>

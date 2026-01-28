@@ -65,6 +65,23 @@ export default function AdminThumbnailsPage() {
   const [refreshingId, setRefreshingId] = useState(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // Auth & Roles
+  const token = localStorage.getItem("token") || "";
+  const payload = useMemo(() => {
+    try {
+      const parts = token.split(".");
+      if (parts.length < 2) return null;
+      const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[1].length + 3) % 4);
+      return JSON.parse(decodeURIComponent(escape(atob(b64))));
+    } catch { return null; }
+  }, [token]);
+
+  const userEmail = payload?.email || localStorage.getItem("userEmail") || "";
+  const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+  const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
+  const isAdmin = userRoles.includes("admin");
+  const isArtist = userRoles.includes("artist");
   const [flashKey, setFlashKey] = useState("");
   const [vErrs, setVErrs] = useState({});
   const [viewMode, setViewMode] = useState("grid"); // grid | list
@@ -100,7 +117,8 @@ export default function AdminThumbnailsPage() {
     setBusyLabel("Fetching library...");
     try {
       const rows = await store.getAll();
-      startTransition(() => setThumbnails(rows || []));
+      const filtered = isAdmin ? (rows || []) : (rows || []).filter(t => t.attributedTo === userEmail);
+      startTransition(() => setThumbnails(filtered));
     } catch (e) {
       surfaceError(e.message || "Error loading thumbnails", e, loadThumbnails);
     } finally {
@@ -191,8 +209,12 @@ export default function AdminThumbnailsPage() {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Permanently delete "${name}"?`)) return;
+  const handleDelete = async (id, thumb) => {
+    if (!isAdmin && thumb?.isShinel) {
+      toast("error", "Only Admin can delete Shinel Studios assets.");
+      return;
+    }
+    if (!confirm("Are you sure? This is permanent.")) return;
     setBusy(true);
     setOp({ kind: "delete", pct: 50, note: "Removing asset" });
     try {
@@ -389,36 +411,32 @@ export default function AdminThumbnailsPage() {
               {filteredItems.map(t => (
                 <ThumbnailCard
                   key={t.id}
-                  t={t}
+                  thumb={t}
+                  onEdit={() => {
+                    setEditingId(t.id);
+                    setForm({
+                      ...t,
+                      isVisibleOnPersonal: t.isVisibleOnPersonal !== false
+                    });
+                    setImagePreview(t.imageUrl || "");
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onDelete={() => handleDelete(t.id, t)}
+                  onRefresh={() => handleRefreshOne(t.youtubeUrl, t.id)}
+                  busy={refreshingId === t.id}
                   isSelected={selectedIds.has(t.id)}
+                  viewMode={viewMode}
                   onToggleSelect={(id) => {
                     const next = new Set(selectedIds);
                     if (next.has(id)) next.delete(id); else next.add(id);
                     setSelectedIds(next);
                   }}
-                  onEdit={(item) => {
-                    setEditingId(item.id);
-                    setForm(item);
-                    setImagePreview(item.imageUrl);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  onDuplicate={(item) => {
-                    setForm({ ...item, id: undefined, filename: item.filename + " (Copy)" });
-                    setImagePreview(item.imageUrl);
-                    setEditingId(null);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  onDelete={handleDelete}
-                  onDownload={downloadImage}
-                  onRefresh={handleRefreshOne}
-                  refreshingId={refreshingId}
-                  copyOkId={copyOkId}
-                  onCopyUrl={(url, id) => {
-                    navigator.clipboard.writeText(url);
+                  onCopyUrl={(id) => {
+                    navigator.clipboard.writeText(t.imageUrl);
                     setCopyOkId(id);
-                    setTimeout(() => setCopyOkId(null), 1500);
-                    toast("success", "URL Copied");
+                    setTimeout(() => setCopyOkId(null), 2000);
                   }}
+                  copyOk={copyOkId === t.id}
                   flashKey={flashKey}
                 />
               ))}
@@ -441,7 +459,11 @@ export default function AdminThumbnailsPage() {
               form={form}
               setForm={setForm}
               onSave={handleSave}
-              onCancel={() => { setEditingId(null); setForm(DEFAULT_FORM); setImagePreview(""); }}
+              onCancel={() => {
+                setEditingId(null);
+                setForm(DEFAULT_FORM);
+                setImagePreview("");
+              }}
               onImageSelected={handleImageSelected}
               onFetchYouTube={handleFetchYouTube}
               imagePreview={imagePreview}
@@ -449,6 +471,7 @@ export default function AdminThumbnailsPage() {
               busyLabel={busyLabel}
               vErrs={vErrs}
               presets={presets}
+              user={{ email: userEmail, roles: userRoles, isAdmin, isArtist }}
             />
 
             {/* Quick Stats Widget */}

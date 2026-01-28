@@ -71,13 +71,13 @@ export default function ProtectedRoute({ children, roles }) {
       }
 
       // --- Role-based access check ---
-      const role =
-        (parseJwt(t)?.role || localStorage.getItem("role") || "").toLowerCase();
+      const rawRole = (parseJwt(t)?.role || localStorage.getItem("role") || "").toLowerCase();
+      const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
 
       if (
         roles &&
         roles.length > 0 &&
-        !roles.map((r) => r.toLowerCase()).includes(role)
+        !roles.some((r) => userRoles.includes(r.toLowerCase()))
       ) {
         if (!cancelled) setStatus("redirect");
         return;

@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { X, Check, Plus, RefreshCw, Info } from "lucide-react";
 import { VIDEO_CATEGORIES, VIDEO_KINDS, extractYouTubeId } from "../utils/constants";
+import { Input, TextArea, SelectWithPresets } from "./AdminUIComponents";
 
 const VideoForm = ({
     editingId,
@@ -10,12 +11,14 @@ const VideoForm = ({
     onCancel,
     busy,
     busyLabel,
+    user
 }) => {
-    const handleInputChange = (e) => {
-        const { name, value, type, checked } = e.target;
+    const { isAdmin, email: userEmail } = user || { isAdmin: false, email: "" };
+
+    const handleInputChange = (name, value) => {
         setForm((f) => ({
             ...f,
-            [name]: type === "checkbox" ? checked : value,
+            [name]: value,
         }));
     };
 
@@ -50,35 +53,25 @@ const VideoForm = ({
             <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="p-5 space-y-6">
 
                 <div className="space-y-4">
-                    {/* Title */}
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Video Title</label>
-                        <input
-                            name="title"
-                            value={form.title}
-                            onChange={handleInputChange}
-                            placeholder="e.g. Minecraft But Everything Is Huge"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                            required
-                        />
-                    </div>
+                    <Input
+                        label="Video Title"
+                        value={form.title}
+                        onChange={(v) => handleInputChange("title", v)}
+                        placeholder="e.g. Minecraft But Everything Is Huge"
+                        required
+                    />
 
-                    {/* URLs */}
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Primary URL (On-site)</label>
-                        <input
-                            name="primaryUrl"
-                            value={form.primaryUrl}
-                            onChange={handleInputChange}
-                            placeholder="YouTube URL for site player"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                            required
-                        />
-                    </div>
+                    <Input
+                        label="Primary URL (On-site)"
+                        value={form.primaryUrl}
+                        onChange={(v) => handleInputChange("primaryUrl", v)}
+                        placeholder="YouTube URL for site player"
+                        required
+                    />
 
                     {/* Preview Container */}
                     {formVideoId && (
-                        <div className="rounded-xl overflow-hidden aspect-video border border-white/10 bg-black animate-in fade-in duration-500">
+                        <div className="rounded-xl overflow-hidden aspect-video border border-white/10 bg-black animate-in fade-in duration-500 mt-2">
                             <iframe
                                 className="w-full h-full"
                                 src={`https://www.youtube.com/embed/${formVideoId}`}
@@ -90,41 +83,28 @@ const VideoForm = ({
                         </div>
                     )}
 
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Creator URL (Original)</label>
-                        <input
-                            name="creatorUrl"
-                            value={form.creatorUrl}
-                            onChange={handleInputChange}
-                            placeholder="The creator's public upload link"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                        />
-                    </div>
+                    <Input
+                        label="Creator URL (Original)"
+                        value={form.creatorUrl}
+                        onChange={(v) => handleInputChange("creatorUrl", v)}
+                        placeholder="The creator's public upload link"
+                    />
                 </div>
 
                 {/* Categorization */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Category</label>
-                        <select
-                            name="category"
-                            value={form.category}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 rounded-xl bg-[#0F0F0F] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium appearance-none cursor-pointer"
-                        >
-                            {VIDEO_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Subcategory</label>
-                        <input
-                            name="subcategory"
-                            value={form.subcategory}
-                            onChange={handleInputChange}
-                            placeholder="e.g. Anime"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                        />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <SelectWithPresets
+                        label="Category"
+                        value={form.category}
+                        onChange={(v) => handleInputChange("category", v)}
+                        options={VIDEO_CATEGORIES.map(c => ({ label: c, value: c }))}
+                    />
+                    <Input
+                        label="Subcategory"
+                        value={form.subcategory}
+                        onChange={(v) => handleInputChange("subcategory", v)}
+                        placeholder="e.g. Anime"
+                    />
                 </div>
 
                 <div className="grid gap-2">
@@ -134,10 +114,10 @@ const VideoForm = ({
                             <button
                                 key={k}
                                 type="button"
-                                onClick={() => setForm(f => ({ ...f, kind: k }))}
+                                onClick={() => handleInputChange("kind", k)}
                                 className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${form.kind === k
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+                                    ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
                                     }`}
                             >
                                 {k}
@@ -148,16 +128,12 @@ const VideoForm = ({
 
                 {/* Ownership & Tags */}
                 <div className="pt-4 border-t border-white/5 space-y-4">
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Tags (Comma Separated)</label>
-                        <input
-                            name="tags"
-                            value={form.tags}
-                            onChange={handleInputChange}
-                            placeholder="gaming, minecraft, survival"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
-                        />
-                    </div>
+                    <Input
+                        label="Tags (Comma Separated)"
+                        value={form.tags}
+                        onChange={(v) => handleInputChange("tags", v)}
+                        placeholder="gaming, minecraft, survival"
+                    />
 
                     <label className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${form.isShinel ? 'bg-orange-500 border-orange-500' : 'bg-white/5 border-white/10 group-hover:border-orange-500/30'
@@ -166,27 +142,41 @@ const VideoForm = ({
                         </div>
                         <input
                             type="checkbox"
-                            name="isShinel"
                             checked={form.isShinel}
-                            onChange={handleInputChange}
+                            onChange={(e) => handleInputChange("isShinel", e.target.checked)}
                             className="hidden"
                         />
                         <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white">Shinel Labs Internal</span>
+                            <span className="text-xs font-bold text-white">Shinel Studios Internal</span>
                             <span className="text-[10px] text-gray-500">Show on main work portal</span>
                         </div>
                     </label>
 
-                    <div className="grid gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Editor Attribution</label>
+                    {/* Visibility Toggle for personal portfolio */}
+                    <label className="flex items-center gap-3 cursor-pointer group px-1">
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${form.isVisibleOnPersonal !== false ? 'bg-blue-600 border-blue-600' : 'bg-white/5 border-white/10 group-hover:border-blue-500/30'
+                            }`}>
+                            {form.isVisibleOnPersonal !== false && <Check size={12} className="text-white" strokeWidth={4} />}
+                        </div>
                         <input
-                            name="attributedTo"
-                            value={form.attributedTo}
-                            onChange={handleInputChange}
-                            placeholder="editor@shinel.in"
-                            className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5 focus:border-orange-500/50 transition-all outline-none text-sm font-medium"
+                            type="checkbox"
+                            checked={form.isVisibleOnPersonal !== false}
+                            onChange={(e) => handleInputChange("isVisibleOnPersonal", e.target.checked)}
+                            className="hidden"
                         />
-                    </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-white">Visible on Personal Portfolio</span>
+                            <span className="text-[10px] text-gray-500">Enable/Disable on your public page</span>
+                        </div>
+                    </label>
+
+                    <Input
+                        label="Editor Attribution (Email)"
+                        value={editingId ? (form.attributedTo || "") : (isAdmin ? form.attributedTo : userEmail)}
+                        onChange={(v) => handleInputChange("attributedTo", v)}
+                        placeholder="editor@shinel.in"
+                        disabled={!isAdmin}
+                    />
                 </div>
 
                 {/* Submit */}
