@@ -462,6 +462,11 @@ export default function AdminUsersPage() {
                             password: "",
                             bio: u.bio || "",
                             slug: u.slug || "",
+                            linkedin: u.linkedin || "",
+                            twitter: u.twitter || "",
+                            website: u.website || "",
+                            skills: u.skills || "",
+                            experience: u.experience || "",
                           });
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}

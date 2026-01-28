@@ -13,12 +13,15 @@ import {
     X,
     CheckSquare,
     Square,
-    Inbox,
     TrendingUp,
-    TrendingDown
+    TrendingDown,
+    Edit3,
+    Users,
+    RotateCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useClientStats } from "../context/ClientStatsContext";
+import { Input, SelectWithPresets, LoadingOverlay } from "./AdminUIComponents";
 import Skeleton from "./Skeleton";
 import Sparkline from "./Sparkline";
 
@@ -28,6 +31,7 @@ export default function AdminClientsPage() {
     const { refreshStats } = useClientStats();
     const [clients, setClients] = useState([]);
     const [busy, setBusy] = useState(false);
+    const [refreshingId, setRefreshingId] = useState(null);
     const [err, setErr] = useState("");
     const [search, setSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState([]);
@@ -95,7 +99,7 @@ export default function AdminClientsPage() {
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
             setForm({ name: "", youtubeId: "", handle: "", category: "Vlogger" });
             await loadClients();
-            refreshStats(); // Update global context immediately
+            refreshStats();
         } catch (e) {
             setErr(e.message);
         } finally {
@@ -113,7 +117,7 @@ export default function AdminClientsPage() {
             });
             if (!res.ok) throw new Error("Delete failed");
             await loadClients();
-            refreshStats(); // Update global context immediately
+            refreshStats();
             setSelectedIds(prev => prev.filter(p => p !== id));
         } catch (e) {
             setErr(e.message);
@@ -139,6 +143,24 @@ export default function AdminClientsPage() {
             setSelectedIds([]);
         } catch (e) {
             setErr(e.message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function refreshSingleClient(clientId) {
+        setRefreshingId(clientId);
+        try {
+            await refreshStats();
+        } finally {
+            setRefreshingId(null);
+        }
+    }
+
+    async function refreshAllClients() {
+        setBusy(true);
+        try {
+            await refreshStats();
         } finally {
             setBusy(false);
         }
@@ -196,7 +218,7 @@ export default function AdminClientsPage() {
             if (!res.ok) throw new Error(data?.error || "Update failed");
             setEditingId(null);
             await loadClients();
-            refreshStats(); // Update global context immediately
+            refreshStats();
         } catch (e) {
             setErr(e.message);
         } finally {
@@ -216,21 +238,22 @@ export default function AdminClientsPage() {
 
             const n = (client.name || "").toLowerCase();
 
+            // More flexible matching
             const s = globalStats.find(s => {
-                const sId = (s.id || "");
+                const sId = (s.id || "").toLowerCase();
                 const sh = (s.handle || "").toLowerCase();
                 const shAt = (sh && !sh.startsWith('@')) ? `@${sh}` : sh;
                 const sTitle = (s.title || "").toLowerCase();
 
-                // 1. Match by ID (Must be UC... and non-empty)
-                if (y && y.toLowerCase().startsWith('uc') && sId === y) return true;
+                // Match by channel ID
+                if (y && y.startsWith('uc') && sId === y) return true;
 
-                // 2. Match by Handle (Must be non-empty and not just "@")
+                // Match by handle
                 if (yAt && yAt.length > 1 && (sh === yAt || shAt === yAt)) return true;
                 if (hAt && hAt.length > 1 && (sh === hAt || shAt === hAt)) return true;
 
-                // 3. Match by Title (Exact fallback)
-                if (n && sTitle === n) return true;
+                // Match by name (exact or contains)
+                if (n && (sTitle === n || sTitle.includes(n) || n.includes(sTitle))) return true;
 
                 return false;
             }) || {};
@@ -244,7 +267,8 @@ export default function AdminClientsPage() {
                 subscribers: s.subscribers || 0,
                 displayTitle: s.title || client.name,
                 growth,
-                history
+                history,
+                matched: !!s.id // Track if we found a match
             };
         });
     }, [clients, globalStats, getHistory, getGrowth]);
@@ -258,130 +282,162 @@ export default function AdminClientsPage() {
         );
     }, [enrichedClients, search]);
 
-    const CATEGORIES = ["Vlogger", "Streamer", "Gamer", "Music Artist", "Tech", "Lifestyle", "Education", "Other"];
+    const CATEGORIES = [
+        { value: "Vlogger", label: "Vlogger" },
+        { value: "Streamer", label: "Streamer" },
+        { value: "Gamer", label: "Gamer" },
+        { value: "Music Artist", label: "Music Artist" },
+        { value: "Tech", label: "Tech" },
+        { value: "Lifestyle", label: "Lifestyle" },
+        { value: "Education", label: "Education" },
+        { value: "Other", label: "Other" }
+    ];
 
     return (
-        <section className="min-h-screen pt-24 pb-32 bg-black text-white">
-            <div className="container mx-auto px-6 max-w-6xl">
+        <section className="min-h-screen pt-24 pb-32 bg-[var(--surface)] text-[var(--text)]">
+            <LoadingOverlay show={busy && clients.length > 0} label="Processing..." />
+
+            <div className="container mx-auto px-6 max-w-7xl">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                     <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30">
                                 <ShieldCheck size={20} className="text-orange-500" />
                             </div>
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500">
-                                Admin Control
-                            </span>
+                            <div>
+                                <span className="block text-[9px] font-black uppercase tracking-[0.3em] text-orange-500 mb-0.5">
+                                    Admin Control
+                                </span>
+                                <h1 className="text-3xl md:text-4xl font-black tracking-tighter leading-none">
+                                    Pulse <span className="text-orange-500 italic">Registry.</span>
+                                </h1>
+                            </div>
                         </div>
-                        <h1 className="text-4xl font-black tracking-tighter">
-                            Pulse <span className="text-orange-500">Registry.</span>
-                        </h1>
+                        <p className="text-xs text-[var(--text-muted)] font-medium ml-1">
+                            Manage your creator network
+                        </p>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <div className="relative">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                             <input
                                 type="text"
-                                placeholder="Search clients..."
+                                placeholder="Search..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/10 rounded-xl text-sm focus:border-orange-500/50 outline-none transition-all w-full md:w-64"
+                                className="pl-9 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-lg text-xs focus:border-orange-500/50 outline-none transition-all w-full md:w-56"
                             />
                         </div>
                         <button
+                            onClick={refreshAllClients}
+                            disabled={busy}
+                            className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 border border-orange-500/30 rounded-lg transition-all disabled:opacity-50 text-xs font-bold"
+                            title="Refresh All Stats"
+                        >
+                            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+                            <span className="hidden sm:inline">Refresh All</span>
+                        </button>
+                        <button
                             onClick={loadClients}
                             disabled={busy}
-                            className="p-2.5 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/[0.06] transition-all"
+                            className="p-2 bg-white/[0.03] border border-white/10 rounded-lg hover:bg-white/[0.06] hover:border-orange-500/30 transition-all disabled:opacity-50"
+                            title="Reload List"
                         >
-                            <RefreshCw size={18} className={busy ? "animate-spin" : ""} />
+                            <RotateCw size={14} className={busy ? "animate-spin" : ""} />
                         </button>
                     </div>
                 </div>
 
                 {err && (
-                    <div className="mb-8 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3 text-sm font-bold">
-                        <AlertCircle size={18} />
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center gap-3 text-xs font-bold"
+                    >
+                        <AlertCircle size={16} />
                         {err}
-                    </div>
+                    </motion.div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Create Client Form */}
                     <div className="lg:col-span-1">
-                        <div className="p-6 md:p-8 rounded-[32px] bg-white/[0.03] border border-white/10 sticky top-28">
+                        <div className="p-6 rounded-2xl bg-gradient-to-br from-white/[0.05] to-white/[0.02] border border-white/10 backdrop-blur-xl sticky top-28 shadow-xl shadow-black/10">
                             <div className="flex items-center gap-2 mb-6">
                                 <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500">
-                                    <UserPlus size={20} />
+                                    <UserPlus size={18} />
                                 </div>
-                                <h2 className="text-lg font-black uppercase tracking-widest">Add Client</h2>
+                                <h2 className="text-base font-black uppercase tracking-wider">Add Client</h2>
                             </div>
 
-                            <form onSubmit={createClient} className="space-y-5">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Creator Name</label>
-                                    <input
-                                        required
-                                        value={form.name}
-                                        onChange={e => setForm({ ...form, name: e.target.value })}
-                                        placeholder="e.g. Gamer Mummy"
-                                        className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none transition-all placeholder:text-gray-700"
-                                    />
-                                </div>
+                            <form onSubmit={createClient} className="space-y-4">
+                                <Input
+                                    label="Creator Name"
+                                    value={form.name}
+                                    onChange={(v) => setForm({ ...form, name: v })}
+                                    placeholder="e.g. Gamer Mummy"
+                                />
 
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1 flex justify-between">
-                                        YouTube ID or Handle
-                                        <div className="flex gap-2">
-                                            <span className="text-gray-700">@handle ok</span>
-                                            <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" rel="noreferrer" className="text-orange-500 hover:text-white transition-colors">Find ID</a>
-                                        </div>
-                                    </label>
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                                            YouTube ID or Handle
+                                        </label>
+                                        <a
+                                            href="https://commentpicker.com/youtube-channel-id.php"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-[9px] font-bold text-orange-500 hover:text-orange-400 transition-colors uppercase tracking-wider"
+                                        >
+                                            Find ID
+                                        </a>
+                                    </div>
                                     <div className="relative">
-                                        <Youtube size={16} className={`absolute left-4 top-1/2 -translate-y-1/2 ${form.youtubeId && !form.youtubeId.startsWith('UC') ? 'text-red-500' : 'text-gray-700'}`} />
+                                        <Youtube
+                                            size={14}
+                                            className={`absolute left-3 top-1/2 -translate-y-1/2 ${form.youtubeId && !form.youtubeId.startsWith('UC') && !form.youtubeId.startsWith('@')
+                                                    ? 'text-orange-500'
+                                                    : 'text-gray-600'
+                                                }`}
+                                        />
                                         <input
                                             required
                                             value={form.youtubeId}
                                             onChange={e => setForm({ ...form, youtubeId: e.target.value })}
                                             placeholder="UC... or @handle"
-                                            className={`w-full pl-11 pr-4 py-3 bg-black border ${form.youtubeId && !form.youtubeId.startsWith('UC') && !form.youtubeId.startsWith('@') && !form.youtubeId.includes('youtube.com') ? 'border-orange-500/50' : 'border-white/10 focus:border-orange-500'} rounded-xl text-sm outline-none transition-all placeholder:text-gray-700`}
+                                            className={`w-full pl-9 pr-3 py-2.5 bg-white/[0.03] border ${form.youtubeId && !form.youtubeId.startsWith('UC') && !form.youtubeId.startsWith('@')
+                                                    ? 'border-orange-500/50'
+                                                    : 'border-white/10 focus:border-orange-500/50'
+                                                } rounded-xl text-sm outline-none transition-all placeholder:text-gray-700`}
                                         />
                                     </div>
-                                    <p className="text-[9px] text-gray-600 font-medium ml-1">
-                                        Pasting a full URL will automatically extract the ID or Handle.
+                                    <p className="text-[8px] text-gray-600 font-medium ml-1">
+                                        Accepts channel IDs (UC...) or handles (@username)
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Handle (Optional)</label>
-                                        <input
-                                            value={form.handle}
-                                            onChange={e => setForm({ ...form, handle: e.target.value })}
-                                            placeholder="@creator"
-                                            className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none transition-all placeholder:text-gray-700"
-                                        />
-                                    </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                        label="Handle (Optional)"
+                                        value={form.handle}
+                                        onChange={(v) => setForm({ ...form, handle: v })}
+                                        placeholder="@creator"
+                                    />
 
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Category</label>
-                                        <select
-                                            value={form.category}
-                                            onChange={e => setForm({ ...form, category: e.target.value })}
-                                            className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none transition-all"
-                                        >
-                                            {CATEGORIES.map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <SelectWithPresets
+                                        label="Category"
+                                        value={form.category}
+                                        onChange={(v) => setForm({ ...form, category: v })}
+                                        options={CATEGORIES}
+                                    />
                                 </div>
 
                                 <button
                                     disabled={busy}
                                     type="submit"
-                                    className="w-full py-4 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-orange-900/10 mt-2"
+                                    className="w-full py-3 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-orange-900/20 hover:shadow-xl hover:shadow-orange-900/30 hover:scale-[1.02] text-xs"
                                 >
                                     {busy ? "Registering..." : "Add to Pulse"}
                                 </button>
@@ -391,13 +447,42 @@ export default function AdminClientsPage() {
 
                     {/* Clients List */}
                     <div className="lg:col-span-2 space-y-4">
+                        {/* Stats Summary */}
+                        {filtered.length > 0 && (
+                            <div className="grid grid-cols-3 gap-3 mb-1">
+                                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <Users size={12} className="text-orange-500" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Creators</span>
+                                    </div>
+                                    <div className="text-2xl font-black">{filtered.length}</div>
+                                </div>
+                                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <TrendingUp size={12} className="text-green-500" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Reach</span>
+                                    </div>
+                                    <div className="text-2xl font-black">
+                                        {(filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0) / 1000000).toFixed(1)}M
+                                    </div>
+                                </div>
+                                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <CheckSquare size={12} className="text-blue-500" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Selected</span>
+                                    </div>
+                                    <div className="text-2xl font-black">{selectedIds.length}</div>
+                                </div>
+                            </div>
+                        )}
+
                         <AnimatePresence mode="popLayout">
                             {busy && clients.length === 0 ? (
                                 Array.from({ length: 5 }).map((_, i) => (
-                                    <div key={i} className="p-6 rounded-[24px] bg-white/[0.02] border border-white/5 flex gap-6">
+                                    <div key={i} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 flex gap-4">
                                         <Skeleton width="56px" height="56px" circle className="shrink-0" />
                                         <div className="flex-grow space-y-3">
-                                            <Skeleton width="60%" height="24px" />
+                                            <Skeleton width="60%" height="20px" />
                                             <Skeleton width="40%" height="16px" />
                                         </div>
                                     </div>
@@ -406,181 +491,205 @@ export default function AdminClientsPage() {
                                 <motion.div
                                     layout
                                     key={client.id}
-                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    initial={{ opacity: 0, scale: 0.98 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    className={`p-6 rounded-[24px] bg-white/[0.02] border ${editingId === client.id ? 'border-orange-500/50 bg-orange-500/[0.03]' : selectedIds.includes(client.id) ? 'border-orange-500/30 bg-orange-500/[0.01]' : 'border-white/5'} flex flex-col md:flex-row md:items-center hover:bg-white/[0.04] transition-all group gap-6 md:gap-4 shadow-lg shadow-black/20 relative`}
+                                    exit={{ opacity: 0, scale: 0.98 }}
+                                    className={`p-5 rounded-2xl border transition-all duration-300 relative group ${editingId === client.id
+                                            ? 'bg-orange-500/[0.05] border-orange-500/40 shadow-lg shadow-orange-500/10'
+                                            : selectedIds.includes(client.id)
+                                                ? 'bg-orange-500/[0.02] border-orange-500/20'
+                                                : !client.matched
+                                                    ? 'bg-yellow-500/[0.02] border-yellow-500/20'
+                                                    : 'bg-gradient-to-br from-white/[0.04] to-white/[0.02] border-white/5 hover:border-white/10 hover:shadow-lg hover:shadow-black/5'
+                                        }`}
                                 >
                                     {/* Selection Checkbox */}
                                     {!editingId && (
                                         <button
                                             onClick={() => toggleSelect(client.id)}
-                                            className="absolute top-6 left-6 md:static h-6 w-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:border-orange-500/50 transition-all z-10 shrink-0"
+                                            className="absolute top-5 right-5 h-6 w-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:border-orange-500/50 hover:bg-orange-500/10 transition-all z-10 shrink-0"
                                         >
                                             {selectedIds.includes(client.id) ? (
                                                 <CheckSquare size={14} className="text-orange-500" />
                                             ) : (
-                                                <Square size={14} className="text-gray-700" />
+                                                <Square size={14} className="text-gray-600" />
                                             )}
                                         </button>
                                     )}
 
                                     {editingId === client.id ? (
-                                        <form onSubmit={saveEdit} className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div className="space-y-1">
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Name</label>
-                                                <input
-                                                    autoFocus
-                                                    value={editForm.name}
-                                                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                                    className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1 flex justify-between">
-                                                    YouTube ID
-                                                    {editForm.youtubeId && !editForm.youtubeId.startsWith('UC') && <span className="text-red-500">Invalid</span>}
-                                                </label>
-                                                <input
-                                                    value={editForm.youtubeId}
-                                                    onChange={e => setEditForm({ ...editForm, youtubeId: e.target.value })}
-                                                    className={`w-full px-4 py-3 bg-black border ${editForm.youtubeId && !editForm.youtubeId.startsWith('UC') ? 'border-red-500' : 'border-white/10'} rounded-xl text-sm focus:border-orange-500 outline-none`}
-                                                />
-                                            </div>
+                                        <form onSubmit={saveEdit} className="w-full space-y-4">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Handle</label>
-                                                    <input
-                                                        value={editForm.handle}
-                                                        onChange={e => setEditForm({ ...editForm, handle: e.target.value })}
-                                                        placeholder="@optional"
-                                                        className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">Category</label>
-                                                    <select
-                                                        value={editForm.category}
-                                                        onChange={e => setEditForm({ ...editForm, category: e.target.value })}
-                                                        className="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-sm focus:border-orange-500 outline-none"
-                                                    >
-                                                        {CATEGORIES.map(cat => (
-                                                            <option key={cat} value={cat}>{cat}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
+                                                <Input
+                                                    label="Name"
+                                                    value={editForm.name}
+                                                    onChange={(v) => setEditForm({ ...editForm, name: v })}
+                                                />
+                                                <Input
+                                                    label="YouTube ID"
+                                                    value={editForm.youtubeId}
+                                                    onChange={(v) => setEditForm({ ...editForm, youtubeId: v })}
+                                                    error={editForm.youtubeId && !editForm.youtubeId.startsWith('UC') && !editForm.youtubeId.startsWith('@') ? "Invalid ID format" : ""}
+                                                />
+                                                <Input
+                                                    label="Handle"
+                                                    value={editForm.handle}
+                                                    onChange={(v) => setEditForm({ ...editForm, handle: v })}
+                                                    placeholder="@optional"
+                                                />
+                                                <SelectWithPresets
+                                                    label="Category"
+                                                    value={editForm.category}
+                                                    onChange={(v) => setEditForm({ ...editForm, category: v })}
+                                                    options={CATEGORIES}
+                                                />
                                             </div>
-                                            <div className="flex items-end gap-2 mt-4">
-                                                <div className="flex gap-2 w-full">
-                                                    <button type="submit" disabled={busy} className="flex-grow h-[46px] flex items-center justify-center bg-orange-600 text-white rounded-xl hover:bg-orange-500 font-black uppercase tracking-widest transition-all">
-                                                        {busy ? <RefreshCw size={20} className="animate-spin" /> : "Save Changes"}
-                                                    </button>
-                                                    <button type="button" onClick={cancelEdit} className="h-[46px] w-[46px] flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-all">
-                                                        <X size={20} />
-                                                    </button>
-                                                </div>
+                                            <div className="flex gap-2 pt-1">
+                                                <button
+                                                    type="submit"
+                                                    disabled={busy}
+                                                    className="flex-grow h-10 flex items-center justify-center gap-2 bg-orange-600 text-white rounded-xl hover:bg-orange-500 font-black uppercase tracking-widest transition-all text-xs disabled:opacity-50"
+                                                >
+                                                    {busy ? <RefreshCw size={16} className="animate-spin" /> : "Save"}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={cancelEdit}
+                                                    className="h-10 w-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-all"
+                                                >
+                                                    <X size={18} />
+                                                </button>
                                             </div>
                                         </form>
                                     ) : (
-                                        <>
-                                            <div className="flex items-center gap-4 flex-grow min-w-0">
+                                        <div className="flex flex-col lg:flex-row gap-4 pr-8">
+                                            {/* Logo & Info */}
+                                            <div className="flex items-start gap-4 flex-grow min-w-0">
                                                 {client.logo ? (
                                                     <img
                                                         src={client.logo}
                                                         alt={client.name}
-                                                        className="w-14 h-14 rounded-2xl object-cover border border-white/10 shadow-lg shadow-orange-500/5 shrink-0"
+                                                        className="w-14 h-14 rounded-xl object-cover border border-white/10 shadow-md shrink-0"
+                                                        onError={(e) => {
+                                                            e.target.style.display = 'none';
+                                                            e.target.nextSibling.style.display = 'flex';
+                                                        }}
                                                     />
-                                                ) : (
-                                                    <div className="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500 shrink-0 shadow-lg shadow-orange-500/5">
-                                                        <Youtube size={28} />
-                                                    </div>
-                                                )}
+                                                ) : null}
+                                                <div
+                                                    className={`w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 ${client.logo ? 'hidden' : 'flex'} items-center justify-center text-orange-500 shrink-0 shadow-md`}
+                                                >
+                                                    <Youtube size={28} />
+                                                </div>
 
-                                                <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 flex-grow ml-0 md:ml-4">
-                                                    <div className="min-w-0 flex-grow pl-2 md:pl-0">
-                                                        <div className="flex items-center gap-3">
-                                                            <h3 className="text-xl font-bold group-hover:text-orange-500 transition-colors truncate">
-                                                                {client.name}
-                                                            </h3>
-                                                            <span className="px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-[9px] font-black text-orange-500 uppercase tracking-widest whitespace-nowrap">
-                                                                {client.category || "CREATOR"}
+                                                <div className="flex-grow min-w-0 pt-0.5">
+                                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                        <h3 className="text-lg font-black group-hover:text-orange-400 transition-colors truncate">
+                                                            {client.name}
+                                                        </h3>
+                                                        <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-orange-600/10 border border-orange-500/30 text-[9px] font-black text-orange-500 uppercase tracking-wider whitespace-nowrap">
+                                                            {client.category || "CREATOR"}
+                                                        </span>
+                                                        {!client.matched && (
+                                                            <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-[9px] font-black text-yellow-500 uppercase tracking-wider whitespace-nowrap">
+                                                                No Data
                                                             </span>
-                                                        </div>
-                                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-black uppercase tracking-widest text-gray-500 mt-1">
-                                                            <span className={`flex items-center gap-1 min-w-0 ${!client.youtubeId?.startsWith('UC') ? 'text-red-500' : ''}`}>
-                                                                ID: <code className={`px-1.5 py-0.5 rounded truncate max-w-[120px] md:max-w-none ${!client.youtubeId?.startsWith('UC') ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-gray-400'}`}>{client.youtubeId}</code>
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Sparkline & Stats */}
-                                                    <div className="flex items-center gap-4 shrink-0 justify-start md:justify-end">
-                                                        {client.history && client.history.length > 1 && (
-                                                            <div className="hidden md:block opacity-50 hover:opacity-100 transition-opacity">
-                                                                <Sparkline
-                                                                    data={client.history}
-                                                                    width={100}
-                                                                    height={32}
-                                                                    color={client.growth >= 0 ? "#22c55e" : "#ef4444"}
-                                                                />
-                                                            </div>
                                                         )}
-
-                                                        <div className="text-right min-w-[100px]">
-                                                            <div className="text-lg font-black text-white tabular-nums">
-                                                                {(client.subscribers || 0).toLocaleString()}
-                                                            </div>
-                                                            <div className={`text-[9px] font-bold uppercase tracking-widest flex items-center justify-end gap-1 ${(client.growth || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                                {(client.growth || 0) >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                                                {Math.abs(client.growth || 0).toFixed(1)}% (7d)
-                                                            </div>
-                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                                                        <span className={`flex items-center gap-1 ${!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@') ? 'text-orange-500' : ''}`}>
+                                                            <Youtube size={10} />
+                                                            <code className={`px-1.5 py-0.5 rounded text-[8px] ${!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@') ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-gray-400'}`}>
+                                                                {client.youtubeId}
+                                                            </code>
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2 justify-end self-end md:self-center border-l border-white/5 pl-4 ml-2">
-                                                <button
-                                                    onClick={() => startEdit(client)}
-                                                    className="h-10 w-10 md:h-11 md:w-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:text-orange-500 hover:border-orange-500/30 transition-all"
-                                                    title="Edit"
-                                                >
-                                                    <Search size={18} className="rotate-90 md:size-[18px]" />
-                                                </button>
-                                                <a
-                                                    href={`https://youtube.com/channel/${client.youtubeId}`}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="h-10 w-10 md:h-11 md:w-11 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:text-orange-500 hover:border-orange-500/30 transition-all"
-                                                    title="Visit Channel"
-                                                >
-                                                    <ExternalLink size={18} className="md:size-[18px]" />
-                                                </a>
-                                                <button
-                                                    onClick={() => deleteClient(client.id, client.name)}
-                                                    className="h-10 w-10 md:h-11 md:w-11 flex items-center justify-center bg-red-500/5 border border-red-500/10 text-red-500/50 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={18} className="md:size-[18px]" />
-                                                </button>
+                                            {/* Metrics & Actions - Side by Side on Desktop */}
+                                            <div className="flex items-center gap-4 shrink-0 flex-wrap lg:flex-nowrap">
+                                                {/* Sparkline */}
+                                                {client.history && client.history.length > 1 && (
+                                                    <div className="hidden xl:block opacity-50 hover:opacity-100 transition-opacity">
+                                                        <Sparkline
+                                                            data={client.history}
+                                                            width={80}
+                                                            height={32}
+                                                            color={client.growth >= 0 ? "#22c55e" : "#ef4444"}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Subscriber Count - EXACT NUMBERS */}
+                                                <div className="text-right min-w-[120px]">
+                                                    <div className="text-2xl font-black text-white tabular-nums leading-none mb-1">
+                                                        {(client.subscribers || 0).toLocaleString()}
+                                                    </div>
+                                                    <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mb-1.5">
+                                                        Subscribers
+                                                    </div>
+                                                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${(client.growth || 0) >= 0
+                                                            ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                        }`}>
+                                                        {(client.growth || 0) >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                                        {Math.abs(client.growth || 0).toFixed(1)}%
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions - HORIZONTAL on Desktop, Vertical on Mobile */}
+                                                <div className="flex lg:flex-row flex-row gap-2 border-l border-white/5 pl-4">
+                                                    <button
+                                                        onClick={() => refreshSingleClient(client.id)}
+                                                        disabled={refreshingId === client.id}
+                                                        className="h-9 w-9 flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-500 rounded-lg hover:bg-green-500/20 hover:border-green-500/30 transition-all disabled:opacity-50"
+                                                        title="Refresh Stats"
+                                                    >
+                                                        <RefreshCw size={14} className={refreshingId === client.id ? "animate-spin" : ""} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => startEdit(client)}
+                                                        className="h-9 w-9 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg hover:text-orange-500 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit3 size={14} />
+                                                    </button>
+                                                    <a
+                                                        href={`https://youtube.com/channel/${client.youtubeId}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="h-9 w-9 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg hover:text-orange-500 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all"
+                                                        title="Visit Channel"
+                                                    >
+                                                        <ExternalLink size={14} />
+                                                    </a>
+                                                    <button
+                                                        onClick={() => deleteClient(client.id, client.name)}
+                                                        className="h-9 w-9 flex items-center justify-center bg-red-500/5 border border-red-500/10 text-red-500/60 rounded-lg hover:bg-red-500 hover:text-white hover:border-red-500 transition-all"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </>
+                                        </div>
                                     )}
                                 </motion.div>
                             ))}
                         </AnimatePresence>
 
-                        {
-                            filtered.length === 0 && !busy && (
-                                <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px] flex flex-col items-center justify-center">
-                                    <div className="w-20 h-20 rounded-full bg-white/[0.02] flex items-center justify-center mb-6">
-                                        <AlertCircle size={32} className="text-gray-700" />
-                                    </div>
-                                    <h3 className="text-xl font-bold text-gray-500">No creators found</h3>
-                                    <p className="text-gray-700 text-sm mt-2 max-w-xs mx-auto">Start by adding your first client to the registry using the form.</p>
+                        {filtered.length === 0 && !busy && (
+                            <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-3xl flex flex-col items-center justify-center">
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/[0.05] to-white/[0.02] flex items-center justify-center mb-5">
+                                    <AlertCircle size={32} className="text-gray-600" />
                                 </div>
-                            )
-                        }
+                                <h3 className="text-xl font-bold text-gray-500 mb-2">No creators found</h3>
+                                <p className="text-gray-600 text-xs max-w-xs mx-auto">
+                                    {search ? "Try adjusting your search query" : "Start by adding your first client"}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -592,33 +701,33 @@ export default function AdminClientsPage() {
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 100, opacity: 0 }}
-                        className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
                     >
-                        <div className="bg-[#111] border border-orange-500/30 rounded-[28px] p-4 shadow-[0_20px_60px_-15px_rgba(232,80,2,0.5)] flex items-center justify-between gap-4 backdrop-blur-xl">
-                            <div className="flex items-center gap-4 pl-4">
-                                <div className="p-2 rounded-xl bg-orange-500/10 text-orange-500">
-                                    <CheckSquare size={20} />
+                        <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-orange-500/40 rounded-2xl p-4 shadow-[0_20px_60px_-15px_rgba(232,80,2,0.6)] flex items-center justify-between gap-4 backdrop-blur-xl">
+                            <div className="flex items-center gap-3 pl-2">
+                                <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                                    <CheckSquare size={18} />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-bold">{selectedIds.length} Selected</div>
-                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Registry Actions</div>
+                                    <div className="text-sm font-black">{selectedIds.length} Selected</div>
+                                    <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Bulk Actions</div>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setSelectedIds([])}
-                                    className="px-5 py-3 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                                    className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={deleteBulk}
                                     disabled={busy}
-                                    className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2 transition-all"
+                                    className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-red-900/30"
                                 >
-                                    <Trash2 size={16} />
-                                    Delete Selected
+                                    <Trash2 size={14} />
+                                    Delete
                                 </button>
                             </div>
                         </div>

@@ -301,7 +301,7 @@
     background: linear-gradient(90deg, var(--orange), #F16001);
     box-shadow: 0 10px 26px rgba(232, 80, 2, .35), inset 0 0 0 1px rgba(255, 255, 255, .08);
     transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease;
-    will-change: transform, box-shadow;
+    /* will-change is added on hover via media query below */
   }
 
   .btn-brand:hover {
@@ -792,7 +792,8 @@
   box-shadow: 0 0 20px var(--orange), 0 0 40px var(--orange)60;
 }
 
-/* Reduced Motion Support */
+/* ===================== Reduced Motion Support ===================== */
+/* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
 
   *,
@@ -808,5 +809,256 @@
   .card-hover:hover,
   .hover-scale:hover {
     transform: none !important;
+  }
+
+  /* Disable all custom animations */
+  .animate-marquee-rtl,
+  .animate-marquee-ltr,
+  .animate-aurora-1,
+  .animate-aurora-2,
+  .animate-stars-1,
+  .animate-stars-2,
+  .animate-pulse-slow,
+  .animate-twinkle,
+  .fade-in,
+  .fade-in-up,
+  .fade-in-down,
+  .shimmer,
+  .pulse,
+  .bounce,
+  .spin,
+  .gradient-border {
+    animation: none !important;
+  }
+}
+
+/* ===================== Cross-Browser Compatibility ===================== */
+
+/* Safari-specific fixes */
+@supports (-webkit-backdrop-filter: none) or (backdrop-filter: none) {
+  .header-blur {
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    backdrop-filter: saturate(140%) blur(10px);
+  }
+}
+
+/* Fallback for browsers that don't support backdrop-filter */
+@supports not ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
+  .header-blur {
+    background: var(--surface);
+    opacity: 0.95;
+  }
+}
+
+/* Safari smooth scrolling fix */
+@media not all and (min-resolution:.001dpcm) {
+  @supports (-webkit-appearance:none) {
+    :root {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+}
+
+/* GPU acceleration for better performance */
+.gpu-accelerated,
+.btn-brand,
+.btn-ghost,
+.card-hover,
+.btn-hover-lift {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000px;
+  perspective: 1000px;
+}
+
+/* Optimize animations for performance */
+@media (hover: hover) and (pointer: fine) {
+
+  /* Only enable hover effects on devices with precise pointers */
+  .btn-brand:hover,
+  .btn-ghost:hover,
+  .card-hover:hover,
+  .btn-hover-lift:hover {
+    will-change: transform, box-shadow;
+  }
+
+  .btn-brand:not(:hover),
+  .btn-ghost:not(:hover),
+  .card-hover:not(:hover),
+  .btn-hover-lift:not(:hover) {
+    will-change: auto;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+
+  /* Disable hover effects on touch devices */
+  .btn-hover-lift:hover,
+  .card-hover:hover,
+  .hover-scale:hover {
+    transform: none;
+  }
+
+  /* Increase touch targets */
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: rgba(0, 0, 0, 0.5);
+  }
+
+  .dark {
+    --border: rgba(255, 255, 255, 0.5);
+  }
+
+  :focus-visible {
+    outline-width: 3px;
+    outline-offset: 3px;
+  }
+}
+
+/* Print styles */
+@media print {
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+
+  .header-blur {
+    background: white;
+    backdrop-filter: none;
+  }
+
+  /* Hide non-essential elements */
+  header,
+  footer,
+  .btn-brand,
+  .btn-ghost {
+    display: none;
+  }
+}
+
+/* ===================== Performance Optimizations ===================== */
+
+/* Optimize font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Optimize image rendering */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Contain layout shifts */
+.contain-layout {
+  contain: layout;
+}
+
+.contain-paint {
+  contain: paint;
+}
+
+.contain-strict {
+  contain: strict;
+}
+
+/* ===================== Accessibility Enhancements ===================== */
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Skip to main content link */
+.skip-to-main {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--orange);
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-to-main:focus {
+  top: 0;
+}
+
+/* Focus visible for keyboard navigation */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+/* ===================== Browser-Specific Fixes ===================== */
+
+/* Firefox-specific fixes */
+@-moz-document url-prefix() {
+
+  /* Fix scrollbar styling in Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--orange) var(--surface-alt);
+  }
+}
+
+/* Edge-specific fixes */
+@supports (-ms-ime-align: auto) {
+
+  /* Fix for older Edge versions */
+  .header-blur {
+    background: var(--surface);
+  }
+}
+
+/* iOS Safari fixes */
+@supports (-webkit-touch-callout: none) {
+
+  /* Fix for iOS Safari viewport height */
+  body {
+    min-height: -webkit-fill-available;
+  }
+
+  /* Fix for iOS Safari input zoom */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  textarea,
+  select {
+    font-size: 16px;
   }
 }
