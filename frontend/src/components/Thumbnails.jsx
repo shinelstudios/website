@@ -1295,7 +1295,13 @@ export default function Thumbnails() {
               </div>
             ) : (
               <>
-                <div className={`grid ${gridClasses[gridSize]}`}>
+                <div
+                  className={`grid ${gridClasses[gridSize]}`}
+                  style={{
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '0 1200px'
+                  }}
+                >
                   {paginatedItems.map((t, index) => (
                     <div
                       key={t.id}

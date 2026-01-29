@@ -273,7 +273,14 @@ export default function WorkPage() {
       </section>
 
       {/* --- SERVICES OVERVIEW SECTION --- */}
-      <section ref={servicesRef} className="py-20 relative overflow-hidden">
+      <section
+        ref={servicesRef}
+        className="py-20 relative overflow-hidden"
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 500px'
+        }}
+      >
         <div className="container mx-auto px-6">
           <motion.div
             className="text-center mb-16"
@@ -307,7 +314,15 @@ export default function WorkPage() {
       </section>
 
       {/* --- FEATURED WORK SECTION --- */}
-      <section ref={featuredRef} id="portfolio-grid" className="py-20 bg-[var(--surface-alt)]">
+      <section
+        ref={featuredRef}
+        id="portfolio-grid"
+        className="py-20 bg-[var(--surface-alt)]"
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 800px'
+        }}
+      >
         <div className="container mx-auto px-6">
           <motion.div
             className="text-center mb-12"
@@ -399,7 +414,13 @@ export default function WorkPage() {
       </section>
 
       {/* --- GFX WORK SECTION --- */}
-      <div id="gfx-section">
+      <div
+        id="gfx-section"
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 600px'
+        }}
+      >
         <WorkSection
           title="GFX / Thumbnails & Branding"
           description="High-CTR visuals that stop the scroll. Brand-consistent, premium, mobile-first designs that drive clicks and build authority."
@@ -413,7 +434,14 @@ export default function WorkPage() {
       </div>
 
       {/* --- EDITING WORK SECTION --- */}
-      <div id="editing-section" className="bg-[var(--surface-alt)]">
+      <div
+        id="editing-section"
+        className="bg-[var(--surface-alt)]"
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 600px'
+        }}
+      >
         <WorkSection
           title="Video Editing / Shorts & Long-form"
           description="Retention-focused edits that keep viewers watching. From hook to payoff, every frame is optimized for engagement and watch time."
@@ -427,7 +455,13 @@ export default function WorkPage() {
       </div>
 
       {/* --- GROWTH WORK SECTION --- */}
-      <div id="growth-section">
+      <div
+        id="growth-section"
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 400px'
+        }}
+      >
         <WorkSection
           title="Growth / SEO & Optimization"
           description="Packaging and SEO that improves clicks and watch time. Data-driven strategies that turn views into subscribers."

@@ -400,7 +400,13 @@ const Pricing = ({ onOpenCalendly }) => {
           <p className="text-[var(--text-muted)] text-[11px] uppercase tracking-[0.4em] font-mono font-black">{CATS.find(x => x.k === cat)?.sub}</p>
         </div>
 
-        <div className="relative">
+        <div
+          className="relative"
+          style={{
+            contentVisibility: 'auto',
+            containIntrinsicSize: '0 800px'
+          }}
+        >
           <div
             ref={railRef}
             className={`flex ${isMobile ? "overflow-x-auto snap-x snap-mandatory no-scrollbar pb-10 gap-6" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"}`}
@@ -544,7 +550,13 @@ const Pricing = ({ onOpenCalendly }) => {
         </div>
 
         {/* Feature 1: The Production Pipeline Visualizer */}
-        <div className="mt-32 p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] backdrop-blur-md relative overflow-hidden">
+        <div
+          className="mt-32 p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] backdrop-blur-md relative overflow-hidden"
+          style={{
+            contentVisibility: 'auto',
+            containIntrinsicSize: '0 400px'
+          }}
+        >
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Monitor size={100} />
           </div>
@@ -578,7 +590,13 @@ const Pricing = ({ onOpenCalendly }) => {
         </div>
 
         {/* Studio Add-ons Hub - Better Grid & Hover */}
-        <div className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <div
+          className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-10"
+          style={{
+            contentVisibility: 'auto',
+            containIntrinsicSize: '0 500px'
+          }}
+        >
           <motion.div
             whileHover={{ y: -5 }}
             className="p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] relative overflow-hidden group hover:border-[var(--orange)]/30 transition-colors duration-500"

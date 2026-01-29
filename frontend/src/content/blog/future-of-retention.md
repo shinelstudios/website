@@ -2,10 +2,10 @@
 title: "The Future of YouTube Retention in 2026: Why Pacing Wins"
 date: "2026-01-26"
 excerpt: "The algorithm has evolved. High-energy cuts are out; 'Narrative Pacing' is in. Here's exactly how we structure edits to keep viewers watching past the 30-second mark."
-author: "Raghav Sharma"
+author: "Raghav Vashisht"
 tags: ["Retention", "Video Editing", "Strategy"]
 readingTime: 6
-coverImage: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1974&auto=format&fit=crop"
+coverImage: /timeline.png
 ---
 
 ## The "MrBeastification" Era is Ending

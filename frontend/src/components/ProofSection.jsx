@@ -167,7 +167,11 @@ const ProofSection = () => {
       id="proof"
       ref={sectionRef}
       className="py-20 relative overflow-hidden"
-      style={{ background: "var(--surface-alt)" }}
+      style={{
+        background: "var(--surface-alt)",
+        contentVisibility: "auto",
+        containIntrinsicSize: "900px"
+      }}
       aria-labelledby="proof-heading"
     >
       {/* CSS Animations */}
@@ -325,8 +329,8 @@ const ProofSection = () => {
                 key={showcase.category}
                 onClick={() => setActiveIndex(index)}
                 className={`px-4 py-2.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center gap-2 ${activeIndex === index
-                    ? "text-white"
-                    : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
+                  ? "text-white"
+                  : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
                   }`}
                 style={{
                   border: "1px solid var(--border)",

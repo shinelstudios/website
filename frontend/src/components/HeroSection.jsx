@@ -58,13 +58,14 @@ const Star = ({ delay, size, top, left }) => (
       ease: "easeInOut",
       delay: delay
     }}
+    will-change="opacity, scale"
   />
 );
 
 const Starfield = () => {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const stars = useMemo(() => {
-    const count = isMobile ? 15 : 40;
+    const count = isMobile ? 12 : 30;
     return Array.from({ length: count }).map((_, i) => ({
       id: i,
       size: Math.random() * 2.5 + 1,
@@ -89,30 +90,32 @@ const AuroraBackground = () => (
 
     {/* Brand Orange Aurora - Theme Aware */}
     <motion.div
-      className="absolute top-[-15%] left-[-15%] w-[70%] h-[70%] rounded-full blur-[140px]"
+      className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[100px]"
       style={{
         background: 'radial-gradient(circle, var(--orange), transparent 70%)',
-        opacity: 0.15
+        opacity: 0.08,
+        willChange: 'transform'
       }}
       animate={{
         scale: [1, 1.1, 1],
-        x: [0, 30, 0],
-        y: [0, -30, 0]
-      }}
-      transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-    />
-    <motion.div
-      className="absolute bottom-[-15%] right-[-15%] w-[60%] h-[60%] rounded-full blur-[130px]"
-      style={{
-        background: 'radial-gradient(circle, var(--orange), transparent 70%)',
-        opacity: 0.1
-      }}
-      animate={{
-        scale: [1, 1.15, 1],
-        x: [0, -30, 0],
-        y: [0, 20, 0]
+        x: [0, 20, 0],
+        y: [0, -20, 0]
       }}
       transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+    />
+    <motion.div
+      className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full blur-[100px]"
+      style={{
+        background: 'radial-gradient(circle, var(--orange), transparent 70%)',
+        opacity: 0.08,
+        willChange: 'transform'
+      }}
+      animate={{
+        scale: [1, 1.1, 1],
+        x: [0, -20, 0],
+        y: [0, 15, 0]
+      }}
+      transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
     />
 
     {/* Subtle Grid */}

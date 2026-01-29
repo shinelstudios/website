@@ -376,6 +376,10 @@ export default function Branding() {
               ref={gridRef}
               onClick={onGridClick}
               className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: '0 800px'
+              }}
             >
               {filtered.map((it) => (
                 <BrandCard key={it.id} item={it} />

@@ -17,14 +17,27 @@ const ParticleNetwork = ({
     const animationRef = useRef(null);
     const particlesRef = useRef([]);
     const prefersReducedMotion = useReducedMotion();
+    const [isInView, setIsInView] = React.useState(true);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => setIsInView(entry.isIntersecting),
+            { threshold: 0.1 }
+        );
+        if (canvasRef.current) observer.observe(canvasRef.current);
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true });
         let width = canvas.width = canvas.offsetWidth;
         let height = canvas.height = canvas.offsetHeight;
+
+        const isMobile = window.innerWidth < 768;
+        const actualCount = isMobile ? Math.min(particleCount, 25) : particleCount;
 
         // Handle resize
         const handleResize = () => {
@@ -33,7 +46,7 @@ const ParticleNetwork = ({
             initParticles();
         };
 
-        window.addEventListener('resize', handleResize);
+        window.addEventListener('resize', handleResize, { passive: true });
 
         // Particle class
         class Particle {
@@ -69,7 +82,7 @@ const ParticleNetwork = ({
         // Initialize particles
         const initParticles = () => {
             particlesRef.current = [];
-            for (let i = 0; i < particleCount; i++) {
+            for (let i = 0; i < actualCount; i++) {
                 particlesRef.current.push(new Particle());
             }
         };
@@ -77,27 +90,36 @@ const ParticleNetwork = ({
         // Draw connections between nearby particles
         const drawConnections = () => {
             const particles = particlesRef.current;
+            const distSq = connectionDistance * connectionDistance;
+
+            ctx.beginPath();
+            ctx.lineWidth = 0.5;
+
             for (let i = 0; i < particles.length; i++) {
                 for (let j = i + 1; j < particles.length; j++) {
                     const dx = particles[i].x - particles[j].x;
                     const dy = particles[i].y - particles[j].y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const dSq = dx * dx + dy * dy;
 
-                    if (distance < connectionDistance) {
+                    if (dSq < distSq) {
+                        const distance = Math.sqrt(dSq);
                         const opacityValue = (1 - distance / connectionDistance) * opacity;
-                        ctx.beginPath();
                         ctx.strokeStyle = `${color}${Math.floor(opacityValue * 255).toString(16).padStart(2, '0')}`;
-                        ctx.lineWidth = 0.5;
                         ctx.moveTo(particles[i].x, particles[i].y);
                         ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.stroke();
                     }
                 }
             }
+            ctx.stroke();
         };
 
         // Animation loop
         const animate = () => {
+            if (!isInView) {
+                animationRef.current = requestAnimationFrame(animate);
+                return;
+            }
+
             ctx.clearRect(0, 0, width, height);
 
             particlesRef.current.forEach(particle => {
@@ -130,13 +152,13 @@ const ParticleNetwork = ({
                 cancelAnimationFrame(animationRef.current);
             }
         };
-    }, [particleCount, color, connectionDistance, speed, opacity, prefersReducedMotion]);
+    }, [particleCount, color, connectionDistance, speed, opacity, prefersReducedMotion, isInView]);
 
     return (
         <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ opacity: opacity }}
+            style={{ opacity: opacity, willChange: 'transform' }}
         />
     );
 };

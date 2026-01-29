@@ -576,7 +576,13 @@ export default function Shorts() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+            <div
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5"
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: '0 1000px'
+              }}
+            >
               {filteredVideos.map((v, idx) => (
                 <ShortCard
                   key={v.id}

@@ -252,7 +252,15 @@ const CaseStudies = () => {
   });
 
   return (
-    <section id="work" className="py-20 relative overflow-hidden" style={{ background: "var(--surface)" }}>
+    <section
+      id="work"
+      className="py-20 relative overflow-hidden"
+      style={{
+        background: "var(--surface)",
+        contentVisibility: "auto",
+        containIntrinsicSize: "600px"
+      }}
+    >
       {/* Background decoration */}
       {!reduceMotion && (
         <>
@@ -541,6 +549,7 @@ const CaseStudies = () => {
                           src={src}
                           alt={`${k} preview`}
                           className="absolute inset-0 w-full h-full object-cover"
+                          decoding="async"
                         />
                       ) : (
                         <div
@@ -674,7 +683,14 @@ const ProcessSection = () => {
   ];
 
   return (
-    <section className="py-20 relative overflow-hidden" style={{ background: "var(--surface)" }}>
+    <section
+      className="py-20 relative overflow-hidden"
+      style={{
+        background: "var(--surface)",
+        contentVisibility: "auto",
+        containIntrinsicSize: "800px",
+      }}
+    >
       {/* Background elements */}
       {!reduceMotion && (
         <>
@@ -872,7 +888,7 @@ const ProcessSection = () => {
                           >
                             <path
                               d="M20 6L9 17l-5-5"
-                              stroke="var(--orange)"
+                              stroke="currentColor"
                               strokeWidth="2.5"
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -1129,6 +1145,7 @@ const TestimonialsSection = ({ isDark }) => {
               alt=""
               className="w-12 h-12 rounded-full object-cover"
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <div
@@ -1192,6 +1209,7 @@ const TestimonialsSection = ({ isDark }) => {
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
+            decoding="async"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
 
@@ -1287,6 +1305,7 @@ const TestimonialsSection = ({ isDark }) => {
             alt={item.alt}
             className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
+            decoding="async"
             whileHover={reduceMotion ? {} : { scale: 1.05 }}
             transition={{ duration: 0.4 }}
           />
