@@ -4498,6 +4498,78 @@ var worker_default = {
       const feed = await env2.SHINEL_AUDIT.get("app:clients:pulse", "json") || { activities: [], meta: {}, ts: Date.now() };
       return json(feed, 200, cors);
     }
+    if (url.pathname === "/clients" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const now = Date.now();
+        if (!body.name || !body.youtubeId) {
+          return json({ error: "Name and YouTube ID required" }, 400, cors);
+        }
+        const list = await env2.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+        const id = `c-${now}-${Math.random().toString(36).slice(2)}`;
+        const row = {
+          id,
+          name: String(body.name),
+          youtubeId: String(body.youtubeId),
+          handle: String(body.handle || ""),
+          category: String(body.category || "Vlogger"),
+          dateAdded: now,
+          lastUpdated: now
+        };
+        list.push(row);
+        await env2.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        return json({ client: row }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Save failed" }, e.status || 500, cors);
+      }
+    }
+    if (url.pathname.startsWith("/clients/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+        const updates = await request.json().catch(() => ({}));
+        const list = await env2.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+        const idx = list.findIndex((c) => c.id === id);
+        if (idx < 0) return json({ error: "Not found" }, 404, cors);
+        const now = Date.now();
+        const merged = { ...list[idx], ...updates, lastUpdated: now };
+        list[idx] = merged;
+        await env2.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        return json({ client: merged }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+    if (url.pathname.startsWith("/clients/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+        const list = await env2.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+        const idx = list.findIndex((c) => c.id === id);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+          await env2.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        }
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
+      }
+    }
+    if (url.pathname === "/clients/bulk" && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const ids = Array.isArray(body.ids) ? body.ids : [];
+        if (!ids.length) return json({ error: "No IDs provided" }, 400, cors);
+        let list = await env2.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+        list = list.filter((c) => !ids.includes(c.id));
+        await env2.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        return json({ ok: true, removed: ids.length }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Bulk delete failed" }, e.status || 500, cors);
+      }
+    }
     if (url.pathname === "/clients/stats" && request.method === "GET") {
       return json({ ok: true, stats: {} }, 200, cors);
     }
