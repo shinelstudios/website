@@ -101,7 +101,12 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                         >
                             {/* Shimmer effect */}
                             <div
-                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"
+                                style={{
+                                    willChange: "transform",
+                                    transform: "translate3d(-100%, 0, 0)",
+                                    WebkitTransform: "translate3d(-100%, 0, 0)",
+                                }}
                                 aria-hidden="true"
                             />
 

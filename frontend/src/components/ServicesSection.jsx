@@ -440,6 +440,11 @@ const ServicesSection = () => {
           33% { transform: translate3d(30px, -30px, 0) scale(1.05); }
           66% { transform: translate3d(-25px, 25px, 0) scale(0.95); }
         }
+        @-webkit-keyframes ss-float-slow {
+          0%, 100% { -webkit-transform: translate3d(0, 0, 0) scale(1); }
+          33% { -webkit-transform: translate3d(30px, -30px, 0) scale(1.05); }
+          66% { -webkit-transform: translate3d(-25px, 25px, 0) scale(0.95); }
+        }
       `}</style>
     </section>
   );

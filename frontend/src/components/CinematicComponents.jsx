@@ -235,7 +235,8 @@ export const BeforeAfterSlider = ({ before, after, alt = 'Comparison' }) => {
                 style={{
                     left: `${sliderPosition}%`,
                     background: COLORS.gold,
-                    transform: 'translateX(-50%)',
+                    transform: 'translate3d(-50%, 0, 0)',
+                    WebkitTransform: 'translate3d(-50%, 0, 0)',
                 }}
                 onMouseDown={() => setIsDragging(true)}
                 onTouchStart={() => setIsDragging(true)}
@@ -245,7 +246,8 @@ export const BeforeAfterSlider = ({ before, after, alt = 'Comparison' }) => {
                     className="absolute top-1/2 left-1/2 w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
                     style={{
                         background: COLORS.gold,
-                        transform: 'translate(-50%, -50%)',
+                        transform: 'translate3d(-50%, -50%, 0)',
+                        WebkitTransform: 'translate3d(-50%, -50%, 0)',
                     }}
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -313,6 +315,10 @@ export const SwipeableCarousel = ({ items = [], renderItem }) => {
                 <motion.div
                     className="flex"
                     animate={{ x: `-${currentIndex * 100}%` }}
+                    style={{
+                        transform: 'translate3d(0,0,0)',
+                        WebkitTransform: 'translate3d(0,0,0)',
+                    }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 >
                     {items.map((item, index) => (
@@ -367,7 +373,7 @@ export const SwipeableCarousel = ({ items = [], renderItem }) => {
                     </button>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

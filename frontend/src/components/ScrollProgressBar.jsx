@@ -24,11 +24,13 @@ const ScrollProgressBar = () => {
 
     return (
         <motion.div
-            className="fixed top-0 left-0 right-0 h-1 z-50 origin-left"
+            className="fixed top-0 left-0 right-0 h-1 z-50"
             style={{
                 background: "linear-gradient(90deg, #E85002, #ff6b35)",
                 scaleX: scrollProgress / 100,
-                transformOrigin: "0%",
+                transformOrigin: "left center",
+                WebkitTransformOrigin: "left center",
+                willChange: "transform",
             }}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: scrollProgress / 100 }}

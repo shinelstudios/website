@@ -33,14 +33,30 @@ const SpotlightSweep = ({
       <style>{`
         @keyframes rotate-spotlight {
           0% {
-            transform: translate(-50%, -50%) rotate(0deg);
+            transform: translate3d(-50%, -50%, 0) rotate(0deg);
           }
           100% {
-            transform: translate(-50%, -50%) rotate(360deg);
+            transform: translate3d(-50%, -50%, 0) rotate(360deg);
+          }
+        }
+        @-webkit-keyframes rotate-spotlight {
+          0% {
+            -webkit-transform: translate3d(-50%, -50%, 0) rotate(0deg);
+          }
+          100% {
+            -webkit-transform: translate3d(-50%, -50%, 0) rotate(360deg);
           }
         }
 
         @keyframes pulse-beam {
+          0%, 100% {
+            opacity: var(--beam-opacity);
+          }
+          50% {
+            opacity: calc(var(--beam-opacity) * 2);
+          }
+        }
+        @-webkit-keyframes pulse-beam {
           0%, 100% {
             opacity: var(--beam-opacity);
           }
@@ -56,7 +72,9 @@ const SpotlightSweep = ({
           width: 200%;
           height: 200%;
           animation: rotate-spotlight var(--duration) linear infinite;
+          -webkit-animation: rotate-spotlight var(--duration) linear infinite;
           animation-delay: var(--delay);
+          -webkit-animation-delay: var(--delay);
           will-change: transform;
         }
 
@@ -67,6 +85,7 @@ const SpotlightSweep = ({
           width: 4px;
           height: 100%;
           transform-origin: top center;
+          -webkit-transform-origin: top center;
           background: linear-gradient(
             to bottom,
             transparent 0%,
@@ -76,6 +95,7 @@ const SpotlightSweep = ({
           );
           filter: blur(30px);
           animation: pulse-beam 2s ease-in-out infinite;
+          -webkit-animation: pulse-beam 2s ease-in-out infinite;
         }
 
         .spotlight-beam::before {
@@ -83,7 +103,8 @@ const SpotlightSweep = ({
           position: absolute;
           top: 0;
           left: 50%;
-          transform: translateX(-50%);
+          transform: translate3d(-50%, 0, 0);
+          -webkit-transform: translate3d(-50%, 0, 0);
           width: 150px;
           height: 100%;
           background: linear-gradient(

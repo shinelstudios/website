@@ -168,6 +168,11 @@ export default function LazyImage({
                         background-position: 200% 0;
                     }
                 }
+                /* Webkit specific fix for shimmers */
+                .lazy-image-placeholder {
+                    -webkit-mask-image: linear-gradient(90deg, transparent, white, transparent);
+                    mask-image: linear-gradient(90deg, transparent, white, transparent);
+                }
             `}</style>
         </div>
     );

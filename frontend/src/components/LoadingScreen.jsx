@@ -6,7 +6,7 @@ const LoadingScreen = () => {
   useEffect(() => {
     // Prevent page scrolling while loading
     document.body.style.overflow = 'hidden';
-    
+
     // Announce loading state to screen readers
     const loadingAnnouncement = document.createElement('div');
     loadingAnnouncement.setAttribute('role', 'status');
@@ -26,7 +26,7 @@ const LoadingScreen = () => {
   }, []);
 
   return (
-    <div 
+    <div
       className="fixed inset-0 flex items-center justify-center bg-[#0F0F0F] z-[9999]"
       role="progressbar"
       aria-valuetext="Loading"
@@ -50,7 +50,7 @@ const LoadingScreen = () => {
         />
 
         {/* Optimized loading circle with CPU-friendly animations */}
-        <div 
+        <div
           className="absolute w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-full border-[3px] border-transparent"
           aria-hidden="true"
           style={{
@@ -64,7 +64,7 @@ const LoadingScreen = () => {
         />
 
         {/* Secondary rotating ring */}
-        <div 
+        <div
           className="absolute w-36 h-36 sm:w-40 sm:h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 rounded-full border-[2px] border-transparent"
           aria-hidden="true"
           style={{
@@ -76,7 +76,7 @@ const LoadingScreen = () => {
         />
 
         {/* Secondary subtle pulse effect */}
-        <div 
+        <div
           className="absolute w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 lg:w-40 lg:h-40 rounded-full bg-[#E85002]/5"
           aria-hidden="true"
           style={{
@@ -103,17 +103,31 @@ const LoadingScreen = () => {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        @-webkit-keyframes spin {
+          to { -webkit-transform: rotate(360deg); }
+        }
 
         @keyframes spinReverse {
           to { transform: rotate(-360deg); }
         }
+        @-webkit-keyframes spinReverse {
+          to { -webkit-transform: rotate(-360deg); }
+        }
 
         @keyframes logoFloat {
           0%, 100% { 
-            transform: translateY(0px) scale(1);
+            transform: translate3d(0, 0px, 0) scale(1);
           }
           50% { 
-            transform: translateY(-8px) scale(1.05);
+            transform: translate3d(0, -8px, 0) scale(1.05);
+          }
+        }
+        @-webkit-keyframes logoFloat {
+          0%, 100% { 
+            -webkit-transform: translate3d(0, 0px, 0) scale(1);
+          }
+          50% { 
+            -webkit-transform: translate3d(0, -8px, 0) scale(1.05);
           }
         }
         
@@ -125,6 +139,16 @@ const LoadingScreen = () => {
           50% { 
             opacity: 0.2;
             transform: scale(1.15);
+          }
+        }
+        @-webkit-keyframes pulse {
+          0%, 100% { 
+            opacity: 0.4;
+            -webkit-transform: scale(1);
+          }
+          50% { 
+            opacity: 0.2;
+            -webkit-transform: scale(1.15);
           }
         }
 

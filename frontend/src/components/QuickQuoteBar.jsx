@@ -133,7 +133,10 @@ const QuickQuoteBar = ({ onBook }) => {
       document.dispatchEvent(new CustomEvent("qqb:visible", { detail: { visible: false } }));
   }, [visible]);
 
-  const shimmer = { x: ["-120%", "120%"], transition: { repeat: Infinity, duration: 1.8, ease: "linear" } };
+  const shimmer = {
+    x: ["-120%", "120%"],
+    transition: { repeat: Infinity, duration: 1.8, ease: "linear" }
+  };
 
   if (!visible) return null;
 
@@ -149,6 +152,7 @@ const QuickQuoteBar = ({ onBook }) => {
         style={{
           top: isMobile ? "auto" : "calc(var(--header-offset, var(--header-h, 92px)) + 12px)",
           bottom: isMobile ? "max(16px, env(safe-area-inset-bottom, 16px))" : "auto",
+          WebkitTransform: "translate3d(0,0,0)", // Force GPU
         }}
         role="region"
         aria-label="Quick quote and audit"
@@ -194,6 +198,8 @@ const QuickQuoteBar = ({ onBook }) => {
                   style={{
                     background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%)",
                     filter: "blur(5px)",
+                    WebkitBackdropFilter: "blur(0px)", // Fixes some iOS shimmer issues
+                    willChange: "transform",
                   }}
                 />
                 Get Free Audit

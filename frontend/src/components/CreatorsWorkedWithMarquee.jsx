@@ -200,10 +200,14 @@ const CreatorsWorkedWithMarquee = ({
 
       setAnimationDuration(`${durationSec.toFixed(3)}s`);
       setAnimationDistance(`${totalDistance.toFixed(2)}px`);
+      // [FIX] Pre-calculate negative distance for iOS Safari to avoid calc() in keyframes
+      if (cont) {
+        cont.style.setProperty("--neg-animation-distance", `-${totalDistance.toFixed(2)}px`);
+      }
     };
 
     const rafId = requestAnimationFrame(updateMarqueeMetrics);
-
+    // ... rest of the effect ...
     let ro;
     if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
       ro = new ResizeObserver(updateMarqueeMetrics);
@@ -242,6 +246,8 @@ const CreatorsWorkedWithMarquee = ({
   const enableAnimation = !showStatic && shouldAnimate;
   const animationIsPaused = isPaused || !isVisible;
 
+  const animateDir = direction === 'right' ? 'ltr' : 'rtl'; // Direction logic for class
+
   return (
     <section
       className="relative py-20 overflow-hidden"
@@ -264,6 +270,7 @@ const CreatorsWorkedWithMarquee = ({
               background: "rgba(255, 255, 255, 0.03)",
               border: "1px solid rgba(255, 255, 255, 0.05)",
               backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
               boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)"
             }}
             variants={itemVariant}
@@ -371,11 +378,12 @@ const CreatorsWorkedWithMarquee = ({
             <div
               ref={trackRef}
               className={`cw-track ${enableAnimation ? "cw-animated" : "cw-static"
-                } ${animationIsPaused ? "paused" : ""} ${direction === 'right' ? 'direction-right' : ''
+                } ${animationIsPaused ? "paused" : ""} ${animateDir === 'ltr' ? 'direction-ltr' : 'direction-rtl'
                 }`}
               style={{
                 "--gap-rem": `${gapRem}`,
                 "--animation-duration": animationDuration,
+                "WebkitAnimationDuration": animationDuration,
                 "--animation-distance": animationDistance,
               }}
             >
@@ -398,6 +406,7 @@ const CreatorsWorkedWithMarquee = ({
                       style={{
                         background: isHovered ? "var(--surface-alt)" : "transparent",
                         border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
+                        willChange: "transform",
                       }}
                     >
                       {creator.href ? (
@@ -440,6 +449,7 @@ const CreatorsWorkedWithMarquee = ({
                         style={{
                           background: isHovered ? "var(--surface-alt)" : "transparent",
                           border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
+                          willChange: "transform",
                         }}
                       >
                         {creator.href ? (
@@ -488,25 +498,29 @@ const CreatorsWorkedWithMarquee = ({
           width: max-content;
           will-change: transform;
           /* GPU Acceleration Forces */
-          transform: translateZ(0);
-          -webkit-transform: translateZ(0);
+          transform: translate3d(0, 0, 0);
+          -webkit-transform: translate3d(0, 0, 0);
           transform-style: preserve-3d;
+          -webkit-transform-style: preserve-3d;
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
           perspective: 1000px;
           -webkit-perspective: 1000px;
         }
         
-        .cw-track.cw-animated {
-          animation: cw-marquee var(--animation-duration) linear infinite;
-          -webkit-animation: cw-marquee var(--animation-duration) linear infinite;
+        .cw-track.cw-animated.direction-rtl {
+          animation: cw-marquee-rtl var(--animation-duration) linear infinite;
+          -webkit-animation: cw-marquee-rtl var(--animation-duration) linear infinite;
         }
 
-        .cw-track.cw-animated.direction-right {
-          animation-direction: reverse;
+        .cw-track.cw-animated.direction-ltr {
+          animation: cw-marquee-ltr var(--animation-duration) linear infinite;
+          -webkit-animation: cw-marquee-ltr var(--animation-duration) linear infinite;
         }
+
         .cw-track.cw-animated.paused {
           animation-play-state: paused !important;
+          -webkit-animation-play-state: paused !important;
         }
 
         .cw-track.cw-static {
@@ -526,7 +540,9 @@ const CreatorsWorkedWithMarquee = ({
           padding: 1rem 0;
           flex-shrink: 0;
           transform-style: preserve-3d;
+          -webkit-transform-style: preserve-3d;
           backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
         }
         
         .cw-track.cw-static .cw-segment {
@@ -555,7 +571,8 @@ const CreatorsWorkedWithMarquee = ({
         .cw-item:hover {
           background: rgba(255, 255, 255, 0.05);
           border-color: rgba(255, 255, 255, 0.1);
-          transform: translateY(-4px) translateZ(0);
+          transform: translateY(-4px) translate3d(0, 0, 0);
+          -webkit-transform: translateY(-4px) translate3d(0, 0, 0);
         }
 
         .cw-item:focus-within {
@@ -633,14 +650,26 @@ const CreatorsWorkedWithMarquee = ({
           letter-spacing: 0.05em;
         }
 
-        @keyframes cw-marquee {
+        /* RTL Direction */
+        @keyframes cw-marquee-rtl {
           0% { transform: translate3d(0, 0, 0); }
-          100% { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+          100% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
         }
         
-        @-webkit-keyframes cw-marquee {
+        @-webkit-keyframes cw-marquee-rtl {
           0% { -webkit-transform: translate3d(0, 0, 0); }
-          100% { -webkit-transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+          100% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+        }
+
+        /* LTR Direction */
+        @keyframes cw-marquee-ltr {
+          0% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          100% { transform: translate3d(0, 0, 0); }
+        }
+        
+        @-webkit-keyframes cw-marquee-ltr {
+          0% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          100% { -webkit-transform: translate3d(0, 0, 0); }
         }
 
       `}</style>

@@ -374,21 +374,41 @@
   /* -------- Marquee utilities (perf + a11y) -------- */
   @keyframes marquee-rtl {
     0% {
-      transform: translate3d(0, 0, 0)
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
     }
-
     100% {
-      transform: translate3d(-50%, 0, 0)
+      transform: translate3d(-50%, 0, 0);
+      -webkit-transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  @-webkit-keyframes marquee-rtl {
+    0% {
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+    100% {
+      -webkit-transform: translate3d(-50%, 0, 0);
     }
   }
 
   @keyframes marquee-ltr {
     0% {
-      transform: translate3d(-50%, 0, 0)
+      transform: translate3d(-50%, 0, 0);
+      -webkit-transform: translate3d(-50%, 0, 0);
     }
-
     100% {
-      transform: translate3d(0, 0, 0)
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @-webkit-keyframes marquee-ltr {
+    0% {
+      -webkit-transform: translate3d(-50%, 0, 0);
+    }
+    100% {
+      -webkit-transform: translate3d(0, 0, 0);
     }
   }
 
@@ -404,15 +424,18 @@
 
   .animate-marquee-rtl {
     animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
+    -webkit-animation: marquee-rtl var(--marquee-duration, 40s) linear infinite;
   }
 
   .animate-marquee-ltr {
     animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
+    -webkit-animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
   }
 
   @media (hover:hover) and (pointer:fine) {
     .marquee-hover-pause:hover .marquee-track {
       animation-play-state: paused;
+      -webkit-animation-play-state: paused;
     }
   }
 
@@ -791,6 +814,7 @@
     transparent 100%
   );
   animation: gradient-rotate 3s linear infinite;
+  -webkit-animation: gradient-rotate 3s linear infinite;
   will-change: transform;
 }
 

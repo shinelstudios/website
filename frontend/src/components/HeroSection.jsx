@@ -501,10 +501,15 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               );
               background-size: 200% auto;
               -webkit-background-clip: text;
-              -webkit-text-fill-color: transparent;
               background-clip: text;
+              -webkit-text-fill-color: transparent;
+              text-fill-color: transparent;
               animation: gradient-shift 3s ease infinite;
+              -webkit-animation: gradient-shift 3s ease infinite;
               filter: drop-shadow(0 0 40px rgba(232, 80, 2, 0.4));
+              /* Force GPU */
+              transform: translate3d(0,0,0);
+              -webkit-transform: translate3d(0,0,0);
             }
 
             /* Fallback for browsers that don't support background-clip: text */

@@ -626,9 +626,15 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               0,
               Math.min(1, progress / 100)
             ).toFixed(4)})`,
+            WebkitTransform: `scaleX(${Math.max(
+              0,
+              Math.min(1, progress / 100)
+            ).toFixed(4)})`,
             background: "linear-gradient(90deg, var(--orange), #ff9357)",
-            transition: "transform .12s linear",
+            transition: "transform .12s linear, -webkit-transform .12s linear",
+            WebkitTransition: "-webkit-transform .12s linear",
             opacity: scrolled ? 1 : 0.95,
+            willChange: "transform",
           }}
           aria-hidden="true"
         />

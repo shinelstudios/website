@@ -32,7 +32,15 @@ const GradientWaves = ({
             transform: translate3d(-50%, -60%, 0) rotate(180deg);
           }
         }
-
+        @-webkit-keyframes wave-1 {
+          0%, 100% {
+            -webkit-transform: translate3d(-50%, -50%, 0) rotate(0deg);
+          }
+          50% {
+            -webkit-transform: translate3d(-50%, -60%, 0) rotate(180deg);
+          }
+        }
+ 
         @keyframes wave-2 {
           0%, 100% {
             transform: translate3d(-50%, -50%, 0) rotate(180deg);
@@ -41,7 +49,15 @@ const GradientWaves = ({
             transform: translate3d(-50%, -40%, 0) rotate(360deg);
           }
         }
-
+        @-webkit-keyframes wave-2 {
+          0%, 100% {
+            -webkit-transform: translate3d(-50%, -50%, 0) rotate(180deg);
+          }
+          50% {
+            -webkit-transform: translate3d(-50%, -40%, 0) rotate(360deg);
+          }
+        }
+ 
         @keyframes wave-3 {
           0%, 100% {
             transform: translate3d(-50%, -50%, 0) rotate(90deg);
@@ -50,7 +66,15 @@ const GradientWaves = ({
             transform: translate3d(-50%, -55%, 0) rotate(270deg);
           }
         }
-
+        @-webkit-keyframes wave-3 {
+          0%, 100% {
+            -webkit-transform: translate3d(-50%, -50%, 0) rotate(90deg);
+          }
+          50% {
+            -webkit-transform: translate3d(-50%, -55%, 0) rotate(270deg);
+          }
+        }
+ 
         .gradient-wave {
           position: absolute;
           width: 200%;
@@ -59,23 +83,31 @@ const GradientWaves = ({
           left: 50%;
           border-radius: 40%;
           filter: blur(80px);
+          /* Force GPU */
+          transform: translate3d(0,0,0);
+          -webkit-transform: translate3d(0,0,0);
         }
-
+ 
         .wave-1 {
           background: radial-gradient(circle, ${colors[0]}90 0%, ${colors[0]}50 30%, transparent 70%);
           animation: wave-1 ${animationDuration} ease-in-out infinite;
+          -webkit-animation: wave-1 ${animationDuration} ease-in-out infinite;
         }
-
+ 
         .wave-2 {
           background: radial-gradient(circle, ${colors[1]}70 0%, ${colors[1]}40 30%, transparent 70%);
           animation: wave-2 ${animationDuration} ease-in-out infinite;
+          -webkit-animation: wave-2 ${animationDuration} ease-in-out infinite;
           animation-delay: -${parseInt(animationDuration) / 3}s;
+          -webkit-animation-delay: -${parseInt(animationDuration) / 3}s;
         }
-
+ 
         .wave-3 {
           background: radial-gradient(circle, ${colors[2] || colors[0]}60 0%, ${colors[2] || colors[0]}30 30%, transparent 70%);
           animation: wave-3 ${animationDuration} ease-in-out infinite;
+          -webkit-animation: wave-3 ${animationDuration} ease-in-out infinite;
           animation-delay: -${parseInt(animationDuration) / 1.5}s;
+          -webkit-animation-delay: -${parseInt(animationDuration) / 1.5}s;
         }
 
         @media (prefers-reduced-motion: reduce) {

@@ -76,6 +76,10 @@ const TrustBar = ({
 
       setAnimationDuration(`${durationSec.toFixed(3)}s`);
       setAnimationDistance(`${totalDistance.toFixed(2)}px`);
+      // [FIX] Pre-calculate negative distance for iOS Safari to avoid calc() in keyframes
+      if (containerRef.current) {
+        containerRef.current.style.setProperty("--neg-animation-distance", `-${totalDistance.toFixed(2)}px`);
+      }
     };
 
     // Initial calculation on mount, after layout
@@ -210,25 +214,30 @@ const TrustBar = ({
         {/* [MODIFIED] New track structure */}
         <div
           ref={trackRef}
-          className={`marquee-track ${isPaused || !isVisible ? "paused" : ""}`}
+          className={`marquee-track ${isPaused || !isVisible ? "paused" : ""} ${animateDir === "rtl" ? "animate-rtl" : "animate-ltr"}`}
           style={{
             display: "flex",
             width: "max-content",
             alignItems: "center",
             willChange: "transform",
             /* GPU Acceleration Forces */
-            transform: "translate3d(0,0,0) translateZ(0)",
-            WebkitTransform: "translate3d(0,0,0) translateZ(0)",
+            transform: "translate3d(0,0,0)",
+            WebkitTransform: "translate3d(0,0,0)",
             transformStyle: "preserve-3d",
             WebkitTransformStyle: "preserve-3d",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             perspective: "1000px",
             WebkitPerspective: "1000px",
-            animation: "marquee-scroll var(--animation-duration) linear infinite",
-            animationDirection: animateDir === 'rtl' ? 'normal' : 'reverse',
+            animationDuration: effectiveDuration + "s",
+            WebkitAnimationDuration: effectiveDuration + "s",
+            animationTimingFunction: "linear",
+            WebkitAnimationTimingFunction: "linear",
+            animationIterationCount: "infinite",
+            WebkitAnimationIterationCount: "infinite",
             animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
-            transition: "animation-duration 0.3s ease-out",
+            WebkitAnimationPlayState: (isPaused || !isVisible) ? "paused" : "running",
+            transition: "animation-duration 0.3s ease-out, -webkit-animation-duration 0.3s ease-out",
           }}
         >
           {/* Segment A (Measured) */}
@@ -265,19 +274,40 @@ const TrustBar = ({
       <style>{`
 /* =============== TrustBar Scoped Styles & Animations =============== */
 
-/* [NEW] Keyframes driven by CSS vars */
-@keyframes marquee-scroll {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+.trustbar .marquee-track.animate-rtl {
+  animation-name: marquee-scroll-rtl;
+  -webkit-animation-name: marquee-scroll-rtl;
 }
 
-@-webkit-keyframes marquee-scroll {
+.trustbar .marquee-track.animate-ltr {
+  animation-name: marquee-scroll-ltr;
+  -webkit-animation-name: marquee-scroll-ltr;
+}
+
+/* [FIX] Discrete keyframes for RTL/LTR instead of using animation-direction: reverse */
+@keyframes marquee-scroll-rtl {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+}
+
+@-webkit-keyframes marquee-scroll-rtl {
   0% { -webkit-transform: translate3d(0, 0, 0); }
-  100% { -webkit-transform: translate3d(calc(var(--animation-distance) * -1), 0, 0); }
+  100% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+}
+
+@keyframes marquee-scroll-ltr {
+  0% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@-webkit-keyframes marquee-scroll-ltr {
+  0% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  100% { -webkit-transform: translate3d(0, 0, 0); }
 }
 
 .trustbar .marquee-track.paused {
   animation-play-state: paused !important;
+  -webkit-animation-play-state: paused !important;
 }
 
 /* [NEW] Segment styling */
@@ -288,7 +318,9 @@ const TrustBar = ({
   white-space: nowrap;
   flex-shrink: 0;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* [NEW] Margin fallback for gap between segments */
