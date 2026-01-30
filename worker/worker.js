@@ -483,6 +483,45 @@ export default {
       }
     }
 
+    /* =============================== /config ============================== */
+    if (url.pathname === "/config" && request.method === "GET") {
+      return json({
+        site: {
+          name: "Shinel Studios",
+          contact: "contact@shinelstudios.in"
+        },
+        features: {
+          pulse: true,
+          hub: true
+        }
+      }, 200, cors);
+    }
+
+    /* =============================== /clients ============================== */
+    // GET /clients - List all registered client channels
+    if (url.pathname === "/clients" && request.method === "GET") {
+      // In a real scenario, this would pull from SHINEL_AUDIT or SHINEL_USERS
+      // For now, return an empty list or mock data to avoid 404
+      const list = await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+      return json({ clients: list }, 200, cors);
+    }
+
+    // GET /clients/pulse - Activity feed
+    if (url.pathname === "/clients/pulse" && request.method === "GET") {
+      const feed = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || { activities: [], meta: {}, ts: Date.now() };
+      return json(feed, 200, cors);
+    }
+
+    // GET /clients/stats - Generic stats
+    if (url.pathname === "/clients/stats" && request.method === "GET") {
+      return json({ ok: true, stats: {} }, 200, cors);
+    }
+
+    // GET /clients/history - Activity history
+    if (url.pathname === "/clients/history" && request.method === "GET") {
+      return json({ ok: true, history: [] }, 200, cors);
+    }
+
     /* =============================== /stats =============================== */
     if (url.pathname === "/stats" && request.method === "GET") {
       const thumbs = await getJsonList(env, KV_THUMBS_KEY);
