@@ -126,11 +126,30 @@ const ROUTES = [
         const serverUrl = `http://localhost:${port}`;
         console.log(`🚀 Custom preview server running at ${serverUrl}`);
 
-        // 2. Launch Puppeteer
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
+        let browser;
+        try {
+            console.log('🌐 Launching Puppeteer...');
+            // 2. Launch Puppeteer
+            browser = await puppeteer.launch({
+                headless: 'new',
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                ]
+            });
+        } catch (e) {
+            console.error('❌ CRITICAL: Failed to launch Puppeteer:', e.message);
+            console.log('⚠️ Skipping pre-rendering due to environment limitations.');
+            console.log('💡 Tip: Cloudflare Pages might lack some system libraries (libatk, etc.).');
+            server.close();
+            process.exit(0); // Exit gracefully so build continues
+            return;
+        }
 
         try {
             const page = await browser.newPage();
@@ -144,11 +163,11 @@ const ROUTES = [
                     const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
 
                     if (!response) {
-                        console.error(`❌ No response for ${route}`);
+                        console.error(`   ❌ No response for ${route}`);
                         continue;
                     }
                     if (!response.ok()) {
-                        console.error(`❌ HTTP Error ${response.status()} for ${route}`);
+                        console.error(`   ❌ HTTP Error ${response.status()} for ${route}`);
                         continue;
                     }
 
@@ -166,15 +185,15 @@ const ROUTES = [
                     console.log(`   ✅ Saved to ${relativePath}`);
 
                 } catch (err) {
-                    console.error(`❌ Failed to render ${route}:`, err.message);
+                    console.error(`   ❌ Failed to render ${route}:`, err.message);
                 }
             }
         } catch (e) {
-            console.error('Fatal error in puppeteer:', e);
+            console.error('⚠️ Fatal error during pre-rendering loop:', e.message);
         } finally {
-            await browser.close();
+            if (browser) await browser.close();
             server.close(); // Close the custom server
-            console.log('🏁 Pre-rendering finished.');
+            console.log('🏁 Pre-rendering process finished.');
             process.exit(0);
         }
     });
