@@ -309,7 +309,7 @@ const ThreeDVisuals = () => {
             </div>
             <div>
               <div className="text-[10px] text-white/80 font-bold uppercase tracking-wider">Client Result</div>
-              <div className="text-xl font-black text-white">+3.2M Views</div>
+              <div className="text-xl font-black text-white">+3.25M Views</div>
             </div>
           </GlassCard>
         </motion.div>
@@ -374,7 +374,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
   const formatCompactNumber = (number) => {
     return new Intl.NumberFormat('en-US', {
       notation: "compact",
-      maximumFractionDigits: 1
+      maximumFractionDigits: 2
     }).format(number);
   };
 

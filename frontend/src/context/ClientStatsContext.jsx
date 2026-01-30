@@ -29,7 +29,7 @@ export const ClientStatsProvider = ({ children }) => {
     // Hardcoded fallbacks for production resilience (if stats API defaults)
     const HARDCODED_FALLBACKS = {
         'UC_x5XG1OV2P6uZZ5FSM9Ttw': { title: 'Kamz Inkzone', subscribers: 1420000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_n6U_Ew_FmYm_N0n_9_X_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }, // Approximation
-        'UCbnkpVSNsBwET7mt1tgqEPQ': { title: 'Deadlox Gaming', subscribers: 2100000, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
+        'UCbnkpVSNsBwET7mt1tgqEPQ': { title: 'Deadlox Gaming', subscribers: 2115670, viewCount: 456789123, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
         'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }
     };
 
@@ -175,13 +175,21 @@ export const ClientStatsProvider = ({ children }) => {
                         "authorization": `Bearer ${token}`
                     }
                 });
-                if (!res.ok) throw new Error("Sync failed");
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || "Sync failed");
                 await fetchStats(); // Reload after sync
-                return true;
+                return data; // Return full result {ok, synced, total, errors}
             } catch (err) {
                 console.error("Sync Error:", err);
-                return false;
+                throw err;
             }
+        },
+        fetchSyncErrors: async () => {
+            try {
+                const res = await fetch(`${AUTH_BASE}/clients/sync/errors`);
+                const data = await res.json();
+                return data.errors || [];
+            } catch { return []; }
         }
     };
 

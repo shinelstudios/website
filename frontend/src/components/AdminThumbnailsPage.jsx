@@ -26,7 +26,6 @@ import ThumbnailForm from "./ThumbnailForm";
 import ThumbnailFilters from "./ThumbnailFilters";
 
 import { AUTH_BASE } from "../config/constants";
-const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || "";
 const LS_TOKEN_KEY = "token";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
 const LS_PRESETS_KEY = "thumbs-presets";
@@ -303,7 +302,7 @@ export default function AdminThumbnailsPage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem(LS_TOKEN_KEY)}`
         },
-        body: JSON.stringify({ youtubeUrl: url, apiKey: YOUTUBE_API_KEY })
+        body: JSON.stringify({ url })
       });
       const data = await res.json();
       if (data.details) {

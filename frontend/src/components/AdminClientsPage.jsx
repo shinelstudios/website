@@ -34,6 +34,8 @@ export default function AdminClientsPage() {
     const [err, setErr] = useState("");
     const [search, setSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState([]);
+    const [syncErrors, setSyncErrors] = useState([]);
+    const [syncReport, setSyncReport] = useState(null);
 
     const [form, setForm] = useState({
         name: "",
@@ -79,20 +81,24 @@ export default function AdminClientsPage() {
         return () => window.removeEventListener("auth:changed", onAuth);
     }, [token]);
 
+    const { stats: globalStats, getHistory, getGrowth, fetchSyncErrors } = useClientStats();
+
     const loadClients = useCallback(async () => {
         setBusy(true);
         setErr("");
         try {
-            const res = await fetch(`${AUTH_BASE}/clients`, { headers: authHeaders });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || "Failed to load clients");
-            setClients(data.clients || []);
+            const [clientData, errors] = await Promise.all([
+                fetch(`${AUTH_BASE}/clients`, { headers: authHeaders }).then(r => r.json()),
+                fetchSyncErrors()
+            ]);
+            setClients(clientData.clients || []);
+            setSyncErrors(errors || []);
         } catch (e) {
             setErr(e.message);
         } finally {
             setBusy(false);
         }
-    }, [authHeaders]);
+    }, [authHeaders, fetchSyncErrors]);
 
     useEffect(() => {
         loadClients();
@@ -173,7 +179,14 @@ export default function AdminClientsPage() {
     async function refreshSingleClient(clientId) {
         setRefreshingId(clientId);
         try {
-            await refreshSync();
+            const result = await refreshSync();
+            if (result.errors?.length > 0) {
+                const myErr = result.errors.find(e => e.id === clientId);
+                if (myErr) setErr(`Sync error for ${myErr.name}: ${myErr.error}`);
+            }
+            await loadClients();
+        } catch (e) {
+            setErr(e.message);
         } finally {
             setRefreshingId(null);
         }
@@ -181,8 +194,13 @@ export default function AdminClientsPage() {
 
     async function refreshAllClients() {
         setBusy(true);
+        setSyncReport(null);
         try {
-            await refreshSync();
+            const result = await refreshSync();
+            setSyncReport(result);
+            await loadClients();
+        } catch (e) {
+            setErr(e.message);
         } finally {
             setBusy(false);
         }
@@ -248,7 +266,6 @@ export default function AdminClientsPage() {
         }
     }
 
-    const { stats: globalStats, getHistory, getGrowth } = useClientStats();
 
     const enrichedClients = useMemo(() => {
         return clients.map(client => {
@@ -280,6 +297,8 @@ export default function AdminClientsPage() {
                 return false;
             }) || {};
 
+            const syncErr = syncErrors.find(e => e.id === client.id);
+
             const growth = getGrowth(s.id || client.youtubeId);
             const history = getHistory(s.id || client.youtubeId);
 
@@ -290,7 +309,8 @@ export default function AdminClientsPage() {
                 displayTitle: s.title || client.name,
                 growth,
                 history,
-                matched: !!s.id // Track if we found a match
+                matched: !!s.id,
+                syncError: syncErr?.error || null
             };
         });
     }, [clients, globalStats, getHistory, getGrowth]);
@@ -376,10 +396,71 @@ export default function AdminClientsPage() {
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center gap-3 text-xs font-bold"
+                        className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 flex items-center justify-between text-xs font-bold"
                     >
-                        <AlertCircle size={16} />
-                        {err}
+                        <div className="flex items-center gap-3">
+                            <AlertCircle size={16} />
+                            {err}
+                        </div>
+                        <button onClick={() => setErr("")} className="hover:text-white transition-colors">
+                            <X size={14} />
+                        </button>
+                    </motion.div>
+                )}
+
+                {syncReport && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="mb-8 p-6 rounded-3xl bg-gradient-to-br from-white/[0.05] to-white/[0.01] border border-white/10 shadow-2xl overflow-hidden relative"
+                    >
+                        <div className="absolute top-0 right-0 p-4">
+                            <button onClick={() => setSyncReport(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                                <X size={16} className="text-gray-500" />
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className={`p-3 rounded-2xl ${syncReport.errors?.length === 0 ? 'bg-green-500/10 text-green-500' : 'bg-orange-500/10 text-orange-500'}`}>
+                                <RefreshCw size={24} className={busy ? "animate-spin" : ""} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black">Sync Complete.</h2>
+                                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                                    {syncReport.synced} / {syncReport.total} Creators updated successfully
+                                </p>
+                            </div>
+                        </div>
+
+                        {syncReport.errors?.length > 0 ? (
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                <div className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                    <AlertCircle size={12} />
+                                    Diagnostic Issues ({syncReport.errors.length})
+                                </div>
+                                {syncReport.errors.map((error, i) => (
+                                    <div key={i} className="p-3 rounded-xl bg-red-500/5 border border-red-500/10 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 font-bold text-xs shrink-0">
+                                                {error.name?.[0] || "?"}
+                                            </div>
+                                            <div>
+                                                <div className="text-xs font-bold text-white">{error.name}</div>
+                                                <div className="text-[10px] text-red-400 font-medium">{error.error}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-[9px] font-mono text-gray-600 bg-black/20 px-2 py-1 rounded">
+                                            {error.id?.slice(-8)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10 text-green-500 text-xs font-bold flex items-center gap-3">
+                                <ShieldCheck size={16} />
+                                All creators are perfectly synced with YouTube.
+                            </div>
+                        )}
                     </motion.div>
                 )}
 
@@ -485,7 +566,7 @@ export default function AdminClientsPage() {
                                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Reach</span>
                                     </div>
                                     <div className="text-2xl font-black">
-                                        {(filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0) / 1000000).toFixed(1)}M
+                                        {(filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0) / 1000000).toFixed(2)}M
                                     </div>
                                 </div>
                                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
@@ -619,12 +700,18 @@ export default function AdminClientsPage() {
                                                         )}
                                                     </div>
                                                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-wider text-gray-500">
-                                                        <span className={`flex items-center gap-1 ${!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@') ? 'text-orange-500' : ''}`}>
+                                                        <span className={`flex items-center gap-1 ${(!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@')) || client.syncError ? 'text-orange-500' : ''}`}>
                                                             <Youtube size={10} />
-                                                            <code className={`px-1.5 py-0.5 rounded text-[8px] ${!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@') ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-gray-400'}`}>
+                                                            <code className={`px-1.5 py-0.5 rounded text-[8px] ${(!client.youtubeId?.startsWith('UC') && !client.youtubeId?.startsWith('@')) || client.syncError ? 'bg-orange-500/10 text-orange-400' : 'bg-white/5 text-gray-400'}`}>
                                                                 {client.youtubeId}
                                                             </code>
                                                         </span>
+                                                        {client.syncError && (
+                                                            <span className="flex items-center gap-1 text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
+                                                                <AlertCircle size={10} />
+                                                                {client.syncError}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -644,14 +731,24 @@ export default function AdminClientsPage() {
                                                 )}
 
                                                 {/* Subscriber Count - EXACT NUMBERS */}
-                                                <div className="text-right min-w-[120px]">
-                                                    <div className="text-2xl font-black text-white tabular-nums leading-none mb-1">
-                                                        {(client.subscribers || 0).toLocaleString()}
+                                                <div className="text-right min-w-[120px] flex flex-col gap-2">
+                                                    <div>
+                                                        <div className="text-xl font-black text-white tabular-nums leading-none">
+                                                            {(client.subscribers || 0).toLocaleString()}
+                                                        </div>
+                                                        <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mt-1">
+                                                            Subscribers
+                                                        </div>
                                                     </div>
-                                                    <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mb-1.5">
-                                                        Subscribers
+                                                    <div>
+                                                        <div className="text-sm font-black text-orange-500 tabular-nums leading-none">
+                                                            {(client.viewCount || 0).toLocaleString()}
+                                                        </div>
+                                                        <div className="text-[7px] font-black uppercase tracking-[0.1em] text-gray-600 mt-0.5">
+                                                            Total Views
+                                                        </div>
                                                     </div>
-                                                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${(client.growth || 0) >= 0
+                                                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider w-fit ml-auto ${(client.growth || 0) >= 0
                                                         ? 'bg-green-500/10 text-green-500 border border-green-500/20'
                                                         : 'bg-red-500/10 text-red-500 border border-red-500/20'
                                                         }`}>

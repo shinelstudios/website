@@ -29,8 +29,6 @@ import ANCHIT_LOGO from '../assets/creators/anchit.png';
 import KUNDAN_LOGO from '../assets/creators/kundan.png';
 const ProofSection = React.lazy(() => import("../components/ProofSection"));
 const CalendlyModal = React.lazy(() => import("../components/CalendlyModal").then(module => ({ default: module.CalendlyModal })));
-import { BeforeAfter } from './BeforeAfter';
-
 // New helper components
 import ErrorBoundary from './ErrorBoundary';
 import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema, LocalBusinessSchema, WebSiteSchema } from './MetaTags';

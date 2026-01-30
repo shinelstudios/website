@@ -63,6 +63,7 @@ export default function WorkPage() {
   const [activeCategory, setActiveCategory] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Refs for scroll navigation
@@ -72,17 +73,44 @@ export default function WorkPage() {
   useEffect(() => {
     async function loadWork() {
       try {
-        const [vRes, tRes] = await Promise.all([
+        const [vRes, tRes, cRes] = await Promise.all([
           fetch(`${AUTH_BASE}/videos`),
-          fetch(`${AUTH_BASE}/thumbnails`)
+          fetch(`${AUTH_BASE}/thumbnails`),
+          fetch(`${AUTH_BASE}/clients`)
         ]);
         const vData = await vRes.json();
         const tData = await tRes.json();
+        const cData = await cRes.json();
 
-        const vMapped = (vData.videos || []).map(v => normalizeWork(v, 'video'));
-        const tMapped = (tData.thumbnails || []).map(t => normalizeWork(t, 'gfx'));
+        const registry = cData.clients || [];
+        setClients(registry);
 
-        setProjects([...vMapped, ...tMapped]);
+        const creatorIds = new Set(registry.map(c => c.youtubeId).filter(Boolean));
+        const creatorHandles = new Set(registry.map(c => c.handle?.toLowerCase()).filter(Boolean));
+
+        const vMapped = (vData.videos || []).map(v => ({
+          ...normalizeWork(v, 'video'),
+          isCreator: creatorIds.has(v.youtubeId) || creatorHandles.has(v.attributedTo?.toLowerCase())
+        }));
+        const tMapped = (tData.thumbnails || []).map(t => ({
+          ...normalizeWork(t, 'gfx'),
+          isCreator: creatorHandles.has(t.attributedTo?.toLowerCase())
+        }));
+
+        const combined = [...vMapped, ...tMapped].sort((a, b) => {
+          // Priority 1: Shinel flagship
+          if (a.isShinel && !b.isShinel) return -1;
+          if (!a.isShinel && b.isShinel) return 1;
+
+          // Priority 2: Partner Creators
+          if (a.isCreator && !b.isCreator) return -1;
+          if (!a.isCreator && b.isCreator) return 1;
+
+          // Priority 3: Natural order (ID/Date)
+          return 0;
+        });
+
+        setProjects(combined);
       } catch (e) {
         console.error("Failed to load work:", e);
       } finally {
@@ -94,7 +122,6 @@ export default function WorkPage() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      if (!p.isShinel) return false;
       const matchCat = activeCategory === "ALL" || p.category === activeCategory;
       const matchSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -105,9 +132,9 @@ export default function WorkPage() {
   // Group projects by service type
   const projectsByService = useMemo(() => {
     const groups = {
-      gfx: projects.filter(p => p.isShinel && (p.kind === "gfx" || p.category.includes("THUMBNAIL"))),
-      editing: projects.filter(p => p.isShinel && (p.kind === "video" || p.category.includes("VIDEO"))),
-      growth: projects.filter(p => p.isShinel && p.category.includes("GROWTH")),
+      gfx: projects.filter(p => p.kind === "gfx" || p.category.includes("THUMBNAIL")),
+      editing: projects.filter(p => p.kind === "video" || p.category.includes("VIDEO")),
+      growth: projects.filter(p => p.category.includes("GROWTH")),
     };
     return groups;
   }, [projects]);
@@ -126,19 +153,18 @@ export default function WorkPage() {
     }
 
     // Otherwise calculate from project data
-    const shinelProjects = projects.filter(p => p.isShinel);
-    const totalProjects = shinelProjects.length;
+    const totalProjects = projects.length;
 
     // Count unique clients based on attributedTo field
     const uniqueClients = new Set(
-      shinelProjects.map(p => p.attributedTo).filter(Boolean)
+      projects.map(p => p.attributedTo).filter(Boolean)
     ).size;
     const estimatedClients = uniqueClients > 0
       ? uniqueClients
       : Math.max(Math.floor(totalProjects / 10), 1);
 
     // Calculate total views from actual youtubeViews data
-    const totalViews = shinelProjects.reduce((sum, p) => {
+    const totalViews = projects.reduce((sum, p) => {
       return sum + (p.youtubeViews || 0);
     }, 0);
 
@@ -224,7 +250,8 @@ export default function WorkPage() {
             <StatsCounter end={stats.projects} suffix="+" label="Projects Delivered" duration={2000} />
             <StatsCounter end={stats.clients} suffix="+" label="Happy Clients" duration={2000} />
             <StatsCounter
-              end={config?.workPageStats?.useCalculated === false ? stats.views : Math.floor(stats.views / 1000000)}
+              end={config?.workPageStats?.useCalculated === false ? stats.views : stats.views / 1000000}
+              decimals={1}
               suffix="M+"
               label="Views Generated"
               duration={2500}
