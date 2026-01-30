@@ -25,7 +25,7 @@ import ThumbnailCard from "./ThumbnailCard";
 import ThumbnailForm from "./ThumbnailForm";
 import ThumbnailFilters from "./ThumbnailFilters";
 
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || "";
 const LS_TOKEN_KEY = "token";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";

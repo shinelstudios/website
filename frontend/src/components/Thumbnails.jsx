@@ -11,9 +11,7 @@ import MetaTags, { BreadcrumbSchema } from "./MetaTags";
  * Endpoints used (read-only):
  *   GET  /thumbnails   → { thumbnails: [...] } with ETag
  */
-const AUTH_BASE =
-  import.meta.env.VITE_AUTH_BASE ||
-  "https://shinel-auth.shinelstudioofficial.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Client cache keys ---------------- */

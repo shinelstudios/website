@@ -23,8 +23,7 @@ import {
 } from "lucide-react";
 import PortfolioItem from "./PortfolioItem";
 import MetaTags from "./MetaTags";
-
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
+import { AUTH_BASE } from "../config/constants";
 
 function normalizeWork(item, type) {
     const isVideo = type === 'video';

@@ -18,9 +18,7 @@ import LiveStatsCaseStudy from "./LiveStatsCaseStudy";
 import ServiceCard from "./ServiceCard";
 import WorkSection from "./WorkSection";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
-
-/* ------------------------------ Portfolio API ------------------------------ */
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
+import { AUTH_BASE } from "../config/constants";
 
 function normalizeWork(item, type) {
   const isVideo = type === 'video';

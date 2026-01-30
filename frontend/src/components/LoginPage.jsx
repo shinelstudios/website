@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, Cpu, Terminal, ChevronRight, AlertTriangle } from "lucide-react";
 import CpuBackground from "./CpuBackground";
 
-const API_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "";
+import { AUTH_BASE } from "../config/constants";
+
+const API_BASE = AUTH_BASE.replace(/\/+$/, "");
 
 // Safe base64url decode + JWT parse
 function base64UrlDecode(str) {

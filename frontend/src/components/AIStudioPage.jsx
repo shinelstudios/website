@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { LogOut, ChevronDown, ChevronUp, RefreshCcw, Timer } from "lucide-react";
 
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
+import { AUTH_BASE } from "../config/constants";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -52,7 +52,7 @@ export default function AIStudioPage() {
       ["token", "refresh", "userEmail", "role", "firstName", "lastName", "rememberMe"].forEach((k) =>
         localStorage.removeItem(k)
       );
-    } catch {}
+    } catch { }
     window.dispatchEvent(new Event("auth:changed"));
     window.location.href = "/"; // go Home
   };

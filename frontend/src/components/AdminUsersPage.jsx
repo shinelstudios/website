@@ -4,7 +4,7 @@ import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle, Linkedin, Twitter
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 import { saveClientConfig, getClientConfig } from "../data/clientRegistry";
 
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
+import { AUTH_BASE } from "../config/constants";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -146,8 +146,6 @@ export default function AdminUsersPage() {
       }
 
       setForm({
-        firstName: "", lastName: "", email: "", role: "client", password: "",
-        bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
         firstName: "", lastName: "", email: "", role: "client", password: "",
         bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
         driveLink: "", finalsLink: "", billingSheet: "", projectName: ""
@@ -524,8 +522,6 @@ export default function AdminUsersPage() {
                             slug: u.slug || "",
                             linkedin: u.linkedin || "",
                             twitter: u.twitter || "",
-                            website: u.website || "",
-                            skills: u.skills || "",
                             website: u.website || "",
                             skills: u.skills || "",
                             experience: u.experience || "",

@@ -1,7 +1,7 @@
 // src/components/QuickLeadForm.jsx
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CONTACT } from "../config/constants";
+import { CONTACT, AUTH_BASE } from "../config/constants";
 
 /** Detect compact (mobile-ish) screens safely (SSR-friendly) */
 function useCompact() {
@@ -170,7 +170,7 @@ const QuickLeadForm = ({ source = "quick_quote" }) => {
     try {
       // ✅ Capture lead in CRM
       try {
-        await fetch(`${import.meta.env.VITE_AUTH_BASE || ""}/leads`, {
+        await fetch(`${AUTH_BASE}/leads`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

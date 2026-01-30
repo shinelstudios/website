@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Users, Crown, Medal, Activity } from 'lucide-react';
+import { AUTH_BASE } from "../../config/constants";
 import MetaTags from "../MetaTags";
-
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
 
 const RankBadge = ({ rank }) => {
     if (rank === 1) return <Crown className="text-yellow-400 drop-shadow-glow" size={32} fill="currentColor" />;

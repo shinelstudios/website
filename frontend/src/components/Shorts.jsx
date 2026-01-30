@@ -22,9 +22,7 @@ import MetaTags, { BreadcrumbSchema } from "./MetaTags";
  * - Modal supports ← / → keys + on-screen arrows to move between shorts.
  */
 
-const AUTH_BASE =
-  import.meta.env.VITE_AUTH_BASE ||
-  "https://shinel-auth.your-account.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 // LocalStorage cache key for this page

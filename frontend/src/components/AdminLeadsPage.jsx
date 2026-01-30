@@ -22,8 +22,7 @@ import {
 } from "lucide-react";
 import { createLeadStorage } from "./cloudflare-lead-storage";
 import { LoadingOverlay } from "./AdminUIComponents";
-
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const LS_TOKEN_KEY = "token";
 
 const store = createLeadStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));

@@ -43,6 +43,7 @@ const StatusBadge = ({ status }) => {
 };
 
 import { getProjectsForUser } from "../../data/clientRegistry";
+import { AUTH_BASE } from "../../config/constants";
 
 export default function ClientDashboard() {
     const [user, setUser] = useState({
@@ -144,7 +145,7 @@ export default function ClientDashboard() {
                                                     if (!confirm("Notify team about updates to this project?")) return;
                                                     try {
                                                         const token = localStorage.getItem("token");
-                                                        const res = await fetch(`${import.meta.env.VITE_AUTH_BASE}/notify`, {
+                                                        const res = await fetch(`${AUTH_BASE}/notify`, {
                                                             method: "POST",
                                                             headers: {
                                                                 "content-type": "application/json",

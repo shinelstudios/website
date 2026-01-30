@@ -13,7 +13,7 @@ import {
     TrendingUp
 } from "lucide-react";
 
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
+import { AUTH_BASE } from "../config/constants";
 
 export default function AdminStats() {
     const [stats, setStats] = useState(null);

@@ -28,9 +28,7 @@ import MetaTags, { BreadcrumbSchema } from "./MetaTags";
  * - Category filters synced with URL (?category=GAMING) so you can share filtered links.
  */
 
-const AUTH_BASE =
-  import.meta.env.VITE_AUTH_BASE ||
-  "https://shinel-auth.your-account.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Cache key (ETag) ---------------- */

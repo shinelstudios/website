@@ -24,7 +24,7 @@ import VideoCard from "./VideoCard";
 import VideoForm from "./VideoForm";
 import VideoFilters from "./VideoFilters";
 
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE?.replace(/\/+$/, "") || "https://shinel-auth.shinelstudioofficial.workers.dev";
+import { AUTH_BASE } from "../config/constants";
 const LS_TOKEN_KEY = "token";
 
 const DEFAULT_FORM = {

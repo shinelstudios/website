@@ -24,8 +24,7 @@ import { useClientStats } from "../context/ClientStatsContext";
 import { Input, SelectWithPresets, LoadingOverlay } from "./AdminUIComponents";
 import Skeleton from "./Skeleton";
 import Sparkline from "./Sparkline";
-
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
+import { AUTH_BASE } from "../config/constants";
 
 export default function AdminClientsPage() {
     const { refreshStats } = useClientStats();
@@ -398,8 +397,8 @@ export default function AdminClientsPage() {
                                         <Youtube
                                             size={14}
                                             className={`absolute left-3 top-1/2 -translate-y-1/2 ${form.youtubeId && !form.youtubeId.startsWith('UC') && !form.youtubeId.startsWith('@')
-                                                    ? 'text-orange-500'
-                                                    : 'text-gray-600'
+                                                ? 'text-orange-500'
+                                                : 'text-gray-600'
                                                 }`}
                                         />
                                         <input
@@ -408,8 +407,8 @@ export default function AdminClientsPage() {
                                             onChange={e => setForm({ ...form, youtubeId: e.target.value })}
                                             placeholder="UC... or @handle"
                                             className={`w-full pl-9 pr-3 py-2.5 bg-white/[0.03] border ${form.youtubeId && !form.youtubeId.startsWith('UC') && !form.youtubeId.startsWith('@')
-                                                    ? 'border-orange-500/50'
-                                                    : 'border-white/10 focus:border-orange-500/50'
+                                                ? 'border-orange-500/50'
+                                                : 'border-white/10 focus:border-orange-500/50'
                                                 } rounded-xl text-sm outline-none transition-all placeholder:text-gray-700`}
                                         />
                                     </div>
@@ -495,12 +494,12 @@ export default function AdminClientsPage() {
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.98 }}
                                     className={`p-5 rounded-2xl border transition-all duration-300 relative group ${editingId === client.id
-                                            ? 'bg-orange-500/[0.05] border-orange-500/40 shadow-lg shadow-orange-500/10'
-                                            : selectedIds.includes(client.id)
-                                                ? 'bg-orange-500/[0.02] border-orange-500/20'
-                                                : !client.matched
-                                                    ? 'bg-yellow-500/[0.02] border-yellow-500/20'
-                                                    : 'bg-gradient-to-br from-white/[0.04] to-white/[0.02] border-white/5 hover:border-white/10 hover:shadow-lg hover:shadow-black/5'
+                                        ? 'bg-orange-500/[0.05] border-orange-500/40 shadow-lg shadow-orange-500/10'
+                                        : selectedIds.includes(client.id)
+                                            ? 'bg-orange-500/[0.02] border-orange-500/20'
+                                            : !client.matched
+                                                ? 'bg-yellow-500/[0.02] border-yellow-500/20'
+                                                : 'bg-gradient-to-br from-white/[0.04] to-white/[0.02] border-white/5 hover:border-white/10 hover:shadow-lg hover:shadow-black/5'
                                         }`}
                                 >
                                     {/* Selection Checkbox */}
@@ -630,8 +629,8 @@ export default function AdminClientsPage() {
                                                         Subscribers
                                                     </div>
                                                     <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${(client.growth || 0) >= 0
-                                                            ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
                                                         }`}>
                                                         {(client.growth || 0) >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                                         {Math.abs(client.growth || 0).toFixed(1)}%

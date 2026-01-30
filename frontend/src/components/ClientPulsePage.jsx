@@ -11,11 +11,7 @@ import {
     TrendingUp,
     Youtube
 } from "lucide-react";
-import { CLIENT_PULSE_CONFIG } from "../config/constants";
-import MetaTags from "./MetaTags";
-
-// API Configuration
-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
+import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
 
 /**
  * ClientPulsePage Component
