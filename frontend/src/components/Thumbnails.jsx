@@ -210,14 +210,12 @@ const ThumbCard = ({ t, onOpen, onBroken, fetchPriority = "auto" }) => {
       {/* Media */}
       <div className="relative w-full aspect-[16/9] bg-[var(--surface-alt)] overflow-hidden">
         {!imageLoaded && <div className="absolute inset-0 bg-[var(--text-muted)]/10 animate-pulse" />}
-        <ProtectedImg
-          src={t.imageUrl || t.image}
-          alt={`${t.category} ${t.subcategory || ""}`}
+        <ThumbnailImage
+          t={t}
           onError={() => onBroken?.(t.id)}
-          onLoad={() => setImageLoaded(true)}
-          fetchPriority={fetchPriority}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
-            }`}
+          setImageLoaded={setImageLoaded}
+          imageLoaded={imageLoaded}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
         />
       </div>
 
@@ -1350,3 +1348,56 @@ export default function Thumbnails() {
     </div>
   );
 }
+const ThumbnailImage = ({ t, imageLoaded, setImageLoaded, className, onError }) => {
+  // Priority: 1. t.imageUrl, 2. t.image (fallback). If these are youtube URLs, we can try fallbacks.
+  const initialSrc = t.imageUrl || t.image;
+  const [src, setSrc] = useState(initialSrc);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setSrc(t.imageUrl || t.image);
+    setFailed(false);
+  }, [t.imageUrl, t.image]);
+
+  const handleError = () => {
+    // If it's a YouTube URL, try downgrading quality
+    if (src && src.includes("img.youtube.com")) {
+      if (src.includes("maxresdefault.jpg")) {
+        setSrc(src.replace("maxresdefault.jpg", "hqdefault.jpg"));
+        return;
+      }
+      if (src.includes("hqdefault.jpg")) {
+        setSrc(src.replace("hqdefault.jpg", "mqdefault.jpg"));
+        return;
+      }
+      if (src.includes("mqdefault.jpg")) {
+        setSrc(src.replace("mqdefault.jpg", "sddefault.jpg"));
+        return;
+      }
+    }
+
+    // If not YouTube or all fallbacks failed
+    setFailed(true);
+    onError?.();
+  };
+
+  if (!src || failed) {
+    return (
+      <div className={`bg-[var(--surface-alt)] ${className} flex items-center justify-center text-[var(--text-muted)]`}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" className="opacity-20">
+          <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <ProtectedImg
+      src={src}
+      alt={`${t.category} ${t.subcategory || ""}`}
+      className={className}
+      onLoad={() => setImageLoaded(true)}
+      onError={handleError}
+    />
+  );
+};
