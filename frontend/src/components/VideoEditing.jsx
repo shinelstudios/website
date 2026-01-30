@@ -189,7 +189,9 @@ export default function VideoEditing() {
             thumb:
               v.thumb ||
               (youtubeId
-                ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+                ? (["t-vPWTJUIO4", "R2jcaMDAvOU"].includes(youtubeId)
+                  ? "https://placehold.co/600x400/202020/white?text=No+Preview"
+                  : `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`)
                 : null),
           };
         });
@@ -702,14 +704,24 @@ function FilterChip({ label, active, onClick }) {
 
 
 function ThumbnailImage({ v, youtubeId, imageLoaded, setImageLoaded, className }) {
-  // Priority: 1. v.thumb (custom), 2. youtube hqdefault, 3. youtube mqdefault (fallback state), 4. placeholder
-  const initialSrc = v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null);
+  // Known IDs that lack hqdefault, so we skip directly to mqdefault to avoid console 404s
+  const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+
+  // Priority: 1. v.thumb (custom), 2. youtube hqdefault (or mqdefault if known bad), 3. youtube mqdefault (fallback state), 4. placeholder
+  const getBestThumb = () => {
+    if (v.thumb) return v.thumb;
+    if (!youtubeId) return null;
+    const quality = KNOWN_BAD_IDS.includes(youtubeId) ? "mqdefault" : "hqdefault";
+    return `https://img.youtube.com/vi/${youtubeId}/${quality}.jpg`;
+  };
+
+  const initialSrc = getBestThumb();
   const [src, setSrc] = useState(initialSrc);
   const [failed, setFailed] = useState(false);
 
   // If initialSrc changes (e.g. video list update), reset state
   useEffect(() => {
-    setSrc(v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null));
+    setSrc(getBestThumb());
     setFailed(false);
   }, [v.thumb, youtubeId]);
 

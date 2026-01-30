@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2 } from "lucide-react";
 import GridMatrix from "../animations/GridMatrix";
 
 
@@ -45,6 +45,13 @@ const tiles = [
     title: "Thumbnail A/B Previewer",
     desc: "Test how your designs look in YouTube search & Home grid.",
     icon: ImageIcon,
+    roles: ["admin", "editor", "client", "public"],
+  },
+  {
+    to: "/tools/thumbnail-tester",
+    title: "Thumbnail A/B Tester",
+    desc: "Vote simulator. Upload 2 designs and see which wins.",
+    icon: BarChart2,
     roles: ["admin", "editor", "client", "public"],
   },
   {

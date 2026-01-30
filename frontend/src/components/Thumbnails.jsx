@@ -1349,13 +1349,32 @@ export default function Thumbnails() {
   );
 }
 const ThumbnailImage = ({ t, imageLoaded, setImageLoaded, className, onError }) => {
-  // Priority: 1. t.imageUrl, 2. t.image (fallback). If these are youtube URLs, we can try fallbacks.
-  const initialSrc = t.imageUrl || t.image;
+  // Known IDs that lack hqdefault
+  const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+
+  const getBestThumb = () => {
+    let base = t.imageUrl || t.image;
+    if (!base) return null;
+
+    // Check if this URL contains a known bad ID
+    const foundBadId = KNOWN_BAD_IDS.find(id => base.includes(id));
+    if (foundBadId) {
+      if (base.includes("hqdefault.jpg")) {
+        return base.replace("hqdefault.jpg", "mqdefault.jpg");
+      }
+      if (base.includes("maxresdefault.jpg")) {
+        return base.replace("maxresdefault.jpg", "mqdefault.jpg");
+      }
+    }
+    return base;
+  };
+
+  const initialSrc = getBestThumb();
   const [src, setSrc] = useState(initialSrc);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setSrc(t.imageUrl || t.image);
+    setSrc(getBestThumb());
     setFailed(false);
   }, [t.imageUrl, t.image]);
 

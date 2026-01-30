@@ -198,12 +198,22 @@ function FilterChip({ label, active, onClick }) {
 }
 
 function ThumbnailImage({ v, youtubeId, imageLoaded, setImageLoaded, className }) {
-  const initialSrc = v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null);
+  // Known IDs that lack hqdefault
+  const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+
+  const getBestThumb = () => {
+    if (v.thumb) return v.thumb;
+    if (!youtubeId) return null;
+    const quality = KNOWN_BAD_IDS.includes(youtubeId) ? "mqdefault" : "hqdefault";
+    return `https://img.youtube.com/vi/${youtubeId}/${quality}.jpg`;
+  };
+
+  const initialSrc = getBestThumb();
   const [src, setSrc] = useState(initialSrc);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setSrc(v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null));
+    setSrc(getBestThumb());
     setFailed(false);
   }, [v.thumb, youtubeId]);
 
@@ -312,7 +322,9 @@ export default function Shorts() {
             thumb:
               v.thumb ||
               (youtubeId
-                ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
+                ? (["t-vPWTJUIO4", "R2jcaMDAvOU"].includes(youtubeId)
+                  ? "https://placehold.co/600x400/202020/white?text=No+Preview"
+                  : `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`)
                 : null),
           };
         });

@@ -34,6 +34,30 @@ const ProgressiveImage = ({
         };
 
         img.onerror = (error) => {
+            // Auto-fallback for YouTube thumbnails
+            if (src && src.includes("youtube.com") && (src.includes("maxresdefault") || src.includes("hqdefault"))) {
+                const fallbackUrl = src.replace("maxresdefault.jpg", "mqdefault.jpg").replace("hqdefault.jpg", "mqdefault.jpg");
+
+                // Avoid infinite loops if the current src IS ALREADY the fallback (shouldn't happen due to if condition, but safety first)
+                if (fallbackUrl !== src) {
+                    const retryImg = new Image();
+                    retryImg.onload = () => {
+                        setImgSrc(fallbackUrl);
+                        setIsLoading(false);
+                        onLoad?.();
+                    };
+                    retryImg.onerror = (retryError) => {
+                        console.warn(`Failed to load fallback image: ${fallbackUrl}`, retryError);
+                        // Final fallback to placeholder
+                        setImgSrc("https://placehold.co/600x400/202020/white?text=No+Preview");
+                        setIsLoading(false);
+                        // We do NOT trigger onError here, we consider the placeholder a success state to avoid braking UI
+                    };
+                    retryImg.src = fallbackUrl;
+                    return; // Exit early to wait for retry
+                }
+            }
+
             setHasError(true);
             setIsLoading(false);
             onError?.(error);

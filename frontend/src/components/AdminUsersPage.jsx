@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle, Linkedin, Twitter, Globe, Star, Briefcase } from "lucide-react";
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
+import { saveClientConfig, getClientConfig } from "../data/clientRegistry";
 
 const AUTH_BASE = import.meta.env.VITE_AUTH_BASE;
 
@@ -47,6 +48,11 @@ export default function AdminUsersPage() {
     website: "",
     skills: "",
     experience: "",
+    // Client Portal Config
+    driveLink: "",
+    finalsLink: "",
+    billingSheet: "",
+    projectName: ""
   });
   const [editingEmail, setEditingEmail] = useState(null);
 
@@ -128,9 +134,23 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `Failed to ${editingEmail ? 'update' : 'create'} user`);
 
+
+      // Save Client Config (Local Storage)
+      if (form.role.includes("client")) {
+        saveClientConfig(form.email, {
+          driveLink: form.driveLink,
+          finalsLink: form.finalsLink,
+          billingSheet: form.billingSheet,
+          projectName: form.projectName
+        });
+      }
+
       setForm({
         firstName: "", lastName: "", email: "", role: "client", password: "",
-        bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: ""
+        bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
+        firstName: "", lastName: "", email: "", role: "client", password: "",
+        bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
+        driveLink: "", finalsLink: "", billingSheet: "", projectName: ""
       });
       setEditingEmail(null);
       await loadUsers();
@@ -276,7 +296,10 @@ export default function AdminUsersPage() {
                   setEditingEmail(null);
                   setForm({
                     firstName: "", lastName: "", email: "", role: "client", password: "",
-                    bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: ""
+                    bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
+                    firstName: "", lastName: "", email: "", role: "client", password: "",
+                    bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
+                    driveLink: "", finalsLink: "", billingSheet: "", projectName: ""
                   });
                 }}
                 className="text-xs text-[var(--orange)] font-bold hover:underline"
@@ -408,6 +431,45 @@ export default function AdminUsersPage() {
                 rows={4}
               />
             </div>
+
+            {/* Client Portal Configuration */}
+            {form.role.includes("client") && (
+              <div className="md:col-span-5 mt-4 p-4 rounded-xl border border-dashed border-orange-500/30 bg-orange-500/5">
+                <h3 className="text-xs font-black uppercase tracking-widest text-orange-500 mb-3 flex items-center gap-2">
+                  <Globe size={12} /> Client Portal Setup
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Project Name"
+                      value={form.projectName}
+                      onChange={v => setForm({ ...form, projectName: v })}
+                      placeholder="e.g. YouTube Automation Batch #1"
+                    />
+                  </div>
+                  <Input
+                    label="Assets Drive Link"
+                    value={form.driveLink}
+                    onChange={v => setForm({ ...form, driveLink: v })}
+                    placeholder="https://drive.google.com/..."
+                  />
+                  <Input
+                    label="Finals Drive Link"
+                    value={form.finalsLink}
+                    onChange={v => setForm({ ...form, finalsLink: v })}
+                    placeholder="https://drive.google.com/..."
+                  />
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Billing & Status Sheet (Google Sheets)"
+                      value={form.billingSheet}
+                      onChange={v => setForm({ ...form, billingSheet: v })}
+                      placeholder="https://docs.google.com/spreadsheets/..."
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="mt-3">
             <button
@@ -466,7 +528,11 @@ export default function AdminUsersPage() {
                             twitter: u.twitter || "",
                             website: u.website || "",
                             skills: u.skills || "",
+                            website: u.website || "",
+                            skills: u.skills || "",
                             experience: u.experience || "",
+                            // Load config
+                            ...(getClientConfig(u.email) || { driveLink: "", finalsLink: "", billingSheet: "", projectName: "" })
                           });
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}

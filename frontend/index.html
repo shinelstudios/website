@@ -7,6 +7,18 @@
   <meta name="color-scheme" content="light dark" />
   <meta name="format-detection" content="telephone=no,address=no,email=no" />
   <meta http-equiv="x-dns-prefetch-control" content="on" />
+  
+  <!-- Relaxed CSP for Integrations (Calendly, Google, Stripe, Segment, Pendo) -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://assets.calendly.com https://calendly.com https://apis.google.com https://accounts.google.com https://www.google-analytics.com https://www.googletagmanager.com https://js.stripe.com https://connect.facebook.net https://cdn.segment.io https://cdn.pendo.io https://data.pendo.io https://js.appboycdn.com https://cdn.sprig.com https://cdn.cookielaw.org https://challenges.cloudflare.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com;
+    font-src 'self' data: https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    frame-src 'self' https://calendly.com https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://youtube.com;
+    connect-src 'self' https: wss:;
+    worker-src 'self' blob:;
+  ">
 
   <!-- DNS Prefetch (pairs with preconnects) -->
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">

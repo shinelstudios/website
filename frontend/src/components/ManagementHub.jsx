@@ -62,6 +62,13 @@ export default function ManagementHub() {
             roles: ['admin'] // Restricted to admin
         },
         {
+            id: 'client-overview',
+            label: 'Client Overview',
+            path: '/dashboard/overview',
+            icon: LayoutDashboard,
+            roles: ['client', 'admin']
+        },
+        {
             id: 'users',
             label: 'User Registry',
             path: '/dashboard/users',
@@ -116,6 +123,13 @@ export default function ManagementHub() {
 
     /* ---------------- tools matrix (role-gated) ---------------- */
     const toolsCatalog = [
+        {
+            name: "Editor Leaderboard",
+            path: "/leaderboard",
+            icon: Zap,
+            roles: ["admin", "editor"],
+            description: "Gamified performance tracking",
+        },
         {
             name: "Local SRT Builder",
             path: "/tools/srt",

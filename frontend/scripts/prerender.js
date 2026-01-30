@@ -138,8 +138,6 @@ const ROUTES = [
                     '--disable-dev-shm-usage',
                     '--disable-gpu',
                     '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
                 ]
             });
         } catch (e) {
@@ -152,22 +150,28 @@ const ROUTES = [
         }
 
         try {
-            const page = await browser.newPage();
-
             for (const route of ROUTES) {
                 console.log(`📸 Pre-rendering: ${route}`);
                 const url = `${serverUrl}${route}`;
+                let page;
 
                 try {
+                    page = await browser.newPage();
+
+                    // Set a reasonable viewport
+                    await page.setViewport({ width: 1280, height: 800 });
+
                     // Increase timeout and wait for network idle
                     const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
 
                     if (!response) {
                         console.error(`   ❌ No response for ${route}`);
+                        await page.close();
                         continue;
                     }
                     if (!response.ok()) {
                         console.error(`   ❌ HTTP Error ${response.status()} for ${route}`);
+                        await page.close();
                         continue;
                     }
 
@@ -184,8 +188,11 @@ const ROUTES = [
                     fs.writeFileSync(destPath, html);
                     console.log(`   ✅ Saved to ${relativePath}`);
 
+                    await page.close();
+
                 } catch (err) {
                     console.error(`   ❌ Failed to render ${route}:`, err.message);
+                    if (page && !page.isClosed()) await page.close().catch(() => { });
                 }
             }
         } catch (e) {

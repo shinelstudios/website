@@ -28,13 +28,16 @@ const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
 
 function normalizeWork(item, type) {
     const isVideo = type === 'video';
+    const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+    const useMq = KNOWN_BAD_IDS.includes(item.videoId);
+
     return {
         id: item.id || (isVideo ? item.videoId : item.filename),
         title: item.title || item.filename,
         description: isVideo ? `Video Project · ${item.category}` : `Thumbnail Art · ${item.category}`,
         category: item.category || "OTHER",
         image: isVideo
-            ? `https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg`
+            ? `https://img.youtube.com/vi/${item.videoId}/${useMq ? 'mqdefault' : 'maxresdefault'}.jpg`
             : item.imageUrl,
         link: isVideo ? "/video-editing" : "/thumbnails",
         kind: isVideo ? "video" : "gfx",

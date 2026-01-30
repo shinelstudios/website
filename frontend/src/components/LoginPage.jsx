@@ -99,7 +99,19 @@ export default function LoginPage() {
         window.dispatchEvent(new Event("auth:changed"));
       } catch { }
 
-      setTimeout(() => nav(next, { replace: true }), 1000);
+      // Intelligent Redirect
+      let targetPath = next;
+      if (targetPath === "/" || !targetPath) {
+        if (finalRole.includes("admin")) {
+          targetPath = "/dashboard";
+        } else if (finalRole.includes("client")) {
+          targetPath = "/dashboard/overview";
+        } else {
+          targetPath = "/dashboard";
+        }
+      }
+
+      setTimeout(() => nav(targetPath, { replace: true }), 1000);
     } catch {
       setErr("SYSTEM ERROR: Connection failed.");
       setLoading(false);

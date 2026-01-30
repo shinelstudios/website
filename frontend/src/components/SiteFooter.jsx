@@ -348,32 +348,46 @@ const SiteFooter = ({
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
                 <ArrowUpRight size={20} style={{ color: "var(--orange)" }} /> Quick Links
               </h3>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ul className="space-y-2 mb-8">
                 {[
                   { t: "Home", href: "/#home", icon: Sparkles },
                   { t: "Services", href: "/#services", icon: Award },
                   { t: "Our Work", href: "/work", icon: TrendingUp },
                   { t: "Contact", href: "/#contact", icon: Mail },
-                  { t: "ROI Calculator", href: "/roi-calculator" },
-                  { t: "Thumbnail A/B", href: "/tools/thumbnail-previewer" },
-                  { t: "SEO Optimizer", href: "/tools/seo" },
-                  { t: "SRT Builder", href: "/tools/srt" },
-                  { t: "Creator Pulse", href: "/live", icon: Radio },
-                  { t: "Video Editing", href: "/video-editing" },
-                  { t: "GFX", href: "/gfx" },
-                  { t: "Thumbnails", href: "/thumbnails" },
-                  { t: "Shorts", href: "/shorts" },
+                  { t: "Tools & Resources", href: "/tools" },
                 ].map((l) => (
                   <li key={l.t}>
                     <Link
                       to={l.href}
-                      className="inline-flex items-center gap-2 group py-1.5" // [MODIFIED] Added py-1.5
+                      className="inline-flex items-center gap-2 group py-1"
                       style={{ color: "var(--footer-muted)" }}
                       onClick={() => track("cta_click_footer_link", { label: l.t })}
                     >
                       {l.icon && <l.icon size={14} style={{ color: "var(--orange)" }} />}
                       <span className="group-hover:translate-x-1 transition-transform duration-200">{l.t}</span>
-                      <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--orange)" }} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
+                <Users size={20} style={{ color: "var(--orange)" }} /> Industries
+              </h3>
+              <ul className="space-y-2">
+                {[
+                  { t: "Real Estate Agents", href: "/industries/real-estate" },
+                  { t: "Tech Creators", href: "/industries/tech-creators" },
+                  { t: "Financial Advisors", href: "/industries/financial-advisors" },
+                  { t: "Podcast Hosts", href: "/industries/podcast-clips" },
+                ].map((l) => (
+                  <li key={l.t}>
+                    <Link
+                      to={l.href}
+                      className="inline-flex items-center gap-2 group py-1"
+                      style={{ color: "var(--footer-muted)" }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--orange)] opacity-50 group-hover:opacity-100 transition-opacity" />
+                      <span className="group-hover:translate-x-1 transition-transform duration-200">{l.t}</span>
                     </Link>
                   </li>
                 ))}

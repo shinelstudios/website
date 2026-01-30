@@ -25,6 +25,8 @@ const VideoCard = ({
 }) => {
     const isFlash = flashKey === String(v.id);
     const videoId = v.videoId;
+    const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+    const thumbQuality = KNOWN_BAD_IDS.includes(videoId) ? "mqdefault" : "hqdefault";
 
     if (viewMode === "list") {
         return (
@@ -38,7 +40,19 @@ const VideoCard = ({
 
                 <div className="w-24 aspect-video rounded-lg overflow-hidden bg-black shrink-0 border border-white/5">
                     {videoId ? (
-                        <img src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`} className="w-full h-full object-cover" alt="" />
+                        <img
+                            src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+                            className="w-full h-full object-cover"
+                            alt=""
+                            onError={(e) => {
+                                if (e.target.src.includes('mqdefault')) {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://placehold.co/600x400/202020/white?text=No+Preview";
+                                } else if (thumbQuality !== 'mqdefault') {
+                                    e.target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                                }
+                            }}
+                        />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-800"><Video size={20} /></div>
                     )}
@@ -71,8 +85,8 @@ const VideoCard = ({
     return (
         <div
             className={`group relative flex flex-col overflow-hidden rounded-2xl border transition-all duration-300 ${isSelected
-                    ? "border-orange-500/50 bg-orange-500/5 shadow-lg shadow-orange-500/10"
-                    : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
+                ? "border-orange-500/50 bg-orange-500/5 shadow-lg shadow-orange-500/10"
+                : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
                 } ${isFlash ? "ring-2 ring-orange-500 ring-offset-2 ring-offset-black" : ""}`}
         >
             {/* Top selection checkbox */}
@@ -91,10 +105,16 @@ const VideoCard = ({
             <div className="relative aspect-video w-full overflow-hidden bg-black">
                 {videoId ? (
                     <img
-                        src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                        src={`https://i.ytimg.com/vi/${videoId}/${thumbQuality}.jpg`}
                         alt={v.title}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => {
+                            if (thumbQuality !== 'mqdefault') {
+                                e.target.onerror = null;
+                                e.target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                            }
+                        }}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-800"><Video size={40} /></div>

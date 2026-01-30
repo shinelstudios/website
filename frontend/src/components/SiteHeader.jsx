@@ -680,7 +680,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
             <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
             {auth.isAuthed && (
-              <DesktopNavLink label="Hub" to="/dashboard" icon={Shield} />
+              <DesktopNavLink
+                label={userRoles.includes("client") && !userRoles.includes("admin") ? "Client Hub" : "Hub"}
+                to={userRoles.includes("client") && !userRoles.includes("admin") ? "/hub" : "/dashboard"}
+                icon={Shield}
+              />
             )}
             <DesktopNavLink label="Blog" to="/blog" icon={Lightbulb} />
             <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />

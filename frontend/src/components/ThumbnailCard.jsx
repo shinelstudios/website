@@ -30,11 +30,19 @@ const ThumbnailCard = ({
 }) => {
     const isFlash = flashKey === String(t.id);
 
+    const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
+    let processedImageUrl = t.imageUrl;
+    // Proactive replacement for known bad IDs
+    if (processedImageUrl && processedImageUrl.includes("youtube.com") && KNOWN_BAD_IDS.some(id => processedImageUrl.includes(id))) {
+        processedImageUrl = processedImageUrl.replace("hqdefault.jpg", "mqdefault.jpg")
+            .replace("maxresdefault.jpg", "mqdefault.jpg");
+    }
+
     return (
         <div
             className={`group relative flex flex-col overflow-hidden rounded-2xl border transition-all duration-300 ${isSelected
-                    ? "border-orange-500/50 bg-orange-500/5 shadow-lg shadow-orange-500/10"
-                    : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:shadow-xl hover:shadow-black/20"
+                ? "border-orange-500/50 bg-orange-500/5 shadow-lg shadow-orange-500/10"
+                : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:shadow-xl hover:shadow-black/20"
                 } ${isFlash ? "ring-2 ring-orange-500 ring-offset-2 ring-offset-black" : ""}`}
         >
             {/* Top selection checkbox */}
@@ -52,9 +60,18 @@ const ThumbnailCard = ({
             {/* Preview Image with overlay actions */}
             <div className="relative aspect-video w-full overflow-hidden bg-black">
                 <img
-                    src={t.imageUrl}
+                    src={processedImageUrl}
                     alt={t.filename}
                     loading="lazy"
+                    onError={(e) => {
+                        if (e.target.src.includes('mqdefault.jpg')) {
+                            e.target.onerror = null;
+                            e.target.src = "https://placehold.co/600x400/202020/white?text=No+Preview";
+                        } else if (e.target.src.includes('hqdefault.jpg') || e.target.src.includes('maxresdefault.jpg')) {
+                            e.target.src = e.target.src.replace('hqdefault.jpg', 'mqdefault.jpg')
+                                .replace('maxresdefault.jpg', 'mqdefault.jpg');
+                        }
+                    }}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4">

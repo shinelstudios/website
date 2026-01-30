@@ -56,11 +56,14 @@ const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 const RoiCalculatorPage = React.lazy(() => import("./components/pages/RoiCalculatorPage.jsx"));
 const ThumbnailPreviewerPage = React.lazy(() => import("./components/pages/ThumbnailPreviewerPage.jsx"));
 const SrtToolPage = React.lazy(() => import("./components/pages/SrtToolPage.jsx"));
+const ThumbnailTesterPage = React.lazy(() => import("./components/pages/ThumbnailTesterPage.jsx")); // HMR Force
+const EditorLeaderboardPage = React.lazy(() => import("./components/pages/EditorLeaderboardPage.jsx"));
 const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
 const ComparisonToolPage = React.lazy(() => import("./components/pages/ComparisonToolPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
+const BudgetCalculatorPage = React.lazy(() => import("./components/pages/BudgetCalculatorPage.jsx"));
 const BlogIndex = React.lazy(() => import("./components/blog/BlogIndex.jsx"));
 const BlogPost = React.lazy(() => import("./components/blog/BlogPost.jsx"));
 
@@ -85,6 +88,8 @@ const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
 const AdminLeadsPage = React.lazy(() => import("./components/AdminLeadsPage.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
+const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
+const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
 
 
 /* -------------------------------------------------------------------------- */
@@ -282,6 +287,7 @@ export default function App() {
           <Route index element={<ShinelStudiosHomepage />} />
           <Route path="/work" element={<WorkPage />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/pricing/calculator" element={<BudgetCalculatorPage />} />
           <Route path="/live" element={<ClientPulsePage />} />
 
           {/* ---------------------- Services + Subcategories ---------------------- */}
@@ -298,6 +304,9 @@ export default function App() {
             element={<ServiceSubcategoryPage />}
           />
 
+          {/* Programmatic SEO Pages */}
+          <Route path="/industries/:niche" element={<ServicePage />} />
+
           {/* ---------------------------- Service Pages --------------------------- */}
           <Route path="/video-editing" element={<VideoEditing />} />
           <Route path="/branding" element={<Branding />} />
@@ -311,6 +320,7 @@ export default function App() {
           {/* Public Tool Landing Pages (SEO) */}
           <Route path="/roi-calculator" element={<RoiCalculatorPage />} />
           <Route path="/tools/thumbnail-previewer" element={<ThumbnailPreviewerPage />} />
+          <Route path="/tools/thumbnail-tester" element={<ThumbnailTesterPage />} />
           <Route path="/tools/srt" element={<SrtToolPage />} />
           <Route path="/tools/seo" element={<SeoToolPage />} />
           <Route path="/tools/comparison" element={<ComparisonToolPage />} />
@@ -392,7 +402,19 @@ export default function App() {
             }
           />
 
+          <Route path="/leaderboard" element={
+            <ProtectedRoute>
+              <EditorLeaderboardPage />
+            </ProtectedRoute>
+          } />
+
           {/* ----------------------------- Dashboard ------------------------------ */}
+          <Route path="/hub" element={
+            <ProtectedRoute>
+              <ClientDashboard />
+            </ProtectedRoute>
+          } />
+
           <Route
             path="/dashboard"
             element={
@@ -402,6 +424,7 @@ export default function App() {
             }
           >
             <Route index element={<AdminStats />} />
+            <Route path="overview" element={<ClientDashboard />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="clients" element={<AdminClientsPage />} />
             <Route path="leads" element={<AdminLeadsPage />} />

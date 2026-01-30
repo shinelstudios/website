@@ -173,11 +173,11 @@ async function audit(env, kind, { email, success, ip, reason }) {
       reason: reason || null,
     });
     await env.SHINEL_AUDIT.put(key, value, { expirationTtl: 60 * 60 * 24 * 30 });
-  } catch {}
+  } catch { }
 }
 
 /* =========================== App data in KV =========================== */
-const KV_THUMBS_KEY = "thumbnails_public"; 
+const KV_THUMBS_KEY = "thumbnails_public";
 const KV_VIDEOS_KEY = "app:videos:list";
 
 function resolveKV(env, key) {
@@ -238,7 +238,7 @@ const ytIdFrom = (url) => {
     if (u.searchParams.get("v")) return u.searchParams.get("v");
     const m = u.pathname.match(/\/shorts\/([^/]+)/);
     if (m) return m[1];
-  } catch {}
+  } catch { }
   return "";
 };
 
@@ -708,94 +708,148 @@ export default {
       }
     }
 
-    /* =========================== /thumbnails (public) =========================== */
+    /* =========================== /notify (Discord) =========================== */
+    if (url.pathname === "/notify" && request.method === "POST") {
+      try {
+        // Allow clients to notify, so we just verify they have a valid token
+        const token = readBearerToken(request);
+        if (!token) return json({ error: "Missing token" }, 401, cors);
+        const payload = await verifyJWT(token, secret); // Verify signature only
 
-if (url.pathname === "/thumbnails" && request.method === "GET") {
-  const list = await getJsonList(env, KV_THUMBS_KEY);
+        const body = await request.json().catch(() => ({}));
+        const webhookUrl = env.DISCORD_WEBHOOK_URL || "";
 
-  const etag = weakEtagFor(list);
-  if (request.headers.get("if-none-match") === etag) {
-    return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
-  }
+        if (!webhookUrl) {
+          return json({ error: "Notification service not configured" }, 503, cors);
+        }
 
-  return json({ thumbnails: list }, 200, { ...cors, ETag: etag });
-}
+        const message = String(body.message || "Update from client");
+        const type = String(body.type || "info"); // info, upload, urgent
 
-/* ======================= /thumbnails (admin CRUD) ======================= */
+        // Map type to color
+        const colors = {
+          info: 3447003, // Blue
+          upload: 5763719, // Green
+          urgent: 15548997 // Red
+        };
 
-if (url.pathname === "/thumbnails" && request.method === "POST") {
-  try {
-    await requireTeamOrThrow(request, secret);
-    const body = await request.json().catch(() => ({}));
-    const now = Date.now();
+        const discordPayload = {
+          embeds: [{
+            title: `Client Notification: ${type.toUpperCase()}`,
+            description: message,
+            color: colors[type] || 3447003,
+            footer: {
+              text: `User: ${payload.email} (${payload.role})`
+            },
+            timestamp: new Date().toISOString()
+          }]
+        };
 
-    const list = await getJsonList(env, KV_THUMBS_KEY);
-    const id = `t-${now}-${Math.random().toString(36).slice(2)}`;
+        const discRes = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(discordPayload)
+        });
 
-    const autoVideoId = ytIdFrom(body.youtubeUrl || "");
+        if (!discRes.ok) {
+          return json({ error: "Failed to send to Discord" }, 502, cors);
+        }
 
-    const row = {
-      id,
-      filename: String(body.filename || ""),
-      youtubeUrl: String(body.youtubeUrl || ""),
-      category: String(body.category || "OTHER"),
-      subcategory: String(body.subcategory || ""),
-      variant: String(body.variant || "VIDEO"),
-      imageUrl: String(body.imageUrl || ""),
-      videoId: body.videoId || autoVideoId || null,
-      youtubeViews: Number(body.youtubeViews || 0),
-      viewStatus: body.viewStatus || "unknown",
-      lastViewUpdate: body.lastViewUpdate || null,
-      dateAdded: now,
-      lastUpdated: now,
-    };
+        return json({ ok: true }, 200, cors);
 
-    list.push(row);
-    await putJsonList(env, KV_THUMBS_KEY, list);
-    return json({ thumbnail: row }, 200, cors);
-  } catch (e) {
-    return json({ error: e.message || "Save failed" }, e.status || 500, cors);
-  }
-}
-
-if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {
-  try {
-    await requireTeamOrThrow(request, secret);
-    const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-    const updates = await request.json().catch(() => ({}));
-
-    const list = await getJsonList(env, KV_THUMBS_KEY);
-    const idx = list.findIndex((t) => t.id === id);
-    if (idx < 0) return json({ error: "Not found" }, 404, cors);
-
-    const now = Date.now();
-    const merged = { ...list[idx], ...updates, lastUpdated: now };
-    list[idx] = merged;
-
-    await putJsonList(env, KV_THUMBS_KEY, list);
-    return json({ thumbnail: merged }, 200, cors);
-  } catch (e) {
-    return json({ error: e.message || "Update failed" }, e.status || 500, cors);
-  }
-}
-
-if (url.pathname.startsWith("/thumbnails/") && request.method === "DELETE") {
-  try {
-    await requireTeamOrThrow(request, secret);
-    const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-
-    const list = await getJsonList(env, KV_THUMBS_KEY);
-    const idx = list.findIndex((t) => t.id === id);
-    if (idx >= 0) {
-      list.splice(idx, 1);
-      await putJsonList(env, KV_THUMBS_KEY, list);
+      } catch (e) {
+        return json({ error: e.message || "Notification failed" }, 500, cors);
+      }
     }
 
-    return json({ ok: true }, 200, cors);
-  } catch (e) {
-    return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
-  }
-}
+    /* =========================== /thumbnails (public) =========================== */
+
+    if (url.pathname === "/thumbnails" && request.method === "GET") {
+      const list = await getJsonList(env, KV_THUMBS_KEY);
+
+      const etag = weakEtagFor(list);
+      if (request.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
+      }
+
+      return json({ thumbnails: list }, 200, { ...cors, ETag: etag });
+    }
+
+    /* ======================= /thumbnails (admin CRUD) ======================= */
+
+    if (url.pathname === "/thumbnails" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const now = Date.now();
+
+        const list = await getJsonList(env, KV_THUMBS_KEY);
+        const id = `t-${now}-${Math.random().toString(36).slice(2)}`;
+
+        const autoVideoId = ytIdFrom(body.youtubeUrl || "");
+
+        const row = {
+          id,
+          filename: String(body.filename || ""),
+          youtubeUrl: String(body.youtubeUrl || ""),
+          category: String(body.category || "OTHER"),
+          subcategory: String(body.subcategory || ""),
+          variant: String(body.variant || "VIDEO"),
+          imageUrl: String(body.imageUrl || ""),
+          videoId: body.videoId || autoVideoId || null,
+          youtubeViews: Number(body.youtubeViews || 0),
+          viewStatus: body.viewStatus || "unknown",
+          lastViewUpdate: body.lastViewUpdate || null,
+          dateAdded: now,
+          lastUpdated: now,
+        };
+
+        list.push(row);
+        await putJsonList(env, KV_THUMBS_KEY, list);
+        return json({ thumbnail: row }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Save failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+        const updates = await request.json().catch(() => ({}));
+
+        const list = await getJsonList(env, KV_THUMBS_KEY);
+        const idx = list.findIndex((t) => t.id === id);
+        if (idx < 0) return json({ error: "Not found" }, 404, cors);
+
+        const now = Date.now();
+        const merged = { ...list[idx], ...updates, lastUpdated: now };
+        list[idx] = merged;
+
+        await putJsonList(env, KV_THUMBS_KEY, list);
+        return json({ thumbnail: merged }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/thumbnails/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+
+        const list = await getJsonList(env, KV_THUMBS_KEY);
+        const idx = list.findIndex((t) => t.id === id);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+          await putJsonList(env, KV_THUMBS_KEY, list);
+        }
+
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
+      }
+    }
 
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
