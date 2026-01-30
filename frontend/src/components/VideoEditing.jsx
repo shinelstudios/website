@@ -439,18 +439,15 @@ function VideoCard({ v, onPlay }) {
         {!imageLoaded && (
           <div className="absolute inset-0 bg-[var(--surface-alt)] animate-pulse" />
         )}
-        <ProtectedImg
-          src={
-            v.thumb ||
-            (youtubeId
-              ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-              : "")
-          }
-          alt={v.title || v.category}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
-            }`}
-          onLoad={() => setImageLoaded(true)}
+
+        <ThumbnailImage
+          v={v}
+          youtubeId={youtubeId}
+          imageLoaded={imageLoaded}
+          setImageLoaded={setImageLoaded}
+          className="absolute inset-0 w-full h-full object-cover"
         />
+
         {playable && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-md">
@@ -700,5 +697,51 @@ function FilterChip({ label, active, onClick }) {
     >
       {label}
     </button>
+  );
+}
+
+
+function ThumbnailImage({ v, youtubeId, imageLoaded, setImageLoaded, className }) {
+  // Priority: 1. v.thumb (custom), 2. youtube hqdefault, 3. youtube mqdefault (fallback state), 4. placeholder
+  const initialSrc = v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null);
+  const [src, setSrc] = useState(initialSrc);
+  const [failed, setFailed] = useState(false);
+
+  // If initialSrc changes (e.g. video list update), reset state
+  useEffect(() => {
+    setSrc(v.thumb || (youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null));
+    setFailed(false);
+  }, [v.thumb, youtubeId]);
+
+  const handleError = () => {
+    if (!src) return;
+
+    // Fallback logic
+    if (src.includes("hqdefault.jpg")) {
+      // Try medium quality
+      setSrc(src.replace("hqdefault.jpg", "mqdefault.jpg"));
+    } else if (src.includes("mqdefault.jpg")) {
+      // Try standard definition
+      setSrc(src.replace("mqdefault.jpg", "sddefault.jpg"));
+    } else {
+      // Give up, show placeholder or transparent
+      setFailed(true);
+      // Optional: set to a valid 404 placeholder image
+    }
+  };
+
+  if (!src || failed) {
+    // Return a placeholder div or valid placeholder image
+    return <div className={`bg-gray-800 ${className} flex items-center justify-center text-white/20`}><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" /></svg></div>;
+  }
+
+  return (
+    <ProtectedImg
+      src={src}
+      alt={v.title || v.category}
+      className={`${className} transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+      onLoad={() => setImageLoaded(true)}
+      onError={handleError}
+    />
   );
 }
