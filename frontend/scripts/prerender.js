@@ -59,6 +59,12 @@ const ROUTES = [
     "/tools/seo",
     "/tools/comparison",
 
+    // Industries (Programmatic SEO)
+    "/industries/real-estate",
+    "/industries/tech-creators",
+    "/industries/financial-advisors",
+    "/industries/podcast-clips",
+
     // Legal & Other
     "/privacy",
     "/terms",

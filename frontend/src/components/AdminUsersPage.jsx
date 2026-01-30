@@ -297,8 +297,6 @@ export default function AdminUsersPage() {
                   setForm({
                     firstName: "", lastName: "", email: "", role: "client", password: "",
                     bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
-                    firstName: "", lastName: "", email: "", role: "client", password: "",
-                    bio: "", slug: "", linkedin: "", twitter: "", website: "", skills: "", experience: "",
                     driveLink: "", finalsLink: "", billingSheet: "", projectName: ""
                   });
                 }}
