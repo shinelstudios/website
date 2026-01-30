@@ -41,6 +41,7 @@ const ServiceCard = ({ service, onClick, index = 0 }) => {
                     style={{
                         background: "rgba(255,255,255,0.1)",
                         backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)",
                     }}
                     whileHover={{ rotate: 5 }}
                     transition={{ duration: 0.3 }}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import MetaTags from "./MetaTags";
 import {
     Radio,
     Play,
@@ -30,9 +31,9 @@ const ClientPulsePage = () => {
     // Filter relevant activities (Strict 24 hours)
     const activeFeeds = useMemo(() => {
         const now = Date.now();
-        const windowSize = 24 * 60 * 60 * 1000; // 24 hours only
+        const windowSize = 48 * 60 * 60 * 1000; // Relaxed 48 hours
         return activities
-            .filter(a => (now - a.timestamp) < windowSize)
+            .filter(a => (now - Number(a.timestamp || 0)) < windowSize)
             .sort((a, b) => {
                 // Priority: LIVE > Newest
                 if (a.isLive && !b.isLive) return -1;
@@ -222,7 +223,8 @@ const ActivityCard = ({ activity, index, meta }) => {
                             Live Now
                         </div>
                     )}
-                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]">
+                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]"
+                        style={{ WebkitBackdropFilter: "blur(32px)" }}>
                         {activity.type === 'VIDEO' ? <Play size={10} fill="currentColor" /> : <Radio size={10} />}
                         {activity.type}
                     </div>

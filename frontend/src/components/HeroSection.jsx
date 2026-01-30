@@ -136,6 +136,7 @@ const GlassCard = ({ children, className = "", style = {}, noBorder = false }) =
     className={`relative overflow-hidden rounded-xl ${noBorder ? '' : 'border border-[var(--border)]'} bg-[var(--surface-alt)]/80 backdrop-blur-xl shadow-2xl ${className}`}
     style={{
       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
+      WebkitBackdropFilter: "blur(24px)",
       ...style
     }}
   >
@@ -447,7 +448,8 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           <motion.div variants={item} className="inline-block relative group">
             <div className="absolute inset-0 bg-[#E85002] rounded-full blur-3xl opacity-20 group-hover:opacity-35 transition-all duration-500" />
 
-            <div className="relative inline-flex items-center gap-4 pl-3 pr-7 py-3 rounded-full border border-white/10 bg-black/70 backdrop-blur-2xl shadow-2xl ring-1 ring-white/5 hover:scale-105 transition-transform duration-300">
+            <div className="relative inline-flex items-center gap-4 pl-3 pr-7 py-3 rounded-full border border-white/10 bg-black/70 backdrop-blur-2xl shadow-2xl ring-1 ring-white/5 hover:scale-105 transition-transform duration-300"
+              style={{ WebkitBackdropFilter: "blur(40px)" }}>
               <div className="flex -space-x-4">
                 {displayClients.length > 0 ? (
                   displayClients.map((client, i) => (
@@ -567,6 +569,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               <button
                 onClick={handleSeeWork}
                 className="px-12 py-6 text-lg font-bold rounded-full border-2 border-white/20 hover:border-white/40 hover:bg-white/5 transition-all duration-300 w-full sm:w-auto backdrop-blur-sm"
+                style={{ WebkitBackdropFilter: "blur(8px)" }}
               >
                 View Our Work
               </button>

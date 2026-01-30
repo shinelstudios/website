@@ -67,7 +67,8 @@ const PortfolioItem = ({ project, index }) => {
 
             {/* Glassmorphism Badge */}
             <div className="absolute top-4 left-4 z-10">
-                <div className="px-3 py-1 rounded-full backdrop-blur-md bg-white/10 border border-white/20 text-[10px] uppercase tracking-widest font-bold text-white">
+                <div className="px-3 py-1 rounded-full backdrop-blur-md bg-white/10 border border-white/20 text-[10px] uppercase tracking-widest font-bold text-white"
+                    style={{ WebkitBackdropFilter: "blur(12px)" }}>
                     {project.category}
                 </div>
             </div>

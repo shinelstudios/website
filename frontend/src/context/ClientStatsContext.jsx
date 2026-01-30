@@ -64,7 +64,7 @@ export const ClientStatsProvider = ({ children }) => {
             }
 
             // Index stats by both YouTube ID and Handle for robust direct lookups
-            const statsMap = channelStats.reduce((acc, s) => {
+            const statsMap = (Array.isArray(channelStats) ? channelStats : []).reduce((acc, s) => {
                 if (s.id) acc[s.id] = s;
                 if (s.handle) acc[s.handle.toLowerCase()] = s;
                 return acc;
@@ -165,7 +165,24 @@ export const ClientStatsProvider = ({ children }) => {
         getClientStats,
         getHistory,
         getGrowth,
-        refreshStats: fetchStats
+        refreshStats: fetchStats,
+        refreshSync: async () => {
+            try {
+                const token = localStorage.getItem("token");
+                const res = await fetch(`${AUTH_BASE}/clients/sync`, {
+                    method: "POST",
+                    headers: {
+                        "authorization": `Bearer ${token}`
+                    }
+                });
+                if (!res.ok) throw new Error("Sync failed");
+                await fetchStats(); // Reload after sync
+                return true;
+            } catch (err) {
+                console.error("Sync Error:", err);
+                return false;
+            }
+        }
     };
 
     return (

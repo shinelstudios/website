@@ -114,6 +114,7 @@ const SocialProofNotifications = ({ interval = 12000, enabled = true }) => {
                         style={{
                             background: "rgba(255, 255, 255, 0.95)",
                             borderColor: "rgba(0, 0, 0, 0.1)",
+                            WebkitBackdropFilter: "blur(20px)",
                         }}
                     >
                         {/* Icon */}

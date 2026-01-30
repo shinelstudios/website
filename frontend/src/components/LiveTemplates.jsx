@@ -613,6 +613,7 @@ const TripleBeforeAfterSlider = ({ images, device }) => {
             color: "#fff",
             fontWeight: 700,
             border: "1px solid rgba(255, 255, 255, 0.15)",
+            WebkitBackdropFilter: "blur(12px)",
           }}
         >
           {device.isMobile ? "👆 Drag sliders" : "Drag the two sliders"}

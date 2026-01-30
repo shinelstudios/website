@@ -136,6 +136,7 @@ export const Card = ({
         glass: {
             background: 'rgba(26, 26, 26, 0.7)',
             backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
             border: '1px solid rgba(192, 192, 192, 0.2)',
         },
     };

@@ -59,7 +59,7 @@ export default function AdminVideosPage() {
   const [viewMode, setViewMode] = useState("grid");
 
   // Auth & Roles
-  const token = localStorage.getItem("token") || "";
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
   const payload = useMemo(() => {
     try {
       const parts = token.split(".");
@@ -104,6 +104,15 @@ export default function AdminVideosPage() {
   useEffect(() => {
     loadVideos();
   }, [loadVideos]);
+
+  useEffect(() => {
+    const update = () => {
+      const newToken = localStorage.getItem("token") || "";
+      if (newToken !== token) setToken(newToken);
+    };
+    window.addEventListener("auth:changed", update);
+    return () => window.removeEventListener("auth:changed", update);
+  }, [token]);
 
   // ---------- Actions ----------
   const handleSave = async () => {

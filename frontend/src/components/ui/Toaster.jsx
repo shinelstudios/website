@@ -92,6 +92,7 @@ function ToastItem({ toast, onRemove }) {
             style={{
                 background: "rgba(10, 10, 10, 0.85)",
                 backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
                 borderColor: "rgba(255,255,255,0.08)",
                 boxShadow: `0 12px 40px -12px ${getGlow()}`,
             }}

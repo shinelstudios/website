@@ -380,6 +380,7 @@ const CaseStudies = () => {
                       background: "rgba(0,0,0,.75)",
                       color: "#fff",
                       backdropFilter: "blur(8px)",
+                      WebkitBackdropFilter: "blur(8px)",
                       border: "1px solid rgba(255,255,255,.2)",
                     }}
                     whileHover={reduceMotion ? {} : { scale: 1.05 }}
@@ -410,6 +411,7 @@ const CaseStudies = () => {
                       style={{
                         background: "rgba(232,80,2,0.9)",
                         backdropFilter: "blur(8px)",
+                        WebkitBackdropFilter: "blur(8px)",
                       }}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
@@ -490,7 +492,7 @@ const CaseStudies = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ background: "rgba(0,0,0,.7)", backdropFilter: "blur(4px)" }}
+            style={{ background: "rgba(0,0,0,.7)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}
             onClick={() => setOpen(null)}
           >
             <motion.div

@@ -237,6 +237,9 @@ export const BeforeAfterSlider = ({ before, after, alt = 'Comparison' }) => {
                     background: COLORS.gold,
                     transform: 'translate3d(-50%, 0, 0)',
                     WebkitTransform: 'translate3d(-50%, 0, 0)',
+                    zIndex: 1,
+                    perspective: 1000,
+                    backfaceVisibility: 'hidden'
                 }}
                 onMouseDown={() => setIsDragging(true)}
                 onTouchStart={() => setIsDragging(true)}
@@ -318,6 +321,8 @@ export const SwipeableCarousel = ({ items = [], renderItem }) => {
                     style={{
                         transform: 'translate3d(0,0,0)',
                         WebkitTransform: 'translate3d(0,0,0)',
+                        perspective: 1000,
+                        backfaceVisibility: 'hidden'
                     }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 >

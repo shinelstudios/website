@@ -191,7 +191,7 @@ export default function ManagementHub() {
             {/* --- MOBILE TOGGLE --- */}
             <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden fixed bottom-6 right-6 z-[100] p-4 rounded-full bg-orange-600 text-white shadow-2xl shadow-orange-900/40"
+                className={`lg:hidden fixed bottom-6 right-6 z-[40] p-4 rounded-full bg-orange-600 text-white shadow-2xl shadow-orange-900/40 ${sidebarOpen ? "hidden" : "flex"}`}
             >
                 <Menu size={24} />
             </button>

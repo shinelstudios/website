@@ -386,6 +386,7 @@ const ProofSection = () => {
               background: "linear-gradient(135deg, var(--orange), #F16001)",
               boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
               WebkitTapHighlightColor: "transparent",
+              WebkitBackdropFilter: "blur(8px)",
             }}
             whileHover={{ scale: 1.05, y: -2 }}
           >
@@ -440,6 +441,7 @@ const ProofSection = () => {
                   background: "rgba(255, 255, 255, 0.05)",
                   borderColor: "var(--border)",
                   boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+                  WebkitBackdropFilter: "blur(12px)",
                 }}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}

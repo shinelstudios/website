@@ -27,7 +27,7 @@ import Sparkline from "./Sparkline";
 import { AUTH_BASE } from "../config/constants";
 
 export default function AdminClientsPage() {
-    const { refreshStats } = useClientStats();
+    const { refreshStats, refreshSync } = useClientStats();
     const [clients, setClients] = useState([]);
     const [busy, setBusy] = useState(false);
     const [refreshingId, setRefreshingId] = useState(null);
@@ -50,11 +50,34 @@ export default function AdminClientsPage() {
         category: ""
     });
 
-    const token = useMemo(() => localStorage.getItem("token") || "", []);
+    const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+    const payload = useMemo(() => {
+        try {
+            const parts = token.split(".");
+            if (parts.length < 2) return null;
+            const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[1].length + 3) % 4);
+            return JSON.parse(decodeURIComponent(escape(atob(b64))));
+        } catch { return null; }
+    }, [token]);
+
+    const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+    const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
+    const isAdmin = userRoles.includes("admin");
+    const firstName = payload?.firstName || localStorage.getItem("firstName") || "Team";
+
     const authHeaders = useMemo(() => ({
         "Content-Type": "application/json",
         authorization: `Bearer ${token}`
     }), [token]);
+
+    useEffect(() => {
+        const onAuth = () => {
+            const newToken = localStorage.getItem("token") || "";
+            if (newToken !== token) setToken(newToken);
+        };
+        window.addEventListener("auth:changed", onAuth);
+        return () => window.removeEventListener("auth:changed", onAuth);
+    }, [token]);
 
     const loadClients = useCallback(async () => {
         setBusy(true);
@@ -98,7 +121,7 @@ export default function AdminClientsPage() {
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
             setForm({ name: "", youtubeId: "", handle: "", category: "Vlogger" });
             await loadClients();
-            refreshStats();
+            await refreshSync();
         } catch (e) {
             setErr(e.message);
         } finally {
@@ -116,7 +139,7 @@ export default function AdminClientsPage() {
             });
             if (!res.ok) throw new Error("Delete failed");
             await loadClients();
-            refreshStats();
+            await refreshSync();
             setSelectedIds(prev => prev.filter(p => p !== id));
         } catch (e) {
             setErr(e.message);
@@ -138,7 +161,7 @@ export default function AdminClientsPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
             await loadClients();
-            refreshStats();
+            await refreshSync();
             setSelectedIds([]);
         } catch (e) {
             setErr(e.message);
@@ -150,7 +173,7 @@ export default function AdminClientsPage() {
     async function refreshSingleClient(clientId) {
         setRefreshingId(clientId);
         try {
-            await refreshStats();
+            await refreshSync();
         } finally {
             setRefreshingId(null);
         }
@@ -159,7 +182,7 @@ export default function AdminClientsPage() {
     async function refreshAllClients() {
         setBusy(true);
         try {
-            await refreshStats();
+            await refreshSync();
         } finally {
             setBusy(false);
         }

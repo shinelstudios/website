@@ -238,7 +238,8 @@ export default function PortfolioPage() {
             </section>
 
             {/* --- CONTROLS --- */}
-            <section className="sticky top-20 z-40 bg-[var(--surface)]/80 backdrop-blur-xl border-y border-[var(--border)] py-4">
+            <section className="sticky top-20 z-40 bg-[var(--surface)]/80 backdrop-blur-xl border-y border-[var(--border)] py-4"
+                style={{ WebkitBackdropFilter: "blur(32px)" }}>
                 <div className="container mx-auto px-6">
                     <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-2">

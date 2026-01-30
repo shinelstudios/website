@@ -60,6 +60,7 @@ export const SelectWithPresets = ({ label, value, onChange, options = [], error,
                 style={{
                     background: "rgba(10, 10, 10, 0.4)",
                     backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
                 }}
                 {...props}
             >
@@ -162,7 +163,8 @@ export const SortBtn = ({ active, dir, onClick, children }) => (
 export function LoadingOverlay({ show, label }) {
     if (!show) return null;
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-[200] animate-in fade-in duration-300">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-[200] animate-in fade-in duration-300"
+            style={{ WebkitBackdropFilter: "blur(12px)" }}>
             <div className="flex flex-col items-center gap-4 text-white">
                 <div className="relative">
                     <div className="w-12 h-12 rounded-full border-2 border-orange-500/20" />

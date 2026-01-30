@@ -67,7 +67,7 @@ export default function AdminThumbnailsPage() {
   const [isPending, startTransition] = useTransition();
 
   // Auth & Roles
-  const token = localStorage.getItem("token") || "";
+  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
   const payload = useMemo(() => {
     try {
       const parts = token.split(".");
@@ -143,6 +143,15 @@ export default function AdminThumbnailsPage() {
     loadThumbnails();
     loadStats();
   }, [loadThumbnails, loadStats]);
+
+  useEffect(() => {
+    const update = () => {
+      const newToken = localStorage.getItem(LS_TOKEN_KEY) || "";
+      if (newToken !== token) setToken(newToken);
+    };
+    window.addEventListener("auth:changed", update);
+    return () => window.removeEventListener("auth:changed", update);
+  }, [token]);
 
   // ---------- Actions ----------
   const surfaceError = (msg, details = "", retryFn = null, retryArgs = []) => {
