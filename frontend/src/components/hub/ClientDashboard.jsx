@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
     LayoutDashboard,
@@ -12,7 +12,9 @@ import {
     FileText,
     Video,
     Image as ImageIcon,
-    ArrowRight
+    ArrowRight,
+    TrendingUp,
+    Play
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import DriveEmbed from "./DriveEmbed";
@@ -43,7 +45,7 @@ const StatusBadge = ({ status }) => {
 };
 
 import { getProjectsForUser } from "../../data/clientRegistry";
-import { AUTH_BASE } from "../../config/constants";
+import { AUTH_BASE, CLIENT_REGISTRY } from "../../config/constants";
 
 export default function ClientDashboard() {
     const [user, setUser] = useState({
@@ -56,7 +58,49 @@ export default function ClientDashboard() {
     const projects = getProjectsForUser(user.email, user.role);
 
     const [activeTab, setActiveTab] = useState("overview");
+    const [pulseData, setPulseData] = useState({ activities: [], loading: true });
+    const [syncedStats, setSyncedStats] = useState(null);
     const navigate = useNavigate();
+
+    const creatorMapping = useMemo(() => {
+        return CLIENT_REGISTRY.find(c => c.creatorEmail?.toLowerCase() === user.email?.toLowerCase());
+    }, [user.email]);
+
+    useEffect(() => {
+        async function fetchPulse() {
+            try {
+                // Fetch pulse
+                const res = await fetch(`${AUTH_BASE}/clients/pulse`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const filtered = creatorMapping
+                        ? (data.activities || []).filter(a => a.channelId === creatorMapping.youtubeId)
+                        : [];
+                    setPulseData({ activities: filtered, loading: false });
+                }
+
+                // Fetch real stats for exact sub/view counts
+                const sRes = await fetch(`${AUTH_BASE}/clients/stats`);
+                if (sRes.ok) {
+                    const sData = await sRes.json();
+                    if (creatorMapping) {
+                        const mine = (sData.stats || []).find(s => s.id === creatorMapping.youtubeId);
+                        if (mine) {
+                            // PRIORITY FIX: If API is rounded and registry is more precise
+                            if (mine.subscribers > 0 && mine.subscribers % 1000 === 0 && creatorMapping.subscribers > 0 && Math.abs(mine.subscribers - creatorMapping.subscribers) < 1000) {
+                                mine.subscribers = creatorMapping.subscribers;
+                            }
+                            setSyncedStats(mine);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Dashboard fetch error", err);
+                setPulseData(prev => ({ ...prev, loading: false }));
+            }
+        }
+        fetchPulse();
+    }, [creatorMapping]);
 
 
     // ... (rest of code) ...
@@ -96,6 +140,15 @@ export default function ClientDashboard() {
                         }`}
                 >
                     <Folder size={16} /> Assets & Drive
+                </button>
+                <button
+                    onClick={() => setActiveTab("performance")}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-t-xl border-b-2 transition-all font-medium text-sm ${activeTab === "performance"
+                        ? "border-green-500 text-green-500 bg-green-500/5"
+                        : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-alt)]"
+                        }`}
+                >
+                    <TrendingUp size={16} /> YouTube Pulse
                 </button>
                 <button
                     className="flex items-center gap-2 px-4 py-3 rounded-t-xl border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-alt)] transition-all font-medium text-sm"
@@ -213,15 +266,88 @@ export default function ClientDashboard() {
                     </motion.div>
                 )}
 
-                {/* Drive Embed Section */}
-                {activeTab === "files" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                            <Folder size={20} className="text-blue-500" />
-                            Project Files
-                        </h2>
-                        <DriveEmbed />
-                    </div>
+                {/* YouTube Performance Section */}
+                {activeTab === "performance" && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="space-y-8"
+                    >
+                        <div className="bg-gradient-to-br from-green-500/10 to-emerald-600/5 border border-green-500/20 rounded-3xl p-8 relative overflow-hidden">
+                            <div className="relative z-10">
+                                <h2 className="text-2xl font-black mb-2 flex items-center gap-3">
+                                    <TrendingUp className="text-green-500" />
+                                    YouTube Performance
+                                </h2>
+                                <p className="text-[var(--text-muted)] text-sm mb-6 uppercase tracking-widest font-bold">Live Activity Monitoring (Last 24h)</p>
+
+                                {!creatorMapping ? (
+                                    <div className="p-6 bg-black/20 rounded-2xl border border-white/5 text-center">
+                                        <p className="text-sm text-[var(--text-muted)]">No YouTube channel linked to this account. Contact your manager to enable Pulse tracking.</p>
+                                    </div>
+                                ) : pulseData.loading ? (
+                                    <div className="flex gap-4">
+                                        {[1, 2].map(i => <div key={i} className="flex-1 h-32 bg-white/5 animate-pulse rounded-2xl" />)}
+                                    </div>
+                                ) : pulseData.activities.length === 0 ? (
+                                    <div className="p-12 text-center bg-black/20 rounded-3xl border border-white/5">
+                                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Play size={32} className="text-white/20" />
+                                        </div>
+                                        <h3 className="font-bold mb-1">No recent uploads detected</h3>
+                                        <p className="text-xs text-[var(--text-muted)]">Upload a video to see real-time performance tracking here.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {pulseData.activities.map(act => (
+                                            <div key={act.id} className="group bg-black/40 border border-white/10 rounded-2xl overflow-hidden hover:border-green-500/30 transition-all flex h-28">
+                                                <div className="w-40 shrink-0 relative">
+                                                    <img src={act.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Play size={24} className="text-white" />
+                                                    </div>
+                                                </div>
+                                                <div className="p-4 flex flex-col justify-center">
+                                                    <h4 className="font-bold text-sm mb-1 line-clamp-2">{act.title}</h4>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-mono text-green-500 uppercase font-black">Live Tracker</span>
+                                                        <span className="text-[10px] font-mono text-white/30 uppercase">{new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            {/* Decorative background circle */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 blur-[100px] -mr-32 -mt-32 rounded-full" />
+                        </div>
+
+                        {/* Quick Stats Grid */}
+                        {creatorMapping && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                {[
+                                    {
+                                        label: 'Subscribers',
+                                        val: (syncedStats?.subscribers ?? creatorMapping.subscribers).toLocaleString(),
+                                        color: 'text-blue-500'
+                                    },
+                                    {
+                                        label: 'Total Views',
+                                        val: (syncedStats?.viewCount ?? 0).toLocaleString(),
+                                        color: 'text-orange-500'
+                                    },
+                                    { label: 'Status', val: 'Connected', color: 'text-green-500' },
+                                    { label: 'Uptime', val: '99.9%', color: 'text-emerald-500' }
+                                ].map((s, i) => (
+                                    <div key={i} className="bg-[var(--surface-alt)] border border-[var(--border)] p-4 rounded-2xl">
+                                        <p className="text-[10px] uppercase font-black tracking-widest text-[var(--text-muted)] mb-1">{s.label}</p>
+                                        <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </motion.div>
                 )}
             </div>
         </div>

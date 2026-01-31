@@ -17,16 +17,16 @@ export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.
 
 // Client Activity Registry (Pulse)
 export const CLIENT_REGISTRY = [
-    { id: 'kamz', name: 'Kamz Inkzone', youtubeId: 'UC_N0eSX2RI_ah-6MjJIAyzA', subscribers: 173000 },
-    { id: 'deadlox', name: 'Deadlox Gaming', youtubeId: 'UCi88JinGRWdVWQPFscNUgOw', subscribers: 7600 },
-    { id: 'maggielive', name: 'Maggie Live', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA', subscribers: 21300 },
-    { id: 'gamermummy', name: 'Gamer Mummy', youtubeId: 'UCDLYqESVrBFdTDE8O_Z4Ysg', subscribers: 15500 },
-    { id: 'aishislive', name: 'Aish is Live', youtubeId: 'UC5SBHYm8lHaRd-nwJRNWkrA', subscribers: 17100 },
-    { id: 'katkagaming', name: 'Katka Gaming', youtubeId: 'UCxCm7PrHUc5yk7rJIh9j72A', subscribers: 38600 },
-    { id: 'anchit', name: 'Gamify With Anchit', youtubeId: 'UCeKuPHM9XtsxORIliF5rc-Q', subscribers: 1420 },
-    { id: 'kundan', name: 'Kundan Parashar', youtubeId: 'UCgA5LtJYZu7Y0AA3UpNxetw', subscribers: 8490 },
-    { id: 'manav', name: 'Manav Sukhija', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA', subscribers: 21300 }, // Manav is Maggie's handle
-    { id: 'vibnric', name: 'VibnRic', youtubeId: 'UC5XTxQsO3KapW09nOVE1TJQ', subscribers: 5850 }
+    { id: 'kamz', name: 'Kamz Inkzone', youtubeId: 'UC_N0eSX2RI_ah-6MjJIAyzA', subscribers: 173445, creatorEmail: 'kamz@shinelstudios.com' },
+    { id: 'deadlox', name: 'Deadlox Gaming', youtubeId: 'UCi88JinGRWdVWQPFscNUgOw', subscribers: 7600, creatorEmail: 'deadlox@shinelstudios.com' },
+    { id: 'maggielive', name: 'Maggie Live', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA', subscribers: 21300, creatorEmail: 'maggie@shinelstudios.com' },
+    { id: 'gamermummy', name: 'Gamer Mummy', youtubeId: 'UCDLYqESVrBFdTDE8O_Z4Ysg', subscribers: 15500, creatorEmail: 'mummy@shinelstudios.com' },
+    { id: 'aishislive', name: 'Aish is Live', youtubeId: 'UC5SBHYm8lHaRd-nwJRNWkrA', subscribers: 17100, creatorEmail: 'aishi@shinelstudios.com' },
+    { id: 'katkagaming', name: 'Katka Gaming', youtubeId: 'UCxCm7PrHUc5yk7rJIh9j72A', subscribers: 38600, creatorEmail: 'katka@shinelstudios.com' },
+    { id: 'anchit', name: 'Gamify With Anchit', youtubeId: 'UCeKuPHM9XtsxORIliF5rc-Q', subscribers: 1420, creatorEmail: 'anchit@shinelstudios.com' },
+    { id: 'kundan', name: 'Kundan Parashar', youtubeId: 'UCgA5LtJYZu7Y0AA3UpNxetw', subscribers: 8490, creatorEmail: 'kundan@shinelstudios.com' },
+    { id: 'manav', name: 'Manav Sukhija', youtubeId: 'UCaQ_GBZe5lVZjXA_DkdTzKA', subscribers: 21300, creatorEmail: 'manav@shinelstudios.com' },
+    { id: 'vibnric', name: 'VibnRic', youtubeId: 'UC5XTxQsO3KapW09nOVE1TJQ', subscribers: 5850, creatorEmail: 'vibnric@shinelstudios.com' }
 ];
 
 export const CLIENT_PULSE_CONFIG = {

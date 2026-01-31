@@ -70,6 +70,29 @@ export default function AdminSettingsPage() {
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
+    const [ytKeys, setYtKeys] = useState([]);
+    const [ytLoading, setYtLoading] = useState(false);
+
+    const fetchYtHealth = async () => {
+        setYtLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${AUTH_BASE}/admin/yt-quota`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) setYtKeys(data.keys || []);
+        } catch (err) {
+            console.error("Failed to fetch YT health:", err);
+        } finally {
+            setYtLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isAdmin) fetchYtHealth();
+    }, [isAdmin]);
+
     // Role detection
     const token = localStorage.getItem("token") || "";
     const payload = parseJwt(token);
@@ -439,10 +462,58 @@ export default function AdminSettingsPage() {
                                 onChange={v => setFormData({ ...formData, stats: { ...formData.stats, ctrBoostMax: Number(v) } })}
                             />
                         </div>
+
                         <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest">These values control the baseline CTR transformation shown in the testimonials section.</p>
                     </div>
 
-                    {/* --- Proof Section Management --- */}
+                    {/* --- YouTube API Health --- */}
+                    {isAdmin && (
+                        <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-red-500/10 text-red-500">
+                                        <Youtube size={20} />
+                                    </div>
+                                    <h2 className="text-lg font-black uppercase tracking-widest">YouTube API Health</h2>
+                                </div>
+                                <button
+                                    onClick={fetchYtHealth}
+                                    disabled={ytLoading}
+                                    className="p-2 rounded-xl border border-[var(--border)] hover:bg-[var(--surface-alt)] transition-colors disabled:opacity-50"
+                                >
+                                    <RefreshCw size={16} className={ytLoading ? "animate-spin" : ""} />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {ytKeys.length > 0 ? ytKeys.map((k, i) => (
+                                    <div key={i} className="p-5 rounded-2xl bg-[var(--surface-alt)]/50 border border-[var(--border)] flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-black uppercase tracking-widest opacity-40">Key {i + 1}</p>
+                                            <code className="text-[10px] font-mono opacity-80">{k.masked}</code>
+                                        </div>
+                                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${k.status === 'ACTIVE'
+                                            ? 'bg-green-500/10 text-green-500'
+                                            : 'bg-red-500/10 text-red-500'
+                                            }`}>
+                                            {k.status}
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-xs text-[var(--text-muted)] font-bold italic col-span-2">
+                                        No API keys configured or healthy status unavailable.
+                                    </p>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-widest leading-relaxed">
+                                Shinel uses intelligent key rotation. Exhausted keys are automatically blacklisted for 1 hour to prevent sync failures.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT COLUMN */}
+                <div className="space-y-6">
                     <div className="p-8 rounded-[32px] bg-[var(--surface)] border border-[var(--border)] space-y-8">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -709,7 +780,7 @@ export default function AdminSettingsPage() {
                     </button>
                 </div>
             </form>
-        </section>
+        </section >
     );
 
     function setPrice(cat, key, val) {

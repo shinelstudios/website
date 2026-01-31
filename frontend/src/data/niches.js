@@ -46,5 +46,29 @@ export const NICHES = {
             "Hook Selection"
         ],
         cta: "Viralize Your Podcast"
+    },
+    "vloggers": {
+        title: "Video Editing for Lifestyle Vloggers",
+        subtitle: "Storytelling that builds deep connection with your audience.",
+        keywords: "vlog editing, lifestyle creator editor, travel vlog video service",
+        heroImage: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1200",
+        features: [
+            "Emotional Storytelling",
+            "Cinematic B-Roll Integration",
+            "Custom Sound Design"
+        ],
+        cta: "Scale Your Vlogs"
+    },
+    "streamers": {
+        title: "Stream Highlights & Viral Edits",
+        subtitle: "Transforming 8-hour streams into 10-minute masterclasses.",
+        keywords: "gaming stream highlights, twitch editor, kick streamer video service",
+        heroImage: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200",
+        features: [
+            "Funny Moment Selection",
+            "Meme & SFX Integration",
+            "Multi-Platform Repurposing"
+        ],
+        cta: "Boost Your Retention"
     }
 };

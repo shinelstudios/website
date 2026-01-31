@@ -77,13 +77,14 @@ export default function LoginPage() {
 
       const payload = parseJwt(data.token) || {};
 
+      let finalRole = "";
       try {
         localStorage.setItem("rememberMe", remember ? "1" : "0");
         localStorage.setItem("token", data.token);
         if (data.refresh) localStorage.setItem("refresh", data.refresh);
 
         const finalEmail = String(data.email || payload.email || email || "").trim();
-        const finalRole = String(data.role || payload.role || "").trim();
+        finalRole = String(data.role || payload.role || "").trim();
         const firstName = String(data.firstName || payload.firstName || payload.first_name || "").trim();
         const lastName = String(data.lastName || payload.lastName || payload.last_name || "").trim();
 
@@ -104,9 +105,10 @@ export default function LoginPage() {
       // Intelligent Redirect
       let targetPath = next;
       if (targetPath === "/" || !targetPath) {
-        if (finalRole.includes("admin")) {
+        const roleLower = finalRole.toLowerCase();
+        if (roleLower.includes("admin")) {
           targetPath = "/dashboard";
-        } else if (finalRole.includes("client")) {
+        } else if (roleLower.includes("client")) {
           targetPath = "/dashboard/overview";
         } else {
           targetPath = "/dashboard";

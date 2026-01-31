@@ -37,7 +37,7 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
     <>
       <span className="cw-avatar flex items-center justify-center text-xs font-bold text-white bg-[var(--surface-alt)]">
         {creator.url && !imageError ? (
-          <img
+          <LazyImage
             src={creator.url}
             alt={`${creator.name} logo`}
             width="48"
@@ -114,7 +114,16 @@ const CreatorsWorkedWithMarquee = ({
 }) => {
   const { stats, loading } = useClientStats();
   const { config } = useGlobalConfig();
-  const prefersReduced = false;
+  const [prefersReduced, setPrefersReduced] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReduced(mediaQuery.matches);
+
+    const handler = () => setPrefersReduced(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
 
   // State
   const [isPaused, setIsPaused] = useState(false);
@@ -151,8 +160,7 @@ const CreatorsWorkedWithMarquee = ({
       url: client.logo,
       subs: client.subscribers,
       category: client.category || "Creator",
-      color: "var(--orange)",
-      href: client.youtubeId ? `https://youtube.com/channel/${client.youtubeId}` : null
+      color: "var(--orange)"
     }));
   }, [creatorsProp, stats, loading]);
   if (!finalCreators || finalCreators.length === 0) return null;
@@ -401,7 +409,7 @@ const CreatorsWorkedWithMarquee = ({
                       className="cw-item"
                       onMouseEnter={() => handleMouseEnter(key)}
                       onMouseLeave={handleMouseLeave}
-                      whileHover={!showStatic ? { y: -4, scale: 1.01 } : {}}
+                      whileHover={!showStatic ? { background: "var(--surface-alt)" } : {}}
                       transition={{ duration: 0.2 }}
                       style={{
                         background: isHovered ? "var(--surface-alt)" : "transparent",
@@ -409,21 +417,9 @@ const CreatorsWorkedWithMarquee = ({
                         willChange: "transform",
                       }}
                     >
-                      {creator.href ? (
-                        <a
-                          href={creator.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="cw-item-link"
-                          aria-label={`Visit ${creator.name}`}
-                        >
-                          <CreatorBadge creator={creator} isHovered={isHovered} />
-                        </a>
-                      ) : (
-                        <div className="cw-item-link" role="presentation">
-                          <CreatorBadge creator={creator} isHovered={isHovered} />
-                        </div>
-                      )}
+                      <div className="cw-item-inner" role="presentation">
+                        <CreatorBadge creator={creator} isHovered={isHovered} />
+                      </div>
                     </motion.li>
                   );
                 })}
@@ -444,7 +440,7 @@ const CreatorsWorkedWithMarquee = ({
                         className="cw-item"
                         onMouseEnter={() => handleMouseEnter(key)}
                         onMouseLeave={handleMouseLeave}
-                        whileHover={!showStatic ? { y: -4, scale: 1.01 } : {}}
+                        whileHover={!showStatic ? { background: "var(--surface-alt)" } : {}}
                         transition={{ duration: 0.2 }}
                         style={{
                           background: isHovered ? "var(--surface-alt)" : "transparent",
@@ -452,21 +448,9 @@ const CreatorsWorkedWithMarquee = ({
                           willChange: "transform",
                         }}
                       >
-                        {creator.href ? (
-                          <a
-                            href={creator.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="cw-item-link"
-                            aria-label={`Visit ${creator.name}`}
-                          >
-                            <CreatorBadge creator={creator} isHovered={isHovered} />
-                          </a>
-                        ) : (
-                          <div className="cw-item-link" role="presentation">
-                            <CreatorBadge creator={creator} isHovered={isHovered} />
-                          </div>
-                        )}
+                        <div className="cw-item-inner" role="presentation">
+                          <CreatorBadge creator={creator} isHovered={isHovered} />
+                        </div>
                       </motion.li>
                     );
                   })}
@@ -571,8 +555,6 @@ const CreatorsWorkedWithMarquee = ({
         .cw-item:hover {
           background: rgba(255, 255, 255, 0.05);
           border-color: rgba(255, 255, 255, 0.1);
-          transform: translateY(-4px) translate3d(0, 0, 0);
-          -webkit-transform: translateY(-4px) translate3d(0, 0, 0);
         }
 
         .cw-item:focus-within {
@@ -580,7 +562,8 @@ const CreatorsWorkedWithMarquee = ({
           background: rgba(255, 255, 255, 0.08);
         }
 
-        .cw-item-link {
+        .cw-item-inner {
+          cursor: default;
           display: inline-flex;
           align-items: center;
           gap: 1rem;

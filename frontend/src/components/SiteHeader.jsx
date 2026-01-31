@@ -814,7 +814,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                           <Link
                             to="/studio"
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                            style={{ color: "var(--text)", background: "transparent" }}
+                            style={{ color: "var(--text)", background: "rgba(0,0,0,0)" }}
                           >
                             <Briefcase size={18} style={{ color: "var(--orange)" }} />
                             <span>Studio</span>
@@ -950,176 +950,185 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         {/* MOBILE MENU */}
         <AnimatePresence>
           {isMenuOpen && (
-            <motion.div
-              id="mobile-menu"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="md:hidden fixed left-0 right-0"
-              style={{
-                top: `var(--header-h, ${headerH}px)`,
-                maxHeight: `min(72vh, calc(100vh - var(--header-h, 76px) - 20px))`,
-                background: "var(--surface)",
-                borderTop: "1px solid var(--border)",
-                borderBottom: "1px solid var(--border)",
-                zIndex: 60,
-                overflowY: "auto",
-                WebkitOverflowScrolling: "touch",
-                paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-              }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Main menu"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <nav
-                className="px-4 py-4 space-y-4"
-                onClick={(e) => e.stopPropagation()}
+            <>
+              {/* Backrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="md:hidden fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm"
+                onClick={closeAllMenus}
+                aria-hidden="true"
+              />
+
+              {/* Menu Content */}
+              <motion.div
+                id="mobile-menu"
+                initial={{ opacity: 0, y: -20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.98 }}
+                transition={{ duration: 0.25, type: "spring", bounce: 0, stiffness: 300, damping: 30 }}
+                className="md:hidden fixed left-0 right-0 z-[60] shadow-2xl rounded-b-[32px] overflow-hidden"
+                style={{
+                  top: `var(--header-h, ${headerH}px)`,
+                  maxHeight: `85dvh`, // Improved height for modern mobile
+                  background: "var(--surface)",
+                  borderBottom: "1px solid var(--border)",
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                }}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Main menu"
               >
-                <div className="grid grid-cols-2 gap-3">
-                  <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
-                  <MobileCardLink
-                    to="/work"
-                    icon={FolderOpen}
-                    title="Work"
-                    subtitle="All services & samples"
-                  />
-                </div>
+                <nav
+                  className="px-4 py-4 space-y-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
+                    <MobileCardLink
+                      to="/work"
+                      icon={FolderOpen}
+                      title="Work"
+                      subtitle="All services & samples"
+                    />
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <MobileCardLink
-                    to="/live"
-                    icon={Radio}
-                    title="Pulse"
-                    subtitle="Live metrics"
-                  />
-                  <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MobileCardLink
+                      to="/live"
+                      icon={Radio}
+                      title="Pulse"
+                      subtitle="Live metrics"
+                    />
+                    <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
-                  {/* Tools removed from here as it is listed below with search */}
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
+                    {/* Tools removed from here as it is listed below with search */}
+                  </div>
 
-                {/* Authenticated User Links (Mobile) */}
-                {auth.isAuthed && (
-                  <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
-                    <SectionHeader icon={User} title="Account" subtitle={`${auth.firstName || "User"}`} right={null} />
-                    <div className="grid grid-cols-1 gap-2">
-                      <MobileCardLink to="/profile" icon={User} title="Profile" subtitle="Personal details" />
-                      <MobileCardLink to="/settings" icon={Settings} title="Settings" subtitle="Preferences" />
-                      {['admin', 'editor', 'artist'].includes(role) && (
-                        <MobileCardLink to="/dashboard" icon={Shield} title="Management Hub" subtitle="Studio Control" />
-                      )}
-                      <button
-                        onClick={handleLogout}
-                        className="group w-full rounded-xl p-3.5 min-h-[56px] flex items-center justify-between"
-                        style={{
-                          background: "rgba(255, 59, 48, 0.1)",
-                          border: "1px solid rgba(255, 59, 48, 0.2)",
-                          color: "#ff3b30",
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <LogOut size={18} />
-                          <div className="text-[15px] font-semibold">Logout</div>
-                        </div>
-                      </button>
+                  {/* Authenticated User Links (Mobile) */}
+                  {auth.isAuthed && (
+                    <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
+                      <SectionHeader icon={User} title="Account" subtitle={`${auth.firstName || "User"}`} right={null} />
+                      <div className="grid grid-cols-1 gap-2">
+                        <MobileCardLink to="/profile" icon={User} title="Profile" subtitle="Personal details" />
+                        <MobileCardLink to="/settings" icon={Settings} title="Settings" subtitle="Preferences" />
+                        {['admin', 'editor', 'artist'].includes(role) && (
+                          <MobileCardLink to="/dashboard" icon={Shield} title="Management Hub" subtitle="Studio Control" />
+                        )}
+                        <button
+                          onClick={handleLogout}
+                          className="group w-full rounded-xl p-3.5 min-h-[56px] flex items-center justify-between"
+                          style={{
+                            background: "rgba(255, 59, 48, 0.1)",
+                            border: "1px solid rgba(255, 59, 48, 0.2)",
+                            color: "#ff3b30",
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <LogOut size={18} />
+                            <div className="text-[15px] font-semibold">Logout</div>
+                          </div>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
 
-                {/* Tools */}
-                <div className="space-y-2">
-                  <SectionHeader
-                    icon={Zap}
-                    title="Tools"
-                    subtitle={
-                      auth.isAuthed
-                        ? "Your available utilities"
-                        : "Login to unlock everything"
-                    }
-                    right={null}
-                  />
-
-                  <div className="relative">
-                    <Search
-                      size={18}
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
-                      style={{ color: "var(--text-muted)" }}
+                  {/* Tools */}
+                  <div className="space-y-2">
+                    <SectionHeader
+                      icon={Zap}
+                      title="Tools"
+                      subtitle={
+                        auth.isAuthed
+                          ? "Your available utilities"
+                          : "Login to unlock everything"
+                      }
+                      right={null}
                     />
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      placeholder="Search tools..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                      style={{
-                        background: "var(--surface-alt)",
-                        border: "1px solid var(--border)",
-                        color: "var(--text)",
-                      }}
-                    />
-                  </div>
 
-                  <div className="grid grid-cols-1 gap-2">
-                    {(searchQuery.trim() ? filteredTools : allToolsForMenu)
-                      .filter(t => t.roles.includes("public") || (auth.isAuthed && t.roles.includes(role)))
-                      .map((t) => {
-                        const Icon = t.icon;
-                        const allowed = true; // Since we filtered, all remaining are allowed
-                        const to = t.path;
-                        return (
-                          <Link
-                            key={t.name}
-                            to={to}
-                            className="group rounded-xl p-3.5 flex items-center justify-between"
-                            style={{
-                              background: "var(--surface-alt)",
-                              border: "1px solid var(--border)",
-                              color: "var(--text)",
-                            }}
-                            onClick={haptic}
-                          >
-                            <span className="flex items-center gap-3 min-w-0">
-                              <div
-                                className="h-9 w-9 rounded-lg grid place-items-center"
-                                style={{
-                                  background: "rgba(232,80,2,0.10)",
-                                  border: "1px solid var(--border)",
-                                }}
-                              >
-                                {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
-                              </div>
+                    <div className="relative">
+                      <Search
+                        size={18}
+                        className="absolute left-3 top-1/2 -translate-y-1/2"
+                        style={{ color: "var(--text-muted)" }}
+                      />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search tools..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-3 py-3 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                        style={{
+                          background: "var(--surface-alt)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text)",
+                        }}
+                      />
+                    </div>
 
-                              <span className="min-w-0">
-                                <div className="text-[15px] font-semibold truncate">{t.name}</div>
-                                {t.description && (
-                                  <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
-                                    {t.description}
-                                  </div>
-                                )}
+                    <div className="grid grid-cols-1 gap-2">
+                      {(searchQuery.trim() ? filteredTools : allToolsForMenu)
+                        .filter(t => t.roles.includes("public") || (auth.isAuthed && t.roles.includes(role)))
+                        .map((t) => {
+                          const Icon = t.icon;
+                          const allowed = true; // Since we filtered, all remaining are allowed
+                          const to = t.path;
+                          return (
+                            <Link
+                              key={t.name}
+                              to={to}
+                              className="group rounded-xl p-3.5 flex items-center justify-between"
+                              style={{
+                                background: "var(--surface-alt)",
+                                border: "1px solid var(--border)",
+                                color: "var(--text)",
+                              }}
+                              onClick={haptic}
+                            >
+                              <span className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className="h-9 w-9 rounded-lg grid place-items-center"
+                                  style={{
+                                    background: "rgba(232,80,2,0.10)",
+                                    border: "1px solid var(--border)",
+                                  }}
+                                >
+                                  {Icon && <Icon size={18} style={{ color: "var(--orange)" }} />}
+                                </div>
+
+                                <span className="min-w-0">
+                                  <div className="text-[15px] font-semibold truncate">{t.name}</div>
+                                  {t.description && (
+                                    <div className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+                                      {t.description}
+                                    </div>
+                                  )}
+                                </span>
+
+                                {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
                               </span>
 
-                              {!allowed && <Lock size={12} className="opacity-70 shrink-0 ml-1" />}
-                            </span>
-
-                            <ArrowRight
-                              size={18}
-                              className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150"
-                              style={{ color: "var(--orange)" }}
-                            />
-                          </Link>
-                        );
-                      })}
+                              <ArrowRight
+                                size={18}
+                                className="shrink-0 opacity-90 group-active:translate-x-0.5 transition-transform duration-150"
+                                style={{ color: "var(--orange)" }}
+                              />
+                            </Link>
+                          );
+                        })}
+                    </div>
                   </div>
-                </div>
-              </nav>
-            </motion.div>
+                </nav>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
 

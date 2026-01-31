@@ -39,7 +39,7 @@ const ServicesSection = () => {
       icon: <Play size={40} />,
       title: "Retention-Led Editing",
       outcome: "Style-matched transitions and pacing that hold attention.",
-      proof: "Kamz Inkzone (1.73M): +38% avg view duration in 30 days",
+      proof: "Kamz Inkzone (173K+): +38% avg view duration in 30 days",
       gradient: "linear-gradient(135deg, #4ecdc4, #44a8a3)",
       path: "/video-editing",
       features: [

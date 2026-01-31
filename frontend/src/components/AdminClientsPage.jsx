@@ -41,7 +41,9 @@ export default function AdminClientsPage() {
         name: "",
         youtubeId: "",
         handle: "",
-        category: "Vlogger"
+        category: "Vlogger",
+        status: "active",
+        subscribers: ""
     });
 
     const [editingId, setEditingId] = useState(null);
@@ -49,7 +51,9 @@ export default function AdminClientsPage() {
         name: "",
         youtubeId: "",
         handle: "",
-        category: ""
+        category: "",
+        status: "",
+        subscribers: ""
     });
 
     const [token, setToken] = useState(() => localStorage.getItem("token") || "");
@@ -112,7 +116,9 @@ export default function AdminClientsPage() {
             name: form.name.trim(),
             youtubeId: form.youtubeId.trim(),
             handle: form.handle.trim(),
-            category: form.category
+            category: form.category,
+            status: form.status,
+            subscribers: Number(form.subscribers || 0)
         };
 
         setBusy(true);
@@ -125,7 +131,7 @@ export default function AdminClientsPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
-            setForm({ name: "", youtubeId: "", handle: "", category: "Vlogger" });
+            setForm({ name: "", youtubeId: "", handle: "", category: "Vlogger", status: "active", subscribers: "" });
             await loadClients();
             await refreshSync();
         } catch (e) {
@@ -226,7 +232,9 @@ export default function AdminClientsPage() {
             name: client.name,
             youtubeId: client.youtubeId,
             handle: client.handle || "",
-            category: client.category || "Vlogger"
+            category: client.category || "Vlogger",
+            status: client.status || "active",
+            subscribers: client.subscribers || ""
         });
     }
 
@@ -243,7 +251,9 @@ export default function AdminClientsPage() {
             name: editForm.name.trim(),
             youtubeId: editForm.youtubeId.trim(),
             handle: editForm.handle.trim(),
-            category: editForm.category
+            category: editForm.category,
+            status: editForm.status,
+            subscribers: Number(editForm.subscribers || 0)
         };
 
         setBusy(true);
@@ -305,7 +315,10 @@ export default function AdminClientsPage() {
             return {
                 ...client,
                 logo: s.logo || client.logo,
-                subscribers: s.subscribers || 0,
+                subscribers: (s.subscribers > 0 && s.subscribers % 1000 === 0 && client.subscribers > 0 && Math.abs(s.subscribers - client.subscribers) < 1000)
+                    ? client.subscribers
+                    : (s.subscribers || client.subscribers || 0),
+                viewCount: s.viewCount || s.views || 0,
                 displayTitle: s.title || client.name,
                 growth,
                 history,
@@ -320,9 +333,15 @@ export default function AdminClientsPage() {
         return enrichedClients.filter(c =>
             c.name.toLowerCase().includes(q) ||
             c.youtubeId.toLowerCase().includes(q) ||
-            (c.category && c.category.toLowerCase().includes(q))
+            (c.category && c.category.toLowerCase().includes(q)) ||
+            (c.status && c.status.toLowerCase().includes(q))
         );
     }, [enrichedClients, search]);
+
+    const STATUS_OPTIONS = [
+        { value: "active", label: "Active" },
+        { value: "old", label: "Old / Legacy" }
+    ];
 
     const CATEGORIES = [
         { value: "Vlogger", label: "Vlogger" },
@@ -537,6 +556,21 @@ export default function AdminClientsPage() {
                                     />
                                 </div>
 
+                                <SelectWithPresets
+                                    label="Network Status"
+                                    value={form.status}
+                                    onChange={(v) => setForm({ ...form, status: v })}
+                                    options={STATUS_OPTIONS}
+                                />
+
+                                <Input
+                                    label="Precise Subscribers (Manual Override)"
+                                    value={form.subscribers}
+                                    onChange={(v) => setForm({ ...form, subscribers: v })}
+                                    placeholder="e.g. 173445"
+                                    type="number"
+                                />
+
                                 <button
                                     disabled={busy}
                                     type="submit"
@@ -566,7 +600,7 @@ export default function AdminClientsPage() {
                                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Reach</span>
                                     </div>
                                     <div className="text-2xl font-black">
-                                        {(filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0) / 1000000).toFixed(2)}M
+                                        {filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0).toLocaleString()}
                                     </div>
                                 </div>
                                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
@@ -646,6 +680,18 @@ export default function AdminClientsPage() {
                                                     onChange={(v) => setEditForm({ ...editForm, category: v })}
                                                     options={CATEGORIES}
                                                 />
+                                                <SelectWithPresets
+                                                    label="Status"
+                                                    value={editForm.status}
+                                                    onChange={(v) => setEditForm({ ...editForm, status: v })}
+                                                    options={STATUS_OPTIONS}
+                                                />
+                                                <Input
+                                                    label="Precise Subscribers"
+                                                    value={editForm.subscribers}
+                                                    onChange={(v) => setEditForm({ ...editForm, subscribers: v })}
+                                                    type="number"
+                                                />
                                             </div>
                                             <div className="flex gap-2 pt-1">
                                                 <button
@@ -692,6 +738,12 @@ export default function AdminClientsPage() {
                                                         </h3>
                                                         <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-orange-600/10 border border-orange-500/30 text-[9px] font-black text-orange-500 uppercase tracking-wider whitespace-nowrap">
                                                             {client.category || "CREATOR"}
+                                                        </span>
+                                                        <span className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wider whitespace-nowrap ${client.status === 'old'
+                                                            ? 'bg-gray-500/20 border-gray-500/30 text-gray-400'
+                                                            : 'bg-green-500/20 border-green-500/30 text-green-500'
+                                                            }`}>
+                                                            {client.status === 'old' ? 'Old Client' : 'Active'}
                                                         </span>
                                                         {!client.matched && (
                                                             <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-[9px] font-black text-yellow-500 uppercase tracking-wider whitespace-nowrap">

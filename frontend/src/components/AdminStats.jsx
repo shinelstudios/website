@@ -16,23 +16,30 @@ import {
 import { AUTH_BASE } from "../config/constants";
 
 export default function AdminStats() {
-    const [stats, setStats] = useState(null);
+    const [stats, setStats] = useState({
+        creators: 0,
+        videos: 0,
+        thumbnails: 0,
+        reach: 0
+    });
     const [loading, setLoading] = useState(true);
-    const [busy, setBusy] = useState(false);
     const [lastPulse, setLastPulse] = useState(null);
     const [trace, setTrace] = useState(null);
     const [keyStatus, setKeyStatus] = useState(null);
-    const [showTrace, setShowTrace] = useState(false);
+    const [quotaHealth, setQuotaHealth] = useState([]);
+    const [busy, setBusy] = useState(false);
 
-    const token = localStorage.getItem("token") || "";
+    // Auth token for admin requests
+    const token = localStorage.getItem("token");
 
     async function loadStats() {
         try {
+            setLoading(true);
             const res = await fetch(`${AUTH_BASE}/stats`);
             const data = await res.json();
-            setStats(data.counts);
+            if (data.counts) setStats(data.counts);
 
-            // Also check pulse health
+            // Check pulse health
             const pRes = await fetch(`${AUTH_BASE}/clients/pulse?debug=1`);
             if (pRes.ok) {
                 const pData = await pRes.json();
@@ -41,9 +48,20 @@ export default function AdminStats() {
                     setTrace(pData.debug.trace);
                     setKeyStatus({
                         present: pData.debug.keyPresent,
-                        length: pData.debug.keyLength,
+                        count: pData.debug.keyCount || 1,
                         valid: pData.debug.keyValid
                     });
+                }
+            }
+
+            // Check API Quota Health (Admin only)
+            if (token) {
+                const qRes = await fetch(`${AUTH_BASE}/admin/yt-quota`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (qRes.ok) {
+                    const qData = await qRes.json();
+                    setQuotaHealth(qData.keys || []);
                 }
             }
         } catch (e) {
@@ -57,87 +75,87 @@ export default function AdminStats() {
         loadStats();
     }, []);
 
-    async function triggerPulseRefresh() {
-        if (!confirm("Force YouTube API sync for all clients? This uses API quota.")) return;
+    const triggerPulseRefresh = async () => {
+        if (busy) return;
         setBusy(true);
-        setTrace(null);
         try {
-            const res = await fetch(`${AUTH_BASE}/clients/pulse/refresh?debug=1`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                }
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Refresh failed");
-
-            setLastPulse(data.ts);
-            if (data.debug?.trace) {
-                setTrace(data.debug.trace);
-                setKeyStatus({
-                    present: data.debug.keyPresent,
-                    length: data.debug.keyLength,
-                    valid: data.debug.keyValid
-                });
-                setShowTrace(true);
-            }
-            alert("Pulse synchronized successfully!");
+            // Call the sync endpoint
+            await fetch("https://shinel-auth.shinelstudioofficial.workers.dev/clients/sync?force=true");
+            // Reload stats after a short delay
+            setTimeout(loadStats, 2000);
         } catch (e) {
-            alert(e.message);
+            console.error(e);
         } finally {
             setBusy(false);
         }
-    }
-
-    const cards = [
-        { label: "Studio Videos", value: stats?.videos || 0, icon: Video, color: "text-orange-500", bg: "bg-orange-500/10" },
-        { label: "Thumbnail Lab", value: stats?.thumbnails || 0, icon: ImageIcon, color: "text-blue-500", bg: "bg-blue-500/10" },
-        { label: "Active Clients", value: stats?.clients || 0, icon: Activity, color: "text-green-500", bg: "bg-green-500/10" },
-        { label: "Team Members", value: "TBD", icon: Users, color: "text-purple-500", bg: "bg-purple-500/10" },
-    ];
+    };
 
     return (
         <div className="space-y-10">
-            {/* --- HERO --- */}
-            <div className="relative p-10 rounded-[40px] bg-white/[0.02] border border-white/5 overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-600/10 rounded-full blur-[80px] -mr-32 -mt-32" />
-                <div className="relative z-10">
-                    <h1 className="text-4xl font-black tracking-tighter mb-2">Welcome to the <span className="text-orange-500 italic">Hub.</span></h1>
-                    <p className="text-gray-500 font-medium max-w-lg">Monitor studio performance, manage creator registries, and optimize your delivery pipeline from one central core.</p>
+            {/* --- HERO STATS --- */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="p-6 rounded-[24px] bg-[var(--surface-alt)] border border-[var(--border)] relative overflow-hidden group">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                            <Users size={18} />
+                        </div>
+                        <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Active Clients</span>
+                    </div>
+                    <div className="text-3xl font-black text-[var(--text)] group-hover:scale-105 transition-transform origin-left">
+                        {loading ? "-" : stats.creators || 0}
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-[24px] bg-[var(--surface-alt)] border border-[var(--border)] relative overflow-hidden group">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
+                            <Video size={18} />
+                        </div>
+                        <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Videos Managed</span>
+                    </div>
+                    <div className="text-3xl font-black text-[var(--text)] group-hover:scale-105 transition-transform origin-left">
+                        {loading ? "-" : stats.videos || 0}
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-[24px] bg-[var(--surface-alt)] border border-[var(--border)] relative overflow-hidden group">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500">
+                            <ImageIcon size={18} />
+                        </div>
+                        <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Thumbnails</span>
+                    </div>
+                    <div className="text-3xl font-black text-[var(--text)] group-hover:scale-105 transition-transform origin-left">
+                        {loading ? "-" : stats.thumbnails || 0}
+                    </div>
+                </div>
+
+                <div className="p-6 rounded-[24px] bg-[var(--surface-alt)] border border-[var(--border)] relative overflow-hidden group">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-lg bg-green-500/10 text-green-500">
+                            <TrendingUp size={18} />
+                        </div>
+                        <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Total Reach</span>
+                    </div>
+                    <div className="text-3xl font-black text-[var(--text)] group-hover:scale-105 transition-transform origin-left">
+                        {loading ? "-" : stats.reach || "10M+"}
+                    </div>
                 </div>
             </div>
 
-            {/* --- STATS GRID --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {cards.map((card, i) => {
-                    const Icon = card.icon;
-                    return (
-                        <div key={i} className="p-6 rounded-3xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-all group">
-                            <div className={`p-3 rounded-2xl ${card.bg} ${card.color} w-fit mb-4 group-hover:scale-110 transition-transform`}>
-                                <Icon size={24} />
-                            </div>
-                            <div className="text-3xl font-black tracking-tight mb-1">
-                                {loading ? "..." : card.value}
-                            </div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-gray-600">{card.label}</div>
-                        </div>
-                    );
-                })}
-            </div>
 
-            {/* --- ACTIVITY TEASER --- */}
+            {/* --- ACTIVITY TEASER & SYSTEM HEALTH --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 p-8 rounded-[32px] bg-white/[0.02] border border-white/10">
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
                             <Zap size={20} className="text-orange-500" />
-                            <h2 className="text-lg font-black uppercase tracking-widest">System Health</h2>
+                            <h2 className="text-lg font-black uppercase tracking-widest">System Matrix</h2>
                         </div>
                         <div className="flex items-center gap-4">
                             {lastPulse && (
                                 <div className="text-[10px] font-bold text-gray-600 uppercase">
-                                    Pulse Synced: {new Date(lastPulse).toLocaleTimeString()}
+                                    Last Sync: {new Date(lastPulse).toLocaleTimeString()}
                                 </div>
                             )}
                             <button
@@ -151,9 +169,30 @@ export default function AdminStats() {
                         </div>
                     </div>
                     <div className="space-y-4">
-                        <HealthLine label="Worker Status" status="Operational" />
-                        <HealthLine label="Pulse Cache" status={lastPulse ? "Warm" : "Cold"} />
-                        <HealthLine label="KV Persistence" status="Synched" />
+                        <HealthLine
+                            label="Worker Core"
+                            status="Operational"
+                            color="text-green-500"
+                        />
+                        <HealthLine
+                            label="Pulse Cache"
+                            status={lastPulse ? "Hit (Warm)" : "Miss (Cold)"}
+                            color={lastPulse ? "text-green-500" : "text-yellow-500"}
+                        />
+
+                        {/* Dynamic Quota Status */}
+                        {quotaHealth.length > 0 ? (
+                            quotaHealth.map((k, i) => (
+                                <HealthLine
+                                    key={i}
+                                    label={`API Key ${i + 1} (${k.masked})`}
+                                    status={k.status === 'ACTIVE' ? "Healthy" : "EXHAUSTED"}
+                                    color={k.status === 'ACTIVE' ? "text-green-500" : "text-red-500"}
+                                />
+                            ))
+                        ) : (
+                            <HealthLine label="API Pool" status="Initializing..." color="text-gray-500" />
+                        )}
                     </div>
                 </div>
 
@@ -174,8 +213,8 @@ export default function AdminStats() {
                                 <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${keyStatus.valid ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
                                     <div className={`w-2 h-2 rounded-full ${keyStatus.valid ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
                                     <div className="text-[10px] font-black uppercase tracking-widest">
-                                        API Key: {keyStatus.present ? (keyStatus.valid ? 'Active' : 'Invalid Signature') : 'Missing'}
-                                        {keyStatus.present && <span className="ml-2 opacity-60">({keyStatus.length} chars)</span>}
+                                        API Status: {keyStatus.present ? (keyStatus.valid ? 'Active' : 'Invalid Signature') : 'Missing'}
+                                        {keyStatus.present && <span className="ml-2 opacity-60">({keyStatus.count} {keyStatus.count === 1 ? 'Key' : 'Keys'} Pooled)</span>}
                                     </div>
                                 </div>
                             )}
@@ -232,13 +271,21 @@ export default function AdminStats() {
     );
 }
 
-function HealthLine({ label, status }) {
+function HealthLine({ label, status, color = "text-green-500" }) {
+    // Extract base color name (e.g. "green-500") if possible for the dot bg, 
+    // or just default to green/red based on text class mapping or simple parsing.
+    // Simpler: Just map text color to bg color roughly or use dynamic classes if tailwind safelist permits.
+    // For safety, let's just use the text color class provided and a generic dot or derived dot.
+
+    // Quick derive of dot color from text-X-500
+    const dotColor = color.replace("text-", "bg-");
+
     return (
         <div className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5">
             <span className="text-sm font-bold text-gray-400">{label}</span>
             <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-green-500">{status}</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${dotColor} shadow-sm`} />
+                <span className={`text-[10px] font-black uppercase tracking-widest ${color}`}>{status}</span>
             </div>
         </div>
     );

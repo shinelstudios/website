@@ -20,7 +20,8 @@ import {
     Languages,
     Mail,
     ExternalLink,
-    Settings as SettingsIcon
+    Settings as SettingsIcon,
+    FileText
 } from "lucide-react";
 
 
@@ -105,10 +106,24 @@ export default function ManagementHub() {
             roles: ['admin', 'artist']
         },
         {
+            id: 'blog',
+            label: 'Blog Manager',
+            path: '/dashboard/blog',
+            icon: FileText,
+            roles: ['admin', 'editor']
+        },
+        {
             id: 'settings',
             label: 'Global Settings',
             path: '/dashboard/settings',
             icon: SettingsIcon,
+            roles: ['admin']
+        },
+        {
+            id: 'audits',
+            label: 'Weekly Audits',
+            path: '/dashboard/audits',
+            icon: FileText,
             roles: ['admin']
         },
         {

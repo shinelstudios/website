@@ -12,6 +12,7 @@ const AdminThumbnailsPage = React.lazy(() => import("./components/AdminThumbnail
 const AdminSettingsPage = React.lazy(() => import("./components/AdminSettingsPage.jsx"));
 import Toaster from "./components/ui/Toaster.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
+import CommandPalette from "./components/ui/CommandPalette.jsx";
 
 import {
   startHashActionRouter,
@@ -87,6 +88,9 @@ const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"))
 const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
 const AdminLeadsPage = React.lazy(() => import("./components/AdminLeadsPage.jsx"));
+const WeeklyAuditLog = React.lazy(() => import("./components/WeeklyAuditLog.jsx"));
+const AdminBlogPage = React.lazy(() => import("./components/AdminBlogPage.jsx"));
+const AdminBlogEditor = React.lazy(() => import("./components/AdminBlogEditor.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
@@ -203,6 +207,7 @@ function Layout() {
       <SiteFooter isDark={isDark} />
       <Toaster />
       <CookieConsent />
+      <CommandPalette />
     </>
   );
 }
@@ -431,6 +436,9 @@ export default function App() {
             <Route path="videos" element={<AdminVideosPage />} />
 
             <Route path="thumbnails" element={<AdminThumbnailsPage />} />
+            <Route path="blog" element={<AdminBlogPage />} />
+            <Route path="blog/:slug" element={<AdminBlogEditor />} />
+            <Route path="audits" element={<WeeklyAuditLog />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 

@@ -188,12 +188,12 @@ export const Button = ({
             border: 'none',
         },
         secondary: {
-            background: 'transparent',
+            background: 'rgba(0,0,0,0)',
             color: 'var(--text)',
             border: '2px solid var(--border)',
         },
         ghost: {
-            background: 'transparent',
+            background: 'rgba(0,0,0,0)',
             color: 'var(--orange)',
             border: 'none',
         },

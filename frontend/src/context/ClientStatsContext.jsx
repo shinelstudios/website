@@ -28,7 +28,7 @@ export const ClientStatsProvider = ({ children }) => {
 
     // Hardcoded fallbacks for production resilience (if stats API defaults)
     const HARDCODED_FALLBACKS = {
-        'UC_x5XG1OV2P6uZZ5FSM9Ttw': { title: 'Kamz Inkzone', subscribers: 1420000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_n6U_Ew_FmYm_N0n_9_X_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }, // Approximation
+        'UC_N0eSX2RI_ah-6MjJIAyzA': { title: 'Kamz Inkzone', subscribers: 173445, logo: 'https://yt3.ggpht.com/zImn10b3yqjY1uQQkvXa1AKA3My4lIa8MEDbvCyp4S9ycDApOkRN2A8BhvkWKTgECr5NQYDRPQ=s88-c-k-c0x00ffffff-no-rj' },
         'UCbnkpVSNsBwET7mt1tgqEPQ': { title: 'Deadlox Gaming', subscribers: 2115670, viewCount: 456789123, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
         'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }
     };
@@ -78,15 +78,25 @@ export const ClientStatsProvider = ({ children }) => {
                 const s = statsMap[client.youtubeId] || HARDCODED_FALLBACKS[client.youtubeId] || {};
 
                 const logo = sanitizeLogoUrl(s.logo || client.logo);
-                // CRITICAL: Force to Number to fix totaling bug
-                const subscribers = Number(s.subscribers || client.subscribers || 0);
+
+                // DATA PRIORITY: Favor more precise numbers (those not ending in 000) if they are close
+                const apiSub = Number(s.subscribers || 0);
+                const regSub = Number(client.subscribers || 0);
+
+                let subscribers = apiSub;
+                // If API is rounded (ends in 000) and registry is within 1000 range and more precise
+                if (apiSub > 0 && apiSub % 1000 === 0 && regSub > 0 && Math.abs(apiSub - regSub) < 1000) {
+                    subscribers = regSub;
+                } else if (apiSub === 0) {
+                    subscribers = regSub;
+                }
 
                 return {
                     ...client,
                     title: s.title || client.name || "Creator",
                     logo: logo,
                     subscribers: subscribers,
-                    views: Number(s.views || 0),
+                    viewCount: Number(s.viewCount || s.views || 0),
                     videoCount: Number(s.videoCount || 0)
                 };
             });
@@ -115,7 +125,7 @@ export const ClientStatsProvider = ({ children }) => {
     }, [stats]);
 
     const totalViews = useMemo(() => {
-        return stats.reduce((acc, curr) => acc + (curr.views || 0), 0);
+        return stats.reduce((acc, curr) => acc + (curr.viewCount || curr.views || 0), 0);
     }, [stats]);
 
     // Helper to get specific client stats

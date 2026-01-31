@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { NICHES } from '../../data/niches';
-import { ArrowRight, CheckCircle, Play, Star } from 'lucide-react';
+import { ArrowRight, CheckCircle, Play, Star, Sparkles, Target, Zap } from 'lucide-react';
 import NewsletterSignup from '../ui/NewsletterSignup';
+import MetaTags from '../MetaTags';
 
 const ServicePage = () => {
     const { niche } = useParams();
@@ -14,6 +15,12 @@ const ServicePage = () => {
 
     return (
         <div className="min-h-screen bg-[var(--background)] pt-24 pb-12">
+            <MetaTags
+                title={data.title}
+                description={data.subtitle}
+                keywords={data.keywords}
+                ogImage={data.heroImage}
+            />
             {/* Hero Section */}
             <section className="container mx-auto px-4 mb-20">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">

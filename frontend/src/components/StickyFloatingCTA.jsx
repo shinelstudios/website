@@ -21,23 +21,26 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
         }
 
         const handleScroll = () => {
-            const scrollPercentage = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+            const scrollY = window.scrollY;
+
+            // Show after 100px (faster response)
+            const isScrolled = scrollY > 100;
 
             // Hide when near footer
             const footer = document.querySelector("footer");
             if (footer) {
                 const footerRect = footer.getBoundingClientRect();
                 const isNearFooter = footerRect.top < window.innerHeight;
-                setIsVisible(scrollPercentage > scrollThreshold && !isNearFooter);
+                setIsVisible(isScrolled && !isNearFooter);
             } else {
-                setIsVisible(scrollPercentage > scrollThreshold);
+                setIsVisible(isScrolled);
             }
         };
 
         window.addEventListener("scroll", handleScroll, { passive: true });
         handleScroll(); // Initial check
         return () => window.removeEventListener("scroll", handleScroll);
-    }, [scrollThreshold]);
+    }, []);
 
     const handleDismiss = (e) => {
         e.stopPropagation();
@@ -158,21 +161,12 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                             whileTap={{ scale: 0.9 }}
                         >
                             <ArrowRight size={24} />
-
-                            {/* Pulse animation */}
-                            <motion.div
-                                className="absolute inset-0 rounded-full"
-                                style={{ border: "2px solid #E85002" }}
-                                animate={{ scale: [1, 1.3, 1], opacity: [0.8, 0, 0.8] }}
-                                transition={{ duration: 2, repeat: Infinity }}
-                                aria-hidden="true"
-                            />
                         </motion.button>
 
-                        {/* Dismiss button - outside main button */}
+                        {/* Dismiss button - positioned better */}
                         <button
                             onClick={handleDismiss}
-                            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-800 text-white flex items-center justify-center z-10"
+                            className="absolute -top-3 -right-1 w-6 h-6 rounded-full bg-black/80 text-white flex items-center justify-center z-10 border border-white/20 shadow-sm backdrop-blur-sm"
                             aria-label="Dismiss"
                         >
                             <X size={12} />

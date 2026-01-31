@@ -245,32 +245,64 @@ export default function RoiCalculator({
 
   const copySummary = useCallback(async () => {
     const text = [
-      `CTR Uplift Estimate`,
+      `📊 Shinel Studios: CTR Uplift Estimate`,
       ``,
-      `Current Performance:`,
-      `• CTR: ${ctr.toFixed(1)}%`,
-      `• Avg views/video: ${formatNumber(views)}`,
-      `• Videos/month: ${posts}`,
-      `• RPM: ${formatINR(rpm)}`,
+      `📈 Current Stats:`,
+      `• views/video: ${formatNumber(views)}`,
+      `• videos/month: ${posts}`,
+      `• current CTR: ${ctr.toFixed(1)}%`,
       ``,
-      `Expected with +${debouncedLift}% CTR lift:`,
-      `• New CTR: ${m.newCtr.toFixed(1)}%`,
-      `• New views/video: ${formatNumber(m.perNew)}`,
-      `• Extra views/month: ${formatNumber(m.deltaViews)}`,
+      `🚀 Projected with +${debouncedLift}% CTR Lift:`,
+      `• New Views/Video: ${formatNumber(m.perNew)}`,
+      `• Extra Views/Month: +${formatNumber(m.deltaViews)}`,
+      `• Est. Revenue Lift: ${formatINR(m.deltaRevenue)}/mo`,
       ``,
-      `Revenue Impact:`,
-      `• Monthly: ${formatINR(m.deltaRevenue)}`,
-      `• Annual: ${formatINR(annualDelta)}`,
-      ``,
-      `Generated via CTR Calculator`,
+      `✨ Transform your channel with Shinel Studios.`,
     ].join("\n");
 
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { }
-  }, [ctr, views, posts, rpm, debouncedLift, m, annualDelta]);
+      if (typeof navigator.share === 'function') {
+        await navigator.share({
+          title: "CTR Uplift Analysis",
+          text: text
+        });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch (e) {
+      console.error("Share failed:", e);
+    }
+  }, [ctr, views, posts, rpm, debouncedLift, m]);
+
+  const downloadReport = useCallback(() => {
+    const data = {
+      title: "CTR Uplift Analysis",
+      generatedAt: new Date().toISOString(),
+      current: {
+        ctr: `${ctr.toFixed(1)}%`,
+        viewsPerVideo: views,
+        videosPerMonth: posts,
+        monthlyRevenue: formatINR(m.revNow)
+      },
+      projected: {
+        lift: `${debouncedLift}%`,
+        newCtr: `${m.newCtr.toFixed(1)}%`,
+        newViewsPerVideo: Math.round(m.perNew),
+        monthlyRevenue: formatINR(m.revNew),
+        monthlyIncrease: formatINR(m.deltaRevenue),
+        annualImpact: formatINR(annualDelta)
+      }
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shinel-roi-report-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [ctr, views, posts, m, debouncedLift, annualDelta]);
 
   const resetCalculator = useCallback(() => {
     setViews(defaults.views);
@@ -627,6 +659,34 @@ export default function RoiCalculator({
                 prefersReducedMotion={false}
               />
             </div>
+          </div>
+
+          <div className="flex gap-2 mt-4 relative z-10">
+            <button
+              onClick={copySummary}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-white/5 active:scale-95"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+                color: "var(--text)"
+              }}
+            >
+              <Zap size={14} className={copied ? "text-green-500" : "text-orange-500"} />
+              {copied ? "Copied To Clipboard" : "Share / Copy Summary"}
+            </button>
+            <button
+              onClick={downloadReport}
+              className="px-6 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-white/5 active:scale-95"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+                color: "var(--text)"
+              }}
+              title="Download JSON Report"
+            >
+              <DollarSign size={14} className="text-orange-500" />
+              Report
+            </button>
           </div>
 
           {/* Loading indicator */}
