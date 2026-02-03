@@ -136,7 +136,8 @@ const GlassCard = ({ children, className = "", style = {}, noBorder = false }) =
     className={`relative overflow-hidden rounded-xl ${noBorder ? '' : 'border border-[var(--border)]'} bg-[var(--surface-alt)]/80 backdrop-blur-xl shadow-2xl ${className}`}
     style={{
       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
-      WebkitBackdropFilter: "blur(24px)",
+      WebkitBackdropFilter: "blur(12px)",
+      backdropFilter: "blur(12px)",
       ...style
     }}
   >
@@ -508,7 +509,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               text-fill-color: transparent;
               animation: gradient-shift 3s ease infinite;
               -webkit-animation: gradient-shift 3s ease infinite;
-              filter: drop-shadow(0 0 40px rgba(232, 80, 2, 0.4));
+              /* Removed drop-shadow for better performance with background-clip: text */
               /* Force GPU */
               transform: translate3d(0,0,0);
               -webkit-transform: translate3d(0,0,0);

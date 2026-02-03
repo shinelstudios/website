@@ -225,14 +225,14 @@ const toolsCatalog = [
     name: "Viral Thumbnail Ideation",
     path: "/tools/thumbnail-ideation",
     icon: Lightbulb,
-    roles: ["admin", "editor", "client"],
+    roles: ["admin", "editor", "client", "public"],
     description: "AI-powered thumbnail concepts that convert",
   },
   {
     name: "Custom AIs",
     path: "/tools/custom-ais",
     icon: Brain,
-    roles: ["admin"],
+    roles: ["admin", "editor", "client", "public"],
     description: "Configure specialized AI workflows",
   },
   {
@@ -262,6 +262,13 @@ const toolsCatalog = [
     icon: Youtube,
     roles: ["admin"],
     description: "Manage YouTube client list",
+  },
+  {
+    name: "YouTube Automated Captions",
+    path: "/tools/youtube-captions",
+    icon: Languages,
+    roles: ["admin", "editor", "client", "public"],
+    description: "Extract manual & auto-generated captions from URL",
   },
 ];
 

@@ -66,6 +66,9 @@ const ThumbnailTesterPage = React.lazy(() => import("./components/pages/Thumbnai
 const EditorLeaderboardPage = React.lazy(() => import("./components/pages/EditorLeaderboardPage.jsx"));
 const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
 const ComparisonToolPage = React.lazy(() => import("./components/pages/ComparisonToolPage.jsx"));
+const ThumbnailIdeationPage = React.lazy(() => import("./components/pages/ThumbnailIdeationPage.jsx"));
+const YoutubeCaptionsPage = React.lazy(() => import("./components/pages/YoutubeCaptionsPage.jsx"));
+const CustomAIsPage = React.lazy(() => import("./components/pages/CustomAIsPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
@@ -384,32 +387,19 @@ export default function App() {
 
           <Route
             path="/tools/thumbnail-ideation"
-            element={
-              <ProtectedRoute>
-                <ThumbnailIdeation />
-              </ProtectedRoute>
-            }
+            element={<ThumbnailIdeationPage />}
           />
 
 
           <Route
             path="/tools/youtube-captions"
-            element={
-              <ProtectedRoute>
-                <AutoSRTTool />
-              </ProtectedRoute>
-            }
+            element={<YoutubeCaptionsPage />}
           />
 
 
           <Route
             path="/tools/custom-ais"
-
-            element={
-              <ProtectedRoute>
-                <CustomAIs />
-              </ProtectedRoute>
-            }
+            element={<CustomAIsPage />}
           />
 
           <Route path="/leaderboard" element={

@@ -6,7 +6,7 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2 } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube } from "lucide-react";
 import GridMatrix from "../animations/GridMatrix";
 
 
@@ -23,7 +23,7 @@ const tiles = [
     title: "Auto SRT (Multi-Language)",
     desc: "Paste or upload transcript and export .srt — quick timing presets.",
     icon: Languages,
-    roles: ["admin", "editor", "public"],
+    roles: ["admin", "editor", "client", "public"],
   },
   {
     to: "/tools/seo",
@@ -37,14 +37,14 @@ const tiles = [
     title: "Thumbnail Ideation",
     desc: "Punchy text concepts & composition prompts in 3 styles.",
     icon: Lightbulb,
-    roles: ["admin", "editor", "client"],
+    roles: ["admin", "editor", "client", "public"],
   },
   {
     to: "/tools/custom-ais",
     title: "Custom AIs",
     desc: "Internal assistants & automations for Shinel Studios.",
     icon: Wand2,
-    roles: ["admin"],
+    roles: ["admin", "editor", "client", "public"],
   },
   {
     to: "/tools/thumbnail-previewer",
@@ -67,13 +67,20 @@ const tiles = [
     icon: TrendingUp,
     roles: ["admin", "editor", "client", "public"],
   },
+  {
+    to: "/tools/youtube-captions",
+    title: "YouTube Automated Captions",
+    desc: "Extract manual & auto-generated captions directly from any YouTube URL.",
+    icon: Youtube,
+    roles: ["admin", "editor", "client", "public"],
+  },
 ];
 
 
 
 export default function ToolsIndex() {
-  const role = (localStorage.getItem("userRole") || "public").toLowerCase();
-  const allowed = tiles.filter(t => t.roles.includes(role));
+  const roleLS = (localStorage.getItem("role") || localStorage.getItem("userRole") || "public").toLowerCase();
+  const allowed = tiles.filter(t => t.roles.includes(roleLS));
 
   return (
     <section style={{ background: "var(--surface)", position: "relative", overflow: "hidden", minHeight: "100vh" }}>

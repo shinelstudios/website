@@ -220,24 +220,21 @@ const TrustBar = ({
             width: "max-content",
             alignItems: "center",
             willChange: "transform",
-            /* GPU Acceleration Forces */
-            transform: "translate3d(0,0,0)",
-            WebkitTransform: "translate3d(0,0,0)",
-            transformStyle: "preserve-3d",
-            WebkitTransformStyle: "preserve-3d",
-            backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
-            perspective: "1000px",
-            WebkitPerspective: "1000px",
-            animationDuration: effectiveDuration + "s",
+            backfaceVisibility: "hidden",
+            WebkitTransform: "translate3d(0,0,0)",
+            transform: "translate3d(0,0,0)",
+            WebkitAnimationName: animateDir === "rtl" ? "marquee-scroll-rtl" : "marquee-scroll-ltr",
+            animationName: animateDir === "rtl" ? "marquee-scroll-rtl" : "marquee-scroll-ltr",
             WebkitAnimationDuration: effectiveDuration + "s",
-            animationTimingFunction: "linear",
+            animationDuration: effectiveDuration + "s",
             WebkitAnimationTimingFunction: "linear",
-            animationIterationCount: "infinite",
+            animationTimingFunction: "linear",
             WebkitAnimationIterationCount: "infinite",
-            animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
+            animationIterationCount: "infinite",
             WebkitAnimationPlayState: (isPaused || !isVisible) ? "paused" : "running",
-            transition: "animation-duration 0.3s ease-out, -webkit-animation-duration 0.3s ease-out",
+            animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
+            transition: "animation-duration 0.3s linear",
           }}
         >
           {/* Segment A (Measured) */}
@@ -285,24 +282,25 @@ const TrustBar = ({
 }
 
 /* [FIX] Discrete keyframes for RTL/LTR instead of using animation-direction: reverse */
+/* Standard keyframes for broad compatibility */
 @keyframes marquee-scroll-rtl {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--neg-animation-distance), 0, 0); }
 }
 
 @-webkit-keyframes marquee-scroll-rtl {
-  0% { -webkit-transform: translate3d(0, 0, 0); }
-  100% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  from { -webkit-transform: translate3d(0, 0, 0); }
+  to { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
 }
 
 @keyframes marquee-scroll-ltr {
-  0% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
-  100% { transform: translate3d(0, 0, 0); }
+  from { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 @-webkit-keyframes marquee-scroll-ltr {
-  0% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
-  100% { -webkit-transform: translate3d(0, 0, 0); }
+  from { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+  to { -webkit-transform: translate3d(0, 0, 0); }
 }
 
 .trustbar .marquee-track.paused {

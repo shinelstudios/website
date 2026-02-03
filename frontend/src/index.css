@@ -276,12 +276,6 @@
     }
   }
 
-  /* CHANGED: limit transitions to color props only (avoid layout jank) */
-  * {
-    transition-property: color, background-color, border-color, fill, stroke;
-    transition-duration: .15s;
-    transition-timing-function: linear;
-  }
 }
 
 /* ===================== Components (buttons, header, chips) ===================== */

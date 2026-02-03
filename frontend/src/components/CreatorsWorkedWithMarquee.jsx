@@ -393,6 +393,14 @@ const CreatorsWorkedWithMarquee = ({
                 "--animation-duration": animationDuration,
                 "WebkitAnimationDuration": animationDuration,
                 "--animation-distance": animationDistance,
+                "WebkitAnimationName": animateDir === 'ltr' ? 'cw-marquee-ltr' : 'cw-marquee-rtl',
+                "animationName": animateDir === 'ltr' ? 'cw-marquee-ltr' : 'cw-marquee-rtl',
+                "WebkitAnimationTimingFunction": "linear",
+                "animationTimingFunction": "linear",
+                "WebkitAnimationIterationCount": "infinite",
+                "animationIterationCount": "infinite",
+                "WebkitAnimationPlayState": animationIsPaused ? "paused" : "running",
+                "animationPlayState": animationIsPaused ? "paused" : "running",
               }}
             >
               {/* Segment A (measured) */}
@@ -641,24 +649,24 @@ const CreatorsWorkedWithMarquee = ({
 
         /* RTL Direction */
         @keyframes cw-marquee-rtl {
-          0% { transform: translate3d(0, 0, 0); }
-          100% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          from { transform: translate3d(0, 0, 0); }
+          to { transform: translate3d(var(--neg-animation-distance), 0, 0); }
         }
         
         @-webkit-keyframes cw-marquee-rtl {
-          0% { -webkit-transform: translate3d(0, 0, 0); }
-          100% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          from { -webkit-transform: translate3d(0, 0, 0); }
+          to { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
         }
 
         /* LTR Direction */
         @keyframes cw-marquee-ltr {
-          0% { transform: translate3d(var(--neg-animation-distance), 0, 0); }
-          100% { transform: translate3d(0, 0, 0); }
+          from { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          to { transform: translate3d(0, 0, 0); }
         }
         
         @-webkit-keyframes cw-marquee-ltr {
-          0% { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
-          100% { -webkit-transform: translate3d(0, 0, 0); }
+          from { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          to { -webkit-transform: translate3d(0, 0, 0); }
         }
 
       `}</style>
