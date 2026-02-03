@@ -13,6 +13,7 @@ import {
   Globe,
   RotateCcw,
 } from "lucide-react";
+import { CAPTIONS_API_BASE } from "../../config/constants";
 
 export default function AutoSRTTool() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -122,7 +123,8 @@ export default function AutoSRTTool() {
     startProgressSimulation();
 
     try {
-      const res = await fetch("/api/youtube-captions", {
+      const apiUrl = `${CAPTIONS_API_BASE}/api/youtube-captions`;
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

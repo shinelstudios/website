@@ -13,7 +13,8 @@ export const CONTACT = {
 };
 
 // API Configuration
-export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.shinelstudioofficial.workers.dev"; // Corrected production fallback
+export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "https://shinel-auth.shinelstudioofficial.workers.dev";
+export const CAPTIONS_API_BASE = import.meta.env.VITE_CAPTIONS_API_BASE || ""; // Empty means relative path (local dev proxy)
 
 // Client Activity Registry (Pulse)
 export const CLIENT_REGISTRY = [
