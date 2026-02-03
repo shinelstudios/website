@@ -438,83 +438,67 @@ function pickVttFile(dir, lang) {
 
 async function ytDlpFetchCaptions(url, lang = "en") {
   const cmd = getYtDlpCmd();
-
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ytcap-"));
-  const manualDir = path.join(tmpRoot, "manual");
-  const autoDir = path.join(tmpRoot, "auto");
-  fs.mkdirSync(manualDir, { recursive: true });
-  fs.mkdirSync(autoDir, { recursive: true });
 
-  const commonArgs = [
-    "--skip-download",
-    "--sub-lang", lang,
-    "--sub-format", "vtt",
-    "--no-check-certificates",
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  ];
+  // Clients to try in order of success probability for captions
+  const clients = ["web", "ios", "android"];
+  const debugLog = { cmd, attempts: [] };
 
-  // OPTIONAL: Support cookies to bypass bot detection
-  // Use a physical file to avoid "Argument list too long" errors with large env vars
-  const cookiesPath = path.join(process.cwd(), "cookies.txt");
-  let extractorArgs = "youtube:player_client=android,web";
+  for (const client of clients) {
+    const commonArgs = [
+      "--skip-download",
+      "--sub-lang", lang,
+      "--sub-format", "vtt",
+      "--no-check-certificates",
+      "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    ];
 
-  if (fs.existsSync(cookiesPath)) {
-    commonArgs.push("--cookies", cookiesPath);
-    extractorArgs = "youtube:player_client=web";
-    console.log("[Captions API] Using cookies from cookies.txt");
-  }
+    let extractorArgs = `youtube:player_client=${client}`;
+    const cookiesPath = path.join(process.cwd(), "cookies.txt");
 
-  // Support PO Token if provided via env (Netscape string or literal)
-  if (process.env.YOUTUBE_PO_TOKEN) {
-    extractorArgs += `,po_token=web+${process.env.YOUTUBE_PO_TOKEN}`;
-  }
+    // Cookies only work with web client
+    if (client === "web" && fs.existsSync(cookiesPath)) {
+      commonArgs.push("--cookies", cookiesPath);
+    }
 
-  commonArgs.push("--extractor-args", extractorArgs);
+    if (process.env.YOUTUBE_PO_TOKEN) {
+      extractorArgs += `,po_token=web+${process.env.YOUTUBE_PO_TOKEN}`;
+    }
+    commonArgs.push("--extractor-args", extractorArgs);
 
-  // 1) Try MANUAL subtitles
-  const manualArgs = [
-    ...commonArgs,
-    "--write-subs",
-    "-o", path.join(manualDir, "%(id)s.%(ext)s"),
-    url,
-  ];
+    // Try Manual then Auto for each client
+    for (const subType of ["manual", "auto"]) {
+      const subDir = path.join(tmpRoot, `${client}-${subType}`);
+      fs.mkdirSync(subDir, { recursive: true });
 
-  const manual = await runProcess(cmd, manualArgs);
-  const manualFile = pickVttFile(manualDir, lang);
+      const args = [
+        ...commonArgs,
+        subType === "manual" ? "--write-subs" : "--write-auto-subs",
+        "-o", path.join(subDir, "%(id)s.%(ext)s"),
+        url
+      ];
 
-  if (manualFile && fs.existsSync(manualFile)) {
-    const vtt = fs.readFileSync(manualFile, "utf8");
-    const text = toPlainTextFromVtt(vtt);
-    return {
-      mode: "manual",
-      format: "vtt",
-      text,
-      file: manualFile,
-      debug: { cmd, manual: { code: manual.code, out: manual.out, err: manual.err } },
-    };
-  }
+      const result = await runProcess(cmd, args);
+      const vttFile = pickVttFile(subDir, lang);
 
-  // 2) Fallback to AUTO subtitles
-  const autoArgs = [
-    ...commonArgs,
-    "--write-auto-subs",
-    "-o", path.join(autoDir, "%(id)s.%(ext)s"),
-    url,
-  ];
+      debugLog.attempts.push({
+        client,
+        type: subType,
+        code: result.code,
+        err: result.err.substring(0, 500) // Keep logs manageable
+      });
 
-  const auto = await runProcess(cmd, autoArgs);
-  const autoFile = pickVttFile(autoDir, lang);
-
-  if (autoFile && fs.existsSync(autoFile)) {
-    const vtt = fs.readFileSync(autoFile, "utf8");
-    const text = toPlainTextFromVtt(vtt);
-    return {
-      mode: "auto",
-      format: "vtt",
-      text,
-      file: autoFile,
-      debug: { cmd, auto: { code: auto.code, out: auto.out, err: auto.err } },
-    };
+      if (vttFile && fs.existsSync(vttFile)) {
+        const vtt = fs.readFileSync(vttFile, "utf8");
+        return {
+          mode: subType,
+          format: "vtt",
+          text: toPlainTextFromVtt(vtt),
+          file: vttFile,
+          debug: debugLog
+        };
+      }
+    }
   }
 
   return {
@@ -522,12 +506,7 @@ async function ytDlpFetchCaptions(url, lang = "en") {
     format: null,
     text: "",
     file: null,
-    debug: {
-      cmd,
-      manual: { code: manual.code, out: manual.out, err: manual.err },
-      auto: { code: auto.code, out: auto.out, err: auto.err },
-      note: "yt-dlp did not produce a .vtt file. Ensure yt-dlp is installed and can access YouTube.",
-    },
+    debug: debugLog
   };
 }
 
