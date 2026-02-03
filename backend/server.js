@@ -449,21 +449,27 @@ async function ytDlpFetchCaptions(url, lang = "en") {
     "--skip-download",
     "--sub-lang", lang,
     "--sub-format", "vtt",
-    // Use only 'web' client when cookies are provided as 'android' doesn't support them
-    // Also explicitly allow node as the JS runtime which is present on Render
+    "--no-check-certificates",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   ];
 
   // OPTIONAL: Support cookies to bypass bot detection
   // Use a physical file to avoid "Argument list too long" errors with large env vars
   const cookiesPath = path.join(process.cwd(), "cookies.txt");
+  let extractorArgs = "youtube:player_client=android,web";
+
   if (fs.existsSync(cookiesPath)) {
     commonArgs.push("--cookies", cookiesPath);
-    commonArgs.push("--extractor-args", "youtube:player_client=web");
+    extractorArgs = "youtube:player_client=web";
     console.log("[Captions API] Using cookies from cookies.txt");
-  } else {
-    // Default fallback clients
-    commonArgs.push("--extractor-args", "youtube:player_client=android,web");
   }
+
+  // Support PO Token if provided via env (Netscape string or literal)
+  if (process.env.YOUTUBE_PO_TOKEN) {
+    extractorArgs += `,po_token=web+${process.env.YOUTUBE_PO_TOKEN}`;
+  }
+
+  commonArgs.push("--extractor-args", extractorArgs);
 
   // 1) Try MANUAL subtitles
   const manualArgs = [
