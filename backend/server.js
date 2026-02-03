@@ -449,7 +449,8 @@ async function ytDlpFetchCaptions(url, lang = "en") {
     "--skip-download",
     "--sub-lang", lang,
     "--sub-format", "vtt",
-    "--extractor-args", "youtube:player_client=android,web",
+    // Use only 'web' client when cookies are provided as 'android' doesn't support them
+    // Also explicitly allow node as the JS runtime which is present on Render
   ];
 
   // OPTIONAL: Support cookies to bypass bot detection
@@ -457,7 +458,11 @@ async function ytDlpFetchCaptions(url, lang = "en") {
   const cookiesPath = path.join(process.cwd(), "cookies.txt");
   if (fs.existsSync(cookiesPath)) {
     commonArgs.push("--cookies", cookiesPath);
+    commonArgs.push("--extractor-args", "youtube:player_client=web");
     console.log("[Captions API] Using cookies from cookies.txt");
+  } else {
+    // Default fallback clients
+    commonArgs.push("--extractor-args", "youtube:player_client=android,web");
   }
 
   // 1) Try MANUAL subtitles
