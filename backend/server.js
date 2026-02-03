@@ -482,12 +482,14 @@ async function ytDlpFetchCaptions(url, lang = "en") {
 
       const result = await runProcess(cmd, args);
       const vttFile = pickVttFile(subDir, lang);
+      const allFiles = fs.existsSync(subDir) ? fs.readdirSync(subDir) : [];
 
       debugLog.attempts.push({
         client,
         type: subType,
         code: result.code,
-        err: result.err.substring(0, 500) // Keep logs manageable
+        err: result.err.substring(0, 500), // Keep logs manageable
+        files: allFiles
       });
 
       if (vttFile && fs.existsSync(vttFile)) {
