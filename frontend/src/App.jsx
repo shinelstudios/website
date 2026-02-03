@@ -1,5 +1,10 @@
-// frontend/src/App.jsx
-
+/**
+ * App.jsx
+ * 
+ * About: Core routing and layout component for the Shinel Studios website.
+ * Used in: main.jsx
+ * Features: React Router setup, Lazy loading, Dark/Light theme management, Scroll to Hash, Auth state handling.
+ */
 import React from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 

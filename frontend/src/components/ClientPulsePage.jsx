@@ -353,9 +353,9 @@ const ActivityCard = ({ activity, index, meta }) => {
                     )}
                 </div>
 
-                <h4 className="text-lg md:text-xl font-bold leading-tight mb-8 group-hover:text-orange-400 transition-colors line-clamp-2 min-h-[3.5rem]"
-                    dangerouslySetInnerHTML={{ __html: activity.title }}
-                />
+                <h4 className="text-lg md:text-xl font-bold leading-tight mb-8 group-hover:text-orange-400 transition-colors line-clamp-2 min-h-[3.5rem]">
+                    {activity.title}
+                </h4>
 
                 <a
                     href={activity.url}

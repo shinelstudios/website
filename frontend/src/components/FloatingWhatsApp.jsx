@@ -1,3 +1,9 @@
+/**
+ * FloatingWhatsApp.jsx
+ * 
+ * About: Floating WhatsApp contact button for mobile users.
+ * Features: Sticky positioning, Visibility gating (hidden on dashboard), Scroll-based minimize/maximize.
+ */
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, ChevronUp } from "lucide-react";

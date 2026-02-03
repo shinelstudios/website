@@ -57,6 +57,7 @@ export default function AdminVideosPage() {
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [viewMode, setViewMode] = useState("grid");
+  const [flashKey, setFlashKey] = useState("");
 
   // Auth & Roles
   const [token, setToken] = useState(() => localStorage.getItem("token") || "");

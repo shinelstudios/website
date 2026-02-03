@@ -490,6 +490,8 @@ const CreatorsWorkedWithMarquee = ({
           -webkit-backface-visibility: hidden;
           perspective: 1000px;
           -webkit-perspective: 1000px;
+          /* Force Subpixel Rendering */
+          -webkit-font-smoothing: antialiased;
         }
         
         .cw-track.cw-animated.direction-rtl {
@@ -542,6 +544,10 @@ const CreatorsWorkedWithMarquee = ({
         }
 
         .cw-item {
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+          -webkit-transform-style: preserve-3d;
+          transform-style: preserve-3d;
           display: block;
           border-radius: 20px;
           transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);

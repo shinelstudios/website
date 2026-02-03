@@ -1,4 +1,9 @@
-// frontend/src/components/SiteHeader.jsx
+/**
+ * SiteHeader.jsx
+ * 
+ * About: Primary navigation header component for the website.
+ * Features: Responsive navigation, Dark/Light mode toggle, User auth state, Notifications, Tools catalog.
+ */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";

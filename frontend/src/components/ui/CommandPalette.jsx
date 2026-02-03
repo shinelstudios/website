@@ -1,3 +1,9 @@
+/**
+ * CommandPalette.jsx
+ * 
+ * About: Keyboard-driven navigation and search tool (Ctrl+K).
+ * Features: Fuzzy search for pages and tools, Quick actions, Dark/Light mode toggle.
+ */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {

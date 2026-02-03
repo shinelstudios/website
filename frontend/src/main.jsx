@@ -1,4 +1,10 @@
-// src/main.jsx
+/**
+ * main.jsx
+ * 
+ * About: Entry point for the React application.
+ * Used in: index.html
+ * Features: React DOM rendering, Context Providers (GlobalConfig, ClientStats), Router, Helmet (SEO).
+ */
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"

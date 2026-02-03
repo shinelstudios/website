@@ -1,3 +1,9 @@
+/**
+ * SiteFooter.jsx
+ * 
+ * About: Global footer component with links, social media, and newsletter signup.
+ * Features: Newsletter subscription, Progressive Disclosure, Social links, Dynamic theme adaptation.
+ */
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {

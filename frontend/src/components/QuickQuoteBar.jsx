@@ -200,6 +200,10 @@ const QuickQuoteBar = ({ onBook }) => {
                     filter: "blur(5px)",
                     WebkitBackdropFilter: "blur(0px)", // Fixes some iOS shimmer issues
                     willChange: "transform",
+                    WebkitBackfaceVisibility: "hidden",
+                    backfaceVisibility: "hidden",
+                    WebkitTransform: "translate3d(0,0,0)",
+                    transform: "translate3d(0,0,0)",
                   }}
                 />
                 Get Free Audit

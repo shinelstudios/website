@@ -1,3 +1,9 @@
+/**
+ * ShinelStudiosHomepage.jsx
+ * 
+ * About: The main landing page component for Shinel Studios.
+ * Features: Hero section, Process overview, Case studies, Services, Social proof, Interactive components.
+ */
 /* ===================== Imports & Globals (TOP OF FILE ONLY) ===================== */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";

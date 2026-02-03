@@ -512,6 +512,8 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
               /* Force GPU */
               transform: translate3d(0,0,0);
               -webkit-transform: translate3d(0,0,0);
+              -webkit-backface-visibility: hidden;
+              backface-visibility: hidden;
             }
 
             /* Fallback for browsers that don't support background-clip: text */

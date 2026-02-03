@@ -1,3 +1,9 @@
+/**
+ * MobileFirst.jsx
+ * 
+ * About: Core UI primitive components designed with a mobile-first approach.
+ * Features: Container, Section, Grid, Card, Button, Badge, Heading, Text components using Framer Motion.
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { BREAKPOINTS, SPACING } from '../config/constants';

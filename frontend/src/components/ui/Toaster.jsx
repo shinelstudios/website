@@ -1,3 +1,9 @@
+/**
+ * Toaster.jsx
+ * 
+ * About: Global notification/toast system component.
+ * Features: Success/Error/Info variants, Auto-dismissal, Framer Motion animations.
+ */
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, CheckCircle, AlertCircle, Info, Bell } from "lucide-react";

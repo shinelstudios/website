@@ -310,6 +310,15 @@ const TrustBar = ({
   -webkit-animation-play-state: paused !important;
 }
 
+/* Optimization for iOS Safari rendering */
+.trustbar .marquee-item, 
+.trustbar .marquee-segment {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}
+
 /* [NEW] Segment styling */
 .trustbar .marquee-segment {
   display: inline-flex;

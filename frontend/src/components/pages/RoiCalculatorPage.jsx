@@ -1,3 +1,9 @@
+/**
+ * RoiCalculatorPage.jsx
+ * 
+ * About: SEO landing page for the YouTube ROI and CTR calculator.
+ * Features: Interactive sliders, Revenue projections, Conversion lift analysis.
+ */
 // src/components/pages/RoiCalculatorPage.jsx
 import React from "react";
 import RoiCalculator from "../RoiCalculator";

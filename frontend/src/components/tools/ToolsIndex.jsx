@@ -1,3 +1,9 @@
+/**
+ * ToolsIndex.jsx
+ * 
+ * About: Navigation hub and landing page for all specialized creator tools.
+ * Features: Tool cards, Role-based visibility, Interactive grid of tools.
+ */
 import React from "react";
 import { Link } from "react-router-dom";
 import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2 } from "lucide-react";
