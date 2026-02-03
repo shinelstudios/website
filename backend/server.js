@@ -445,16 +445,31 @@ async function ytDlpFetchCaptions(url, lang = "en") {
   fs.mkdirSync(manualDir, { recursive: true });
   fs.mkdirSync(autoDir, { recursive: true });
 
+  const commonArgs = [
+    "--skip-download",
+    "--sub-lang", lang,
+    "--sub-format", "vtt",
+    "--extractor-args", "youtube:player_client=android,web",
+  ];
+
+  // OPTIONAL: Support cookies to bypass bot detection
+  // 1. Check for cookies.txt in backend root
+  const cookiesPath = path.join(process.cwd(), "cookies.txt");
+  if (fs.existsSync(cookiesPath)) {
+    commonArgs.push("--cookies", cookiesPath);
+  }
+  // 2. Check for env var YOUTUBE_COOKIES (Netscape format string)
+  else if (process.env.YOUTUBE_COOKIES) {
+    const envCookiesPath = path.join(tmpRoot, "env_cookies.txt");
+    fs.writeFileSync(envCookiesPath, process.env.YOUTUBE_COOKIES);
+    commonArgs.push("--cookies", envCookiesPath);
+  }
+
   // 1) Try MANUAL subtitles
   const manualArgs = [
-    "--skip-download",
+    ...commonArgs,
     "--write-subs",
-    "--sub-lang",
-    lang,
-    "--sub-format",
-    "vtt",
-    "-o",
-    path.join(manualDir, "%(id)s.%(ext)s"),
+    "-o", path.join(manualDir, "%(id)s.%(ext)s"),
     url,
   ];
 
@@ -475,14 +490,9 @@ async function ytDlpFetchCaptions(url, lang = "en") {
 
   // 2) Fallback to AUTO subtitles
   const autoArgs = [
-    "--skip-download",
+    ...commonArgs,
     "--write-auto-subs",
-    "--sub-lang",
-    lang,
-    "--sub-format",
-    "vtt",
-    "-o",
-    path.join(autoDir, "%(id)s.%(ext)s"),
+    "-o", path.join(autoDir, "%(id)s.%(ext)s"),
     url,
   ];
 
