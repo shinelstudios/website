@@ -1,0 +1,99 @@
+﻿{
+    "videoId":  "dQw4w9WgXcQ",
+    "requestedLang":  "en",
+    "trackSource":  "yt-dlp",
+    "tracks":  {
+                   "manualCount":  0,
+                   "autoCount":  0
+               },
+    "manual":  {
+                   "languageCode":  "en",
+                   "name":  "Manual (yt-dlp)",
+                   "format":  "vtt",
+                   "text":  "[♪♪♪]\n♪ We\u0027re no strangers to love ♪\n♪ You know the rules and so do I ♪\n♪ A full commitment\u0027s what I\u0027m thinking of ♪\n♪ You wouldn\u0027t get this from any other guy ♪\n♪ I just wanna tell you how I\u0027m feeling ♪\n♪ Gotta make you understand ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪\n♪ We\u0027ve known each other for so long ♪\n♪ Your heart\u0027s been aching but you\u0027re too shy to say it ♪\n♪ Inside we both know what\u0027s been going ♪\n♪ We know the game and we\u0027re gonna play it ♪\n♪ And if you ask me how I\u0027m feeling ♪\n♪ Don\u0027t tell me you\u0027re too blind to see ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪\n♪ (Ooh, give you up) ♪\n♪ (Ooh, give you up) ♪\n♪ Never gonna give, never gonna give ♪\n♪ (Give you up) ♪\n♪ Never gonna give, never gonna give ♪\n♪ (Give you up) ♪\n♪ We\u0027ve known each other for so long ♪\n♪ Your heart\u0027s been aching but you\u0027re too shy to say it ♪\n♪ Inside we both know what\u0027s been going ♪\n♪ We know the game and we\u0027re gonna play it ♪\n♪ I just wanna tell you how I\u0027m feeling ♪\n♪ Gotta make you understand ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪\n♪ Never gonna give you up ♪\n♪ Never gonna let you down ♪\n♪ Never gonna run around and desert you ♪\n♪ Never gonna make you cry ♪\n♪ Never gonna say goodbye ♪\n♪ Never gonna tell a lie and hurt you ♪",
+                   "download":  null
+               },
+    "auto":  null,
+    "meta":  {
+                 "noCaptions":  false,
+                 "playabilityStatus":  "UNPLAYABLE",
+                 "playabilityReason":  "Video unavailable",
+                 "hl":  "en",
+                 "glRequested":  "IN",
+                 "usedClient":  "WEB",
+                 "usedGl":  "AE",
+                 "watchUrl":  "https://www.youtube.com/watch?v=dQw4w9WgXcQ\u0026hl=en\u0026gl=AE",
+                 "clientVersion":  "2.20260128.05.00",
+                 "apiKeyFound":  true,
+                 "attempts":  [
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "IN",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "US",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "GB",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "CA",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "AU",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "SG",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  },
+                                  {
+                                      "client":  "WEB",
+                                      "gl":  "AE",
+                                      "status":  "UNPLAYABLE",
+                                      "reason":  "Video unavailable",
+                                      "tracks":  0
+                                  }
+                              ],
+                 "captionDownloadDebug":  {
+                                              "manualTried":  [
+
+                                                              ],
+                                              "autoTried":  [
+
+                                                            ]
+                                          },
+                 "ytdlpUsed":  true,
+                 "ytdlpMode":  "manual",
+                 "ytdlpDebug":  {
+                                    "cmd":  "yt-dlp",
+                                    "manual":  {
+                                                   "code":  0,
+                                                   "out":  "[youtube] Extracting URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ\n[youtube] dQw4w9WgXcQ: Downloading webpage\n[youtube] dQw4w9WgXcQ: Downloading tv client config\n[youtube] dQw4w9WgXcQ: Downloading player 3510b6ff-main\n[youtube] dQw4w9WgXcQ: Downloading tv player API JSON\n[youtube] dQw4w9WgXcQ: Downloading android sdkless player API JSON\n[youtube] [jsc:deno] Solving JS challenges using deno\n[info] dQw4w9WgXcQ: Downloading subtitles: en\n[info] dQw4w9WgXcQ: Downloading 1 format(s): 401+251\n[info] Writing video subtitles to: C:\\Users\\ragha\\AppData\\Local\\Temp\\ytcap-EBTs2y\\manual\\dQw4w9WgXcQ.en.vtt\n[download] Destination: C:\\Users\\ragha\\AppData\\Local\\Temp\\ytcap-EBTs2y\\manual\\dQw4w9WgXcQ.en.vtt\n\r[download]    1.00KiB at  547.34KiB/s (00:00:00)\r[download]    3.00KiB at 1012.63KiB/s (00:00:00)\r[download]    4.16KiB at    1.13MiB/s (00:00:00)\r[download] 100% of    4.16KiB in 00:00:00 at 13.30KiB/s\n",
+                                                   "err":  ""
+                                               }
+                                }
+             },
+    "message":  "Captions fetched via yt-dlp fallback."
+}

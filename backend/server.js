@@ -1,3 +1,9 @@
+/**
+ * server.js (Backend)
+ * 
+ * About: Express server for handling YouTube caption extraction.
+ * Features: yt-dlp fallback, caption track selection (manual/auto), YouTube URL parsing, JSON3/SRV3/VTT conversion.
+ */
 import express from "express";
 import cors from "cors";
 import fs from "fs";
@@ -238,7 +244,7 @@ async function fetchCaptionContent(trackBaseUrl, videoId, lang, isAuto, ytHeader
         const json = JSON.parse(body);
         const text = toPlainTextFromJson3(json);
         if (text) return { format: "json3", text, download: url, debug };
-      } catch {}
+      } catch { }
     }
 
     if (fmt === "srv3" && body.includes("<transcript")) {
@@ -276,7 +282,7 @@ async function fetchCaptionContent(trackBaseUrl, videoId, lang, isAuto, ytHeader
           const json = JSON.parse(body);
           const text = toPlainTextFromJson3(json);
           if (text) return { format: "json3", text, download: u.toString(), debug };
-        } catch {}
+        } catch { }
       }
       if (fmt === "srv3" && body.includes("<transcript")) {
         const text = toPlainTextFromSrv3(body);
@@ -384,13 +390,29 @@ async function getPlayerResponseWithRetry(videoId, hl = "en", glPreferred = "IN"
 ----------------------------*/
 
 function getYtDlpCmd() {
-  // If you set YTDLP_PATH, we use it. Otherwise we try "yt-dlp" in PATH.
-  return process.env.YTDLP_PATH || "yt-dlp";
+  const envPath = process.env.YTDLP_PATH;
+
+  // 1. Try env var path if it looks valid
+  if (envPath && envPath !== "C:\\path\\to\\yt-dlp.exe") {
+    if (fs.existsSync(envPath)) return envPath;
+    // Try relative to current file if it's a relative path
+    const relPath = path.resolve(path.dirname(import.meta.url.replace("file:///", "")), envPath);
+    if (fs.existsSync(relPath)) return relPath;
+  }
+
+  // 2. Try common relative locations
+  const localPaths = ["./yt-dlp", "yt-dlp", "./yt-dlp.exe", "yt-dlp.exe"];
+  for (const p of localPaths) {
+    if (fs.existsSync(p)) return path.resolve(p);
+  }
+
+  // 3. Fallback to system path
+  return "yt-dlp";
 }
 
 function runProcess(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], ...opts });
+    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], shell: true, ...opts });
 
     let out = "";
     let err = "";
@@ -542,31 +564,33 @@ app.post("/api/youtube-captions", async (req, res) => {
     const manualOk = !!(manualData?.text && manualData.text.length > 0);
     const autoOk = !!(autoData?.text && autoData.text.length > 0);
 
-    // ✅ FINAL FIX: if track exists but downloads are empty, fallback to yt-dlp
-    let ytdlp = null;
     let finalManual = manualBest
       ? {
-          languageCode: manualBest.languageCode,
-          name: manualBest.name?.simpleText || "Manual",
-          format: manualData.format || null,
-          text: manualOk ? manualData.text : "",
-          download: manualData.download || null,
-        }
+        languageCode: manualBest.languageCode,
+        name: manualBest.name?.simpleText || "Manual",
+        format: manualData.format || null,
+        text: manualOk ? manualData.text : "",
+        download: manualData.download || null,
+      }
       : null;
 
     let finalAuto = autoBest
       ? {
-          languageCode: autoBest.languageCode,
-          name: autoBest.name?.simpleText || "Auto",
-          format: autoData.format || null,
-          text: autoOk ? autoData.text : "",
-          download: autoData.download || null,
-        }
+        languageCode: autoBest.languageCode,
+        name: autoBest.name?.simpleText || "Auto",
+        format: autoData.format || null,
+        text: autoOk ? autoData.text : "",
+        download: autoData.download || null,
+      }
       : null;
 
-    const trackFoundButEmpty = (!!autoBest || !!manualBest) && !manualOk && !autoOk;
+    const finalManualOk = !!(finalManual?.text && finalManual.text.length > 0);
+    const finalAutoOk = !!(finalAuto?.text && finalAuto.text.length > 0);
 
-    if (trackFoundButEmpty) {
+    // ✅ ROBUST FALLBACK: if nothing found yet, try yt-dlp
+    let ytdlp = null;
+    if (!finalManualOk && !finalAutoOk) {
+      console.log(`[Captions API] No tracks found via youtubei. Trying yt-dlp fallback for ${videoId}...`);
       const ytUrl = url?.startsWith("http") ? url : `https://www.youtube.com/watch?v=${videoId}`;
       ytdlp = await ytDlpFetchCaptions(ytUrl, lang);
 
@@ -591,18 +615,26 @@ app.post("/api/youtube-captions", async (req, res) => {
       }
     }
 
-    const finalManualOk = !!(finalManual?.text && finalManual.text.length > 0);
-    const finalAutoOk = !!(finalAuto?.text && finalAuto.text.length > 0);
+    const manualFinalOk = !!(finalManual?.text && finalManual.text.length > 0);
+    const autoFinalOk = !!(finalAuto?.text && finalAuto.text.length > 0);
+
+    const usedYtDlp = !!(ytdlp && ytdlp.text);
+    let finalMessage = "No captions found for this video.";
+    if (manualFinalOk || autoFinalOk) {
+      finalMessage = usedYtDlp ? "Captions fetched via yt-dlp fallback." : "Captions fetched successfully.";
+    } else if (manualBest || autoBest) {
+      finalMessage = "Captions found but download was blocked by YouTube.";
+    }
 
     return res.json({
       videoId,
       requestedLang: lang,
-      trackSource: "youtubei",
+      trackSource: usedYtDlp ? "yt-dlp" : "youtubei",
       tracks: { manualCount: manualAll.length, autoCount: autoAll.length },
-      manual: finalManualOk ? finalManual : finalManual, // keep object even if empty for debugging
-      auto: finalAutoOk ? finalAuto : finalAuto,
+      manual: manualFinalOk ? finalManual : (finalManual || null),
+      auto: autoFinalOk ? finalAuto : (finalAuto || null),
       meta: {
-        noCaptions: !(manualBest || autoBest),
+        noCaptions: !(manualBest || autoBest || usedYtDlp),
         playabilityStatus: playability?.status || null,
         playabilityReason: playability?.reason || null,
         hl,
@@ -617,14 +649,11 @@ app.post("/api/youtube-captions", async (req, res) => {
           manualTried: manualBest ? manualData.debug : [],
           autoTried: autoBest ? autoData.debug : [],
         },
-        ytdlpUsed: !!(ytdlp && ytdlp.text),
+        ytdlpUsed: usedYtDlp,
         ytdlpMode: ytdlp?.mode || null,
-        ytdlpDebug: ytdlp?.debug || null,
+        ytdlpDebug: ytdlp?.debug || null, // Included even on error
       },
-      message:
-        finalAutoOk || finalManualOk
-          ? (ytdlp && ytdlp.text ? "Captions fetched (yt-dlp fallback)." : "Captions fetched.")
-          : "Track found but caption download returned empty/blocked.",
+      message: finalMessage,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Unknown error" });
