@@ -1,3 +1,9 @@
+/**
+ * worker.js (Cloudflare Worker)
+ * 
+ * About: Backend API and authentication logic for Shinel Studios.
+ * Features: KV/D1 storage, JWT authentication, YouTube API integration, Client Sync, Audit logging, Rate limiting.
+ */
 // worker.js — Cloudflare Workers (Modules syntax)
 //
 // ✅ What’s included
@@ -34,7 +40,13 @@ function makeCorsHeaders(origin, allowedOrigins) {
       const A = lower(a.trim());
       if (!A) return false;
       if (A === "*") return true;
-      return o === A || o.startsWith(A);
+      try {
+        const urlO = new URL(o);
+        const urlA = new URL(A);
+        return urlO.hostname === urlA.hostname && urlO.protocol === urlA.protocol;
+      } catch {
+        return o === A;
+      }
     });
 
   const allowOrigin = ok ? origin : null;
@@ -58,7 +70,13 @@ function pickAllowedOrigin(origin, allowedOrigins) {
       const A = lower(a.trim());
       if (!A) return false;
       if (A === "*") return true;
-      return o === A || o.startsWith(A);
+      try {
+        const urlO = new URL(o);
+        const urlA = new URL(A);
+        return urlO.hostname === urlA.hostname && urlO.protocol === urlA.protocol;
+      } catch {
+        return o === A;
+      }
     });
   return ok ? origin : null;
 }
@@ -135,7 +153,8 @@ async function signRefresh(payload, secret, days = 7) {
 async function verifyJWT(token, secret, opts = {}) {
   // 👇 allow clock skew so "exp" claim won't fail due to tiny drifts
   const { payload } = await jwtVerify(token, secret, {
-    clockTolerance: 60,
+    algorithms: ["HS256"],
+    clockTolerance: 300,
     ...opts,
   });
   return payload;
@@ -162,6 +181,17 @@ async function isRateLimited(env, ip, windowSec = 600, max = 5) {
 async function audit(env, kind, { email, success, ip, reason }) {
   try {
     const when = new Date().toISOString();
+
+    // 1. Try D1 (Modern)
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          "INSERT INTO audit_logs (action, user_id, details, ip) VALUES (?, ?, ?, ?)"
+        ).bind(kind, email || null, JSON.stringify({ success, reason }), ip || null).run();
+      } catch (e) { console.error("D1 Audit Error:", e.message); }
+    }
+
+    // 2. Fallback to KV (Legacy)
     const ipHash = ip ? await sha256Hex(ip) : "unknown";
     const key = `audit:${kind}:${when}:${ipHash}`;
     const value = JSON.stringify({
@@ -197,6 +227,19 @@ async function putJsonList(env, key, list) {
   await ns.put(key, JSON.stringify(list));
 }
 
+// D1 Helper: Get all clients
+async function getClients(env) {
+  // 1. Try D1
+  if (env.DB) {
+    try {
+      const { results } = await env.DB.prepare("SELECT * FROM clients").all();
+      if (results && results.length > 0) return results;
+    } catch (e) { console.error("D1 Clients Error:", e.message); }
+  }
+  // 2. Fallback to KV
+  return await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+}
+
 
 
 // 👇 ETag must reflect changes to views/lastViewUpdate as well as lastUpdated & hype.
@@ -230,6 +273,15 @@ async function requireTeamOrThrow(request, secret) {
   return payload;
 }
 
+async function requireAdminOrThrow(request, secret) {
+  const token = readBearerToken(request);
+  if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
+  const payload = await verifyJWT(token, secret);
+  const role = String(payload.role || "").toLowerCase();
+  if (role !== "admin") throw Object.assign(new Error("Admin access required"), { status: 403 });
+  return payload;
+}
+
 /* ============================= YouTube helpers ============================= */
 const ytIdFrom = (url) => {
   try {
@@ -242,8 +294,27 @@ const ytIdFrom = (url) => {
   return "";
 };
 
+/**
+ * Intelligent Key Rotation
+ * - Support multiple comma-separated keys in YOUTUBE_API_KEYS
+ * - Automatically skips keys blacklisted in KV (1 hour cooldown for quota)
+ */
+async function getYoutubeKey(env) {
+  const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "";
+  const keys = keysStr.split(",").map(k => k.trim()).filter(Boolean);
+
+  for (const k of keys) {
+    const keyHash = await sha256Hex(k);
+    const isExhausted = await env.SHINEL_AUDIT.get(`yt_key_exhausted:${keyHash}`);
+    if (!isExhausted) {
+      return k;
+    }
+  }
+  return null;
+}
+
 async function fetchYouTubeViews(env, videoId) {
-  const key = env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "";
+  const key = await getYoutubeKey(env);
   if (!key) return null;
   const api = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${encodeURIComponent(
     videoId
@@ -253,6 +324,117 @@ async function fetchYouTubeViews(env, videoId) {
   const j = await resp.json().catch(() => null);
   const views = Number(j?.items?.[0]?.statistics?.viewCount ?? 0);
   return Number.isFinite(views) ? views : null;
+}
+
+async function fetchYouTubeVideoDetails(env, videoId) {
+  const key = await getYoutubeKey(env);
+  if (!key) return { error: "No available API key" };
+
+  const api = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(key)}`;
+  try {
+    const resp = await fetch(api, { headers: { accept: "application/json" } });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      if (resp.status === 403 && (err?.error?.message || "").toLowerCase().includes("quota")) {
+        await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+      }
+      return { error: err?.error?.message || `HTTP ${resp.status}` };
+    }
+    const j = await resp.json().catch(() => ({}));
+    const item = j?.items?.[0];
+    if (!item) return { error: "Video not found" };
+
+    return {
+      title: item.snippet.title,
+      thumbnails: item.snippet.thumbnails,
+      viewCount: item.statistics.viewCount,
+      publishedAt: item.snippet.publishedAt
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+async function fetchYouTubeChannelInfo(env, identifier) {
+  const key = await getYoutubeKey(env);
+  if (!key) return { error: "All YouTube API keys have exhausted their daily quota." };
+
+  const id = String(identifier || "").trim();
+  if (!id) return { error: "Empty identifier" };
+
+  const isId = id.startsWith("UC");
+  // For handles, YouTube API expects it WITHOUT the @ if using forHandle, 
+  // but some users might provide it. Let's handle both.
+  const handleVal = id.startsWith('@') ? id.slice(1) : id;
+  const param = isId ? `id=${encodeURIComponent(id)}` : `forHandle=${encodeURIComponent(handleVal)}`;
+
+  const api = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&${param}&key=${encodeURIComponent(key)}`;
+
+  try {
+    const resp = await fetch(api, { headers: { accept: "application/json" } });
+    if (!resp.ok) {
+      const errJson = await resp.json().catch(() => ({}));
+      const message = errJson?.error?.message || "Unknown error";
+
+      // If quota exceeded, blacklist this key for 1 hour (enough to stop immediate retry spam)
+      if (resp.status === 403 && message.toLowerCase().includes("quota")) {
+        await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+      }
+
+      return { error: `YouTube API ${resp.status}: ${message}` };
+    }
+    const j = await resp.json().catch(() => null);
+    const item = j?.items?.[0];
+    if (!item) return { error: "Channel not found" };
+
+    return {
+      id: item.id,
+      title: item.snippet.title,
+      logo: item.snippet.thumbnails?.default?.url || item.snippet.thumbnails?.medium?.url,
+      subscribers: Number(item.statistics.subscriberCount || 0),
+      viewCount: Number(item.statistics.viewCount || 0),
+      videoCount: Number(item.statistics.videoCount || 0),
+      handle: id.startsWith('@') ? id : (isId ? null : `@${handleVal}`),
+      uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads || null
+    };
+  } catch (e) {
+    return { error: `Fetch failed: ${e.message}` };
+  }
+}
+
+async function fetchYouTubePulse(env, channelId, uploadsPlaylistId = null) {
+  const key = await getYoutubeKey(env);
+  if (!key) return [];
+
+  // HIGH EFFICIENCY SYNC (2 Units)
+  // If we have the uploads playlist ID, we use playlistItems (1 unit) instead of search (100 units)
+  if (uploadsPlaylistId) {
+    const api = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${encodeURIComponent(uploadsPlaylistId)}&maxResults=5&key=${encodeURIComponent(key)}`;
+    const resp = await fetch(api, { headers: { accept: "application/json" } });
+    if (resp.ok) {
+      const j = await resp.json().catch(() => ({}));
+      return (j?.items || []).map(item => ({
+        id: item.snippet.resourceId.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url,
+        publishedAt: item.snippet.publishedAt,
+        type: "VIDEO"
+      }));
+    }
+  }
+
+  // Fallback to Search (100 units) if playlist ID is missing or failed
+  const api = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${encodeURIComponent(channelId)}&maxResults=5&order=date&type=video&key=${encodeURIComponent(key)}`;
+  const resp = await fetch(api, { headers: { accept: "application/json" } });
+  if (!resp.ok) return [];
+  const j = await resp.json().catch(() => []);
+  return (j?.items || []).map(item => ({
+    id: item.id.videoId,
+    title: item.snippet.title,
+    thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url,
+    publishedAt: item.snippet.publishedAt,
+    type: "upload"
+  }));
 }
 
 function isStale(ts, now = Date.now()) {
@@ -281,13 +463,17 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("origin") || "";
-    const allowedOrigins = (env.ALLOWED_ORIGINS || "")
+    const allowedOrigins = (env.ALLOWED_ORIGINS || "*")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
 
     const cors = makeCorsHeaders(origin, allowedOrigins);
-    const secret = new TextEncoder().encode(env.JWT_SECRET || "change-me");
+    const secret = new TextEncoder().encode(env.JWT_SECRET);
+    if (!env.JWT_SECRET) {
+      console.error("CRITICAL: JWT_SECRET environment variable is missing.");
+      return json({ error: "Internal Server Error (Auth Config)" }, 500, cors);
+    }
     const ALLOW = loadUsers(env); // back-compat allowlist
     const ip =
       request.headers.get("CF-Connecting-IP") ||
@@ -304,7 +490,162 @@ export default {
       (url.pathname === "/" || url.pathname === "/health") &&
       request.method === "GET"
     ) {
-      return json({ ok: true, service: "shinel-auth", time: Date.now() }, 200, cors);
+      return json({ ok: true, v: "1.0.1", service: "shinel-auth", time: Date.now() }, 200, cors);
+    }
+
+    // POST /clients/sync or /clients/pulse/refresh - PERFORM DEEP SYNC
+    const isSync = (url.pathname === "/clients/sync" || url.pathname === "/clients/pulse/refresh") && request.method === "POST";
+    if (isSync) {
+      try {
+        await requireTeamOrThrow(request, secret);
+
+        // --- COOLDOWN CHECK ---
+        const lastSyncKey = "app:clients:last_sync_ts";
+        const lastSyncTs = Number(await env.SHINEL_AUDIT.get(lastSyncKey) || "0");
+        const now = Date.now();
+        const cooldown = 15 * 60 * 1000; // 15 mins
+        const isForced = url.searchParams.has("force"); // Admin can force if needed
+
+        if (!isForced && (now - lastSyncTs < cooldown)) {
+          const remaining = Math.ceil((cooldown - (now - lastSyncTs)) / 60000);
+          return json({ error: `Sync cooldown active. Please wait ${remaining}m or use ?force=1` }, 429, cors);
+        }
+
+        const clients = await getClients(env);
+        const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+        // handle case where existingStatsRaw might be the array itself or {stats:[]}
+        const existingStatsArray = Array.isArray(existingStatsRaw) ? existingStatsRaw : (existingStatsRaw.stats || []);
+        const existingStatsMap = new Map(existingStatsArray.map(s => [s.id, s]));
+
+        const allStats = [];
+        const pulseActivities = [];
+        const channelMeta = {};
+        const errors = [];
+        let registryMutated = false;
+
+        for (let i = 0; i < clients.length; i++) {
+          const c = clients[i];
+          try {
+            const identifier = c.youtubeId || c.handle;
+            if (!identifier) {
+              errors.push({ id: c.id, name: c.name, error: "No YouTube ID or Handle provided" });
+              continue;
+            }
+
+            const result = await fetchYouTubeChannelInfo(env, identifier);
+            if (result && !result.error) {
+              allStats.push(result);
+              channelMeta[result.id] = { logo: result.logo, title: result.title };
+
+              // Cache uploadsPlaylistId in registry if missing
+              if (result.uploadsPlaylistId && c.uploadsPlaylistId !== result.uploadsPlaylistId) {
+                c.uploadsPlaylistId = result.uploadsPlaylistId;
+                registryMutated = true;
+              }
+
+              const videos = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
+              const windowLimit = now - (24 * 60 * 60 * 1000); // 24h Window
+
+              videos.forEach(v => {
+                const ts = new Date(v.publishedAt).getTime();
+                // ONLY ADD CONTENT FROM LAST 24 HOURS
+                if (ts >= windowLimit) {
+                  pulseActivities.push({
+                    id: `act-${v.id}-${ts}`,
+                    clientName: result.title,
+                    channelId: result.id,
+                    title: v.title,
+                    thumbnail: v.thumbnail,
+                    url: `https://youtube.com/watch?v=${v.id}`,
+                    type: "VIDEO",
+                    timestamp: ts,
+                    publishedAt: v.publishedAt
+                  });
+                }
+              });
+            } else {
+              const err = result?.error || "Unknown error";
+              errors.push({ id: c.id, name: c.name, error: err });
+
+              // STICKY STATS: If fetch failed (e.g. Quota), try to preserve old stats
+              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+              if (old) {
+                allStats.push({ ...old, _stale: true });
+                channelMeta[old.id] = { logo: old.logo, title: old.title };
+              }
+            }
+          } catch (err) {
+            console.error(`Sync error for ${c.name}:`, err.message);
+            errors.push({ id: c.id, name: c.name, error: err.message });
+
+            const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+            if (old) {
+              allStats.push({ ...old, _stale: true });
+              channelMeta[old.id] = { logo: old.logo, title: old.title };
+            }
+          }
+        }
+
+        pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
+
+        if (registryMutated) {
+          await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
+        }
+
+        await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
+        await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
+          activities: pulseActivities,
+          meta: channelMeta,
+          ts: now
+        }));
+        await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
+
+        const responseData = {
+          ok: true,
+          synced: allStats.length,
+          total: clients.length,
+          errors,
+          ts: now
+        };
+
+        if (url.searchParams.has("debug")) {
+          responseData.debug = {
+            trace: [
+              ...allStats.map(s => ({ name: s.title, id: s.id, status: 'success', count: s.videoCount })),
+              ...errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error }))
+            ],
+            keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
+            keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
+            keyValid: true
+          };
+        }
+
+        return json(responseData, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Sync failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* -------------------------- YouTube Captions Proxy -------------------------- */
+    if (url.pathname === "/api/youtube-captions" && request.method === "POST") {
+      try {
+        const backendUrl = env.CAPTIONS_API_URL;
+        if (!backendUrl) {
+          return json({ error: "Backend Captions API URL not configured in Worker secrets (CAPTIONS_API_URL)" }, 501, cors);
+        }
+
+        const body = await request.clone().json();
+        const res = await fetch(`${backendUrl}/api/youtube-captions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const data = await res.json();
+        return json(data, res.status, cors);
+      } catch (e) {
+        return json({ error: "Proxy failed: " + e.message }, 502, cors);
+      }
     }
 
     /* ----------------------------- POST /auth/login ----------------------------- */
@@ -485,16 +826,19 @@ export default {
 
     /* =============================== /config ============================== */
     if (url.pathname === "/config" && request.method === "GET") {
-      return json({
-        site: {
-          name: "Shinel Studios",
-          contact: "contact@shinelstudios.in"
-        },
-        features: {
-          pulse: true,
-          hub: true
-        }
-      }, 200, cors);
+      const config = await env.SHINEL_AUDIT.get("app:config:global", "json") || {};
+      return json({ config }, 200, cors);
+    }
+
+    if (url.pathname === "/config" && request.method === "PUT") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const updates = await request.json().catch(() => ({}));
+        await env.SHINEL_AUDIT.put("app:config:global", JSON.stringify(updates));
+        return json({ ok: true, config: updates }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
     }
 
     /* =============================== /clients ============================== */
@@ -508,8 +852,54 @@ export default {
 
     // GET /clients/pulse - Activity feed
     if (url.pathname === "/clients/pulse" && request.method === "GET") {
-      const feed = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || { activities: [], meta: {}, ts: Date.now() };
+      let feed = { activities: [], meta: {}, ts: Date.now() };
+
+      // 1. Try D1 (Source of Truth for activities)
+      if (env.DB) {
+        try {
+          const { results: activities } = await env.DB.prepare(
+            "SELECT p.*, c.name as clientName FROM pulse_activities p JOIN clients c ON p.client_id = c.youtube_id WHERE c.status = 'active' ORDER BY p.timestamp DESC LIMIT 50"
+          ).all();
+
+          if (activities && activities.length > 0) {
+            feed.activities = activities.map(a => ({
+              ...a,
+              clientName: a.clientName || "Shinel Partner"
+            }));
+            // Get meta for these channels
+            const statsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+            const stats = Array.isArray(statsRaw) ? statsRaw : (statsRaw.stats || []);
+            const meta = {};
+            stats.forEach(s => { meta[s.id] = { logo: s.logo, title: s.title }; });
+            feed.meta = meta;
+            feed.ts = Number(await env.SHINEL_AUDIT.get("app:clients:last_sync_ts") || Date.now());
+            return json(feed, 200, cors);
+          }
+        } catch (e) {
+          console.error("D1 Pulse Read Error:", e.message);
+        }
+      }
+
+      // 2. Fallback to KV (aggregated cache)
+      feed = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || feed;
+
+      // Support debug mode from AdminStats.jsx
+      if (url.searchParams.has("debug")) {
+        const syncErrors = await env.SHINEL_AUDIT.get("app:clients:sync_errors", "json") || { errors: [] };
+        feed.debug = {
+          trace: syncErrors.errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error })),
+          keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
+          keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
+          keyValid: true // Basic assumption for now
+        };
+      }
       return json(feed, 200, cors);
+    }
+
+    // GET /clients/sync/errors - Retrieve latest sync errors
+    if (url.pathname === "/clients/sync/errors" && request.method === "GET") {
+      const data = await env.SHINEL_AUDIT.get("app:clients:sync_errors", "json") || { errors: [], ts: Date.now() };
+      return json(data, 200, cors);
     }
 
     // POST /clients - Add a new creator to the registry
@@ -532,12 +922,24 @@ export default {
           youtubeId: String(body.youtubeId),
           handle: String(body.handle || ""),
           category: String(body.category || "Vlogger"),
+          status: String(body.status || "active"),
+          subscribers: Number(body.subscribers || 0),
           dateAdded: now,
           lastUpdated: now
         };
 
         list.push(row);
         await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+
+        // ALSO D1
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              "INSERT INTO clients (id, name, youtube_id, handle, category, status, subscribers) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ).bind(id, row.name, row.youtubeId, row.handle, row.category, row.status, row.subscribers).run();
+          } catch (e) { console.error("D1 Client Insert Error:", e.message); }
+        }
+
         return json({ client: row }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Save failed" }, e.status || 500, cors);
@@ -560,6 +962,16 @@ export default {
         list[idx] = merged;
 
         await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+
+        // ALSO D1
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              "UPDATE clients SET name=?, youtube_id=?, handle=?, category=?, status=?, subscribers=? WHERE id=?"
+            ).bind(merged.name, merged.youtubeId, merged.handle, merged.category, merged.status || 'active', merged.subscribers || 0, id).run();
+          } catch (e) { console.error("D1 Client Update Error:", e.message); }
+        }
+
         return json({ client: merged }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Update failed" }, e.status || 500, cors);
@@ -606,12 +1018,142 @@ export default {
 
     // GET /clients/stats - Generic stats
     if (url.pathname === "/clients/stats" && request.method === "GET") {
-      return json({ ok: true, stats: {} }, 200, cors);
+      const stats = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+      return json({ ok: true, stats: Array.isArray(stats) ? stats : [] }, 200, cors);
     }
+
 
     // GET /clients/history - Activity history
     if (url.pathname === "/clients/history" && request.method === "GET") {
       return json({ ok: true, history: [] }, 200, cors);
+    }
+
+    /* =============================== /admin/users =============================== */
+
+    // GET /admin/users - List all users
+    if (url.pathname === "/admin/users" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const list = [];
+
+        // 1) From KV
+        let cursor = "";
+        while (true) {
+          const { keys, list_complete, cursor: nextCursor } = await env.SHINEL_USERS.list({ prefix: "user:", cursor });
+          for (const k of keys) {
+            const val = await env.SHINEL_USERS.get(k.name, "json");
+            if (val) {
+              list.push({
+                firstName: val.firstName || "",
+                lastName: val.lastName || "",
+                email: val.email,
+                role: val.role || "client"
+              });
+            }
+          }
+          if (list_complete) break;
+          cursor = nextCursor;
+        }
+
+        // 2) From USERS_JSON static list (fallback/allowlist)
+        const staticUsers = loadUsers(env);
+        for (const su of staticUsers) {
+          if (!list.find(u => u.email === su.email)) {
+            list.push({
+              firstName: su.firstName || "",
+              lastName: su.lastName || "",
+              email: su.email,
+              role: su.role || "client"
+            });
+          }
+        }
+
+        return json({ users: list }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
+      }
+    }
+
+    // POST /admin/users - Create new user
+    if (url.pathname === "/admin/users" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const email = String(body.email || "").trim().toLowerCase();
+        const password = String(body.password || "");
+
+        if (!email || !password) {
+          return json({ error: "Email and password required" }, 400, cors);
+        }
+
+        // Standard bcrypt hash (10 rounds)
+        const passwordHash = await bcrypt.hash(password, 10);
+        const userData = {
+          email,
+          passwordHash,
+          role: String(body.role || "client"),
+          firstName: String(body.firstName || ""),
+          lastName: String(body.lastName || ""),
+          bio: String(body.bio || ""),
+          slug: String(body.slug || ""),
+          linkedin: String(body.linkedin || ""),
+          twitter: String(body.twitter || ""),
+          website: String(body.website || ""),
+          skills: String(body.skills || ""),
+          experience: String(body.experience || "")
+        };
+
+        await env.SHINEL_USERS.put(`user:${email}`, JSON.stringify(userData));
+        return json({ ok: true, user: { email, role: userData.role } }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Creation failed" }, e.status || 500, cors);
+      }
+    }
+
+    // PUT /admin/users/:email - Update user
+    if (url.pathname.startsWith("/admin/users/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const email = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
+        const updates = await request.json().catch(() => ({}));
+
+        const raw = await env.SHINEL_USERS.get(`user:${email}`);
+        let user = raw ? JSON.parse(raw) : null;
+
+        // If not in KV, try to find in USERS_JSON static list
+        if (!user) {
+          const staticUsers = loadUsers(env);
+          user = staticUsers.find(u => u.email === email) || null;
+        }
+
+        if (!user) return json({ error: "User not found" }, 404, cors);
+
+        const merged = { ...user, ...updates };
+        if (updates.password) {
+          merged.passwordHash = await bcrypt.hash(updates.password, 10);
+          delete merged.password;
+        }
+
+        merged.email = email; // Ensure email doesn't change
+        if (updates.role) merged.role = String(updates.role);
+
+        await env.SHINEL_USERS.put(`user:${email}`, JSON.stringify(merged));
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+
+    // DELETE /admin/users/:email - Delete user
+    if (url.pathname.startsWith("/admin/users/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const email = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
+        await env.SHINEL_USERS.delete(`user:${email}`);
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
+      }
     }
 
     /* =============================== /stats =============================== */
@@ -893,6 +1435,26 @@ export default {
       }
     }
 
+    /* =========================== /thumbnails (proxies) =========================== */
+    if (url.pathname === "/thumbnails/fetch-youtube" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const videoUrl = String(body.url || body.youtubeUrl || "").trim();
+        if (!videoUrl) return json({ error: "Missing URL" }, 400, cors);
+
+        const videoId = ytIdFrom(videoUrl);
+        if (!videoId) return json({ error: "Invalid YouTube URL" }, 400, cors);
+
+        const details = await fetchYouTubeVideoDetails(env, videoId);
+        if (details.error) return json({ error: details.error }, 400, cors);
+
+        return json({ ok: true, details }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
+      }
+    }
+
     /* =========================== /thumbnails (public) =========================== */
 
     if (url.pathname === "/thumbnails" && request.method === "GET") {
@@ -982,7 +1544,279 @@ export default {
       }
     }
 
+    /* ------------------------------- config ------------------------------- */
+    if (url.pathname === "/config/stats" && request.method === "GET") {
+      const stats = await env.SHINEL_AUDIT.get("app:config:stats", "json") || { totalReach: null, creatorsImpacted: null };
+      return json({ stats }, 200, cors);
+    }
+
+    if (url.pathname === "/config/stats" && request.method === "POST") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const body = await request.json();
+        const stats = {
+          totalReach: body.totalReach,
+          creatorsImpacted: body.creatorsImpacted,
+          updatedAt: Date.now()
+        };
+        await env.SHINEL_AUDIT.put("app:config:stats", JSON.stringify(stats));
+        return json({ ok: true, stats }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* ------------------------------- yt-quota ------------------------------- */
+    // GET /admin/yt-quota - List health status of all pooled keys
+    if (url.pathname === "/admin/yt-quota" && request.method === "GET") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "";
+        const keys = keysStr.split(",").map(k => k.trim()).filter(Boolean);
+
+        const health = [];
+        for (const k of keys) {
+          const keyHash = await sha256Hex(k);
+          const isExhausted = await env.SHINEL_AUDIT.get(`yt_key_exhausted:${keyHash}`);
+          health.push({
+            masked: k.slice(0, 4) + "..." + k.slice(-4),
+            hash: keyHash,
+            status: isExhausted ? "EXHAUSTED" : "ACTIVE",
+            cooldown: isExhausted ? "Up to 1 hour" : "None"
+          });
+        }
+
+        return json({ keys: health }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* ------------------------------- audits ------------------------------- */
+    if (url.pathname === "/audits/weekly" && request.method === "GET") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const audits = await env.SHINEL_AUDIT.get("app:audits:weekly", "json") || [];
+        return json({ audits }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* ------------------------------- blog ------------------------------- */
+    // GET /blog/posts - Public list
+    if (url.pathname === "/blog/posts" && request.method === "GET") {
+      const posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
+      // Filter drafts if not admin? For now public sees published.
+      // If admin param ?admin=1, show all.
+      // Simplest: Public gets everything marked 'published'.
+      const isPublic = !url.searchParams.has("admin");
+      const result = isPublic ? posts.filter(p => p.status === 'published') : posts;
+      // Sort by date desc
+      result.sort((a, b) => new Date(b.date) - new Date(a.date));
+      return json({ posts: result }, 200, cors);
+    }
+
+    // GET /blog/posts/:slug - Single post
+    if (url.pathname.match(/^\/blog\/posts\/([^/]+)$/) && request.method === "GET") {
+      const slug = url.pathname.split("/").pop();
+      const posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
+      const post = posts.find(p => p.slug === slug);
+      if (!post) return json({ error: "Post not found" }, 404, cors);
+      return json({ post }, 200, cors);
+    }
+
+    // POST /blog/posts (Admin) - Create/Update
+    if (url.pathname === "/blog/posts" && request.method === "POST") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const body = await request.json();
+        const { slug, title, content, excerpt, coverImage, author, status, date } = body;
+
+        if (!slug || !title) return json({ error: "Slug and Title required" }, 400, cors);
+
+        let posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
+        const existingIdx = posts.findIndex(p => p.slug === slug);
+
+        const newPost = {
+          slug,
+          title,
+          content, // Markdown/HTML
+          excerpt,
+          coverImage,
+          author: author || "Shinel Studios",
+          status: status || "draft",
+          date: date || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx >= 0) {
+          posts[existingIdx] = { ...posts[existingIdx], ...newPost };
+        } else {
+          posts.push(newPost);
+        }
+
+        await env.SHINEL_AUDIT.put("app:blog:posts", JSON.stringify(posts));
+        return json({ ok: true, post: newPost }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Save failed" }, e.status || 500, cors);
+      }
+    }
+
+    // DELETE /blog/posts/:slug (Admin)
+    if (url.pathname.match(/^\/blog\/posts\/([^/]+)$/) && request.method === "DELETE") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const slug = url.pathname.split("/").pop();
+        let posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
+        const newPosts = posts.filter(p => p.slug !== slug);
+
+        if (posts.length === newPosts.length) return json({ error: "Post not found" }, 404, cors);
+
+        await env.SHINEL_AUDIT.put("app:blog:posts", JSON.stringify(newPosts));
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
+      }
+    }
+
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
   },
+
+  async scheduled(event, env, ctx) {
+    console.log("CRON TRIGGER: Starting Pulse Sync...");
+    ctx.waitUntil((async () => {
+      try {
+        const lastSyncKey = "app:clients:last_sync_ts";
+        const clients = await getClients(env);
+        const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+        const existingStatsArray = Array.isArray(existingStatsRaw) ? existingStatsRaw : (existingStatsRaw.stats || []);
+        const existingStatsMap = new Map(existingStatsArray.map(s => [s.id, s]));
+
+        const allStats = [];
+        const pulseActivities = [];
+        const channelMeta = {};
+        const now = Date.now();
+        let registryMutated = false;
+
+        for (const c of clients) {
+          try {
+            const identifier = c.youtubeId || c.handle;
+            if (!identifier) continue;
+
+            // --- STATUS FILTER ---
+            // If client is 'old', skip YouTube fetch but keep their stats for marquee
+            if (c.status === "old") {
+              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+              if (old) {
+                allStats.push({ ...old, _stale: true, _source: 'legacy_status' });
+                channelMeta[old.id] = { logo: old.logo, title: old.title };
+              } else {
+                // If no stats exist, push a placeholder so they stay in registry
+                allStats.push({ id: c.youtubeId || c.id, title: c.name, logo: c.logo || null, subscribers: c.subscribers || 0, _stale: true });
+              }
+              continue;
+            }
+
+            const result = await fetchYouTubeChannelInfo(env, identifier);
+            if (result && !result.error) {
+              allStats.push(result);
+              channelMeta[result.id] = { logo: result.logo, title: result.title };
+
+              if (result.uploadsPlaylistId && c.uploadsPlaylistId !== result.uploadsPlaylistId) {
+                c.uploadsPlaylistId = result.uploadsPlaylistId;
+                registryMutated = true;
+              }
+
+              const videos = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
+              const windowLimit = now - (24 * 60 * 60 * 1000);
+
+              for (const v of videos) {
+                const ts = new Date(v.publishedAt).getTime();
+                if (ts >= windowLimit) {
+                  pulseActivities.push({
+                    id: `act-${v.id}-${ts}`,
+                    clientName: result.title,
+                    channelId: result.id,
+                    title: v.title,
+                    thumbnail: v.thumbnail,
+                    url: `https://youtube.com/watch?v=${v.id}`,
+                    type: "VIDEO",
+                    timestamp: ts,
+                    publishedAt: v.publishedAt
+                  });
+
+                  // ALSO PIPELINE TO D1 IF AVAILABLE
+                  if (env.DB) {
+                    try {
+                      await env.DB.prepare(
+                        "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                      ).bind(`act-${v.id}-${ts}`, result.id, v.id, v.title, v.thumbnail, `https://youtube.com/watch?v=${v.id}`, v.publishedAt, ts).run();
+                    } catch (e) { console.error("D1 Pulse Insert Error:", e.message); }
+                  }
+                }
+              }
+            } else {
+              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+              if (old) {
+                allStats.push({ ...old, _stale: true });
+                channelMeta[old.id] = { logo: old.logo, title: old.title };
+              }
+            }
+          } catch (err) {
+            console.error(`Scheduled Sync Error for ${c.name}:`, err.message);
+            const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+            if (old) {
+              allStats.push({ ...old, _stale: true });
+              channelMeta[old.id] = { logo: old.logo, title: old.title };
+            }
+          }
+        }
+
+        pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
+
+        if (registryMutated) {
+          await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
+        }
+
+        await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
+        await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
+          activities: pulseActivities,
+          meta: channelMeta,
+          ts: now
+        }));
+        await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
+
+        // --- WEEKLY AUDIT AGGREGATION ---
+        const lastWeeklyAudit = await env.SHINEL_AUDIT.get("app:audits:weekly_last_ts");
+        const weekInMs = 7 * 24 * 60 * 60 * 1000;
+        if (!lastWeeklyAudit || (now - Number(lastWeeklyAudit)) > weekInMs) {
+          const totalSubs = allStats.reduce((sum, s) => sum + (Number(s.subscribers) || 0), 0);
+          const totalViews = allStats.reduce((sum, s) => sum + (Number(s.viewCount) || 0), 0);
+          const activeCreators = clients.filter(c => c.status !== 'old').length;
+
+          const auditSummary = {
+            ts: now,
+            date: new Date(now).toISOString(),
+            totalCreators: clients.length,
+            activeCreators,
+            totalSubscribers: totalSubs,
+            totalViews: totalViews,
+            syncErrors: allStats.filter(s => s._stale).length
+          };
+
+          const auditHistory = await env.SHINEL_AUDIT.get("app:audits:weekly", "json") || [];
+          auditHistory.unshift(auditSummary);
+          await env.SHINEL_AUDIT.put("app:audits:weekly", JSON.stringify(auditHistory.slice(0, 10))); // Keep last 10 weeks
+          await env.SHINEL_AUDIT.put("app:audits:weekly_last_ts", String(now));
+          console.log("WEEKLY AUDIT GENERATED:", auditSummary);
+        }
+
+        console.log(`CRON SUCCESS: Synced ${allStats.length} creators.`);
+      } catch (e) {
+        console.error("CRON ERROR:", e.message);
+      }
+    })());
+  }
 };

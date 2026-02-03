@@ -441,7 +441,7 @@ async function ytDlpFetchCaptions(url, lang = "en") {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ytcap-"));
 
   // Clients to try in order of success probability for captions
-  const clients = ["web", "ios", "android"];
+  const clients = ["web", "mweb", "ios", "android"];
   const debugLog = { cmd, attempts: [] };
 
   for (const client of clients) {
@@ -450,6 +450,8 @@ async function ytDlpFetchCaptions(url, lang = "en") {
       "--sub-lang", lang,
       "--sub-format", "vtt",
       "--no-check-certificates",
+      "--no-playlist",
+      "--js-runtimes", "node",
       "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     ];
 

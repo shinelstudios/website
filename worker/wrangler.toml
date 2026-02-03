@@ -34,11 +34,17 @@ preview_id = "3cbcd4fa6bb448789ca40ec2c42658dd"   # new PREVIEW KV
 binding = "SHINEL_USERS_PROD"
 id = "f97b96f897114a559bce369f79ec80f2"
 
-# --- Environment Variables ---
-[vars]
-ALLOWED_ORIGINS="https://shinelstudios.in,https://www.shinelstudios.in,https://beta.shinelstudios.in,http://localhost:5173"
+# --- D1 Database ---
+[[d1_databases]]
+binding = "DB"
+database_name = "shinel-db"
+database_id = "907df36d-0254-4744-8473-bcfcc4aa8e0c"
 
-# Note: Secrets (JWT_SECRET, USERS_JSON, YOUTUBE_API_KEY) are stored separately via:
+# --- Cron Triggers ---
+[triggers]
+crons = ["*/30 * * * *"] # Every 30 mins
+
+# Note: Secrets (JWT_SECRET, USERS_JSON, YOUTUBE_API_KEYS) are stored separately via:
 # wrangler secret put JWT_SECRET
 # wrangler secret put USERS_JSON
-# wrangler secret put YOUTUBE_API_KEY
+# wrangler secret put YOUTUBE_API_KEYS  # Can be a comma-separated list for pooling
