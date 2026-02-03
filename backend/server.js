@@ -453,16 +453,11 @@ async function ytDlpFetchCaptions(url, lang = "en") {
   ];
 
   // OPTIONAL: Support cookies to bypass bot detection
-  // 1. Check for cookies.txt in backend root
+  // Use a physical file to avoid "Argument list too long" errors with large env vars
   const cookiesPath = path.join(process.cwd(), "cookies.txt");
   if (fs.existsSync(cookiesPath)) {
     commonArgs.push("--cookies", cookiesPath);
-  }
-  // 2. Check for env var YOUTUBE_COOKIES (Netscape format string)
-  else if (process.env.YOUTUBE_COOKIES) {
-    const envCookiesPath = path.join(tmpRoot, "env_cookies.txt");
-    fs.writeFileSync(envCookiesPath, process.env.YOUTUBE_COOKIES);
-    commonArgs.push("--cookies", envCookiesPath);
+    console.log("[Captions API] Using cookies from cookies.txt");
   }
 
   // 1) Try MANUAL subtitles
@@ -520,8 +515,7 @@ async function ytDlpFetchCaptions(url, lang = "en") {
       cmd,
       manual: { code: manual.code, out: manual.out, err: manual.err },
       auto: { code: auto.code, out: auto.out, err: auto.err },
-      note:
-        "yt-dlp did not produce a .vtt file. Ensure yt-dlp is installed and can access YouTube on this machine/network.",
+      note: "yt-dlp did not produce a .vtt file. Ensure yt-dlp is installed and can access YouTube.",
     },
   };
 }
