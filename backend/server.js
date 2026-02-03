@@ -412,7 +412,8 @@ function getYtDlpCmd() {
 
 function runProcess(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], shell: true, ...opts });
+    // shell: false is safer and avoids syntax errors with special characters in templates/URLs
+    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], shell: false, ...opts });
 
     let out = "";
     let err = "";
