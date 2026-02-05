@@ -18,13 +18,13 @@ const tiles = [
     icon: Search,
     roles: ["admin", "editor", "client", "public"],
   },
-  {
+  /* {
     to: "/tools/srt",
     title: "Auto SRT (Multi-Language)",
     desc: "Paste or upload transcript and export .srt — quick timing presets.",
     icon: Languages,
     roles: ["admin", "editor", "client", "public"],
-  },
+  }, */
   {
     to: "/tools/seo",
     title: "SEO Tool",
@@ -67,13 +67,13 @@ const tiles = [
     icon: TrendingUp,
     roles: ["admin", "editor", "client", "public"],
   },
-  {
+  /* {
     to: "/tools/youtube-captions",
     title: "YouTube Automated Captions",
     desc: "Extract manual & auto-generated captions directly from any YouTube URL.",
     icon: Youtube,
     roles: ["admin", "editor", "client", "public"],
-  },
+  }, */
 ];
 
 

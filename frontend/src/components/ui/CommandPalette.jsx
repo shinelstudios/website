@@ -40,7 +40,7 @@ export default function CommandPalette() {
             { icon: Briefcase, label: "Work Portfolio", path: "/work", category: "Pages" },
             { icon: Cpu, label: "AI Studio", path: "/studio", category: "Tools" },
             { icon: ImageIcon, label: "Thumbnail Previewer", path: "/tools/thumbnail-previewer", category: "Tools" },
-            { icon: Video, label: "SRT/Caption Tool", path: "/tools/srt", category: "Tools" },
+            // { icon: Video, label: "SRT/Caption Tool", path: "/tools/srt", category: "Tools" },
         ];
 
         if (isAdmin) {

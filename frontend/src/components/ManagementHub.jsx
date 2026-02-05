@@ -145,20 +145,20 @@ export default function ManagementHub() {
             roles: ["admin", "editor"],
             description: "Gamified performance tracking",
         },
-        {
+        /* {
             name: "Local SRT Builder",
             path: "/tools/srt",
             icon: Languages,
             roles: ["admin", "editor"],
             description: "Paste transcript lines -> export .srt",
-        },
-        {
+        }, */
+        /* {
             name: "YouTube Captions Fetcher",
             path: "/tools/youtube-captions",
             icon: Video,
             roles: ["admin", "editor"],
             description: "Fetch manual + auto captions",
-        },
+        }, */
         {
             name: "SEO Tool",
             path: "/tools/seo",

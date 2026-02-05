@@ -1,3 +1,19 @@
+/**
+ * ParticleNetwork.jsx
+ * 
+ * About: Particle network background animation component
+ * Purpose: Creates floating particles with connecting lines for dynamic visual effects
+ * 
+ * Cross-Device Compatibility:
+ * - iOS Safari: Retina display support with devicePixelRatio scaling
+ * - macOS Safari: High-DPI display optimization for Retina screens
+ * - Android Chrome: Canvas willReadFrequently optimization, mobile particle count reduction
+ * - Windows Browsers: Standard canvas rendering with performance optimizations
+ * 
+ * Accessibility: Respects prefers-reduced-motion user preference
+ * Performance: RequestAnimationFrame with proper cleanup, IntersectionObserver for visibility,
+ *              optimized canvas rendering, reduced particle count on mobile devices
+ */
 import React, { useEffect, useRef } from 'react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -32,17 +48,38 @@ const ParticleNetwork = ({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const ctx = canvas.getContext('2d', { alpha: true });
-        let width = canvas.width = canvas.offsetWidth;
-        let height = canvas.height = canvas.offsetHeight;
+        // Get 2D context with alpha and willReadFrequently for better performance
+        // This is especially important for frequent pixel reads on mobile devices
+        const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
+
+        // Support for high-DPI displays (Retina, etc.)
+        // This ensures crisp rendering on iOS, macOS, and high-DPI Android devices
+        const dpr = window.devicePixelRatio || 1;
+        let width = canvas.offsetWidth;
+        let height = canvas.offsetHeight;
+
+        // Scale canvas for retina displays
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.scale(dpr, dpr);
 
         const isMobile = window.innerWidth < 768;
         const actualCount = isMobile ? Math.min(particleCount, 25) : particleCount;
 
         // Handle resize
         const handleResize = () => {
-            width = canvas.width = canvas.offsetWidth;
-            height = canvas.height = canvas.offsetHeight;
+            width = canvas.offsetWidth;
+            height = canvas.offsetHeight;
+
+            // Re-scale canvas for retina displays on resize
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+            ctx.scale(dpr, dpr);
+
             initParticles();
         };
 
@@ -138,7 +175,7 @@ const ParticleNetwork = ({
         initParticles();
 
         if (prefersReducedMotion) {
-            // Draw static frame
+            // Draw static frame for users who prefer reduced motion
             particlesRef.current.forEach(particle => particle.draw());
             drawConnections();
         } else {

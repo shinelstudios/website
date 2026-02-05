@@ -200,13 +200,13 @@ const toolsCatalog = [
     roles: ["admin", "editor", "client", "public"],
     description: "Visualize potential revenue and growth lift",
   },
-  {
-    name: "Local SRT Builder",
-    path: "/tools/srt",
-    icon: Languages,
-    roles: ["admin", "editor", "client", "public"],
-    description: "Paste transcript lines → export .srt with simple timing",
-  },
+  /* {
+      name: "Local SRT Builder",
+      path: "/tools/srt",
+      icon: Languages,
+      roles: ["admin", "editor", "client", "public"],
+      description: "Paste transcript lines → export .srt with simple timing",
+    }, */
   {
     name: "Thumbnail A/B Previewer",
     path: "/tools/thumbnail-previewer",
@@ -263,13 +263,13 @@ const toolsCatalog = [
     roles: ["admin"],
     description: "Manage YouTube client list",
   },
-  {
-    name: "YouTube Automated Captions",
-    path: "/tools/youtube-captions",
-    icon: Languages,
-    roles: ["admin", "editor", "client", "public"],
-    description: "Extract manual & auto-generated captions from URL",
-  },
+  /* {
+      name: "YouTube Automated Captions",
+      path: "/tools/youtube-captions",
+      icon: Languages,
+      roles: ["admin", "editor", "client", "public"],
+      description: "Extract manual & auto-generated captions from URL",
+    }, */
 ];
 
 
@@ -501,7 +501,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       { icon: BarChart3, text: `Thumbnails Delivering +${config?.stats?.ctrBoostMax || "60"}% CTR Lift` },
       { icon: Zap, text: "Edits Driving 2× Average Watch Time" },
       { icon: ExternalLink, text: `${config?.stats?.totalReach || "1.2B"}${typeof config?.stats?.totalReach === 'string' ? '' : '+'} Total Views Driven for Clients` },
-      { icon: Languages, text: "Auto-Captions & Multi-Language Support" },
+      // { icon: Languages, text: "Auto-Captions & Multi-Language Support" },
       { icon: Shield, text: "Consent-First Face & Voice AI Features" },
       { icon: Lightbulb, text: "Hook Scoring & Title Testing" },
       { icon: Brain, text: "AI Script Co-Pilot for Viral Ideation" },

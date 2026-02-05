@@ -1,3 +1,18 @@
+/**
+ * SpotlightSweep.jsx
+ * 
+ * About: Spotlight sweep background animation component
+ * Purpose: Creates rotating spotlight beam effects for gaming/streaming aesthetic
+ * 
+ * Cross-Device Compatibility:
+ * - iOS Safari: Uses translate3d for GPU acceleration, webkit-prefixed animations
+ * - macOS Safari: Webkit-prefixed keyframes and transform-origin for older versions
+ * - Android Chrome: Optimized with will-change and transform3d
+ * - Windows Browsers: Standard CSS animations with fallbacks
+ * 
+ * Accessibility: Respects prefers-reduced-motion user preference
+ * Performance: GPU-accelerated with translate3d, filter blur optimizations
+ */
 import React from 'react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 

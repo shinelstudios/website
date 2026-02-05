@@ -371,6 +371,7 @@
       transform: translate3d(0, 0, 0);
       -webkit-transform: translate3d(0, 0, 0);
     }
+
     100% {
       transform: translate3d(-50%, 0, 0);
       -webkit-transform: translate3d(-50%, 0, 0);
@@ -381,6 +382,7 @@
     0% {
       -webkit-transform: translate3d(0, 0, 0);
     }
+
     100% {
       -webkit-transform: translate3d(-50%, 0, 0);
     }
@@ -391,6 +393,7 @@
       transform: translate3d(-50%, 0, 0);
       -webkit-transform: translate3d(-50%, 0, 0);
     }
+
     100% {
       transform: translate3d(0, 0, 0);
       -webkit-transform: translate3d(0, 0, 0);
@@ -401,6 +404,7 @@
     0% {
       -webkit-transform: translate3d(-50%, 0, 0);
     }
+
     100% {
       -webkit-transform: translate3d(0, 0, 0);
     }
@@ -433,16 +437,35 @@
     }
   }
 
-  /* Aurora Animations */
+  /* Aurora Animations
+   * Cross-device compatible background animations
+   * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+   * Uses translate3d for GPU acceleration and prevents flicker on mobile devices
+   */
   @keyframes aurora-1 {
 
     0%,
     100% {
-      transform: translate(0, 0) scale(1);
+      transform: translate3d(0, 0, 0) scale(1);
+      -webkit-transform: translate3d(0, 0, 0) scale(1);
     }
 
     50% {
-      transform: translate(20px, -20px) scale(1.1);
+      transform: translate3d(20px, -20px, 0) scale(1.1);
+      -webkit-transform: translate3d(20px, -20px, 0) scale(1.1);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes aurora-1 {
+
+    0%,
+    100% {
+      -webkit-transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    50% {
+      -webkit-transform: translate3d(20px, -20px, 0) scale(1.1);
     }
   }
 
@@ -450,87 +473,246 @@
 
     0%,
     100% {
-      transform: translate(0, 0) scale(1);
+      transform: translate3d(0, 0, 0) scale(1);
+      -webkit-transform: translate3d(0, 0, 0) scale(1);
     }
 
     50% {
-      transform: translate(-20px, 10px) scale(0.9);
+      transform: translate3d(-20px, 10px, 0) scale(0.9);
+      -webkit-transform: translate3d(-20px, 10px, 0) scale(0.9);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes aurora-2 {
+
+    0%,
+    100% {
+      -webkit-transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    50% {
+      -webkit-transform: translate3d(-20px, 10px, 0) scale(0.9);
     }
   }
 
   .animate-aurora-1 {
     animation: aurora-1 10s ease-in-out infinite;
+    -webkit-animation: aurora-1 10s ease-in-out infinite;
+    /* GPU acceleration for smooth performance on all devices */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
   }
 
   .animate-aurora-2 {
     animation: aurora-2 15s ease-in-out infinite;
+    -webkit-animation: aurora-2 15s ease-in-out infinite;
+    /* GPU acceleration for smooth performance on all devices */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
   }
 
-  /* Starfield Animations */
+  /* Respect user's motion preferences (accessibility) */
+  @media (prefers-reduced-motion: reduce) {
+
+    .animate-aurora-1,
+    .animate-aurora-2 {
+      animation: none !important;
+      -webkit-animation: none !important;
+    }
+  }
+
+  /* Starfield Animations
+   * Vertical scrolling star background effect
+   * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+   * Uses translate3d for GPU acceleration on mobile devices
+   */
   @keyframes star-movement-1 {
     0% {
-      transform: translateY(0);
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
     }
 
     100% {
-      transform: translateY(-2000px);
+      transform: translate3d(0, -2000px, 0);
+      -webkit-transform: translate3d(0, -2000px, 0);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes star-movement-1 {
+    0% {
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+
+    100% {
+      -webkit-transform: translate3d(0, -2000px, 0);
     }
   }
 
   @keyframes star-movement-2 {
     0% {
-      transform: translateY(0);
+      transform: translate3d(0, 0, 0);
+      -webkit-transform: translate3d(0, 0, 0);
     }
 
     100% {
-      transform: translateY(-1000px);
+      transform: translate3d(0, -1000px, 0);
+      -webkit-transform: translate3d(0, -1000px, 0);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes star-movement-2 {
+    0% {
+      -webkit-transform: translate3d(0, 0, 0);
+    }
+
+    100% {
+      -webkit-transform: translate3d(0, -1000px, 0);
     }
   }
 
   .animate-stars-1 {
     animation: star-movement-1 150s linear infinite;
+    -webkit-animation: star-movement-1 150s linear infinite;
+    /* GPU acceleration for smooth scrolling on all devices */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .animate-stars-2 {
     animation: star-movement-2 200s linear infinite;
+    -webkit-animation: star-movement-2 200s linear infinite;
+    /* GPU acceleration for smooth scrolling on all devices */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
-  /* Slow Pulse for Trust Badge */
+  /* Respect user's motion preferences (accessibility) */
+  @media (prefers-reduced-motion: reduce) {
+
+    .animate-stars-1,
+    .animate-stars-2 {
+      animation: none !important;
+      -webkit-animation: none !important;
+    }
+  }
+
+  /* Slow Pulse for Trust Badge
+   * Subtle pulsing animation for badges and indicators
+   * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+   * Uses scale3d for better GPU acceleration
+   */
   @keyframes pulse-slow {
 
     0%,
     100% {
       opacity: 0.2;
-      transform: scale(1);
+      transform: scale3d(1, 1, 1);
+      -webkit-transform: scale3d(1, 1, 1);
     }
 
     50% {
       opacity: 0.6;
-      transform: scale(1.05);
+      transform: scale3d(1.05, 1.05, 1);
+      -webkit-transform: scale3d(1.05, 1.05, 1);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes pulse-slow {
+
+    0%,
+    100% {
+      opacity: 0.2;
+      -webkit-transform: scale3d(1, 1, 1);
+    }
+
+    50% {
+      opacity: 0.6;
+      -webkit-transform: scale3d(1.05, 1.05, 1);
     }
   }
 
   .animate-pulse-slow {
     animation: pulse-slow 3s ease-in-out infinite;
+    -webkit-animation: pulse-slow 3s ease-in-out infinite;
+    /* GPU acceleration for smooth pulsing on all devices */
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
-  /* Star Twinkle */
+  /* Respect user's motion preferences (accessibility) */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-slow {
+      animation: none !important;
+      -webkit-animation: none !important;
+      opacity: 0.4 !important;
+    }
+  }
+
+  /* Star Twinkle
+   * Twinkling effect for star elements
+   * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+   * Uses scale3d for better GPU acceleration
+   */
   @keyframes twinkle {
 
     0%,
     100% {
       opacity: 0.4;
-      transform: scale(0.9);
+      transform: scale3d(0.9, 0.9, 1);
+      -webkit-transform: scale3d(0.9, 0.9, 1);
     }
 
     50% {
       opacity: 1;
-      transform: scale(1.1);
+      transform: scale3d(1.1, 1.1, 1);
+      -webkit-transform: scale3d(1.1, 1.1, 1);
+    }
+  }
+
+  /* Webkit-prefixed version for older Safari browsers */
+  @-webkit-keyframes twinkle {
+
+    0%,
+    100% {
+      opacity: 0.4;
+      -webkit-transform: scale3d(0.9, 0.9, 1);
+    }
+
+    50% {
+      opacity: 1;
+      -webkit-transform: scale3d(1.1, 1.1, 1);
     }
   }
 
   .animate-twinkle {
     animation: twinkle 4s ease-in-out infinite;
+    -webkit-animation: twinkle 4s ease-in-out infinite;
+    /* GPU acceleration for smooth twinkling on all devices */
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Respect user's motion preferences (accessibility) */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-twinkle {
+      animation: none !important;
+      -webkit-animation: none !important;
+      opacity: 0.7 !important;
+    }
   }
 }
 
@@ -590,16 +772,35 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
 }
 
-/* Fade In Animations */
+/* Fade In Animations
+ * Entry animations for content
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses translate3d for GPU acceleration and smooth entry effects
+ */
 @keyframes fadeIn {
   from {
     opacity: 0;
     transform: translate3d(0, 20px, 0);
+    -webkit-transform: translate3d(0, 20px, 0);
   }
 
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes fadeIn {
+  from {
+    opacity: 0;
+    -webkit-transform: translate3d(0, 20px, 0);
+  }
+
+  to {
+    opacity: 1;
+    -webkit-transform: translate3d(0, 0, 0);
   }
 }
 
@@ -607,11 +808,26 @@
   from {
     opacity: 0;
     transform: translate3d(0, 30px, 0);
+    -webkit-transform: translate3d(0, 30px, 0);
   }
 
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes fadeInUp {
+  from {
+    opacity: 0;
+    -webkit-transform: translate3d(0, 30px, 0);
+  }
+
+  to {
+    opacity: 1;
+    -webkit-transform: translate3d(0, 0, 0);
   }
 }
 
@@ -619,24 +835,64 @@
   from {
     opacity: 0;
     transform: translate3d(0, -30px, 0);
+    -webkit-transform: translate3d(0, -30px, 0);
   }
 
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes fadeInDown {
+  from {
+    opacity: 0;
+    -webkit-transform: translate3d(0, -30px, 0);
+  }
+
+  to {
+    opacity: 1;
+    -webkit-transform: translate3d(0, 0, 0);
   }
 }
 
 .fade-in {
   animation: fadeIn 0.5s ease-out forwards;
+  -webkit-animation: fadeIn 0.5s ease-out forwards;
+  /* GPU acceleration for smooth fade-in on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
+  -webkit-animation: fadeInUp 0.6s ease-out forwards;
+  /* GPU acceleration for smooth fade-in on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .fade-in-down {
   animation: fadeInDown 0.6s ease-out forwards;
+  -webkit-animation: fadeInDown 0.6s ease-out forwards;
+  /* GPU acceleration for smooth fade-in on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+
+  .fade-in,
+  .fade-in-up,
+  .fade-in-down {
+    animation: none !important;
+    -webkit-animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* Stagger delays for children */
@@ -669,13 +925,31 @@
   animation-delay: 0.3s;
 }
 
-/* Shimmer Effect (Optimized with transform) */
+/* Shimmer Effect
+ * Loading shimmer animation
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses translate3d for GPU acceleration
+ */
 @keyframes shimmer {
   0% {
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
+    -webkit-transform: translate3d(-100%, 0, 0);
   }
+
   100% {
-    transform: translateX(100%);
+    transform: translate3d(100%, 0, 0);
+    -webkit-transform: translate3d(100%, 0, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes shimmer {
+  0% {
+    -webkit-transform: translate3d(-100%, 0, 0);
+  }
+
+  100% {
+    -webkit-transform: translate3d(100%, 0, 0);
   }
 }
 
@@ -695,34 +969,86 @@
       rgba(255, 255, 255, 0.1) 50%,
       transparent 100%);
   animation: shimmer 2s infinite;
+  -webkit-animation: shimmer 2s infinite;
   will-change: transform;
+  /* GPU acceleration for smooth shimmer on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Pulse Animation */
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none !important;
+    -webkit-animation: none !important;
+  }
+}
+
+/* Pulse Animation
+ * Pulsing effect for attention-grabbing elements
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses scale3d for better GPU acceleration
+ */
 @keyframes pulse {
 
   0%,
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale3d(1, 1, 1);
+    -webkit-transform: scale3d(1, 1, 1);
   }
 
   50% {
     opacity: 0.8;
-    transform: scale(1.05);
+    transform: scale3d(1.05, 1.05, 1);
+    -webkit-transform: scale3d(1.05, 1.05, 1);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    -webkit-transform: scale3d(1, 1, 1);
+  }
+
+  50% {
+    opacity: 0.8;
+    -webkit-transform: scale3d(1.05, 1.05, 1);
   }
 }
 
 .pulse {
   animation: pulse 2s ease-in-out infinite;
+  -webkit-animation: pulse 2s ease-in-out infinite;
+  /* GPU acceleration for smooth pulsing on all devices */
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Shake Animation (for errors) */
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none !important;
+    -webkit-animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Shake Animation
+ * Error indication animation
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses translate3d for GPU acceleration
+ */
 @keyframes shake {
 
   0%,
   100% {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
   }
 
   10%,
@@ -730,60 +1056,177 @@
   50%,
   70%,
   90% {
-    transform: translateX(-4px);
+    transform: translate3d(-4px, 0, 0);
+    -webkit-transform: translate3d(-4px, 0, 0);
   }
 
   20%,
   40%,
   60%,
   80% {
-    transform: translateX(4px);
+    transform: translate3d(4px, 0, 0);
+    -webkit-transform: translate3d(4px, 0, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes shake {
+
+  0%,
+  100% {
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    -webkit-transform: translate3d(-4px, 0, 0);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    -webkit-transform: translate3d(4px, 0, 0);
   }
 }
 
 .shake {
   animation: shake 0.5s ease-in-out;
+  -webkit-animation: shake 0.5s ease-in-out;
+  /* GPU acceleration for smooth shake on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Bounce Animation */
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .shake {
+    animation: none !important;
+    -webkit-animation: none !important;
+  }
+}
+
+/* Bounce Animation
+ * Bouncing effect for playful interactions
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses translate3d for GPU acceleration
+ */
 @keyframes bounce {
 
   0%,
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
   }
 
   50% {
-    transform: translateY(-10px);
+    transform: translate3d(0, -10px, 0);
+    -webkit-transform: translate3d(0, -10px, 0);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes bounce {
+
+  0%,
+  100% {
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    -webkit-transform: translate3d(0, -10px, 0);
   }
 }
 
 .bounce {
   animation: bounce 0.6s ease-in-out;
+  -webkit-animation: bounce 0.6s ease-in-out;
+  /* GPU acceleration for smooth bounce on all devices */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Spin Animation */
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .bounce {
+    animation: none !important;
+    -webkit-animation: none !important;
+  }
+}
+
+/* Spin Animation
+ * Rotating loader/spinner animation
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses rotate for GPU acceleration
+ */
 @keyframes spin {
   from {
     transform: rotate(0deg);
+    -webkit-transform: rotate(0deg);
   }
 
   to {
     transform: rotate(360deg);
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes spin {
+  from {
+    -webkit-transform: rotate(0deg);
+  }
+
+  to {
+    -webkit-transform: rotate(360deg);
   }
 }
 
 .spin {
   animation: spin 1s linear infinite;
+  -webkit-animation: spin 1s linear infinite;
+  /* GPU acceleration for smooth spinning on all devices */
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Gradient Border Animation (Optimized with transform rotate) */
+/* Respect user's motion preferences (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none !important;
+    -webkit-animation: none !important;
+  }
+}
+
+/* Gradient Border Animation
+ * Rotating gradient border effect
+ * Optimized for: iOS Safari, macOS Safari, Android Chrome, Windows browsers
+ * Uses rotate for GPU acceleration
+ */
 @keyframes gradient-rotate {
   0% {
     transform: rotate(0deg);
+    -webkit-transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+/* Webkit-prefixed version for older Safari browsers */
+@-webkit-keyframes gradient-rotate {
+  0% {
+    -webkit-transform: rotate(0deg);
+  }
+
+  100% {
+    -webkit-transform: rotate(360deg);
   }
 }
 
@@ -799,14 +1242,12 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0%,
-    var(--orange) 25%,
-    #ff9357 50%,
-    var(--orange) 75%,
-    transparent 100%
-  );
+  background: conic-gradient(from 0deg,
+      transparent 0%,
+      var(--orange) 25%,
+      #ff9357 50%,
+      var(--orange) 75%,
+      transparent 100%);
   animation: gradient-rotate 3s linear infinite;
   -webkit-animation: gradient-rotate 3s linear infinite;
   will-change: transform;

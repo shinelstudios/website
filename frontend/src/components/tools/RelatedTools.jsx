@@ -11,14 +11,14 @@ const TOOLS = [
         color: "text-blue-400",
         bg: "bg-blue-400/10"
     },
-    {
+    /* {
         icon: Type,
         title: "Auto SRT Builder",
         desc: "Create perfectly timed captions instantly.",
         path: "/tools/srt",
         color: "text-green-400",
         bg: "bg-green-400/10"
-    },
+    }, */
     {
         icon: Search,
         title: "YouTube SEO Tool",

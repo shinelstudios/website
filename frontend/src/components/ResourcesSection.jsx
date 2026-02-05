@@ -19,13 +19,13 @@ const RESOURCES = [
         icon: Layout,
         color: "#ff9357",
     },
-    {
+    /* {
         title: "Caption/SRT Builder",
         desc: "Fast, local tool to build perfectly timed subtitles for your edits.",
         to: "/tools/srt",
         icon: FileText,
         color: "#4ade80",
-    },
+    }, */
     {
         title: "YouTube SEO Optimizer",
         desc: "Generate high-CTR titles, tags, and semantic descriptions.",
