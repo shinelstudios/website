@@ -968,8 +968,8 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="md:hidden fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm"
+                transition={{ duration: 0.15 }}
+                className="md:hidden fixed inset-0 z-[55] bg-black/40 backdrop-blur-[6px]"
                 onClick={closeAllMenus}
                 aria-hidden="true"
               />
@@ -977,18 +977,21 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               {/* Menu Content */}
               <motion.div
                 id="mobile-menu"
-                initial={{ opacity: 0, y: -20, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -20, scale: 0.98 }}
-                transition={{ duration: 0.25, type: "spring", bounce: 0, stiffness: 300, damping: 30 }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
                 className="md:hidden fixed left-0 right-0 z-[60] shadow-2xl rounded-b-[32px] overflow-hidden"
                 style={{
                   top: `var(--header-h, ${headerH}px)`,
-                  maxHeight: `85dvh`, // Improved height for modern mobile
+                  maxHeight: `85dvh`,
                   background: "var(--surface)",
                   borderBottom: "1px solid var(--border)",
                   overflowY: "auto",
                   WebkitOverflowScrolling: "touch",
+                  willChange: "transform, opacity",
+                  WebkitBackdropFilter: "none", /* Optimize: Disable expensive filters on large animated surfaces */
+                  backdropFilter: "none",
                 }}
                 role="dialog"
                 aria-modal="true"

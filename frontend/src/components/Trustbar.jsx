@@ -169,6 +169,7 @@ const TrustBar = ({
         ["--marquee-mask"]: maskWidth,
         ["--animation-duration"]: `${effectiveDuration}s`,
         ["--animation-distance"]: animationDistance,
+        ["--neg-animation-distance"]: `-${animationDistance}`, // Force negative distance for calc-less keyframes
       }}
     >
       <div
@@ -178,36 +179,43 @@ const TrustBar = ({
         onMouseLeave={handleMouseLeave}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd} // [FIX] Handle touch cancel
+        onTouchCancel={handleTouchEnd}
         style={{
           position: "relative",
           overflow: "hidden",
-          cursor: "default", // [FIX] No 'ew-resize'
+          cursor: "default",
           WebkitUserSelect: "none",
           userSelect: "none",
+          /* Removed mask-image/WebkitMaskImage for Safari stability */
         }}
       >
-        {/* fade masks */}
+        {/* fade masks - Dedicated divs instead of CSS mask-image for permanent iOS fix */}
         <div
           className="marquee-mask-left"
           style={{
             position: "absolute",
-            left: 0, top: 0, bottom: 0,
+            left: 0,
+            top: 0,
+            bottom: 0,
             width: "var(--marquee-mask)",
-            background: "linear-gradient(90deg, var(--header-bg) 0%, transparent 100%)",
-            zIndex: 1,
+            background: "linear-gradient(to right, var(--header-bg) 0%, transparent 100%)",
+            zIndex: 10,
             pointerEvents: "none",
+            transform: "translate3d(0,0,0)", /* GPU skip */
           }}
         />
         <div
           className="marquee-mask-right"
           style={{
             position: "absolute",
-            right: 0, top: 0, bottom: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
             width: "var(--marquee-mask)",
-            background: "linear-gradient(270deg, var(--header-bg) 0%, transparent 100%)", // [FIX] Corrected gradient direction
-            zIndex: 1,
+            background: "linear-gradient(to left, var(--header-bg) 0%, transparent 100%)",
+            zIndex: 10,
             pointerEvents: "none",
+            transform: "translate3d(0,0,0)", /* GPU skip */
           }}
         />
 
@@ -235,6 +243,11 @@ const TrustBar = ({
             WebkitAnimationPlayState: (isPaused || !isVisible) ? "paused" : "running",
             animationPlayState: (isPaused || !isVisible) ? "paused" : "running",
             transition: "animation-duration 0.3s linear",
+            /* Permanent GPU Hardware Acceleration */
+            WebkitPerspective: "1000px",
+            perspective: "1000px",
+            WebkitTransformStyle: "preserve-3d",
+            transformStyle: "preserve-3d",
           }}
         >
           {/* Segment A (Measured) */}

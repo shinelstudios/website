@@ -354,30 +354,43 @@ const CreatorsWorkedWithMarquee = ({
             onFocus={() => setIsPaused(true)}
             onBlur={() => setIsPaused(false)}
             style={{
-              maskImage:
-                "linear-gradient(90deg, transparent 0%, black 15%, black 85%, transparent 100%)",
-              WebkitMaskImage:
-                "-webkit-linear-gradient(90deg, transparent 0%, black 15%, black 85%, transparent 100%)",
+              position: "relative",
+              overflow: "hidden",
+              /* Removed mask-image/WebkitMaskImage as it's buggy in Safari with translate3d */
             }}
           >
-            {/* Edge gradient overlays */}
+            {/* fade masks - Permanent fix for iOS Safari marquee visibility */}
             <div
-              className="pointer-events-none absolute left-0 top-0 bottom-0 z-10"
+              className="marquee-mask-left"
               style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
                 width: "8vw",
                 minWidth: "16px",
                 maxWidth: "64px",
-                background: "linear-gradient(90deg, var(--surface) 0%, transparent 100%)",
+                background: "linear-gradient(to right, var(--surface) 0%, transparent 100%)",
+                zIndex: 10,
+                pointerEvents: "none",
+                transform: "translate3d(0,0,0)",
               }}
               aria-hidden="true"
             />
             <div
-              className="pointer-events-none absolute right-0 top-0 bottom-0 z-10"
+              className="marquee-mask-right"
               style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                bottom: 0,
                 width: "8vw",
                 minWidth: "16px",
                 maxWidth: "64px",
-                background: "linear-gradient(270deg, var(--surface) 0%, transparent 100%)",
+                background: "linear-gradient(to left, var(--surface) 0%, transparent 100%)",
+                zIndex: 10,
+                pointerEvents: "none",
+                transform: "translate3d(0,0,0)",
               }}
               aria-hidden="true"
             />
@@ -401,6 +414,11 @@ const CreatorsWorkedWithMarquee = ({
                 "animationIterationCount": "infinite",
                 "WebkitAnimationPlayState": animationIsPaused ? "paused" : "running",
                 "animationPlayState": animationIsPaused ? "paused" : "running",
+                /* Permanent GPU Hardware Acceleration */
+                WebkitPerspective: "1000px",
+                perspective: "1000px",
+                WebkitTransformStyle: "preserve-3d",
+                transformStyle: "preserve-3d",
               }}
             >
               {/* Segment A (measured) */}

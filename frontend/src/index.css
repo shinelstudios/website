@@ -418,6 +418,13 @@
     display: inline-flex;
     width: max-content;
     will-change: transform;
+    /* GPU Acceleration for Safari/iOS */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000px;
+    perspective: 1000px;
   }
 
   .animate-marquee-rtl {
@@ -428,6 +435,17 @@
   .animate-marquee-ltr {
     animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
     -webkit-animation: marquee-ltr var(--marquee-duration, 40s) linear infinite;
+  }
+
+  /* GPU-Accelerated Layer Utility */
+  .gpu-layer {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000px;
+    perspective: 1000px;
+    will-change: transform, opacity;
   }
 
   @media (hover:hover) and (pointer:fine) {
