@@ -23,10 +23,14 @@ const MetaTags = ({
     const fullTitle = title.includes(BRAND.name) ? title : `${title} | ${BRAND.name}`;
     const fullOgImage = ogImage.startsWith('http') ? ogImage : `${origin}${ogImage}`;
 
-    // Clean canonical URL (no query, no hash, enforced primary domain)
-    // Preference: Prop > useLocation (Router) > Origin fallback
+    // Clean canonical URL (no query, no hash, enforced non-www domain)
     const path = location.pathname.replace(/\/+$/, '') || '/';
-    const canonical = canonicalUrl || `${origin}${path}`;
+    const cleanOrigin = origin.replace('www.', ''); // Enforce non-www
+    const canonical = canonicalUrl || `${cleanOrigin}${path}`; // No query params or hash
+
+    // Detect search pages and set noindex
+    const isSearchPage = location.search.includes('?q=');
+    const shouldNoIndex = noIndex || isSearchPage;
 
     return (
         <Helmet>
@@ -40,7 +44,7 @@ const MetaTags = ({
             <link rel="canonical" href={canonical} />
 
             {/* Robots */}
-            {noIndex && <meta name="robots" content="noindex, nofollow" />}
+            {shouldNoIndex && <meta name="robots" content="noindex, nofollow" />}
 
             {/* Open Graph / Facebook */}
             <meta property="og:type" content={ogType} />

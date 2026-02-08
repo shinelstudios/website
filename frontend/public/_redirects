@@ -1,1 +1,14 @@
+# Redirect www to non-www (301 permanent redirect)
+https://www.shinelstudios.in/* https://shinelstudios.in/:splat 301!
+
+# Redirect HTTP to HTTPS
+http://shinelstudios.in/* https://shinelstudios.in/:splat 301!
+http://www.shinelstudios.in/* https://shinelstudios.in/:splat 301!
+
+# Legacy Page Redirects
+/work/*            /portfolio/:splat 301
+/contact           /#contact 301
+/forgot-password   /login    301
+
+# SPA fallback (must be last)
 /*    /index.html   200

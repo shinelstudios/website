@@ -8,7 +8,9 @@ import {
     Check,
     CheckSquare,
     Square,
-    Video
+    Video,
+    Youtube,
+    Instagram
 } from "lucide-react";
 import { timeAgo } from "../utils/helpers";
 
@@ -145,6 +147,17 @@ const VideoCard = ({
                             SHINEL
                         </span>
                     )}
+                    {/* Platform Badge */}
+                    <span className={`px-2 py-1 rounded-lg backdrop-blur-md border text-[10px] font-black uppercase tracking-widest flex items-center gap-1 ${(v.platform || 'YOUTUBE') === 'INSTAGRAM'
+                            ? 'bg-pink-500/20 border-pink-500/30 text-pink-400'
+                            : 'bg-red-500/20 border-red-500/30 text-red-400'
+                        }`}>
+                        {(v.platform || 'YOUTUBE') === 'INSTAGRAM' ? (
+                            <><Instagram size={10} /> IG</>
+                        ) : (
+                            <><Youtube size={10} /> YT</>
+                        )}
+                    </span>
                 </div>
             </div>
 

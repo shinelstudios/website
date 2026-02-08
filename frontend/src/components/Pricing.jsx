@@ -1,25 +1,26 @@
 // src/components/Pricing.jsx
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import { formatINR, track } from "../lib/helpers";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { FESTIVAL_DATABASE, CONTACT, TYPOGRAPHY, COLORS } from "../config/constants";
 import {
   Check, ArrowRight, Zap, Star, Shield, Clock, Sparkles, Info, MessageCircle,
-  Settings as SettingsIcon, Monitor, Activity, Cpu, Layers, BarChart, HardDrive
+  Settings as SettingsIcon, Monitor, Activity, Cpu, Layers, BarChart, HardDrive, TrendingUp, Users, Award
 } from "lucide-react";
 import FloatingOrbs from "./animations/FloatingOrbs";
 
 /**
- * Pricing - Elite Agency Optimized Version
- * High-contrast readability, 60fps animations, and new "Studio Pipeline" features.
+ * Pricing - Enhanced with Psychological Pricing & Better Animations
+ * Optimized for all devices with improved fonts and micro-interactions
  */
 const Pricing = ({ onOpenCalendly }) => {
   const { config } = useGlobalConfig();
   const [cat, setCat] = useState("gaming");
   const [openIdx, setOpenIdx] = useState(null);
   const [idx, setIdx] = useState(0);
+  const railRef = useRef(null);
 
   const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
@@ -33,6 +34,24 @@ const Pricing = ({ onOpenCalendly }) => {
       return now >= start && now <= end;
     });
   }, []);
+
+  // Track scroll position for mobile navigation dots
+  useEffect(() => {
+    const container = railRef.current;
+    if (!container || !isMobile) return;
+
+    const handleScroll = () => {
+      const scrollLeft = container.scrollLeft;
+      const cardWidth = container.scrollWidth / currentPlans.length;
+      const newIdx = Math.round(scrollLeft / cardWidth);
+      if (newIdx !== idx) {
+        setIdx(newIdx);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [isMobile, idx]);
 
   // 2. Comprehensive Data Structure
   const CATS = [
@@ -235,6 +254,11 @@ const Pricing = ({ onOpenCalendly }) => {
     return Math.floor(original * factor);
   }, [activeOffer]);
 
+  // Calculate per-day cost for monthly plans
+  const calculatePerDay = (monthlyPrice) => {
+    return Math.floor(monthlyPrice / 30);
+  };
+
   // Merge dynamic prices into local object if available
   const activePrices = useMemo(() => {
     const fresh = config?.pricing || {};
@@ -260,7 +284,6 @@ const Pricing = ({ onOpenCalendly }) => {
   };
 
   const currentPlans = activePrices[cat] || [];
-  const railRef = useRef(null);
 
   const scrollToIndex = useCallback((i) => {
     if (!railRef.current) return;
@@ -286,6 +309,36 @@ const Pricing = ({ onOpenCalendly }) => {
       <span className={`text-[8px] font-mono uppercase tracking-widest ${active || complete ? 'text-[var(--text)] font-black' : 'text-[var(--text-muted)]/20'}`}>{label}</span>
     </div>
   );
+
+  // Animated Counter Component
+  const AnimatedCounter = ({ value, prefix = "", suffix = "" }) => {
+    const ref = useRef(null);
+    const isInView = useInView(ref, { once: true });
+    const [count, setCount] = useState(0);
+
+    React.useEffect(() => {
+      if (isInView && value) {
+        let start = 0;
+        const end = parseInt(value);
+        const duration = 1000;
+        const increment = end / (duration / 16);
+
+        const timer = setInterval(() => {
+          start += increment;
+          if (start >= end) {
+            setCount(end);
+            clearInterval(timer);
+          } else {
+            setCount(Math.floor(start));
+          }
+        }, 16);
+
+        return () => clearInterval(timer);
+      }
+    }, [isInView, value]);
+
+    return <span ref={ref}>{prefix}{count.toLocaleString()}{suffix}</span>;
+  };
 
   return (
     <section id="pricing" className="py-24 md:py-32 relative bg-[var(--surface)] text-[var(--text)] overflow-hidden min-h-screen cursor-default selection:bg-[var(--orange)]/30">
@@ -316,10 +369,10 @@ const Pricing = ({ onOpenCalendly }) => {
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="flex items-center gap-3 px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--surface-alt)] mb-8"
+            className="flex items-center gap-3 px-5 py-3 rounded-full border border-[var(--border)] bg-[var(--surface-alt)] mb-8"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-[var(--orange)] animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-[0.4em] text-[var(--text-muted)] font-black">Production Standards v4.2 // OPTIMIZED</span>
+            <div className="w-2 h-2 rounded-full bg-[var(--orange)] animate-pulse" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Production Standards v4.2</span>
           </motion.div>
 
           <motion.h1
@@ -328,7 +381,7 @@ const Pricing = ({ onOpenCalendly }) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="text-5xl md:text-8xl lg:text-9xl text-[var(--text)] mb-6 tracking-tight leading-none"
+            className="text-5xl md:text-8xl lg:text-9xl text-[var(--text)] mb-6 tracking-tight leading-none font-black"
           >
             Elite <span className="italic text-[var(--orange)]">Value.</span>
           </motion.h1>
@@ -337,10 +390,34 @@ const Pricing = ({ onOpenCalendly }) => {
             initial={{ opacity: 0, scale: 0.98 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="text-[var(--text-muted)] text-[10px] md:text-xs font-mono uppercase tracking-[0.5em] max-w-2xl font-bold"
+            className="text-[var(--text-muted)] text-base md:text-lg max-w-2xl font-medium"
+            style={{ fontFamily: TYPOGRAPHY.body }}
           >
             Tiered output pipelines for high-performance channels.
           </motion.p>
+
+          {/* Trust Signals */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+            className="mt-10 flex flex-wrap items-center justify-center gap-8 text-sm text-[var(--text-muted)]"
+            style={{ fontFamily: TYPOGRAPHY.body }}
+          >
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-[var(--orange)]" />
+              <span className="font-semibold">Join <AnimatedCounter value="500" />+ Creators</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield size={18} className="text-[var(--orange)]" />
+              <span className="font-semibold">100% Satisfaction Guarantee</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Award size={18} className="text-[var(--orange)]" />
+              <span className="font-semibold">Cancel Anytime</span>
+            </div>
+          </motion.div>
         </div>
 
         {/* Global Offer Alert - Enhanced Contrast */}
@@ -363,13 +440,13 @@ const Pricing = ({ onOpenCalendly }) => {
                     <Zap className="text-[var(--orange)] drop-shadow-glow" size={40} />
                   </div>
                   <div>
-                    <span className="text-[11px] font-mono text-[var(--orange)] uppercase tracking-widest block mb-1 font-black">Incoming Transmission // Offer Active</span>
-                    <h2 className="text-3xl md:text-5xl font-black text-[var(--text)] uppercase tracking-tighter leading-none">{activeOffer.title}</h2>
+                    <span className="text-sm text-[var(--orange)] uppercase tracking-wide block mb-2 font-bold" style={{ fontFamily: TYPOGRAPHY.body }}>Offer Active</span>
+                    <h2 className="text-3xl md:text-5xl font-black text-[var(--text)] uppercase tracking-tight leading-none" style={{ fontFamily: TYPOGRAPHY.display }}>{activeOffer.title}</h2>
                   </div>
                 </div>
                 <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-[var(--border)] pt-8 md:pt-0 md:pl-12">
-                  <div className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-[0.3em] mb-2 font-black">Discount Multiplier</div>
-                  <div className="text-6xl font-black text-[var(--text)] leading-none tracking-tighter">-{activeOffer.discount}%</div>
+                  <div className="text-sm text-[var(--text-muted)] uppercase tracking-wide mb-3 font-semibold" style={{ fontFamily: TYPOGRAPHY.body }}>Discount</div>
+                  <div className="text-6xl font-black text-[var(--text)] leading-none" style={{ fontFamily: TYPOGRAPHY.display }}>-{activeOffer.discount}%</div>
                 </div>
               </div>
             </motion.div>
@@ -382,11 +459,11 @@ const Pricing = ({ onOpenCalendly }) => {
             <button
               key={c.k}
               onClick={() => { setCat(c.k); setIdx(0); setOpenIdx(null); }}
-              className={`group relative flex items-center gap-3 px-10 py-5 rounded-2xl text-[12px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${cat === c.k
+              className={`group relative flex items-center gap-3 px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-wide transition-all duration-500 ${cat === c.k
                 ? "bg-[var(--text)] text-[var(--surface)] scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
                 : "bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-alt)]/80 hover:text-[var(--text)] active:scale-95"
                 }`}
-              style={{ willChange: 'transform, opacity' }}
+              style={{ willChange: 'transform, opacity', fontFamily: TYPOGRAPHY.body }}
             >
               {cat === c.k && <motion.div layoutId="tab-dot" className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_10px_rgba(232,80,2,0.8)]" />}
               {c.label}
@@ -396,8 +473,8 @@ const Pricing = ({ onOpenCalendly }) => {
 
         {/* Studio Plans Display Header */}
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-black text-[var(--text)] uppercase tracking-[0.2em] mb-4 drop-shadow-glow">{CATS.find(x => x.k === cat)?.headline}</h2>
-          <p className="text-[var(--text-muted)] text-[11px] uppercase tracking-[0.4em] font-mono font-black">{CATS.find(x => x.k === cat)?.sub}</p>
+          <h2 className="text-4xl md:text-5xl font-black text-[var(--text)] uppercase tracking-tight mb-4" style={{ fontFamily: TYPOGRAPHY.display }}>{CATS.find(x => x.k === cat)?.headline}</h2>
+          <p className="text-[var(--text-muted)] text-base md:text-lg font-medium" style={{ fontFamily: TYPOGRAPHY.body }}>{CATS.find(x => x.k === cat)?.sub}</p>
         </div>
 
         <div
@@ -416,6 +493,8 @@ const Pricing = ({ onOpenCalendly }) => {
               const open = openIdx === i;
               const originalPrice = p.priceInr;
               const finalPrice = calculateDiscountedPrice(originalPrice);
+              const perDay = p.billing === 'monthly' && finalPrice ? calculatePerDay(finalPrice) : null;
+              const savings = originalPrice && finalPrice !== originalPrice ? originalPrice - finalPrice : null;
 
               return (
                 <motion.div
@@ -424,15 +503,21 @@ const Pricing = ({ onOpenCalendly }) => {
                   initial={{ opacity: 0, scale: 0.98, y: 20 }}
                   whileInView={{ opacity: 1, scale: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 100, damping: 20 }}
+                  transition={{ delay: i * 0.08, type: 'spring', stiffness: 120, damping: 20 }}
+                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
                   className={`relative group shrink-0 ${isMobile ? "w-[88vw] snap-center" : "w-full"}`}
                 >
                   {/* Studio Spec Card - Enhanced Hovers & Contrast */}
                   <div className={`h-full rounded-[2.5rem] p-8 border transition-all duration-500 flex flex-col relative overflow-hidden ${isPopular
-                    ? "border-[var(--orange)]/40 bg-[var(--surface-alt)]"
+                    ? "border-[var(--orange)]/40 bg-[var(--surface-alt)] ring-2 ring-[var(--orange)]/20"
                     : "border-[var(--border)] bg-[var(--surface-alt)]/50 hover:bg-[var(--surface-alt)] hover:border-[var(--text-muted)]/30"
                     }`}
                     style={{ willChange: 'transform' }}>
+
+                    {/* Shimmer Effect for Popular Plans */}
+                    {isPopular && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[var(--orange)]/10 to-transparent shimmer-animation pointer-events-none" />
+                    )}
 
                     {/* Shadow Glow On Hover (Desktop) */}
                     {!isMobile && (
@@ -442,29 +527,58 @@ const Pricing = ({ onOpenCalendly }) => {
                     {/* Sensor Data Headers - Better Readability */}
                     <div className="flex justify-between items-center mb-10 relative z-10">
                       <div className="flex items-center gap-2">
-                        <Activity size={12} className="text-orange-500 animate-pulse" />
-                        <span className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-[0.2em] font-black">{p.key.padStart(8, '0')}</span>
+                        <Activity size={14} className="text-orange-500 animate-pulse" />
+                        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-semibold" style={{ fontFamily: TYPOGRAPHY.body }}>{p.key}</span>
                       </div>
                       {isPopular && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[var(--orange)]/40 bg-[var(--orange)]/10">
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.5, type: "spring" }}
+                          className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[var(--orange)]/40 bg-[var(--orange)]/10"
+                        >
                           <Star size={8} className="text-[var(--orange)] fill-[var(--orange)]" />
                           <span className="text-[9px] font-mono text-[var(--orange)] uppercase tracking-widest font-black">Elite choice</span>
-                        </div>
+                        </motion.div>
                       )}
                     </div>
 
                     <div className="mb-10 relative z-10">
-                      <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-[var(--orange)] font-black block mb-2">{p.tag}</span>
-                      <h3 className="text-2xl font-black text-[var(--text)] uppercase tracking-tighter mb-6 leading-none">{p.name}</h3>
+                      <span className="text-sm uppercase tracking-wide text-[var(--orange)] font-bold block mb-3" style={{ fontFamily: TYPOGRAPHY.body }}>{p.tag}</span>
+                      <h3 className="text-3xl font-black text-[var(--text)] uppercase tracking-tight mb-6 leading-tight" style={{ fontFamily: TYPOGRAPHY.heading }}>{p.name}</h3>
 
                       <div className="flex flex-col">
                         {originalPrice ? (
                           <>
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-4xl font-black text-[var(--text)] tracking-tighter">{formatINR(finalPrice)}</span>
-                              {p.billing === 'monthly' && <span className="text-[11px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-bold">/mo</span>}
+                            <div className="flex items-baseline gap-3">
+                              <span className="text-5xl font-black text-[var(--text)]" style={{ fontFamily: TYPOGRAPHY.display }}>{formatINR(finalPrice)}</span>
+                              {p.billing === 'monthly' && <span className="text-lg text-[var(--text-muted)] font-semibold" style={{ fontFamily: TYPOGRAPHY.body }}>/mo</span>}
                             </div>
-                            {originalPrice !== finalPrice && (
+                            {/* Per Day Breakdown */}
+                            {perDay && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className="flex items-center gap-2 mt-3"
+                              >
+                                <TrendingUp size={16} className="text-[var(--orange)]" />
+                                <span className="text-sm text-[var(--text-muted)] font-semibold" style={{ fontFamily: TYPOGRAPHY.body }}>Just ₹{perDay}/day</span>
+                              </motion.div>
+                            )}
+                            {/* Savings Display */}
+                            {savings && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.4 }}
+                                className="flex items-center gap-2 mt-3 px-4 py-2 rounded-lg bg-[var(--orange)]/10 border border-[var(--orange)]/20 w-fit"
+                              >
+                                <Sparkles size={16} className="text-[var(--orange)]" />
+                                <span className="text-sm text-[var(--orange)] font-bold" style={{ fontFamily: TYPOGRAPHY.body }}>You save ₹{savings.toLocaleString()}</span>
+                              </motion.div>
+                            )}
+                            {originalPrice !== finalPrice && !savings && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <span className="text-xs font-mono text-[var(--text-muted)]/50 line-through tracking-wider font-medium">{formatINR(originalPrice)}</span>
                                 <span className="text-[10px] font-mono text-[var(--orange)] font-black tracking-widest">FLAT -{activeOffer.discount}%</span>
@@ -472,19 +586,32 @@ const Pricing = ({ onOpenCalendly }) => {
                             )}
                           </>
                         ) : (
-                          <span className="text-xl font-black text-[var(--text)]/90 uppercase tracking-[0.2em] drop-shadow-glow">Consult Studio</span>
+                          <span className="text-xl font-black text-[var(--text)]/90 uppercase tracking-[0.2em] drop-shadow-glow" style={{ fontFamily: TYPOGRAPHY.display }}>Consult Studio</span>
                         )}
                       </div>
                     </div>
 
-                    {/* Operational Bullets - Higher Contrast */}
+                    {/* Operational Bullets - Higher Contrast with Animated Checkmarks */}
                     <div className="flex-1 relative z-10">
                       <ul className="space-y-4 mb-10">
                         {p.bullets.map((b, bi) => (
-                          <li key={bi} className="flex items-start gap-4 group/item">
-                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[var(--orange)] shadow-[0_0_5px_rgba(232,80,2,0.5)] group-hover/item:scale-150 transition-transform duration-300" />
-                            <span className="text-xs text-[var(--text-muted)] leading-relaxed font-mono uppercase tracking-tight group-hover/item:text-[var(--text)] font-bold transition-colors duration-300">{b}</span>
-                          </li>
+                          <motion.li
+                            key={bi}
+                            initial={{ opacity: 0, x: -10 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.08 + bi * 0.1 }}
+                            className="flex items-start gap-4 group/item"
+                          >
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              whileInView={{ scale: 1 }}
+                              viewport={{ once: true }}
+                              transition={{ delay: i * 0.08 + bi * 0.1 + 0.2, type: "spring" }}
+                              className="mt-1 w-2 h-2 rounded-full bg-[var(--orange)] shadow-[0_0_5px_rgba(232,80,2,0.5)] group-hover/item:scale-125 transition-transform duration-300 shrink-0"
+                            />
+                            <span className="text-sm text-[var(--text-muted)] leading-relaxed group-hover/item:text-[var(--text)] font-medium transition-colors duration-300" style={{ fontFamily: TYPOGRAPHY.body }}>{b}</span>
+                          </motion.li>
                         ))}
                       </ul>
 
@@ -493,13 +620,13 @@ const Pricing = ({ onOpenCalendly }) => {
                         <div className="mt-6 pt-6 border-t border-white/10">
                           <button
                             onClick={(e) => { e.stopPropagation(); setOpenIdx(open ? null : i); }}
-                            className="flex items-center justify-between w-full text-[10px] font-mono uppercase tracking-[0.3em] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                            className="flex items-center justify-between w-full text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                            style={{ fontFamily: TYPOGRAPHY.body }}
                           >
                             <div className="flex items-center gap-2">
-                              <SettingsIcon size={14} className={`transition-transform duration-500 ${open ? "rotate-90 text-[var(--orange)]" : ""}`} />
-                              <span className={open ? 'text-[var(--orange)] font-black' : ''}>Technical Specs</span>
+                              <SettingsIcon size={16} className={`transition-transform duration-500 ${open ? "rotate-90 text-[var(--orange)]" : ""}`} />
+                              <span className={open ? 'text-[var(--orange)]' : ''}>Technical Specs</span>
                             </div>
-                            <ArrowRight size={10} className={`transition-transform duration-300 ${open ? 'rotate-90' : ''}`} />
                           </button>
                           <AnimatePresence>
                             {open && (
@@ -511,10 +638,16 @@ const Pricing = ({ onOpenCalendly }) => {
                               >
                                 <ul className="mt-6 space-y-3.5 pl-2 border-l border-white/5">
                                   {p.includes.map((inc, ii) => (
-                                    <li key={ii} className="text-[10px] text-[var(--text-muted)] font-mono uppercase flex items-center gap-2 tracking-wide leading-relaxed font-medium hover:text-[var(--text)]/80 transition-colors">
+                                    <motion.li
+                                      key={ii}
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      transition={{ delay: ii * 0.05 }}
+                                      className="text-[10px] text-[var(--text-muted)] font-mono uppercase flex items-center gap-2 tracking-wide leading-relaxed font-medium hover:text-[var(--text)]/80 transition-colors"
+                                    >
                                       <div className="w-1 h-1 rotate-45 border border-[var(--orange)]/30 shrink-0" />
                                       {inc}
-                                    </li>
+                                    </motion.li>
                                   ))}
                                 </ul>
                               </motion.div>
@@ -524,33 +657,103 @@ const Pricing = ({ onOpenCalendly }) => {
                       )}
                     </div>
 
-                    {/* Agency Action Button - Liquid Animation */}
-                    <button
+                    {/* Agency Action Button - Liquid Animation with Pulse */}
+                    <motion.button
                       onClick={() => handleCTA(p)}
-                      className={`w-full mt-10 py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.3em] transition-all duration-500 relative overflow-hidden group/btn active:scale-95 z-20 ${isPopular
-                        ? "bg-[var(--text)] text-[var(--surface)] hover:bg-[var(--brand-red)] hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)]"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`w-full mt-10 py-5 rounded-xl font-bold text-base uppercase tracking-wide transition-all duration-500 relative overflow-hidden group/btn z-20 ${isPopular
+                        ? "bg-[var(--text)] text-[var(--surface)] hover:bg-[var(--orange)] hover:text-white shadow-[0_15px_30px_rgba(232,80,2,0.2)] animate-pulse-subtle"
                         : "bg-[var(--surface-alt)] text-[var(--text)] hover:bg-[var(--surface-alt)]/80 border border-[var(--border)]"
                         }`}
-                      style={{ willChange: 'transform' }}
+                      style={{ willChange: 'transform', fontFamily: TYPOGRAPHY.body }}
                     >
                       <span className="relative z-10 flex items-center justify-center gap-3">
                         {p.cta} <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
                       </span>
-                    </button>
+                    </motion.button>
 
                     <div className="mt-8 flex justify-between items-center px-1 relative z-10">
                       <MetricLabel icon={Cpu} label="Engine" value="v9.0a" />
-                      <MetricLabel icon={Clock} label="Latency" value="&lt;48H" />
+                      <MetricLabel icon={Clock} label="Latency" value="<48H" />
                     </div>
                   </div>
                 </motion.div>
               );
-            })}
-          </div>
-        </div>
+            })}</div>
+
+          {/* Mobile Navigation - Arrow Buttons & Counter */}
+          {isMobile && currentPlans.length > 1 && (
+            <>
+              {/* Left Arrow */}
+              <button
+                onClick={() => {
+                  const newIdx = Math.max(0, idx - 1);
+                  const container = railRef.current;
+                  if (container) {
+                    const cardWidth = container.scrollWidth / currentPlans.length;
+                    container.scrollTo({ left: cardWidth * newIdx, behavior: 'smooth' });
+                    setIdx(newIdx);
+                  }
+                }}
+                disabled={idx === 0}
+                className={`absolute left-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--border)] flex items-center justify-center transition-all duration-300 ${idx === 0
+                  ? 'opacity-30 cursor-not-allowed'
+                  : 'opacity-100 hover:bg-[var(--orange)] hover:border-[var(--orange)] hover:scale-110 active:scale-95 shadow-lg'
+                  }`}
+                aria-label="Previous plan"
+              >
+                <ArrowRight size={20} className={`rotate-180 ${idx === 0 ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`} />
+              </button>
+
+              {/* Right Arrow */}
+              <button
+                onClick={() => {
+                  const newIdx = Math.min(currentPlans.length - 1, idx + 1);
+                  const container = railRef.current;
+                  if (container) {
+                    const cardWidth = container.scrollWidth / currentPlans.length;
+                    container.scrollTo({ left: cardWidth * newIdx, behavior: 'smooth' });
+                    setIdx(newIdx);
+                  }
+                }}
+                disabled={idx === currentPlans.length - 1}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--border)] flex items-center justify-center transition-all duration-300 ${idx === currentPlans.length - 1
+                  ? 'opacity-30 cursor-not-allowed'
+                  : 'opacity-100 hover:bg-[var(--orange)] hover:border-[var(--orange)] hover:scale-110 active:scale-95 shadow-lg'
+                  }`}
+                aria-label="Next plan"
+              >
+                <ArrowRight size={20} className={idx === currentPlans.length - 1 ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'} />
+              </button>
+
+              {/* Card Counter */}
+              <div className="flex items-center justify-center gap-4 mt-8">
+                <div className="flex items-center gap-2 px-5 py-3 rounded-full bg-[var(--surface-alt)] border border-[var(--border)]">
+                  <span className="text-sm font-bold text-[var(--text)]" style={{ fontFamily: TYPOGRAPHY.body }}>
+                    {idx + 1}
+                  </span>
+                  <span className="text-xs text-[var(--text-muted)] font-medium">of</span>
+                  <span className="text-sm font-bold text-[var(--text-muted)]" style={{ fontFamily: TYPOGRAPHY.body }}>
+                    {currentPlans.length}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Desktop: Show count indicator */}
+          {!isMobile && currentPlans.length > 0 && (
+            <div className="text-center mt-12">
+              <p className="text-sm text-[var(--text-muted)] font-medium" style={{ fontFamily: TYPOGRAPHY.body }}>
+                {currentPlans.length} {currentPlans.length === 1 ? 'plan' : 'plans'} available
+              </p>
+            </div>
+          )}
+        </div >
 
         {/* Feature 1: The Production Pipeline Visualizer */}
-        <div
+        < div
           className="mt-32 p-10 rounded-[3rem] border border-[var(--border)] bg-[var(--surface-alt)] backdrop-blur-md relative overflow-hidden"
           style={{
             contentVisibility: 'auto',
@@ -563,7 +766,7 @@ const Pricing = ({ onOpenCalendly }) => {
 
           <div className="text-center mb-12">
             <span className="text-[10px] font-mono text-[var(--orange)] font-black uppercase tracking-[0.5em] block mb-2">Live Production Logic</span>
-            <h3 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter">Your Pipeline Journey</h3>
+            <h3 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter" style={{ fontFamily: TYPOGRAPHY.display }}>Your Pipeline Journey</h3>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 relative px-4">
@@ -587,10 +790,10 @@ const Pricing = ({ onOpenCalendly }) => {
               <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest font-black">All Project Assets Preserved</span>
             </div>
           </div>
-        </div>
+        </div >
 
         {/* Studio Add-ons Hub - Better Grid & Hover */}
-        <div
+        < div
           className="mt-20 grid grid-cols-1 lg:grid-cols-2 gap-10"
           style={{
             contentVisibility: 'auto',
@@ -608,7 +811,7 @@ const Pricing = ({ onOpenCalendly }) => {
               <div className="w-12 h-12 rounded-2xl bg-[var(--orange)]/10 flex items-center justify-center border border-[var(--orange)]/30">
                 <Zap size={24} className="text-[var(--orange)]" />
               </div>
-              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest">Expansion Modules</h4>
+              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest" style={{ fontFamily: TYPOGRAPHY.heading }}>Expansion Modules</h4>
             </div>
             <div className="space-y-8">
               {[
@@ -621,7 +824,7 @@ const Pricing = ({ onOpenCalendly }) => {
                     <span className="text-[12px] font-mono text-[var(--text)] uppercase tracking-widest block mb-1 group-hover/line:text-[var(--orange)] transition-colors font-black">{item.label}</span>
                     <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-tight font-medium leading-relaxed max-w-xs block">{item.desc}</span>
                   </div>
-                  <span className="text-2xl font-black text-[var(--text)] ml-6">{item.val}</span>
+                  <span className="text-2xl font-black text-[var(--text)] ml-6" style={{ fontFamily: TYPOGRAPHY.display }}>{item.val}</span>
                 </div>
               ))}
             </div>
@@ -638,7 +841,7 @@ const Pricing = ({ onOpenCalendly }) => {
               <div className="w-12 h-12 rounded-2xl bg-[var(--orange)]/10 flex items-center justify-center border border-[var(--orange)]/30">
                 <BarChart size={24} className="text-[var(--orange)]" />
               </div>
-              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest">Standard Specs</h4>
+              <h4 className="text-2xl font-black text-[var(--text)] uppercase tracking-widest" style={{ fontFamily: TYPOGRAPHY.heading }}>Standard Specs</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
               {[
@@ -656,12 +859,12 @@ const Pricing = ({ onOpenCalendly }) => {
               ))}
             </div>
           </motion.div>
-        </div>
+        </div >
 
         {/* Feature 2: Standard vs Shinel Elite Comparison Overlay */}
-        <div className="mt-32 border-t border-[var(--border)] pt-32">
+        < div className="mt-32 border-t border-[var(--border)] pt-32" >
           <div className="text-center mb-16">
-            <h4 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter">Why the Industry Switches to Shinel</h4>
+            <h4 className="text-3xl font-black text-[var(--text)] uppercase tracking-tighter" style={{ fontFamily: TYPOGRAPHY.display }}>Why the Industry Switches to Shinel</h4>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-5xl mx-auto">
@@ -672,7 +875,13 @@ const Pricing = ({ onOpenCalendly }) => {
               </div>
               <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">Turnaround</div>
               <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-[var(--orange)] w-[95%]" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: "95%" }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className="h-full bg-[var(--orange)]"
+                />
               </div>
               <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Industry: 7 Days vs Shinel: 48H</p>
             </div>
@@ -683,7 +892,13 @@ const Pricing = ({ onOpenCalendly }) => {
               </div>
               <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">Creative Index</div>
               <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-[var(--orange)] w-[88%]" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: "88%" }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+                  className="h-full bg-[var(--orange)]"
+                />
               </div>
               <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Shinel Human-in-Loop Logic</p>
             </div>
@@ -694,19 +909,25 @@ const Pricing = ({ onOpenCalendly }) => {
               </div>
               <div className="text-[11px] font-mono text-[var(--text)] font-black uppercase tracking-widest mb-2">QA Reliability</div>
               <div className="h-2 w-full bg-[var(--surface-alt)] rounded-full mb-3 overflow-hidden">
-                <div className="h-full bg-[var(--orange)] w-[99%]" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: "99%" }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1, ease: "easeOut", delay: 0.4 }}
+                  className="h-full bg-[var(--orange)]"
+                />
               </div>
               <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">10-Point Internal Audit</p>
             </div>
           </div>
-        </div>
+        </div >
 
         <div className="mt-40 text-center opacity-30 pb-20">
           <p className="text-[10px] font-mono uppercase tracking-[0.8em] text-[var(--text)] font-black">
             SHINEL STUDIOS // ELITE CREATIVE PRODUCTION // 2026 // ALL ANALYTICS ACTIVE
           </p>
         </div>
-      </div>
+      </div >
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -720,8 +941,35 @@ const Pricing = ({ onOpenCalendly }) => {
         .drop-shadow-glow {
           animation: glow 3s infinite ease-in-out;
         }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .shimmer-animation {
+          animation: shimmer 3s infinite;
+        }
+
+        @keyframes pulse-subtle {
+          0%, 100% { box-shadow: 0 15px 30px rgba(232,80,2,0.2); }
+          50% { box-shadow: 0 15px 40px rgba(232,80,2,0.4); }
+        }
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s infinite;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+          .snap-x {
+            scroll-snap-type: x mandatory;
+            scroll-padding: 1.5rem;
+          }
+          .snap-center {
+            scroll-snap-align: center;
+          }
+        }
       `}</style>
-    </section>
+    </section >
   );
 };
 

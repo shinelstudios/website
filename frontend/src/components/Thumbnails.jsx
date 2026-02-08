@@ -1283,9 +1283,11 @@ export default function Thumbnails() {
                 ))}
               </div>
             ) : paginatedItems.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-lg mb-2 text-[var(--text)]">No thumbnails found</p>
-                <p className="text-sm text-[var(--text-muted)]">Try adjusting your filters or search query</p>
+              <div className="text-center py-16 bg-[var(--surface-alt)] rounded-3xl border border-dashed border-[var(--border)]">
+                <p className="text-lg mb-2 text-[var(--text)] font-bold">Gallery currently filtering...</p>
+                <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
+                  We have hundreds of high-CTR designs. Try clearing your search or adjusting filters to explore our full creative range.
+                </p>
               </div>
             ) : (
               <>
@@ -1340,6 +1342,58 @@ export default function Thumbnails() {
 
         {/* Share Modal */}
         {shareItem && <ShareModal item={shareItem} onClose={() => setShareItem(null)} />}
+
+        {/* SEO Content Section - Ensures page always has value for crawlers */}
+        {!loading && (
+          <section className="py-20 border-t border-[var(--border)] bg-[var(--surface-alt)]">
+            <div className="container mx-auto px-6">
+              <div className="max-w-4xl mx-auto">
+                <h2 className="text-3xl font-black mb-8 text-[var(--text)] uppercase tracking-tight">
+                  Why our <span className="text-[var(--orange)]">Thumbnails</span> Work
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-[var(--text)]">Psychological Triggers</h3>
+                    <p className="text-[var(--text-muted)] leading-relaxed">
+                      We use color theory, high contrast, and gaze-direction to guide the viewer's eye exactly where you want it. Our designs are built to trigger curiosity and urgency.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-[var(--text)]">Data-Backed Iteration</h3>
+                    <p className="text-[var(--text-muted)] leading-relaxed">
+                      Every thumbnail style in our gallery has been tested for high CTR across various niches, from gaming to professional corporate storytelling.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-[var(--text)]">Mobile Optimization</h3>
+                    <p className="text-[var(--text-muted)] leading-relaxed">
+                      Over 70% of viewers are on mobile. Our thumbnails are designed to be legible and impactful even on the smallest screens.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-[var(--text)]">Brand Consistency</h3>
+                    <p className="text-[var(--text-muted)] leading-relaxed">
+                      We don't just make "one-off" clicks. we build a visual identity for your channel that viewers recognize instantly in their feed.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-16 p-8 rounded-3xl bg-[var(--surface)] border border-[var(--border)] text-center">
+                  <h3 className="text-2xl font-black mb-4 text-[var(--text)]">Ready to increase your CTR?</h3>
+                  <p className="text-[var(--text-muted)] mb-8">Join the hundreds of creators who have scaled their channels with our visual engines.</p>
+                  <a
+                    href="https://wa.me/918968141585?text=I'm interested in thumbnail design services!"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-[var(--orange)] text-white font-black hover:opacity-90 transition-all active:scale-95"
+                  >
+                    Get Custom Thumbnails
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

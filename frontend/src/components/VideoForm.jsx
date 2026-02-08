@@ -126,6 +126,26 @@ const VideoForm = ({
                     </div>
                 </div>
 
+                {/* Platform Selection */}
+                <div className="grid gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Platform</label>
+                    <div className="flex flex-wrap gap-2">
+                        {['YOUTUBE', 'INSTAGRAM'].map(p => (
+                            <button
+                                key={p}
+                                type="button"
+                                onClick={() => handleInputChange("platform", p)}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${(form.platform || 'YOUTUBE') === p
+                                    ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+                                    }`}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Ownership & Tags */}
                 <div className="pt-4 border-t border-white/5 space-y-4">
                     <Input

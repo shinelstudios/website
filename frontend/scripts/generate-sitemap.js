@@ -3,7 +3,7 @@ import { SitemapStream, streamToPromise } from "sitemap";
 
 async function generate() {
   const sitemap = new SitemapStream({
-    hostname: "https://www.shinelstudios.in",
+    hostname: "https://shinelstudios.in",
   });
 
   // Add your routes

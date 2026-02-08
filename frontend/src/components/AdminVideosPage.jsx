@@ -34,6 +34,7 @@ const DEFAULT_FORM = {
   category: "GAMING",
   subcategory: "",
   kind: "LONG",
+  platform: "YOUTUBE",
   tags: "",
   isShinel: true,
   attributedTo: "",
