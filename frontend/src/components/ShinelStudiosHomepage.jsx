@@ -42,6 +42,7 @@ import MetaTags, { BreadcrumbSchema, OrganizationSchema, FAQSchema, LocalBusines
 import ProgressiveImage from './ProgressiveImage';
 import SkeletonLoader, { SectionSkeleton } from './SkeletonLoader';
 import { useClientStats } from '../context/ClientStatsContext';
+import ParticleNetwork from './animations/ParticleNetwork';
 
 // Mobile-first UI components
 import {
@@ -701,6 +702,14 @@ const ProcessSection = () => {
       {/* Background elements */}
       {!reduceMotion && (
         <>
+          {/* ParticleNetwork - relocated from Hero */}
+          <ParticleNetwork
+            particleCount={30}
+            color="#E85002"
+            connectionDistance={100}
+            speed={0.2}
+            opacity={0.15}
+          />
           <div
             className="absolute top-1/4 left-10 w-72 h-72 rounded-full opacity-10 blur-3xl pointer-events-none"
             style={{

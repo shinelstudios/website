@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { useClientStats } from "../context/ClientStatsContext";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
-import ParticleNetwork from "./animations/ParticleNetwork";
+import FloatingMetricsCloud from "./animations/FloatingServiceBubbles";
+import { getCurrentUrgencyMessage } from "../utils/urgencyMessages";
 
 /* ------------------------------ Helpers ------------------------------ */
 
@@ -427,19 +428,13 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
       aria-label="Shinel Studios Hero"
     >
       <AuroraBackground />
-      <ParticleNetwork
-        particleCount={40}
-        color="#E85002"
-        connectionDistance={120}
-        speed={0.3}
-        opacity={0.25}
-      />
+      <FloatingMetricsCloud />
 
-      <div className="container mx-auto px-6 relative z-10 grid lg:grid-cols-2 gap-20 lg:gap-32 items-center py-32 lg:py-0">
+      <div className="container mx-auto px-8 lg:px-12 relative z-10 grid lg:grid-cols-2 gap-20 lg:gap-32 items-center py-24 lg:py-0">
 
         {/* LEFT: Content */}
         <motion.div
-          className="text-center lg:text-left space-y-12 max-w-2xl mx-auto lg:mx-0"
+          className="text-center lg:text-left space-y-10 max-w-2xl mx-auto lg:mx-0"
           variants={container}
           initial="hidden"
           animate="visible"
@@ -484,7 +479,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           {/* Headline */}
           <motion.h1
             variants={item}
-            className="text-6xl lg:text-8xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl text-[var(--text)]"
+            className="text-5xl lg:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl text-[var(--text)]"
           >
             We <span className="animated-gradient-text">Engineer</span>
             <br />YouTube Growth
@@ -546,21 +541,21 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
           {/* Subheadline */}
           <motion.p
             variants={item}
-            className="text-xl lg:text-2xl text-[var(--text-muted)] leading-relaxed max-w-xl mx-auto lg:mx-0"
+            className="text-lg lg:text-xl text-[var(--text-muted)] leading-relaxed max-w-xl mx-auto lg:mx-0"
           >
             Premium editing & strategy that drives measurable results.
-            <span className="block opacity-60 text-lg mt-3 font-light">Data-backed. Performance-focused. No templates.</span>
+            <span className="block opacity-60 text-base mt-3 font-light">Data-backed. Performance-focused. No templates.</span>
           </motion.p>
 
           {/* CTAs */}
           <motion.div
             variants={item}
-            className="space-y-6 pt-8"
+            className="space-y-6 pt-6"
           >
             <div className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start">
               <button
                 onClick={onAudit}
-                className="group relative px-12 py-6 text-lg font-black text-white rounded-full bg-[#E85002] shadow-[0_20px_60px_-15px_rgba(232,80,2,0.7)] hover:shadow-[0_30px_70px_-10px_rgba(232,80,2,0.9)] hover:scale-105 active:scale-100 transition-all duration-300 w-full sm:w-auto overflow-hidden"
+                className="group relative px-10 py-5 text-base font-black text-white rounded-full bg-[#E85002] shadow-[0_20px_60px_-15px_rgba(232,80,2,0.7)] hover:shadow-[0_30px_70px_-10px_rgba(232,80,2,0.9)] hover:scale-105 active:scale-100 transition-all duration-300 w-full sm:w-auto overflow-hidden"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/25 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                 <span className="relative flex items-center justify-center gap-2.5">
@@ -571,7 +566,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
 
               <button
                 onClick={handleSeeWork}
-                className="px-12 py-6 text-lg font-bold rounded-full border-2 border-white/20 hover:border-white/40 hover:bg-white/5 transition-all duration-300 w-full sm:w-auto backdrop-blur-sm"
+                className="px-10 py-5 text-base font-bold rounded-full border-2 border-white/20 hover:border-white/40 hover:bg-white/5 transition-all duration-300 w-full sm:w-auto backdrop-blur-sm"
                 style={{ WebkitBackdropFilter: "blur(8px)" }}
               >
                 View Our Work
@@ -579,14 +574,14 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
             </div>
 
             {/* Trust micro-copy - Now properly aligned under buttons */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-8 gap-y-3 px-2">
-              <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] font-medium">
-                <div className="flex items-center gap-1.5">
-                  <Check size={14} className="text-[var(--orange)]" />
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-10 gap-y-4 px-2">
+              <div className="flex items-center gap-5 text-sm text-[var(--text-muted)] font-medium">
+                <div className="flex items-center gap-2">
+                  <Check size={16} className="text-[var(--orange)]" />
                   <span>No credit card</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Check size={14} className="text-[var(--orange)]" />
+                <div className="flex items-center gap-2">
+                  <Check size={16} className="text-[var(--orange)]" />
                   <span>15-min call</span>
                 </div>
               </div>
@@ -599,7 +594,7 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
                 </div>
                 <span className="text-xs text-[var(--text-muted)] font-medium">
                   <span className="text-[var(--orange)] font-extrabold uppercase tracking-widest text-[10px] mr-1">Limited:</span>
-                  Only 3 spots left this week
+                  {getCurrentUrgencyMessage().text}
                 </span>
               </div>
             </div>

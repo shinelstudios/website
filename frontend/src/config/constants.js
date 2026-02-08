@@ -298,7 +298,22 @@ export const ANALYTICS_EVENTS = {
 };
 
 // Festival Database (Max 30% discount rule applied)
+// Expanded with major Hindu and Indian festivals
 export const FESTIVAL_DATABASE = [
+    {
+        id: 'makar_sankranti',
+        name: 'Makar Sankranti',
+        month: 0, // Jan
+        day: 14,
+        durationDays: 2,
+        discount: 20,
+        code: 'HARVEST20',
+        title: 'Harvest Festival Special!',
+        description: 'Celebrate the harvest season with fresh content.',
+        theme: 'linear-gradient(135deg, #FFD700, #FFA500, #FF8C00)',
+        textColor: '#000',
+        badgeColor: '#8B4513'
+    },
     {
         id: 'republic_day',
         name: 'Republic Day',
@@ -328,6 +343,20 @@ export const FESTIVAL_DATABASE = [
         badgeColor: '#590d22'
     },
     {
+        id: 'maha_shivratri',
+        name: 'Maha Shivratri',
+        month: 1, // Feb
+        day: 15,
+        durationDays: 2,
+        discount: 25,
+        code: 'SHIVA25',
+        title: 'Maha Shivratri Blessings!',
+        description: 'Divine content for your channel.',
+        theme: 'linear-gradient(135deg, #4A148C, #7B1FA2, #9C27B0)',
+        textColor: '#fff',
+        badgeColor: '#FFD700'
+    },
+    {
         id: 'holi',
         name: 'Holi Festival',
         month: 2, // March (approx for 2026)
@@ -340,6 +369,34 @@ export const FESTIVAL_DATABASE = [
         theme: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
         textColor: '#fff',
         badgeColor: '#800080'
+    },
+    {
+        id: 'ram_navami',
+        name: 'Ram Navami',
+        month: 3, // April (approx April 6 in 2026)
+        day: 6,
+        durationDays: 2,
+        discount: 20,
+        code: 'RAM20',
+        title: 'Ram Navami Special!',
+        description: 'Victory of good over evil in your content.',
+        theme: 'linear-gradient(135deg, #FF6B6B, #FFD93D, #6BCB77)',
+        textColor: '#000',
+        badgeColor: '#C70039'
+    },
+    {
+        id: 'raksha_bandhan',
+        name: 'Raksha Bandhan',
+        month: 7, // Aug (approx Aug 3 in 2026)
+        day: 3,
+        durationDays: 2,
+        discount: 20,
+        code: 'RAKHI20',
+        title: 'Raksha Bandhan Offer!',
+        description: 'Protect your channel with quality content.',
+        theme: 'linear-gradient(135deg, #FF6B9D, #C06C84, #F67280)',
+        textColor: '#fff',
+        badgeColor: '#FFD700'
     },
     {
         id: 'independence_day',
@@ -356,9 +413,51 @@ export const FESTIVAL_DATABASE = [
         badgeColor: '#138808'
     },
     {
+        id: 'janmashtami',
+        name: 'Janmashtami',
+        month: 7, // Aug (approx Aug 26 in 2026)
+        day: 26,
+        durationDays: 2,
+        discount: 25,
+        code: 'KRISHNA25',
+        title: 'Janmashtami Special!',
+        description: 'Divine creativity for your channel.',
+        theme: 'linear-gradient(135deg, #1E3A8A, #3B82F6, #60A5FA)',
+        textColor: '#fff',
+        badgeColor: '#FFD700'
+    },
+    {
+        id: 'ganesh_chaturthi',
+        name: 'Ganesh Chaturthi',
+        month: 8, // Sep (approx Sep 7 in 2026)
+        day: 7,
+        durationDays: 3,
+        discount: 25,
+        code: 'GANESH25',
+        title: 'Ganesh Chaturthi Blessings!',
+        description: 'Remove obstacles from your content journey.',
+        theme: 'linear-gradient(135deg, #FF6B35, #F7931E, #FDC830)',
+        textColor: '#000',
+        badgeColor: '#C70039'
+    },
+    {
+        id: 'navratri',
+        name: 'Navratri',
+        month: 9, // Oct (approx Oct 3 in 2026)
+        day: 3,
+        durationDays: 9,
+        discount: 30,
+        code: 'NAVRATRI30',
+        title: '9 Nights of Savings!',
+        description: 'Celebrate with divine discounts.',
+        theme: 'linear-gradient(135deg, #FF0080, #FF8C00, #FFD700)',
+        textColor: '#fff',
+        badgeColor: '#8B0000'
+    },
+    {
         id: 'diwali',
         name: 'Diwali',
-        month: 10, // Nov
+        month: 10, // Nov (approx Nov 8 in 2026)
         day: 8,
         durationDays: 5,
         discount: 30,
@@ -368,6 +467,20 @@ export const FESTIVAL_DATABASE = [
         theme: 'linear-gradient(135deg, #FFD700, #FF8C00)',
         textColor: '#000',
         badgeColor: '#8B0000'
+    },
+    {
+        id: 'guru_nanak_jayanti',
+        name: 'Guru Nanak Jayanti',
+        month: 10, // Nov (approx Nov 15 in 2026)
+        day: 15,
+        durationDays: 2,
+        discount: 20,
+        code: 'GURUPURAB',
+        title: 'Guru Nanak Jayanti Special!',
+        description: 'Wisdom and creativity for your content.',
+        theme: 'linear-gradient(135deg, #FF9933, #FFFFFF, #138808)',
+        textColor: '#000',
+        badgeColor: '#000080'
     },
     {
         id: 'halloween',
