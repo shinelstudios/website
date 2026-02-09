@@ -6,6 +6,7 @@ import {
     ExternalLink,
     RefreshCw,
     Youtube,
+    Instagram,
     ShieldCheck,
     AlertCircle,
     UserPlus,
@@ -27,7 +28,7 @@ import Sparkline from "./Sparkline";
 import { AUTH_BASE } from "../config/constants";
 
 export default function AdminClientsPage() {
-    const { refreshStats, refreshSync } = useClientStats();
+    const { refreshStats, refreshSync, getProxiedImage } = useClientStats();
     const [clients, setClients] = useState([]);
     const [busy, setBusy] = useState(false);
     const [refreshingId, setRefreshingId] = useState(null);
@@ -41,9 +42,12 @@ export default function AdminClientsPage() {
         name: "",
         youtubeId: "",
         handle: "",
+        instagramHandle: "",
         category: "Vlogger",
         status: "active",
-        subscribers: ""
+        subscribers: "",
+        instagramFollowers: "",
+        instagramLogo: ""
     });
 
     const [editingId, setEditingId] = useState(null);
@@ -51,9 +55,12 @@ export default function AdminClientsPage() {
         name: "",
         youtubeId: "",
         handle: "",
+        instagramHandle: "",
         category: "",
         status: "",
-        subscribers: ""
+        subscribers: "",
+        instagramFollowers: "",
+        instagramLogo: ""
     });
 
     const [token, setToken] = useState(() => localStorage.getItem("token") || "");
@@ -110,15 +117,17 @@ export default function AdminClientsPage() {
 
     async function createClient(e) {
         e.preventDefault();
-        if (!form.name || !form.youtubeId) return setErr("Name and YouTube ID required");
-
+        if (!form.name || (!form.youtubeId && !form.instagramHandle)) return setErr("Name and at least one platform ID (YouTube or Instagram) required");
         const payload = {
-            name: form.name.trim(),
-            youtubeId: form.youtubeId.trim(),
-            handle: form.handle.trim(),
+            name: form.name,
+            youtubeId: form.youtubeId,
+            handle: form.handle,
+            instagramHandle: form.instagramHandle,
             category: form.category,
             status: form.status,
-            subscribers: Number(form.subscribers || 0)
+            subscribers: form.subscribers ? Number(form.subscribers) : 0,
+            instagramFollowers: form.instagramFollowers ? Number(form.instagramFollowers) : 0,
+            instagramLogo: form.instagramLogo
         };
 
         setBusy(true);
@@ -131,7 +140,7 @@ export default function AdminClientsPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
-            setForm({ name: "", youtubeId: "", handle: "", category: "Vlogger", status: "active", subscribers: "" });
+            setForm({ name: "", youtubeId: "", handle: "", instagramHandle: "", category: "Vlogger", status: "active", subscribers: "" });
             await loadClients();
             await refreshSync();
         } catch (e) {
@@ -182,17 +191,26 @@ export default function AdminClientsPage() {
         }
     }
 
-    async function refreshSingleClient(clientId) {
+    async function refreshSingleClient(clientId, force = false) {
         setRefreshingId(clientId);
         try {
-            const result = await refreshSync();
+            const result = await refreshSync(force); // Pass force flag
             if (result.errors?.length > 0) {
                 const myErr = result.errors.find(e => e.id === clientId);
                 if (myErr) setErr(`Sync error for ${myErr.name}: ${myErr.error}`);
             }
             await loadClients();
         } catch (e) {
-            setErr(e.message);
+            console.error(e);
+            if (e.status === 429) {
+                if (!force) {
+                    setErr("Sync cooldown active. Shift+Click the refresh button to force sync immediately.");
+                } else {
+                    setErr("Sync limit reached even with force. Please wait.");
+                }
+            } else {
+                setErr(e.message || "Sync failed");
+            }
         } finally {
             setRefreshingId(null);
         }
@@ -206,7 +224,11 @@ export default function AdminClientsPage() {
             setSyncReport(result);
             await loadClients();
         } catch (e) {
-            setErr(e.message);
+            if (e.status === 429) {
+                setErr("Too many sync requests. Please wait a few minutes before trying again.");
+            } else {
+                setErr(e.message);
+            }
         } finally {
             setBusy(false);
         }
@@ -229,12 +251,15 @@ export default function AdminClientsPage() {
     function startEdit(client) {
         setEditingId(client.id);
         setEditForm({
-            name: client.name,
-            youtubeId: client.youtubeId,
+            name: client.name || "",
+            youtubeId: client.youtubeId || "",
             handle: client.handle || "",
-            category: client.category || "Vlogger",
+            instagramHandle: client.instagramHandle || client.instagram_handle || "",
+            category: client.category || "",
             status: client.status || "active",
-            subscribers: client.subscribers || ""
+            subscribers: client.subscribers || "",
+            instagramFollowers: client.instagramFollowers || client.instagram_followers || "",
+            instagramLogo: client.instagramLogo || client.instagram_logo || ""
         });
     }
 
@@ -245,15 +270,18 @@ export default function AdminClientsPage() {
 
     async function saveEdit(e) {
         e.preventDefault();
-        if (!editForm.name || !editForm.youtubeId) return setErr("Name and YouTube ID required");
+        if (!editForm.name || (!editForm.youtubeId && !editForm.instagramHandle)) return setErr("Name and at least one platform ID (YouTube or Instagram) required");
 
         const payload = {
-            name: editForm.name.trim(),
-            youtubeId: editForm.youtubeId.trim(),
-            handle: editForm.handle.trim(),
+            name: editForm.name,
+            youtubeId: editForm.youtubeId,
+            handle: editForm.handle,
+            instagramHandle: editForm.instagramHandle,
             category: editForm.category,
             status: editForm.status,
-            subscribers: Number(editForm.subscribers || 0)
+            subscribers: editForm.subscribers ? Number(editForm.subscribers) : 0,
+            instagramFollowers: editForm.instagramFollowers ? Number(editForm.instagramFollowers) : 0,
+            instagramLogo: editForm.instagramLogo
         };
 
         setBusy(true);
@@ -312,18 +340,24 @@ export default function AdminClientsPage() {
             const growth = getGrowth(s.id || client.youtubeId);
             const history = getHistory(s.id || client.youtubeId);
 
+            // Manual values from client registry
+            const manualIGFollowers = Number(client.instagramFollowers || client.instagram_followers || 0);
+            const manualYTSubs = Number(client.subscribers || 0);
+
             return {
                 ...client,
-                logo: s.logo || client.logo,
-                subscribers: (s.subscribers > 0 && s.subscribers % 1000 === 0 && client.subscribers > 0 && Math.abs(s.subscribers - client.subscribers) < 1000)
-                    ? client.subscribers
-                    : (s.subscribers || client.subscribers || 0),
+                logo: client.instagramLogo || client.instagram_logo || s.logo || client.logo,
+                subscribers: (manualYTSubs > 0) ? manualYTSubs : (s.subscribers || 0),
                 viewCount: s.viewCount || s.views || 0,
                 displayTitle: s.title || client.name,
+                instagramFollowers: (manualIGFollowers > 0) ? manualIGFollowers : (s.instagramFollowers || 0),
+                instagramHandle: s.instagramHandle || client.instagramHandle || client.instagram_handle,
                 growth,
                 history,
-                matched: !!s.id,
-                syncError: syncErr?.error || null
+                matched: !!(s.id || s.instagramHandle || manualIGFollowers > 0 || manualYTSubs > 0),
+                syncError: syncErr?.error || null,
+                hasYT: !!(client.youtubeId || manualYTSubs > 0),
+                hasIG: !!(client.instagramHandle || client.instagram_handle || manualIGFollowers > 0)
             };
         });
     }, [clients, globalStats, getHistory, getGrowth]);
@@ -333,6 +367,7 @@ export default function AdminClientsPage() {
         return enrichedClients.filter(c =>
             c.name.toLowerCase().includes(q) ||
             c.youtubeId.toLowerCase().includes(q) ||
+            (c.instagramHandle && c.instagramHandle.toLowerCase().includes(q)) ||
             (c.category && c.category.toLowerCase().includes(q)) ||
             (c.status && c.status.toLowerCase().includes(q))
         );
@@ -525,7 +560,6 @@ export default function AdminClientsPage() {
                                                 }`}
                                         />
                                         <input
-                                            required
                                             value={form.youtubeId}
                                             onChange={e => setForm({ ...form, youtubeId: e.target.value })}
                                             placeholder="UC... or @handle"
@@ -540,31 +574,53 @@ export default function AdminClientsPage() {
                                     </p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Input
-                                        label="Handle (Optional)"
-                                        value={form.handle}
-                                        onChange={(v) => setForm({ ...form, handle: v })}
-                                        placeholder="@creator"
-                                    />
+                                <Input
+                                    label="Handle (Youtube)"
+                                    value={form.handle}
+                                    onChange={(v) => setForm({ ...form, handle: v })}
+                                    placeholder="@creator"
+                                />
 
+                                <Input
+                                    label="Instagram Handle"
+                                    value={form.instagramHandle}
+                                    onChange={(v) => setForm({ ...form, instagramHandle: v })}
+                                    placeholder="@shinel.studios"
+                                />
+
+                                <div className="grid grid-cols-2 gap-3">
                                     <SelectWithPresets
                                         label="Category"
                                         value={form.category}
                                         onChange={(v) => setForm({ ...form, category: v })}
                                         options={CATEGORIES}
                                     />
+                                    <SelectWithPresets
+                                        label="Status"
+                                        value={form.status}
+                                        onChange={(v) => setForm({ ...form, status: v })}
+                                        options={STATUS_OPTIONS}
+                                    />
                                 </div>
 
-                                <SelectWithPresets
-                                    label="Network Status"
-                                    value={form.status}
-                                    onChange={(v) => setForm({ ...form, status: v })}
-                                    options={STATUS_OPTIONS}
-                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                        label="Manual IG Followers"
+                                        value={form.instagramFollowers}
+                                        onChange={(v) => setForm({ ...form, instagramFollowers: v })}
+                                        placeholder="e.g. 50000"
+                                        type="number"
+                                    />
+                                    <Input
+                                        label="Manual IG Logo URL"
+                                        value={form.instagramLogo}
+                                        onChange={(v) => setForm({ ...form, instagramLogo: v })}
+                                        placeholder="https://..."
+                                    />
+                                </div>
 
                                 <Input
-                                    label="Precise Subscribers (Manual Override)"
+                                    label="Precise YT Subscribers (Manual)"
                                     value={form.subscribers}
                                     onChange={(v) => setForm({ ...form, subscribers: v })}
                                     placeholder="e.g. 173445"
@@ -600,7 +656,7 @@ export default function AdminClientsPage() {
                                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Reach</span>
                                     </div>
                                     <div className="text-2xl font-black">
-                                        {filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0).toLocaleString()}
+                                        {(filtered.reduce((sum, c) => sum + (c.subscribers || 0), 0) + filtered.reduce((sum, c) => sum + (c.instagram_followers || c.instagramFollowers || 0), 0)).toLocaleString()}
                                     </div>
                                 </div>
                                 <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
@@ -669,9 +725,15 @@ export default function AdminClientsPage() {
                                                     error={editForm.youtubeId && !editForm.youtubeId.startsWith('UC') && !editForm.youtubeId.startsWith('@') ? "Invalid ID format" : ""}
                                                 />
                                                 <Input
-                                                    label="Handle"
+                                                    label="Handle (Youtube)"
                                                     value={editForm.handle}
                                                     onChange={(v) => setEditForm({ ...editForm, handle: v })}
+                                                    placeholder="@optional"
+                                                />
+                                                <Input
+                                                    label="Instagram Handle"
+                                                    value={editForm.instagramHandle}
+                                                    onChange={(v) => setEditForm({ ...editForm, instagramHandle: v })}
                                                     placeholder="@optional"
                                                 />
                                                 <SelectWithPresets
@@ -687,10 +749,22 @@ export default function AdminClientsPage() {
                                                     options={STATUS_OPTIONS}
                                                 />
                                                 <Input
-                                                    label="Precise Subscribers"
+                                                    label="Precise YT Subscribers (Manual)"
                                                     value={editForm.subscribers}
                                                     onChange={(v) => setEditForm({ ...editForm, subscribers: v })}
                                                     type="number"
+                                                />
+                                                <Input
+                                                    label="Manual IG Followers"
+                                                    value={editForm.instagramFollowers}
+                                                    onChange={(v) => setEditForm({ ...editForm, instagramFollowers: v })}
+                                                    type="number"
+                                                />
+                                                <Input
+                                                    label="Manual IG Logo URL"
+                                                    value={editForm.instagramLogo}
+                                                    onChange={(v) => setEditForm({ ...editForm, instagramLogo: v })}
+                                                    placeholder="https://..."
                                                 />
                                             </div>
                                             <div className="flex gap-2 pt-1">
@@ -716,7 +790,7 @@ export default function AdminClientsPage() {
                                             <div className="flex items-start gap-4 flex-grow min-w-0">
                                                 {client.logo ? (
                                                     <img
-                                                        src={client.logo}
+                                                        src={getProxiedImage(client.logo)}
                                                         alt={client.name}
                                                         className="w-14 h-14 rounded-xl object-cover border border-white/10 shadow-md shrink-0"
                                                         onError={(e) => {
@@ -758,6 +832,14 @@ export default function AdminClientsPage() {
                                                                 {client.youtubeId}
                                                             </code>
                                                         </span>
+                                                        {client.instagramHandle && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Instagram size={10} className="text-pink-500" />
+                                                                <code className="px-1.5 py-0.5 rounded text-[8px] bg-white/5 text-gray-400">
+                                                                    {client.instagramHandle}
+                                                                </code>
+                                                            </span>
+                                                        )}
                                                         {client.syncError && (
                                                             <span className="flex items-center gap-1 text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full">
                                                                 <AlertCircle size={10} />
@@ -784,38 +866,60 @@ export default function AdminClientsPage() {
 
                                                 {/* Subscriber Count - EXACT NUMBERS */}
                                                 <div className="text-right min-w-[120px] flex flex-col gap-2">
-                                                    <div>
-                                                        <div className="text-xl font-black text-white tabular-nums leading-none">
-                                                            {(client.subscribers || 0).toLocaleString()}
+                                                    {client.hasYT && (
+                                                        <div>
+                                                            <div className="text-xl font-black text-white tabular-nums leading-none">
+                                                                {(client.subscribers || 0).toLocaleString()}
+                                                            </div>
+                                                            <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mt-1">
+                                                                Subscribers
+                                                            </div>
                                                         </div>
-                                                        <div className="text-[8px] font-black uppercase tracking-widest text-gray-500 mt-1">
-                                                            Subscribers
+                                                    )}
+
+                                                    {client.hasIG && (
+                                                        <div className="flex flex-col items-end animate-in fade-in slide-in-from-right-2 duration-500">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="text-sm font-black text-pink-500 tabular-nums leading-none">
+                                                                    {(client.instagramFollowers || 0).toLocaleString()}
+                                                                </div>
+                                                                <Instagram size={12} className="text-pink-500" />
+                                                            </div>
+                                                            <div className="text-[7px] font-black uppercase tracking-[0.1em] text-gray-600 mt-0.5">
+                                                                IG Followers
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-sm font-black text-orange-500 tabular-nums leading-none">
-                                                            {(client.viewCount || 0).toLocaleString()}
+                                                    )}
+
+                                                    {client.hasYT && (
+                                                        <div>
+                                                            <div className="text-sm font-black text-orange-500 tabular-nums leading-none">
+                                                                {(client.viewCount || 0).toLocaleString()}
+                                                            </div>
+                                                            <div className="text-[7px] font-black uppercase tracking-[0.1em] text-gray-600 mt-0.5">
+                                                                Total Views
+                                                            </div>
                                                         </div>
-                                                        <div className="text-[7px] font-black uppercase tracking-[0.1em] text-gray-600 mt-0.5">
-                                                            Total Views
+                                                    )}
+
+                                                    {client.hasYT && (
+                                                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider w-fit ml-auto ${(client.growth || 0) >= 0
+                                                            ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                            }`}>
+                                                            {(client.growth || 0) >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                                            {Math.abs(client.growth || 0).toFixed(1)}%
                                                         </div>
-                                                    </div>
-                                                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider w-fit ml-auto ${(client.growth || 0) >= 0
-                                                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                        }`}>
-                                                        {(client.growth || 0) >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                                        {Math.abs(client.growth || 0).toFixed(1)}%
-                                                    </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Actions - HORIZONTAL on Desktop, Vertical on Mobile */}
                                                 <div className="flex lg:flex-row flex-row gap-2 border-l border-white/5 pl-4">
                                                     <button
-                                                        onClick={() => refreshSingleClient(client.id)}
+                                                        onClick={(e) => refreshSingleClient(client.id, e.shiftKey)}
                                                         disabled={refreshingId === client.id}
                                                         className="h-9 w-9 flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-500 rounded-lg hover:bg-green-500/20 hover:border-green-500/30 transition-all disabled:opacity-50"
-                                                        title="Refresh Stats"
+                                                        title="Refresh Stats (Shift+Click to Force)"
                                                     >
                                                         <RefreshCw size={14} className={refreshingId === client.id ? "animate-spin" : ""} />
                                                     </button>
@@ -863,48 +967,50 @@ export default function AdminClientsPage() {
                         )}
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Bulk Actions Sticky Bar */}
-            <AnimatePresence>
-                {selectedIds.length > 0 && (
-                    <motion.div
-                        initial={{ y: 100, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 100, opacity: 0 }}
-                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
-                    >
-                        <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-orange-500/40 rounded-2xl p-4 shadow-[0_20px_60px_-15px_rgba(232,80,2,0.6)] flex items-center justify-between gap-4 backdrop-blur-xl">
-                            <div className="flex items-center gap-3 pl-2">
-                                <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
-                                    <CheckSquare size={18} />
+            < AnimatePresence >
+                {
+                    selectedIds.length > 0 && (
+                        <motion.div
+                            initial={{ y: 100, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: 100, opacity: 0 }}
+                            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-2xl"
+                        >
+                            <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border border-orange-500/40 rounded-2xl p-4 shadow-[0_20px_60px_-15px_rgba(232,80,2,0.6)] flex items-center justify-between gap-4 backdrop-blur-xl">
+                                <div className="flex items-center gap-3 pl-2">
+                                    <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                                        <CheckSquare size={18} />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-black">{selectedIds.length} Selected</div>
+                                        <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Bulk Actions</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div className="text-sm font-black">{selectedIds.length} Selected</div>
-                                    <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Bulk Actions</div>
-                                </div>
-                            </div>
 
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setSelectedIds([])}
-                                    className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={deleteBulk}
-                                    disabled={busy}
-                                    className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-red-900/30"
-                                >
-                                    <Trash2 size={14} />
-                                    Delete
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setSelectedIds([])}
+                                        className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={deleteBulk}
+                                        disabled={busy}
+                                        className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-red-900/30"
+                                    >
+                                        <Trash2 size={14} />
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </section>
+                        </motion.div>
+                    )
+                }
+            </AnimatePresence >
+        </section >
     );
 }

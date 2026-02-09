@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
 import PremiumPlayer from "./PremiumPlayer";
+import { useClientStats } from "../context/ClientStatsContext";
 
 /**
  * ClientPulsePage Component
@@ -32,6 +33,7 @@ const ClientPulsePage = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastChecked, setLastChecked] = useState(Date.now());
     const [isAdmin, setIsAdmin] = useState(false);
+    const { getProxiedImage } = useClientStats();
 
     // Check for admin role
     useEffect(() => {
@@ -300,7 +302,7 @@ const ActivityCard = ({ activity, index, meta }) => {
                         >
                             <PremiumPlayer
                                 videoId={videoId}
-                                thumbnail={activity.thumbnail}
+                                thumbnail={getProxiedImage(activity.thumbnail)}
                                 autoplay={true}
                                 className="w-full h-full"
                             />
@@ -331,7 +333,7 @@ const ActivityCard = ({ activity, index, meta }) => {
                     {/* Channel Logo */}
                     <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] flex-shrink-0">
                         {meta?.logo ? (
-                            <img src={meta.logo} alt={activity.clientName} className="w-full h-full object-cover" />
+                            <img src={getProxiedImage(meta.logo)} alt={activity.clientName} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-orange-500 uppercase">
                                 {activity.clientName.charAt(0)}

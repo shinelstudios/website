@@ -13,6 +13,7 @@ import {
     Instagram
 } from "lucide-react";
 import { timeAgo } from "../utils/helpers";
+import { useClientStats } from "../context/ClientStatsContext";
 
 const VideoCard = ({
     v,
@@ -25,6 +26,7 @@ const VideoCard = ({
     flashKey,
     viewMode = "grid"
 }) => {
+    const { getProxiedImage } = useClientStats();
     const isFlash = flashKey === String(v.id);
     const videoId = v.videoId;
     const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
@@ -43,7 +45,7 @@ const VideoCard = ({
                 <div className="w-24 aspect-video rounded-lg overflow-hidden bg-black shrink-0 border border-white/5">
                     {videoId ? (
                         <img
-                            src={`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+                            src={getProxiedImage(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`)}
                             className="w-full h-full object-cover"
                             alt=""
                             onError={(e) => {
@@ -51,7 +53,7 @@ const VideoCard = ({
                                     e.target.onerror = null;
                                     e.target.src = "https://placehold.co/600x400/202020/white?text=No+Preview";
                                 } else if (thumbQuality !== 'mqdefault') {
-                                    e.target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                                    e.target.src = getProxiedImage(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
                                 }
                             }}
                         />
@@ -107,14 +109,14 @@ const VideoCard = ({
             <div className="relative aspect-video w-full overflow-hidden bg-black">
                 {videoId ? (
                     <img
-                        src={`https://i.ytimg.com/vi/${videoId}/${thumbQuality}.jpg`}
+                        src={getProxiedImage(`https://i.ytimg.com/vi/${videoId}/${thumbQuality}.jpg`)}
                         alt={v.title}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         onError={(e) => {
                             if (thumbQuality !== 'mqdefault') {
                                 e.target.onerror = null;
-                                e.target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                                e.target.src = getProxiedImage(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
                             }
                         }}
                     />
@@ -149,8 +151,8 @@ const VideoCard = ({
                     )}
                     {/* Platform Badge */}
                     <span className={`px-2 py-1 rounded-lg backdrop-blur-md border text-[10px] font-black uppercase tracking-widest flex items-center gap-1 ${(v.platform || 'YOUTUBE') === 'INSTAGRAM'
-                            ? 'bg-pink-500/20 border-pink-500/30 text-pink-400'
-                            : 'bg-red-500/20 border-red-500/30 text-red-400'
+                        ? 'bg-pink-500/20 border-pink-500/30 text-pink-400'
+                        : 'bg-red-500/20 border-red-500/30 text-red-400'
                         }`}>
                         {(v.platform || 'YOUTUBE') === 'INSTAGRAM' ? (
                             <><Instagram size={10} /> IG</>

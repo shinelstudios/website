@@ -71,39 +71,43 @@ self.addEventListener("fetch", (event) => {
 
   if (!wantsApi && !wantsImg) return;
 
+  // Domain exclusion: Don't cache signed/short-lived CDN URLs (Instagram/Facebook)
+  // These often have CORS issues or expire, leading to ERR_FAILED in SW.
+  const host = url.hostname.toLowerCase();
+  if (host.includes("fbcdn.net") || host.includes("instagram.com")) {
+    return; // Bypass Service Worker for these
+  }
+
   event.respondWith(
     (async () => {
       const cacheName = wantsApi ? CACHE_API : CACHE_IMG;
       const cache = await caches.open(cacheName);
 
-      // Build a cache key that ignores credential variance.
-      // (Request itself is fine; we just ensure credentials are omitted.)
       const cacheKey = new Request(url.toString(), {
         method: "GET",
         credentials: "omit",
-        headers: req.headers, // keep etag headers for server semantics
+        headers: req.headers,
       });
 
       const cached = await cache.match(cacheKey);
-      // Fire network in background
-      const networkPromise = fetch(req)
-        .then(async (res) => {
-          // Cache only successful (or opaque for images) responses
-          const ok =
-            res.ok ||
-            (wantsImg && res.type === "opaque"); // allow opaque cross-origin images
-          if (ok) {
-            // Clone before caching
-            const clone = res.clone();
-            await cache.put(cacheKey, clone);
-            if (wantsImg) trimImageCache();
-          }
-          return res;
-        })
-        .catch(() => cached); // offline => fall back to cache
 
-      // Serve cached immediately; otherwise await network
-      return cached || networkPromise;
+      try {
+        const res = await fetch(req);
+        const ok = res.ok || (wantsImg && res.type === "opaque");
+        if (ok) {
+          const clone = res.clone();
+          await cache.put(cacheKey, clone);
+          if (wantsImg) trimImageCache();
+        }
+        return res;
+      } catch (err) {
+        // Fallback to cache ONLY if we have a match
+        if (cached) return cached;
+        // If NO cache and network failed, we MUST return a Response or bypass respondWith.
+        // However, we are already inside respondWith. Let's return a simple failure response
+        // so the browser knows the network failed properly.
+        return new Response("Network error", { status: 408, headers: { 'Content-Type': 'text/plain' } });
+      }
     })()
   );
 });

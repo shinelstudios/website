@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 // [NEW] Imported new icons for social proof
-import { CheckCircle2, Users, TrendingUp } from "lucide-react";
+import { CheckCircle2, Users, TrendingUp, Youtube, Instagram } from "lucide-react";
 import { LazyImage } from "./ProgressiveImage";
 import { useClientStats } from "../context/ClientStatsContext";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
@@ -73,9 +73,18 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
             {creator.category}
           </span>
         </span>
-        {creator.subs != null && (
-          <span className="cw-meta">{formatSubs(creator.subs)} subscribers</span>
-        )}
+        <div className="flex flex-col gap-0">
+          {creator.subs != null && creator.subs > 0 && (
+            <span className="cw-meta flex items-center gap-1 text-[9px]">
+              <Youtube size={10} className="text-red-500" /> {formatSubs(creator.subs)}
+            </span>
+          )}
+          {creator.igFollowers != null && creator.igFollowers > 0 && (
+            <span className="cw-meta flex items-center gap-1 text-[9px]">
+              <Instagram size={10} className="text-pink-500" /> {formatSubs(creator.igFollowers)}
+            </span>
+          )}
+        </div>
       </span>
     </>
   );
@@ -112,7 +121,7 @@ const CreatorsWorkedWithMarquee = ({
   forceMotion = false,
   direction = 'left',
 }) => {
-  const { stats, loading } = useClientStats();
+  const { stats, totalSubscribers, totalInstagramFollowers, loading, getProxiedImage } = useClientStats();
   const { config } = useGlobalConfig();
   const [prefersReduced, setPrefersReduced] = useState(false);
 
@@ -154,27 +163,49 @@ const CreatorsWorkedWithMarquee = ({
     if (creatorsProp && creatorsProp.length) return creatorsProp;
     if (loading) return [];
 
-    return stats.map(client => ({
-      name: client.title,
-      key: client.youtubeId || client.id, // Use youtubeId as unique key
-      url: client.logo,
-      subs: client.subscribers,
-      category: client.category || "Creator",
-      color: "var(--orange)"
-    }));
+    return stats.flatMap(client => {
+      const items = [];
+      const primaryId = client.youtubeId || client.id;
+
+      // YouTube Card
+      if (client.subscribers > 0) {
+        items.push({
+          name: client.title,
+          key: `${primaryId}-yt`,
+          url: client.logo,
+          subs: client.subscribers,
+          igFollowers: 0,
+          category: client.category || "Creator",
+          color: "var(--orange)"
+        });
+      }
+
+      // Instagram Card
+      if (client.instagramFollowers > 0) {
+        items.push({
+          name: client.title,
+          key: `${client.instagramHandle || primaryId}-ig`,
+          url: client.instagramLogo || client.logo, // Prefer IG logo, fallback to main
+          subs: 0,
+          igFollowers: client.instagramFollowers,
+          category: client.category || "Creator",
+          color: "var(--orange)"
+        });
+      }
+
+      return items;
+    });
   }, [creatorsProp, stats, loading]);
   if (!finalCreators || finalCreators.length === 0) return null;
 
-  // Calculate total combined reach for display, prioritizing Admin Config
-  const totalSubs = useMemo(() => {
-    // If Admin has set a manual override text (e.g. "100M+"), use that directly if possible,
-    // though this formatting function expects a number. 
-    // If the config value is a string that looks like a number, parse it.
-    // However, the upstream component now allows text. 
-    // We should probably check if `config.stats.totalReach` exists and use it directly in the render
-    // instead of passing it through `fmt`.
-    return config?.stats?.totalReach || finalCreators.reduce((sum, c) => sum + (c.subs || 0), 0);
-  }, [finalCreators, config]);
+  // Platform-specific reach calculations
+  const ytReach = useMemo(() => {
+    return config?.stats?.totalReach || totalSubscribers;
+  }, [totalSubscribers, config]);
+
+  const igReach = useMemo(() => {
+    return totalInstagramFollowers || 0;
+  }, [totalInstagramFollowers]);
 
   const fmt = useCallback((n) => {
     if (n == null) return null;
@@ -309,9 +340,16 @@ const CreatorsWorkedWithMarquee = ({
               <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center group-hover:bg-[var(--orange)] transition-colors duration-300">
                 <TrendingUp size={16} className="text-[var(--orange)] group-hover:text-white transition-colors duration-300" />
               </div>
-              <span className="text-sm font-black uppercase tracking-widest text-[var(--orange)]">
-                {fmt(totalSubs)}+ Total Reach
-              </span>
+              <div className="flex flex-col items-start justify-center">
+                <span className="text-sm font-black uppercase tracking-widest text-[var(--orange)] leading-none">
+                  {fmt(ytReach)}+ YouTube Reach
+                </span>
+                {igReach > 0 && (
+                  <span className="text-[10px] font-black uppercase tracking-widest text-pink-500 leading-none mt-1 opacity-90">
+                    {fmt(igReach)}+ Instagram Reach
+                  </span>
+                )}
+              </div>
             </div>
           </motion.div>
 
@@ -438,7 +476,7 @@ const CreatorsWorkedWithMarquee = ({
                       whileHover={!showStatic ? { background: "var(--surface-alt)" } : {}}
                       transition={{ duration: 0.2 }}
                       style={{
-                        background: isHovered ? "var(--surface-alt)" : "transparent",
+                        background: isHovered ? "var(--surface-alt)" : "rgba(0,0,0,0)",
                         border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
                         willChange: "transform",
                       }}
@@ -469,7 +507,7 @@ const CreatorsWorkedWithMarquee = ({
                         whileHover={!showStatic ? { background: "var(--surface-alt)" } : {}}
                         transition={{ duration: 0.2 }}
                         style={{
-                          background: isHovered ? "var(--surface-alt)" : "transparent",
+                          background: isHovered ? "var(--surface-alt)" : "rgba(0,0,0,0)",
                           border: `1px solid ${isHovered ? "var(--border)" : "transparent"}`,
                           willChange: "transform",
                         }}

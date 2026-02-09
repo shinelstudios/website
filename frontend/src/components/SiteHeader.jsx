@@ -38,6 +38,7 @@ import {
   FolderOpen,
   Radio,
   Youtube,
+  Instagram,
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
@@ -46,6 +47,7 @@ import logoLight from "../assets/logo_light.png";
 import logoDark from "../assets/logo_dark.png";
 
 import { useGlobalConfig } from "../context/GlobalConfigContext";
+import { useClientStats } from "../context/ClientStatsContext";
 
 /* ---------------- helpers: safe base64url + jwt + theme favicon ---------------- */
 function base64UrlDecode(str) {
@@ -259,9 +261,9 @@ const toolsCatalog = [
   {
     name: "Pulse Registry",
     path: "/dashboard/clients",
-    icon: Youtube,
+    icon: Shield,
     roles: ["admin"],
-    description: "Manage YouTube client list",
+    description: "Manage YouTube & Instagram creators",
   },
   /* {
       name: "YouTube Automated Captions",
@@ -493,22 +495,44 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   // [MODIFIED] Use config for dynamic stats
   const { config } = useGlobalConfig();
+  const { totalSubscribers, totalInstagramFollowers } = useClientStats();
+
+  const formatFmt = useCallback((n) => {
+    if (n == null) return null;
+    if (typeof n === 'string') return n;
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return `${n}`;
+  }, []);
 
   const trustItems = useMemo(
-    () => [
-      { icon: Wand2, text: "AI-First Studio • Human-Directed Quality" },
-      { icon: UserCog, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Creators Across Niches` },
-      { icon: BarChart3, text: `Thumbnails Delivering +${config?.stats?.ctrBoostMax || "60"}% CTR Lift` },
-      { icon: Zap, text: "Edits Driving 2× Average Watch Time" },
-      { icon: ExternalLink, text: `${config?.stats?.totalReach || "1.2B"}${typeof config?.stats?.totalReach === 'string' ? '' : '+'} Total Views Driven for Clients` },
-      // { icon: Languages, text: "Auto-Captions & Multi-Language Support" },
-      { icon: Shield, text: "Consent-First Face & Voice AI Features" },
-      { icon: Lightbulb, text: "Hook Scoring & Title Testing" },
-      { icon: Brain, text: "AI Script Co-Pilot for Viral Ideation" },
-      { icon: Zap, text: "48–72 HR Standard Project Turnaround" },
-      { icon: UserCog, text: "Dedicated PM & Weekly Checkpoints" },
-    ],
-    [config]
+    () => {
+      const totalReach = (config?.stats?.totalReach || totalSubscribers || 0) + (totalInstagramFollowers || 0);
+
+      const items = [
+        { icon: Wand2, text: "AI-First Studio • Human-Directed Quality" },
+        { icon: UserCog, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Creators Across Niches` },
+        { icon: BarChart3, text: `Thumbnails Delivering +${config?.stats?.ctrBoostMax || "60"}% CTR Lift` },
+        { icon: Zap, text: "Edits Driving 2× Average Watch Time" },
+        {
+          icon: Youtube,
+          text: `${formatFmt(totalReach)}+ Total Managed Reach`,
+          // Note: SiteHeader trustItems only supports one icon, we'll use Youtube as primary or just one.
+        },
+      ];
+
+      items.push(
+        { icon: Shield, text: "Consent-First Face & Voice AI Features" },
+        { icon: Lightbulb, text: "Hook Scoring & Title Testing" },
+        { icon: Brain, text: "AI Script Co-Pilot for Viral Ideation" },
+        { icon: Zap, text: "48–72 HR Standard Project Turnaround" },
+        { icon: UserCog, text: "Dedicated PM & Weekly Checkpoints" }
+      );
+
+      return items;
+    },
+    [config, totalSubscribers, totalInstagramFollowers, formatFmt]
   );
 
   const DesktopNavLink = ({ label, to, icon: Icon }) => {

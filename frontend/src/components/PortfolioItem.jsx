@@ -121,8 +121,8 @@ const PortfolioItem = ({ project, index }) => {
                 className="absolute inset-0 z-0 pointer-events-none"
                 animate={{
                     background: isHovered
-                        ? "radial-gradient(circle at center, rgba(232,80,2,0.15) 0%, transparent 70%)"
-                        : "radial-gradient(circle at center, transparent 0%, transparent 70%)"
+                        ? "radial-gradient(circle at center, rgba(232,80,2,0.15) 0%, rgba(232,80,2,0) 70%)"
+                        : "radial-gradient(circle at center, rgba(232,80,2,0) 0%, rgba(232,80,2,0) 70%)"
                 }}
             />
         </motion.div>

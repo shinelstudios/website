@@ -18,11 +18,29 @@ export const ClientStatsProvider = ({ children }) => {
     const [loading, setLoading] = useState(stats.length === 0);
     const [error, setError] = useState(null);
 
+    const getProxiedImage = (src) => {
+        if (!src) return src;
+        const s = String(src);
+
+        // Idempotency: If already proxied, return as is
+        if (s.includes("/api/proxy-image?url=")) return src;
+
+        const low = s.toLowerCase();
+        // Proxy Instagram/Facebook/Google thumbnails to avoid expired signed URLs and origin blocks
+        if (low.includes("fbcdn.net") || low.includes("instagram.com") || low.includes("cdninstagram.com") || low.includes("fbsbx.com") || low.includes("googleusercontent.com") || low.includes("ggpht.com") || s.includes("efg=")) {
+            return `${AUTH_BASE}/api/proxy-image?url=${encodeURIComponent(src)}`;
+        }
+        return src;
+    };
+
     const sanitizeLogoUrl = (url) => {
         if (!url) return null;
+        // Use proxy for problematic CDN domains
+        const proxied = getProxiedImage(url);
+        if (proxied !== url) return proxied;
+
         if (url.startsWith('http') || url.startsWith('data:')) return url;
         // If it starts with /api or is just a filename, prepend AUTH_BASE
-        // AUTH_BASE is typically something like https://shinel-auth.shinelstudioofficial.workers.dev
         return `${AUTH_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
@@ -63,10 +81,11 @@ export const ClientStatsProvider = ({ children }) => {
                 historyData = data.history || {};
             }
 
-            // Index stats by both YouTube ID and Handle for robust direct lookups
+            // Index stats by both YouTube ID, YT Handle, and IG Handle for robust lookups
             const statsMap = (Array.isArray(channelStats) ? channelStats : []).reduce((acc, s) => {
                 if (s.id) acc[s.id] = s;
                 if (s.handle) acc[s.handle.toLowerCase()] = s;
+                if (s.instagramHandle) acc[s.instagramHandle.toLowerCase()] = s;
                 return acc;
             }, {});
 
@@ -75,9 +94,13 @@ export const ClientStatsProvider = ({ children }) => {
 
             // Process clients with stats and fallbacks
             const processedClients = baseRegistry.map(client => {
-                const s = statsMap[client.youtubeId] || HARDCODED_FALLBACKS[client.youtubeId] || {};
+                const s = statsMap[client.youtubeId] ||
+                    (client.instagramHandle && statsMap[client.instagramHandle.toLowerCase()]) ||
+                    (client.instagram_handle && statsMap[client.instagram_handle.toLowerCase()]) ||
+                    HARDCODED_FALLBACKS[client.youtubeId] || {};
 
-                const logo = sanitizeLogoUrl(s.logo || client.logo);
+                const manualLogo = client.instagramLogo || client.instagram_logo;
+                const logo = sanitizeLogoUrl(manualLogo || s.logo || client.logo);
 
                 // DATA PRIORITY: Favor more precise numbers (those not ending in 000) if they are close
                 const apiSub = Number(s.subscribers || 0);
@@ -91,13 +114,19 @@ export const ClientStatsProvider = ({ children }) => {
                     subscribers = regSub;
                 }
 
+                const manualIGFollowers = Number(client.instagramFollowers || client.instagram_followers || 0);
+                const instagramFollowers = manualIGFollowers > 0 ? manualIGFollowers : Number(s.instagramFollowers || 0);
+
                 return {
                     ...client,
                     title: s.title || client.name || "Creator",
                     logo: logo,
+                    instagramLogo: sanitizeLogoUrl(client.instagramLogo || client.instagram_logo || s.instagramLogo),
                     subscribers: subscribers,
                     viewCount: Number(s.viewCount || s.views || 0),
-                    videoCount: Number(s.videoCount || 0)
+                    videoCount: Number(s.videoCount || 0),
+                    instagramFollowers: instagramFollowers,
+                    instagramHandle: s.instagramHandle || client.instagramHandle || client.instagram_handle
                 };
             });
 
@@ -122,6 +151,10 @@ export const ClientStatsProvider = ({ children }) => {
     // Derived Metrics
     const totalSubscribers = useMemo(() => {
         return stats.reduce((acc, curr) => acc + (curr.subscribers || 0), 0);
+    }, [stats]);
+
+    const totalInstagramFollowers = useMemo(() => {
+        return stats.reduce((acc, curr) => acc + (curr.instagramFollowers || 0), 0);
     }, [stats]);
 
     const totalViews = useMemo(() => {
@@ -171,22 +204,28 @@ export const ClientStatsProvider = ({ children }) => {
         loading,
         error,
         totalSubscribers,
+        totalInstagramFollowers,
         totalViews,
         getClientStats,
         getHistory,
         getGrowth,
         refreshStats: fetchStats,
-        refreshSync: async () => {
+        refreshSync: async (force = false) => {
             try {
                 const token = localStorage.getItem("token");
-                const res = await fetch(`${AUTH_BASE}/clients/sync`, {
+                const url = `${AUTH_BASE}/clients/sync${force ? '?force=1' : ''}`;
+                const res = await fetch(url, {
                     method: "POST",
                     headers: {
                         "authorization": `Bearer ${token}`
                     }
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Sync failed");
+                if (!res.ok) {
+                    const error = new Error(data.error || "Sync failed");
+                    error.status = res.status;
+                    throw error;
+                }
                 await fetchStats(); // Reload after sync
                 return data; // Return full result {ok, synced, total, errors}
             } catch (err) {
@@ -200,7 +239,8 @@ export const ClientStatsProvider = ({ children }) => {
                 const data = await res.json();
                 return data.errors || [];
             } catch { return []; }
-        }
+        },
+        getProxiedImage
     };
 
     return (

@@ -8,7 +8,9 @@ import {
   Users,
   Check,
   Play,
-  Zap
+  Zap,
+  Youtube,
+  Instagram
 } from "lucide-react";
 import { useClientStats } from "../context/ClientStatsContext";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
@@ -368,7 +370,7 @@ const ClientAvatar = ({ client, gradient, zIndex }) => {
 /* ------------------------------ Main Component ------------------------------ */
 
 export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) {
-  const { totalSubscribers, stats, loading } = useClientStats();
+  const { totalSubscribers, totalInstagramFollowers, stats, loading } = useClientStats();
   const { config } = useGlobalConfig();
   const sectionRef = useRef(null);
   const navigate = useNavigate();
@@ -380,10 +382,15 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
     }).format(number);
   };
 
-  const reachValue = useMemo(() => {
-    const combined = (totalSubscribers || 0) || (config?.stats?.totalReach || 0);
-    return combined > 0 ? formatCompactNumber(combined) : "3M+";
-  }, [totalSubscribers, config]);
+  const reachStats = useMemo(() => {
+    const ytReach = (totalSubscribers || 0) || (config?.stats?.totalReach || 0);
+    const igReach = (totalInstagramFollowers || 0);
+
+    return {
+      yt: ytReach > 0 ? formatCompactNumber(ytReach) : "3M+",
+      ig: igReach > 0 ? formatCompactNumber(igReach) : null
+    };
+  }, [totalSubscribers, totalInstagramFollowers, config]);
 
   const handleSeeWork = useCallback((e) => {
     e.preventDefault();
@@ -467,11 +474,19 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
                 )}
               </div>
               <div className="h-7 w-px bg-white/10" />
-              <div className="flex flex-col items-start">
-                <span className="text-lg font-black text-white tabular-nums leading-none">
-                  {reachValue}
+              <div className="flex flex-col items-start justify-center">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-lg font-black text-white tabular-nums leading-none">
+                    {formatCompactNumber((totalSubscribers || 0) + (totalInstagramFollowers || 0)) || "3M+"}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Youtube size={12} className="text-red-500" />
+                    <Instagram size={10} className="text-pink-500" />
+                  </div>
+                </div>
+                <span className="text-[9px] text-gray-500 font-black uppercase tracking-[0.1em] mt-1 leading-none">
+                  Total Managed Reach
                 </span>
-                <span className="text-xs text-gray-400 font-semibold leading-none mt-1">Active Subs Managed</span>
               </div>
             </div>
           </motion.div>
