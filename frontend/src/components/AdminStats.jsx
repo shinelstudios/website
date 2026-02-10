@@ -80,7 +80,11 @@ export default function AdminStats() {
         setBusy(true);
         try {
             // Call the sync endpoint
-            await fetch("https://shinel-auth.shinelstudioofficial.workers.dev/clients/sync?force=true");
+            // Call the sync endpoint
+            await fetch(`${AUTH_BASE}/clients/sync?force=true`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
             // Reload stats after a short delay
             setTimeout(loadStats, 2000);
         } catch (e) {

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
+import { AUTH_BASE } from "../config/constants";
 
 // Platform icon mapping
 const PLATFORM_ICONS = {
@@ -70,6 +71,14 @@ export default function AdminSettingsPage() {
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
+    // Role detection
+    const token = localStorage.getItem("token") || "";
+    const payload = parseJwt(token);
+    const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+    const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
+    const isAdmin = userRoles.includes('admin');
+    const isStaff = userRoles.some(r => ['admin', 'staff', 'editor'].includes(r));
+
     const [ytKeys, setYtKeys] = useState([]);
     const [ytLoading, setYtLoading] = useState(false);
 
@@ -93,13 +102,6 @@ export default function AdminSettingsPage() {
         if (isAdmin) fetchYtHealth();
     }, [isAdmin]);
 
-    // Role detection
-    const token = localStorage.getItem("token") || "";
-    const payload = parseJwt(token);
-    const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
-    const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
-    const isAdmin = userRoles.includes('admin');
-    const isStaff = userRoles.some(r => ['admin', 'staff', 'editor'].includes(r));
 
     // Local form state
     const [formData, setFormData] = useState({

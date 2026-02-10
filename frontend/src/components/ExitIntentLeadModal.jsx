@@ -37,7 +37,7 @@ const ExitIntentLeadModal = ({
     if (urlParams.get('clear-exit') === 'true') {
       sessionStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(USER_KEY);
-      console.log("[ExitIntent] Session/Local storage cleared for testing");
+      // console.log("[ExitIntent] Session/Local storage cleared for testing");
     }
   }, []);
 
@@ -64,26 +64,26 @@ const ExitIntentLeadModal = ({
 
     if (!forced) {
       if (now() - mountAt.current < mountGuardMs) {
-        console.log(`[ExitIntent] Blocked: Mount guard (${Math.round((mountGuardMs - (now() - mountAt.current)) / 1000)}s left)`);
+        // console.log(`[ExitIntent] Blocked: Mount guard (${Math.round((mountGuardMs - (now() - mountAt.current)) / 1000)}s left)`);
         return;
       }
       if (now() < suppressUntil.current) {
-        console.log(`[ExitIntent] Blocked: Recently suppressed (${Math.round((suppressUntil.current - now()) / 1000)}s left)`);
+        // console.log(`[ExitIntent] Blocked: Recently suppressed (${Math.round((suppressUntil.current - now()) / 1000)}s left)`);
         return;
       }
       if (isShownThisSession()) {
-        console.log("[ExitIntent] Blocked: Already shown this session");
+        // console.log("[ExitIntent] Blocked: Already shown this session");
         return;
       }
       if (isShownInCooldown()) {
-        console.log("[ExitIntent] Blocked: Cooldown period active");
+        // console.log("[ExitIntent] Blocked: Cooldown period active");
         return;
       }
     } else {
-      console.log("[ExitIntent] Bypassing guards (force-exit=true)");
+      // console.log("[ExitIntent] Bypassing guards (force-exit=true)");
     }
 
-    console.log(`[ExitIntent] Opening! Reason: ${reason}`);
+    // console.log(`[ExitIntent] Opening! Reason: ${reason}`);
     setOpen(true);
     markShownThisSession();
     markShownForUser();

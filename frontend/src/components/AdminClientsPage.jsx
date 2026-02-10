@@ -216,16 +216,20 @@ export default function AdminClientsPage() {
         }
     }
 
-    async function refreshAllClients() {
+    async function refreshAllClients(force = false) {
         setBusy(true);
         setSyncReport(null);
         try {
-            const result = await refreshSync();
+            const result = await refreshSync(force);
             setSyncReport(result);
             await loadClients();
         } catch (e) {
             if (e.status === 429) {
-                setErr("Too many sync requests. Please wait a few minutes before trying again.");
+                if (!force) {
+                    setErr("Sync cooldown active. Shift+Click 'Refresh All' to force sync.");
+                } else {
+                    setErr("Sync limit reached even with force. Please wait.");
+                }
             } else {
                 setErr(e.message);
             }
@@ -427,7 +431,7 @@ export default function AdminClientsPage() {
                             />
                         </div>
                         <button
-                            onClick={refreshAllClients}
+                            onClick={(e) => refreshAllClients(e.shiftKey)}
                             disabled={busy}
                             className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 border border-orange-500/30 rounded-lg transition-all disabled:opacity-50 text-xs font-bold"
                             title="Refresh All Stats"
