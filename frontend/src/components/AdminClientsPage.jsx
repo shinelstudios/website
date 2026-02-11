@@ -140,9 +140,9 @@ export default function AdminClientsPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
-            setForm({ name: "", youtubeId: "", handle: "", instagramHandle: "", category: "Vlogger", status: "active", subscribers: "" });
             await loadClients();
-            await refreshSync();
+            await refreshSync(true); // Bypass cooldown for manual add
+            setForm({ name: "", youtubeId: "", handle: "", instagramHandle: "", category: "Vlogger", status: "active", subscribers: "" });
         } catch (e) {
             setErr(e.message);
         } finally {
@@ -160,7 +160,7 @@ export default function AdminClientsPage() {
             });
             if (!res.ok) throw new Error("Delete failed");
             await loadClients();
-            await refreshSync();
+            await refreshSync(true); // Bypass cooldown for manual delete
             setSelectedIds(prev => prev.filter(p => p !== id));
         } catch (e) {
             setErr(e.message);
@@ -182,7 +182,7 @@ export default function AdminClientsPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
             await loadClients();
-            await refreshSync();
+            await refreshSync(true); // Bypass cooldown for manual bulk delete
             setSelectedIds([]);
         } catch (e) {
             setErr(e.message);
@@ -300,6 +300,7 @@ export default function AdminClientsPage() {
             if (!res.ok) throw new Error(data?.error || "Update failed");
             setEditingId(null);
             await loadClients();
+            await refreshSync(true); // Bypass cooldown for manual edit
             refreshStats();
         } catch (e) {
             setErr(e.message);

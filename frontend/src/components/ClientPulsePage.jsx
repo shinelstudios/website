@@ -25,7 +25,6 @@ import { useClientStats } from "../context/ClientStatsContext";
 const ClientPulsePage = () => {
     const [activities, setActivities] = useState([]);
     const [channelMeta, setChannelMeta] = useState({}); // id -> { title, logo }
-    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [lastSync, setLastSync] = useState(Date.now());
     const [error, setError] = useState(null);
@@ -33,7 +32,7 @@ const ClientPulsePage = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastChecked, setLastChecked] = useState(Date.now());
     const [isAdmin, setIsAdmin] = useState(false);
-    const { getProxiedImage } = useClientStats();
+    const { stats, getProxiedImage, loading: statsLoading } = useClientStats();
 
     // Check for admin role
     useEffect(() => {
@@ -46,19 +45,37 @@ const ClientPulsePage = () => {
         return () => window.removeEventListener("auth:changed", checkAdmin);
     }, []);
 
-    // Filter relevant activities (Strict 24 hours)
+    // Filter relevant activities (Strict 24 hours + Active Clients Only)
     const activeFeeds = useMemo(() => {
         const now = Date.now();
         const windowSize = 24 * 60 * 60 * 1000; // Strict 24 hours
+
+        // Use stats for O(1) canonical ID lookup
+        // We filter for 'active' status and map to the YouTube canonical ID (UC...)
+        const activeCanonicalIds = new Set(
+            stats
+                .filter(s => s.status === 'active')
+                .map(s => s.youtube_canonical_id) // This is the UC... ID priority
+                .filter(Boolean)
+        );
+
         return activities
-            .filter(a => (now - Number(a.timestamp || 0)) < windowSize)
+            .filter(a => {
+                const isWithinWindow = (now - Number(a.timestamp || 0)) < windowSize;
+
+                // If stats are still loading, don't filter out yet (prevent flicker)
+                if (statsLoading && stats.length === 0) return isWithinWindow;
+
+                // Check if the activity's channel is in our active set
+                return isWithinWindow && activeCanonicalIds.has(a.channelId);
+            })
             .sort((a, b) => {
                 // Priority: LIVE > Newest
                 if (a.isLive && !b.isLive) return -1;
                 if (!a.isLive && b.isLive) return 1;
                 return b.timestamp - a.timestamp;
             });
-    }, [activities]);
+    }, [activities, stats, statsLoading]);
 
     const fetchPulse = useCallback(async (isBackground = false) => {
         if (isBackground) setIsRefreshing(true);
@@ -79,15 +96,7 @@ const ClientPulsePage = () => {
             setQuotaExceeded(!!data.quotaExceeded);
             setLastChecked(Date.now());
 
-            // Also load reg for stats if needed ONLY on full load
-            if (!isBackground) {
-                const cRes = await fetch(`${AUTH_BASE}/clients`);
-                if (cRes.ok) {
-                    const cData = await cRes.json();
-                    setClients(cData.clients || []);
-                }
-            }
-
+            setLastChecked(Date.now());
         } catch (err) {
             setError("Pulse sync failed. Backend may be unavailable.");
             console.error("Pulse fetch failed:", err);
@@ -223,7 +232,7 @@ const ClientPulsePage = () => {
                                 ))}
                             </AnimatePresence>
                         </div>
-                    ) : !loading && clients.length === 0 ? (
+                    ) : !loading && stats.length === 0 ? (
                         <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
                             <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Registry is empty</h3>
@@ -236,7 +245,7 @@ const ClientPulsePage = () => {
                         <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
                             <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
-                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {clients.length} registered channels.</p>
+                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {stats.length} registered channels.</p>
                         </div>
                     )
                 }
@@ -256,6 +265,7 @@ const ClientPulsePage = () => {
 };
 
 const ActivityCard = ({ activity, index, meta }) => {
+    const { getProxiedImage } = useClientStats();
     const isLive = activity.isLive;
     const [isHovered, setIsHovered] = useState(false);
     const videoId = useMemo(() => {
@@ -287,7 +297,7 @@ const ActivityCard = ({ activity, index, meta }) => {
                             key="thumb"
                             initial={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            src={activity.thumbnail}
+                            src={getProxiedImage(activity.thumbnail)}
                             alt={activity.title}
                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                             loading="lazy"

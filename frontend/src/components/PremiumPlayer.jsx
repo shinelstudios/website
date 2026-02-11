@@ -66,7 +66,6 @@ const PremiumPlayer = ({ videoId, thumbnail, autoplay = false, className = "" })
                 height: "100%",
                 width: "100%",
                 videoId: videoId,
-                host: 'https://www.youtube.com',
                 playerVars: {
                     autoplay: autoplay ? 1 : 0,
                     mute: 1,

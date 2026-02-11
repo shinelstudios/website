@@ -119,6 +119,7 @@ export const ClientStatsProvider = ({ children }) => {
 
                 return {
                     ...client,
+                    youtube_canonical_id: s.id || client.youtubeId, // UC... ID priority
                     title: s.title || client.name || "Creator",
                     logo: logo,
                     instagramLogo: sanitizeLogoUrl(client.instagramLogo || client.instagram_logo || s.instagramLogo),
