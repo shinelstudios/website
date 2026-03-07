@@ -10,12 +10,34 @@ export const ClientStatsProvider = ({ children }) => {
     const [stats, setStats] = useState(() => {
         try {
             const saved = localStorage.getItem(LS_KEY);
-            return saved ? JSON.parse(saved) : [];
+            if (!saved) return [];
+            const parsed = JSON.parse(saved);
+            // Support legacy plain array or new {timestamp, data} format
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && Array.isArray(parsed.data)) return parsed.data;
+            return [];
         } catch {
             return [];
         }
     });
-    const [loading, setLoading] = useState(stats.length === 0);
+    // Check if we need to show loading immediately
+    const shouldLoadImmediate = useMemo(() => {
+        try {
+            const saved = localStorage.getItem(LS_KEY);
+            if (!saved) return true;
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) return true; // Legacy format, force refresh
+            if (parsed && parsed.timestamp) {
+                // If cache is older than 30 mins, show background loading but don't block
+                return (Date.now() - parsed.timestamp) > 30 * 60 * 1000;
+            }
+            return true;
+        } catch {
+            return true;
+        }
+    }, []);
+
+    const [loading, setLoading] = useState(stats.length === 0 || shouldLoadImmediate);
     const [error, setError] = useState(null);
 
     const getProxiedImage = (src) => {
@@ -35,8 +57,11 @@ export const ClientStatsProvider = ({ children }) => {
 
     const sanitizeLogoUrl = (url) => {
         if (!url) return null;
+        // Fix previously cached values with HTML encodings
+        const decodedUrl = url.replace(/&amp;/g, '&');
+
         // Use proxy for problematic CDN domains
-        const proxied = getProxiedImage(url);
+        const proxied = getProxiedImage(decodedUrl);
         if (proxied !== url) return proxied;
 
         if (url.startsWith('http') || url.startsWith('data:')) return url;
@@ -131,14 +156,25 @@ export const ClientStatsProvider = ({ children }) => {
                 };
             });
 
+            // Update state
             setStats(processedClients);
             setHistory(historyData);
-            localStorage.setItem(LS_KEY, JSON.stringify(processedClients));
+
+            // Save with timestamp for TTL
+            localStorage.setItem(LS_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                data: processedClients
+            }));
+
             setLoading(false);
             setError(null);
         } catch (err) {
             console.error("ClientStats Error:", err);
-            setError(err.message);
+            // STALE-WHILE-REVALIDATE: If we hit a network error but have cached stats, 
+            // DON'T throw them away. Just log the error and clear the loading state.
+            if (stats.length === 0) {
+                setError(err.message);
+            }
             setLoading(false);
         }
     };

@@ -61,7 +61,7 @@ const ProgressiveImage = ({
             setHasError(true);
             setIsLoading(false);
             onError?.(error);
-            console.error(`Failed to load image: ${src}`, error);
+            // console.error(`Failed to load image: ${src}`, error); // Muted to prevent expected console spam
         };
 
         // Start loading the full-size image

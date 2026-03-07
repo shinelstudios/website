@@ -50,11 +50,11 @@ const ClientPulsePage = () => {
         const now = Date.now();
         const windowSize = 24 * 60 * 60 * 1000; // Strict 24 hours
 
-        // Use stats for O(1) canonical ID lookup
+        // Use stats for canonical ID lookup
         // We filter for 'active' status and map to the YouTube canonical ID (UC...)
         const activeCanonicalIds = new Set(
             stats
-                .filter(s => s.status === 'active')
+                .filter(s => s.status !== 'old')
                 .map(s => s.youtube_canonical_id) // This is the UC... ID priority
                 .filter(Boolean)
         );
@@ -63,10 +63,12 @@ const ClientPulsePage = () => {
             .filter(a => {
                 const isWithinWindow = (now - Number(a.timestamp || 0)) < windowSize;
 
-                // If stats are still loading, don't filter out yet (prevent flicker)
-                if (statsLoading && stats.length === 0) return isWithinWindow;
+                // 1) If stats are still loading, don't filter out yet (prevent flicker)
+                // 2) If the active set is empty but we have stats, it means the API fetch failed 
+                //    or the user hasn't synced. We trust the worker's filtered payload in this case.
+                if (statsLoading || activeCanonicalIds.size === 0) return isWithinWindow;
 
-                // Check if the activity's channel is in our active set
+                // Check if the activity's channel is in our active set OR if we are fallback-trusting the worker
                 return isWithinWindow && activeCanonicalIds.has(a.channelId);
             })
             .sort((a, b) => {
@@ -268,6 +270,7 @@ const ActivityCard = ({ activity, index, meta }) => {
     const { getProxiedImage } = useClientStats();
     const isLive = activity.isLive;
     const [isHovered, setIsHovered] = useState(false);
+    const [imgError, setImgError] = useState(false);
     const videoId = useMemo(() => {
         if (!activity.url) return null;
         try {
@@ -297,7 +300,8 @@ const ActivityCard = ({ activity, index, meta }) => {
                             key="thumb"
                             initial={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            src={getProxiedImage(activity.thumbnail)}
+                            src={imgError ? (meta?.logo ? getProxiedImage(meta.logo) : 'https://placehold.co/640x360/1a1a1a/f97316/png?text=Pulse') : getProxiedImage(activity.thumbnail)}
+                            onError={() => setImgError(true)}
                             alt={activity.title}
                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                             loading="lazy"
