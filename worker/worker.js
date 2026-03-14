@@ -1697,6 +1697,36 @@ export default {
       }
     }
 
+    // POST /leads - Create new lead (Public)
+    if (url.pathname === "/leads" && request.method === "POST") {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const now = Date.now();
+        const id = `lead-${now}-${Math.random().toString(36).slice(2)}`;
+
+        const lead = {
+          id,
+          name: String(body.name || "Unknown"),
+          email: String(body.email || ""),
+          handle: String(body.handle || ""),
+          source: String(body.source || "wizard"),
+          interests: Array.isArray(body.interests) ? body.interests : [],
+          quizData: body.quizData || null,
+          status: "new",
+          createdAt: now,
+          lastUpdated: now
+        };
+
+        const list = await getJsonList(env, KV_LEADS_KEY);
+        list.push(lead);
+        await putJsonList(env, KV_LEADS_KEY, list);
+
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Submission failed" }, 500, cors);
+      }
+    }
+
     // PUT /leads/:id - Update lead (status, notes, etc)
     if (url.pathname.startsWith("/leads/") && request.method === "PUT") {
       try {

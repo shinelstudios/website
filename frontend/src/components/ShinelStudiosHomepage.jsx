@@ -63,7 +63,11 @@ import {
   BeforeAfterSlider,
   SwipeableCarousel,
   UrgencyIndicator,
+  NetworkImpactBar,
 } from './CinematicComponents';
+
+import ServiceLens from './ServiceLens';
+import StrategyWizard from './StrategyWizard';
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -2078,6 +2082,18 @@ export default function ShinelStudiosHomepage() {
             <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
           </ErrorBoundary>
 
+          {/* 1.5) Network Impact (Social Proof) */}
+          <ErrorBoundary>
+            <NetworkImpactBar
+              stats={[
+                { value: 100, suffix: 'M+', label: 'Views Delivered' },
+                { value: 150, suffix: '+', label: 'Happy Creators' },
+                { value: 5000, suffix: '+', label: 'Videos Polished' },
+                { value: 24, suffix: '/7', label: 'Global Support' }
+              ]}
+            />
+          </ErrorBoundary>
+
           {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
           <ErrorBoundary>
             <QuickQuoteBar onBook={() => setShowCalendly(true)} />
@@ -2103,6 +2119,23 @@ export default function ShinelStudiosHomepage() {
               <ProofSection />
             </React.Suspense>
           </ErrorBoundary>
+
+          {/* 5.5) The Shinel Touch (Interactive Lens) */}
+          <section className="py-24 bg-black overflow-hidden">
+            <div className="container mx-auto px-4 max-w-5xl">
+              <div className="text-center mb-12">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500 mb-4 block">Precision Quality</span>
+                <h2 className="text-4xl md:text-5xl font-black text-white italic tracking-tighter uppercase mb-6">THE <span className="text-orange-500">SHINEL</span> TOUCH</h2>
+                <p className="text-gray-400 max-w-2xl mx-auto font-medium">Use our interactive lens to see how we turn raw footage into high-retention masterpieces.</p>
+              </div>
+              <ErrorBoundary>
+                <ServiceLens
+                  before={SAMPLE_VLOG_BEFORE}
+                  after={SAMPLE_VLOG_AFTER}
+                />
+              </ErrorBoundary>
+            </div>
+          </section>
 
           {/* 6) Case studies (wins) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={3} />}>
@@ -2186,6 +2219,19 @@ export default function ShinelStudiosHomepage() {
               />
             </React.Suspense>
           </ErrorBoundary>
+
+          {/* 11.5) Strategy Quiz (Lead Magnet) */}
+          <section className="py-24 relative overflow-hidden" style={{ background: "var(--surface)" }}>
+            <div className="container mx-auto px-4 max-w-4xl">
+              <div className="text-center mb-12">
+                <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase mb-4">FIND YOUR <span className="text-orange-500">BLUEPRINT</span></h2>
+                <p className="text-[var(--text-muted)] font-medium">Take our 30-second quiz to lock in a custom strategy for your channel.</p>
+              </div>
+              <ErrorBoundary>
+                <StrategyWizard />
+              </ErrorBoundary>
+            </div>
+          </section>
 
           {/* 12) Final CTA */}
           <ErrorBoundary>

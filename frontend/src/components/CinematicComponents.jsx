@@ -393,7 +393,7 @@ export const UrgencyIndicator = ({ slotsLeft = 3, nextAvailable = 'Feb 1' }) => 
             style={{
                 background: 'rgba(220, 20, 60, 0.1)',
                 border: '1px solid rgba(220, 20, 60, 0.3)',
-                color: COLORS.crimson,
+                color: '#DC143C', // Crimson color
             }}
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -410,10 +410,49 @@ export const UrgencyIndicator = ({ slotsLeft = 3, nextAvailable = 'Feb 1' }) => 
     );
 };
 
+/**
+ * Network Impact Bar Component
+ * High-impact stats bar for public proof
+ */
+export const NetworkImpactBar = ({ stats = [] }) => {
+    return (
+        <div className="w-full py-12 bg-black border-y border-white/5 relative overflow-hidden">
+            {/* Background Accent */}
+            <div className="absolute inset-0 opacity-20 pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-px h-full bg-gradient-to-b from-transparent via-orange-500 to-transparent" />
+                <div className="absolute top-0 right-1/4 w-px h-full bg-gradient-to-b from-transparent via-orange-500 to-transparent" />
+            </div>
+
+            <div className="container mx-auto px-4 relative z-10">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
+                    {stats.map((stat, idx) => (
+                        <motion.div
+                            key={idx}
+                            className="text-center"
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: idx * 0.1 }}
+                        >
+                            <div className="text-3xl md:text-5xl font-black text-white italic tracking-tighter mb-1">
+                                <MetricCounter value={stat.value} suffix={stat.suffix} prefix={stat.prefix} />
+                            </div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500">
+                                {stat.label}
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default {
     FilmStripTimeline,
     MetricCounter,
     BeforeAfterSlider,
     SwipeableCarousel,
     UrgencyIndicator,
+    NetworkImpactBar,
 };

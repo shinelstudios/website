@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { animations } from "../lib/helpers"; // Assuming helpers are in src/lib/helpers.js
+import ProjectBlueprint from './ProjectBlueprint';
+import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
+import ErrorBoundary from './ErrorBoundary';
 
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 
@@ -391,6 +394,31 @@ const ServicesSection = () => {
             );
           })}
         </motion.div>
+
+        {/* Technique Spotlight (Interactive Blueprint) */}
+        <div className="mt-32">
+          <div className="text-center mb-16">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500 mb-4 block">Our secret sauce</span>
+            <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase mb-6">TECHNIQUE <span className="text-orange-500">SPOTLIGHT</span></h2>
+            <p className="text-[var(--text-muted)] max-w-2xl mx-auto font-medium">Explore the professional editing techniques we use to maximize your video performance.</p>
+          </div>
+
+          <div className="max-w-5xl mx-auto">
+            <ErrorBoundary>
+              <ProjectBlueprint
+                image={SAMPLE_VLOG_AFTER}
+                title="THE SHINEL BLUEPRINT"
+                subtitle="Retention-Driven Workflow"
+                blueprints={[
+                  { x: 15, y: 25, label: 'Visual Hook', description: 'Fast-paced edits in the first 3s to lock in viewers.', icon: <Zap size={14} /> },
+                  { x: 45, y: 55, label: 'Dynamic Subs', description: 'Animated, on-brand captions for maximum engagement.', icon: <Wand2 size={14} />, impact: 'Very High' },
+                  { x: 75, y: 20, label: 'Smart B-Roll', description: 'Context-aware overlays to maintain visual interest.', icon: <IconImage size={14} /> },
+                  { x: 40, y: 15, label: 'Voice Tuning', description: 'AI-assisted cleanup for studio-grade vocal clarity.', icon: <Bot size={14} />, impact: 'High' }
+                ]}
+              />
+            </ErrorBoundary>
+          </div>
+        </div>
 
         {/* Enhanced consent note */}
         <motion.div
