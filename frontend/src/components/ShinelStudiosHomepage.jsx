@@ -696,6 +696,7 @@ const ProcessSection = () => {
 
   return (
     <section
+      id="process"
       className="py-20 relative overflow-hidden"
       style={{
         background: "var(--surface)",
@@ -1677,7 +1678,7 @@ const FAQSection = () => {
   const toggleFAQ = (idx) => setOpenFAQ((cur) => (cur === idx ? null : idx));
 
   return (
-    <section className="py-20 relative overflow-hidden" style={{ background: 'var(--surface)' }}>
+    <section id="faq" className="py-20 relative overflow-hidden" style={{ background: 'var(--surface)' }}>
       {/* Centralized FAQ Schema */}
       <FAQSchema faqs={faqs} />
       {/* Background decoration */}

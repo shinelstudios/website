@@ -9,12 +9,12 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle,
   Send, Heart, Sparkles, TrendingUp, Users, Award, Clock,
-  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle, Radio,
+  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle, Radio, HelpCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import logoLight from "../assets/logo_light.png"; // WHITE logo (dark bg)
 import logoDark from "../assets/logo_dark.png";   // DARK logo (light bg)
-import { CONTACT } from "../config/constants";
+import { CONTACT, SOCIAL_LINKS } from "../config/constants";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 /* -------------------------------- analytics (no-op safe) ------------------------------- */
@@ -102,10 +102,9 @@ const SiteFooter = ({
   const logoSrc = isDarkMode ? logoLight : logoDark;
 
   const SOCIALS = useMemo(() => ([
-    { label: "Instagram", href: "https://www.instagram.com/shinel.studios/", Icon: Instagram, color: "#E4405F" },
-    { label: "LinkedIn", href: "https://www.linkedin.com/company/shinel-studios/", Icon: Linkedin, color: "#0A66C2" },
-    { label: "Facebook", href: "https://www.facebook.com/", Icon: Facebook, color: "#1877F2" },
-    { label: "Twitter / X", href: "https://twitter.com/", Icon: Twitter, color: "#1DA1F2" },
+    { label: "Instagram", href: SOCIAL_LINKS.instagram, Icon: Instagram, color: "#E4405F" },
+    { label: "LinkedIn", href: SOCIAL_LINKS.linkedin, Icon: Linkedin, color: "#0A66C2" },
+    { label: "Linktree", href: SOCIAL_LINKS.linktree, Icon: ExternalLink, color: "#43E660" },
   ]), []);
 
   const { config } = useGlobalConfig();
@@ -358,7 +357,9 @@ const SiteFooter = ({
                 {[
                   { t: "Home", href: "/#home", icon: Sparkles },
                   { t: "Services", href: "/#services", icon: Award },
-                  { t: "Our Work", href: "/work", icon: TrendingUp },
+                  { t: "Process", href: "/#process", icon: Clock },
+                  { t: "Our Work", href: "/#work", icon: TrendingUp },
+                  { t: "FAQ", href: "/#faq", icon: HelpCircle },
                   { t: "Contact", href: "/#contact", icon: Mail },
                   { t: "Tools & Resources", href: "/tools" },
                 ].map((l) => (
