@@ -102,6 +102,8 @@ const AdminBlogEditor = React.lazy(() => import("./components/AdminBlogEditor.js
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
+const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
+const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
 
 
 /* -------------------------------------------------------------------------- */
@@ -302,6 +304,8 @@ export default function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/pricing/calculator" element={<BudgetCalculatorPage />} />
           <Route path="/live" element={<ClientPulsePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/faq" element={<FAQPage />} />
 
           {/* ---------------------- Services + Subcategories ---------------------- */}
           <Route

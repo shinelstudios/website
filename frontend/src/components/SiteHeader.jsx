@@ -719,6 +719,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           <div className="hidden md:flex items-center gap-8 relative">
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
+            <DesktopNavLink label="About" to="/about" icon={User} />
             <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
             <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
             {auth.isAuthed && (
@@ -729,6 +730,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               />
             )}
             <DesktopNavLink label="Blog" to="/blog" icon={Lightbulb} />
+            <DesktopNavLink label="FAQ" to="/faq" icon={HelpCircle} />
             <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
 
           </div>
@@ -1033,6 +1035,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       title="Work"
                       subtitle="All services & samples"
                     />
+                    <MobileCardLink
+                      to="/about"
+                      icon={User}
+                      title="About"
+                      subtitle="Who we are"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1042,12 +1050,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       title="Pulse"
                       subtitle="Live metrics"
                     />
-                    <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
+                    <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
-                    {/* Tools removed from here as it is listed below with search */}
+                    <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                   </div>
 
                   {/* Authenticated User Links (Mobile) */}

@@ -355,11 +355,11 @@ const SiteFooter = ({
               </h3>
               <ul className="space-y-2 mb-8">
                 {[
-                  { t: "Home", href: "/#home", icon: Sparkles },
+                  { t: "Home", href: "/", icon: Sparkles },
+                  { t: "About", href: "/about", icon: User },
                   { t: "Services", href: "/#services", icon: Award },
-                  { t: "Process", href: "/#process", icon: Clock },
-                  { t: "Our Work", href: "/#work", icon: TrendingUp },
-                  { t: "FAQ", href: "/#faq", icon: HelpCircle },
+                  { t: "Our Work", href: "/work", icon: TrendingUp },
+                  { t: "FAQ", href: "/faq", icon: HelpCircle },
                   { t: "Contact", href: "/#contact", icon: Mail },
                   { t: "Tools & Resources", href: "/tools" },
                 ].map((l) => (

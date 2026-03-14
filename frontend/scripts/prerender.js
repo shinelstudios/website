@@ -10,8 +10,10 @@ const toAbsolute = (p) => path.resolve(__dirname, '..', p);
 
 const ROUTES = [
     '/',
+    '/about',
     '/work',
     '/pricing',
+    '/faq',
     '/live',
     '/contact',
 

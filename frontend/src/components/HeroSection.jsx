@@ -517,59 +517,6 @@ export default function HeroSection({ isDark, onAudit, workTargetId = "work" }) 
             <br />YouTube Growth
           </motion.h1>
 
-          {/* Add gradient animation styles */}
-          <style dangerouslySetInnerHTML={{
-            __html: `
-            .animated-gradient-text {
-              background: linear-gradient(
-                90deg,
-                #E85002 0%,
-                #ff6b35 25%,
-                #E85002 50%,
-                #ff6b35 75%,
-                #E85002 100%
-              );
-              background-size: 200% auto;
-              -webkit-background-clip: text;
-              background-clip: text;
-              -webkit-text-fill-color: transparent;
-              text-fill-color: transparent;
-              animation: gradient-shift 3s ease infinite;
-              -webkit-animation: gradient-shift 3s ease infinite;
-              /* Removed drop-shadow for better performance with background-clip: text */
-              /* Force GPU */
-              transform: translate3d(0,0,0);
-              -webkit-transform: translate3d(0,0,0);
-              -webkit-backface-visibility: hidden;
-              backface-visibility: hidden;
-            }
-
-            /* Fallback for browsers that don't support background-clip: text */
-            @supports not (-webkit-background-clip: text) {
-              .animated-gradient-text {
-                color: #E85002;
-                -webkit-text-fill-color: #E85002;
-              }
-            }
-
-            @keyframes gradient-shift {
-              0%, 100% {
-                background-position: 0% center;
-              }
-              50% {
-                background-position: 100% center;
-              }
-            }
-
-            /* Reduce motion for accessibility */
-            @media (prefers-reduced-motion: reduce) {
-              .animated-gradient-text {
-                animation: none;
-                background-position: 0% center;
-              }
-            }
-          `}} />
-
           {/* Subheadline */}
           <motion.p
             variants={item}

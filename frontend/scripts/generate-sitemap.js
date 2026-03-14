@@ -10,8 +10,10 @@ async function generate() {
   const pages = [
     // Core Pages
     "/",
+    "/about",
     "/work",
     "/pricing",
+    "/faq",
     "/live",
     "/contact",
     "/privacy",

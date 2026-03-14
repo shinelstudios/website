@@ -20,6 +20,10 @@ import WorkSection from "./WorkSection";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
 
+// Lazy load moved components
+const ProofSection = React.lazy(() => import("./ProofSection"));
+const CaseStudies = React.lazy(() => import("./CaseStudies"));
+
 function normalizeWork(item, type) {
   const isVideo = type === 'video';
   const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
@@ -307,6 +311,16 @@ export default function WorkPage() {
         projects={projects}
         fallbackTitle="Dynamic Stats Demo"
       />
+
+      {/* --- PROOF SECTION (CTR LIFT) --- */}
+      <React.Suspense fallback={<div className="h-96 animate-pulse bg-[var(--surface-alt)]" />}>
+        <ProofSection />
+      </React.Suspense>
+
+      {/* --- CASE STUDIES (WINS) --- */}
+      <React.Suspense fallback={<div className="h-96 animate-pulse bg-[var(--surface)]" />}>
+        <CaseStudies />
+      </React.Suspense>
 
       {/* --- SERVICES OVERVIEW SECTION --- */}
       <section
