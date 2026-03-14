@@ -39,6 +39,7 @@ import {
   Radio,
   Youtube,
   Instagram,
+  HelpCircle,
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
