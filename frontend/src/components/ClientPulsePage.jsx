@@ -111,13 +111,13 @@ const ClientPulsePage = () => {
     useEffect(() => {
         fetchPulse();
 
-        // 💡 30 MINUTE BACKGROUND POLLING with recursive timeout for robustness
+        // 💡 BACKGROUND POLLING with recursive timeout for robustness
         let timer;
         const poll = () => {
             timer = setTimeout(async () => {
                 await fetchPulse(true);
                 poll();
-            }, 30 * 60 * 1000);
+            }, CLIENT_PULSE_CONFIG.pollIntervalMs);
         };
 
         poll();
