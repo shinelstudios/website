@@ -984,7 +984,7 @@ export default function ShinelStudiosHomepage() {
 
 
           {/* 5.5) The Shinel Touch (Interactive Lens) */}
-          <section className="py-24 bg-black overflow-hidden">
+          <section id="touch" className="py-24 bg-black overflow-hidden">
             <div className="container mx-auto px-4 max-w-5xl">
               <div className="text-center mb-12">
                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500 mb-4 block">Precision Quality</span>
