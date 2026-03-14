@@ -1180,7 +1180,7 @@ export default {
       if (env.DB) {
         try {
           const { results: activities } = await env.DB.prepare(
-            "SELECT p.*, c.name as clientName FROM pulse_activities p JOIN clients c ON p.client_id = c.youtube_id WHERE c.status = 'active' ORDER BY p.timestamp DESC LIMIT 50"
+            "SELECT p.*, c.name as clientName FROM pulse_activities p JOIN clients c ON p.client_id = c.youtube_id WHERE COALESCE(c.status, 'active') != 'old' ORDER BY p.timestamp DESC LIMIT 50"
           ).all();
 
           if (activities && activities.length > 0) {
