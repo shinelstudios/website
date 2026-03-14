@@ -352,6 +352,7 @@ export default function App() {
           <Route path="/services/editing/long" element={<Navigate to="/video-editing" replace />} />
 
           <Route path="/pulse" element={<Navigate to="/live" replace />} />
+          <Route path="/work/:slug" element={<Navigate to="/portfolio/:slug" replace />} />
 
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />

@@ -33,6 +33,7 @@ export default function AdminStats() {
     const [keyStatus, setKeyStatus] = useState(null);
     const [quotaHealth, setQuotaHealth] = useState([]);
     const [busy, setBusy] = useState(false);
+    const [showWorkspace, setShowWorkspace] = useState(true);
 
     const { stats: allClients, getGrowth, liveMode, setLiveMode } = useClientStats();
 
@@ -266,6 +267,85 @@ export default function AdminStats() {
                             )}
                         </div>
                     </div>
+
+                    {/* --- PULSE DIAGNOSTICS (Moved inside col-span-2 for layout stability) --- */}
+                    <div className="relative z-0">
+                        <AnimatePresence>
+                            {trace && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.98 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="p-8 rounded-[32px] bg-orange-500/5 border-2 border-orange-500/10 shadow-xl shadow-orange-500/5 overflow-hidden"
+                                >
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                                                <Activity size={24} />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-black uppercase tracking-widest text-white">Pulse X-Ray</h2>
+                                                <p className="text-xs font-bold text-orange-500 uppercase tracking-tighter">Real-time sync diagnostics</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            {keyStatus && (
+                                                <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${keyStatus.valid ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
+                                                    <div className={`w-2 h-2 rounded-full ${keyStatus.valid ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                                                    <div className="text-[10px] font-black uppercase tracking-widest">
+                                                        API: {keyStatus.present ? (keyStatus.valid ? 'ACTIVE' : 'KEYS_INVALID') : 'OFFLINE'}
+                                                        {keyStatus.present && <span className="ml-2 opacity-60">({keyStatus.count} pooled)</span>}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => setTrace(null)}
+                                                className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all"
+                                            >
+                                                <X size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {trace.map((t, i) => (
+                                            <div key={i} className={`p-5 rounded-2xl border transition-all ${t.status === 'success' ? 'bg-white/[0.02] border-white/5' : 'bg-red-500/5 border-red-500/20 shadow-lg shadow-red-500/5'}`}>
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-xs font-black uppercase tracking-widest truncate mr-2 text-white">{t.name}</span>
+                                                    <div className={`w-2 h-2 rounded-full ${t.status === 'success' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                                                </div>
+                                                <div className="text-[9px] font-black text-gray-500 font-mono mb-4 truncate italic">{t.id}</div>
+                                                <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">Status</span>
+                                                    {t.status === 'success' ? (
+                                                        <span className="text-[10px] font-black text-green-500">{t.count} VIDS SYNCED</span>
+                                                    ) : (
+                                                        <span className="text-[10px] font-black text-red-500 truncate max-w-[120px]" title={t.error}>{t.error || 'Fetch Error'}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-8 p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <ShieldCheck size={16} className="text-orange-500" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-600 italic">Manual verification recommended for persistent anomalies.</span>
+                                        </div>
+                                        <a
+                                            href="https://commentpicker.com/youtube-channel-id.php"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-500 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500/20 transition-all border border-orange-500/20"
+                                        >
+                                            Verify IDs
+                                        </a>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 {/* --- ACTIVITY FEED (SIDEBAR) --- */}
@@ -302,85 +382,44 @@ export default function AdminStats() {
                         </div>
                     </div>
 
-                    <div className="p-8 rounded-[32px] bg-orange-600 text-white shadow-2xl shadow-orange-900/20 relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative z-10">
-                            <h3 className="text-xl font-black mb-2">Workspace <br />System V2.4</h3>
-                            <p className="text-orange-100 text-sm font-bold opacity-80 mb-6 leading-relaxed italic">"Simplicity is the soul of efficient management."</p>
-                            <div className="p-3 rounded-xl bg-white/20 text-xs font-black uppercase tracking-widest text-center border border-white/10">
-                                SHINEL_CORE_STABLE
-                            </div>
-                        </div>
-                    </div>
+                    <AnimatePresence>
+                        {showWorkspace && (
+                            <motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="p-8 rounded-[32px] bg-gradient-to-br from-orange-600 to-orange-500 text-white shadow-2xl shadow-orange-900/20 relative overflow-hidden group"
+                            >
+                                <button
+                                    onClick={() => setShowWorkspace(false)}
+                                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/10 text-white/50 hover:text-white transition-all z-20"
+                                >
+                                    <X size={16} />
+                                </button>
+                                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="absolute -right-4 -bottom-4 opacity-10">
+                                    <Shield size={120} />
+                                </div>
+                                <div className="relative z-10">
+                                    <h3 className="text-xl font-black mb-2 italic">Workspace <br />Deployment Hub</h3>
+                                    <p className="text-orange-100 text-xs font-bold opacity-80 mb-6 leading-relaxed">
+                                        Monitor real-time system stability and managed creator nodes.
+                                    </p>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="px-3 py-2 rounded-xl bg-green-500/20 backdrop-blur-md text-[10px] font-black uppercase tracking-widest text-center border border-green-400/30 flex items-center justify-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                            CORE_SYSTEM_STABLE
+                                        </div>
+                                        <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-center border border-white/10 transition-all">
+                                            View System Logs
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
-
-            {/* --- PULSE DIAGNOSTICS (Moved out for visibility) --- */}
-            <AnimatePresence>
-                {trace && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="p-8 rounded-[32px] bg-orange-500/5 border-2 border-orange-500/20 shadow-2xl shadow-orange-500/10 backdrop-blur-sm"
-                    >
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-                                    <Activity size={20} />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black uppercase tracking-widest text-white">Pulse X-Ray</h2>
-                                    <p className="text-[10px] font-bold text-orange-500/60 uppercase tracking-tighter">Real-time sync diagnostics</p>
-                                </div>
-                            </div>
-                            {keyStatus && (
-                                <div className={`px-4 py-2 rounded-xl border flex items-center gap-3 ${keyStatus.valid ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
-                                    <div className={`w-2 h-2 rounded-full ${keyStatus.valid ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
-                                    <div className="text-[10px] font-black uppercase tracking-widest">
-                                        API: {keyStatus.present ? (keyStatus.valid ? 'ACTIVE' : 'KEYS_INVALID') : 'OFFLINE'}
-                                        {keyStatus.present && <span className="ml-2 opacity-60">({keyStatus.count} Keys Pooled)</span>}
-                                    </div>
-                                </div>
-                            )}
-                            <button
-                                onClick={() => setTrace(null)}
-                                className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {trace.map((t, i) => (
-                                <div key={i} className={`p-4 rounded-2xl border ${t.status === 'success' ? 'bg-black/20 border-white/10' : 'bg-red-500/10 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]'}`}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-black uppercase tracking-wider truncate mr-2">{t.name}</span>
-                                        <div className={`w-2 h-2 rounded-full ${t.status === 'success' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
-                                    </div>
-                                    <div className="text-[9px] font-bold text-gray-500 font-mono mb-2 truncate">{t.id}</div>
-                                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">Sync Result</span>
-                                        {t.status === 'success' ? (
-                                            <span className="text-[10px] font-black text-green-500">{t.count} Vids</span>
-                                        ) : (
-                                            <span className="text-[10px] font-black text-red-500 truncate max-w-[120px]" title={t.error}>{t.error || 'Fetch Error'}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-6 p-4 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <Shield size={14} className="text-orange-500" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Manual verification recommended for entries showing persistent red status.</span>
-                            </div>
-                            <a href="https://commentpicker.com/youtube-channel-id.php" target="_blank" rel="noreferrer" className="text-[10px] font-black uppercase tracking-widest text-orange-500 hover:underline">Verify IDs</a>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     );
 }
