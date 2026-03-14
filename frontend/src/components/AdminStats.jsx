@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
+import { useClientStats } from "../context/ClientStatsContext";
 
 import { AUTH_BASE } from "../config/constants";
 
@@ -32,6 +33,19 @@ export default function AdminStats() {
     const [keyStatus, setKeyStatus] = useState(null);
     const [quotaHealth, setQuotaHealth] = useState([]);
     const [busy, setBusy] = useState(false);
+
+    const { stats: allClients, getGrowth, liveMode, setLiveMode } = useClientStats();
+
+    const topMovers = React.useMemo(() => {
+        if (!allClients) return [];
+        return allClients
+            .map(c => ({
+                ...c,
+                growth: getGrowth(c.youtubeId || c.id, 7)
+            }))
+            .sort((a, b) => b.growth - a.growth)
+            .slice(0, 4);
+    }, [allClients, getGrowth]);
 
     // Auth token for admin requests
     const token = localStorage.getItem("token");
@@ -83,13 +97,10 @@ export default function AdminStats() {
         if (busy) return;
         setBusy(true);
         try {
-            // Call the sync endpoint
-            // Call the sync endpoint
             await fetch(`${AUTH_BASE}/clients/sync?force=true`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` }
             });
-            // Reload stats after a short delay
             setTimeout(loadStats, 2000);
         } catch (e) {
             console.error(e);
@@ -131,7 +142,7 @@ export default function AdminStats() {
                 ))}
             </div>
 
-            {/* --- QUICK ACTIONS (CONTROL CENTER) --- */}
+            {/* --- MAIN GRID --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
                     {/* Control Center */}
@@ -153,8 +164,8 @@ export default function AdminStats() {
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                 {[
                                     { label: "Sync Pulse", icon: Activity, action: triggerPulseRefresh, busy: busy },
+                                    { label: "Live Sync", icon: Zap, action: () => setLiveMode(!liveMode), active: liveMode },
                                     { label: "Registry", icon: Users, path: "/dashboard/clients" },
-                                    { label: "CRM", icon: Shield, path: "/dashboard/leads" },
                                     { label: "Refresh Hub", icon: BarChart3, action: loadStats },
                                 ].map((act, i) => (
                                     act.path ? (
@@ -171,15 +182,49 @@ export default function AdminStats() {
                                             key={i}
                                             onClick={act.action}
                                             disabled={act.busy}
-                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all group disabled:opacity-50"
+                                            className={`flex flex-col items-center justify-center p-4 rounded-2xl border transition-all group disabled:opacity-50 ${act.active ? 'bg-orange-500/10 border-orange-500/50' : 'bg-white/5 border-white/5 hover:border-orange-500/30 hover:bg-orange-500/5'}`}
                                         >
-                                            <act.icon size={24} className={`text-gray-500 group-hover:text-orange-500 mb-2 transition-colors ${act.busy ? 'animate-spin' : ''}`} />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-white">{act.label}</span>
+                                            <act.icon size={24} className={`mb-2 transition-colors ${act.busy ? 'animate-spin' : ''} ${act.active ? 'text-orange-500' : 'text-gray-500 group-hover:text-orange-500'}`} />
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${act.active ? 'text-white' : 'text-gray-400 group-hover:text-white'}`}>{act.label}</span>
+                                            {act.active && (
+                                                <div className="mt-1 w-1 h-1 rounded-full bg-orange-500 animate-pulse" />
+                                            )}
                                         </button>
                                     )
                                 ))}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Client Health High-Score */}
+                    <div className="p-8 rounded-[32px] bg-white/[0.02] border border-white/10">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <TrendingUp size={20} className="text-green-500" />
+                                <h2 className="text-lg font-black uppercase tracking-widest">Client Health</h2>
+                            </div>
+                            <div className="text-[10px] font-bold text-gray-600 uppercase">Growth (Last 7 Days)</div>
+                        </div>
+
+                        {topMovers.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                {topMovers.map(c => (
+                                    <div key={c.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between group hover:border-green-500/30 transition-all">
+                                        <div className="flex items-center gap-3">
+                                            {c.logo && <img src={c.logo} className="w-6 h-6 rounded-full" alt="" />}
+                                            <span className="text-xs font-bold text-gray-300 truncate max-w-[80px]">{c.title}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-1 text-[10px] font-black ${c.growth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                            {c.growth >= 0 ? '+' : ''}{c.growth.toFixed(1)}%
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 text-[10px] font-bold text-gray-600 uppercase italic">
+                                Awaiting historical data for scoring...
+                            </div>
+                        )}
                     </div>
 
                     {/* System Health Registry */}
@@ -285,7 +330,7 @@ export default function AdminStats() {
                                     <Activity size={20} />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black uppercase tracking-widest">Pulse X-Ray</h2>
+                                    <h2 className="text-lg font-black uppercase tracking-widest text-white">Pulse X-Ray</h2>
                                     <p className="text-[10px] font-bold text-orange-500/60 uppercase tracking-tighter">Real-time sync diagnostics</p>
                                 </div>
                             </div>
@@ -362,12 +407,6 @@ function ActivityItem({ title, time, type }) {
 }
 
 function HealthLine({ label, status, color = "text-green-500" }) {
-    // Extract base color name (e.g. "green-500") if possible for the dot bg, 
-    // or just default to green/red based on text class mapping or simple parsing.
-    // Simpler: Just map text color to bg color roughly or use dynamic classes if tailwind safelist permits.
-    // For safety, let's just use the text color class provided and a generic dot or derived dot.
-
-    // Quick derive of dot color from text-X-500
     const dotColor = color.replace("text-", "bg-");
 
     return (

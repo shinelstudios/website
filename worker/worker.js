@@ -1373,9 +1373,57 @@ export default {
     }
 
 
-    // GET /clients/history - Activity history
+    // GET /clients/history - Activity history (30-day window)
     if (url.pathname === "/clients/history" && request.method === "GET") {
-      return json({ ok: true, history: [] }, 200, cors);
+      try {
+        const historyData = {};
+        const now = Date.now();
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+
+        // List all history: keys
+        const { keys } = await env.SHINEL_AUDIT.list({ prefix: "history:" });
+
+        // Parallel fetch for all history keys
+        const results = await Promise.all(
+          keys.map(async (k) => {
+            const dateStr = k.name.split(":")[1];
+            const data = await env.SHINEL_AUDIT.get(k.name, "json");
+            return { dateStr, data };
+          })
+        );
+
+        results.forEach(({ dateStr, data }) => {
+          if (data) historyData[dateStr] = data;
+        });
+
+        return json({ ok: true, history: historyData }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, 500, cors);
+      }
+    }
+
+    // POST /admin/snapshot - Manual trigger for history snapshot
+    if (url.pathname === "/admin/snapshot" && request.method === "POST") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        const stats = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+        const dateStr = new Date().toISOString().split('T')[0];
+        const key = `history:${dateStr}`;
+
+        const snapshot = {
+          ts: Date.now(),
+          stats: Array.isArray(stats) ? stats.map(s => ({
+            id: s.id || s.youtubeId,
+            subscribers: Number(s.subscribers || 0),
+            viewCount: Number(s.viewCount || 0)
+          })) : []
+        };
+
+        await env.SHINEL_AUDIT.put(key, JSON.stringify(snapshot), { expirationTtl: 35 * 24 * 60 * 60 }); // 35 days
+        return json({ ok: true, date: dateStr, key }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Snapshot failed" }, e.status || 500, cors);
+      }
     }
 
     /* =============================== /admin/users =============================== */
@@ -2385,15 +2433,20 @@ export default {
         await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
         await env.SHINEL_AUDIT.put("app:clients:stats:backup", JSON.stringify(allStats));
 
-        // Update Historical Pool
-        const historicalRaw = await env.SHINEL_AUDIT.get("app:clients:stats:historical", "json") || {};
-        const historical = (typeof historicalRaw === 'object' && historicalRaw !== null) ? historicalRaw : {};
-        allStats.forEach(s => {
-          if (s.internalId) {
-            historical[s.internalId] = { ...s, _last_seen: now };
-          }
-        });
         await env.SHINEL_AUDIT.put("app:clients:stats:historical", JSON.stringify(historical));
+
+        // Create Daily History Snapshot for Sparklines/Health Score
+        const dateStr = new Date(now).toISOString().split('T')[0];
+        const historyKey = `history:${dateStr}`;
+        const historySnapshot = {
+          ts: now,
+          stats: allStats.map(s => ({
+            id: s.id || s.youtubeId,
+            subscribers: Number(s.subscribers || 0),
+            viewCount: Number(s.viewCount || 0)
+          }))
+        };
+        await env.SHINEL_AUDIT.put(historyKey, JSON.stringify(historySnapshot), { expirationTtl: 35 * 24 * 60 * 60 }); // Expire after 35 days
 
         await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
           activities: pulseActivities,

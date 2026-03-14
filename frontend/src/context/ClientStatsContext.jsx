@@ -39,6 +39,9 @@ export const ClientStatsProvider = ({ children }) => {
 
     const [loading, setLoading] = useState(stats.length === 0 || shouldLoadImmediate);
     const [error, setError] = useState(null);
+    const [liveMode, setLiveMode] = useState(false);
+
+    const activeInterval = liveMode ? 30 * 1000 : POLL_INTERVAL;
 
     const getProxiedImage = (src) => {
         if (!src) return src;
@@ -181,9 +184,9 @@ export const ClientStatsProvider = ({ children }) => {
 
     useEffect(() => {
         fetchStats();
-        const interval = setInterval(fetchStats, POLL_INTERVAL);
+        const interval = setInterval(fetchStats, activeInterval);
         return () => clearInterval(interval);
-    }, []);
+    }, [activeInterval]);
 
     // Derived Metrics
     const totalSubscribers = useMemo(() => {
@@ -246,6 +249,8 @@ export const ClientStatsProvider = ({ children }) => {
         getClientStats,
         getHistory,
         getGrowth,
+        liveMode,
+        setLiveMode,
         refreshStats: fetchStats,
         refreshSync: async (force = false) => {
             try {

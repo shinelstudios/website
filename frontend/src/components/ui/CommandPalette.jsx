@@ -23,15 +23,28 @@ import {
     Command
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useClientStats } from "../../context/ClientStatsContext";
+import { AUTH_BASE } from "../../config/constants";
+import { createVideoStorage } from "../cloudflare-video-storage";
 
 export default function CommandPalette() {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
+    const [videos, setVideos] = useState([]);
     const navigate = useNavigate();
+    const { stats: creators } = useClientStats();
 
     const role = localStorage.getItem("role") || "";
     const isAdmin = role.includes("admin");
+    const isEditor = role.includes("editor");
+
+    useEffect(() => {
+        if (isOpen && (isAdmin || isEditor)) {
+            const store = createVideoStorage(AUTH_BASE, () => localStorage.getItem("token"));
+            store.getAll().then(setVideos).catch(console.error);
+        }
+    }, [isOpen, isAdmin, isEditor]);
 
     const commands = useMemo(() => {
         const base = [
@@ -58,12 +71,44 @@ export default function CommandPalette() {
     }, [isAdmin]);
 
     const filtered = useMemo(() => {
-        if (!search) return commands;
-        return commands.filter(c =>
+        let results = [...commands];
+
+        // Add Creators
+        if (creators && creators.length > 0) {
+            results = [
+                ...results,
+                ...creators.map(c => ({
+                    icon: Users,
+                    label: c.title || c.name,
+                    path: `/live?channel=${c.youtubeId || c.id}`,
+                    category: "Creators",
+                    sublabel: `${(c.subscribers || 0).toLocaleString()} Subs`
+                }))
+            ];
+        }
+
+        // Add Videos
+        if (videos && videos.length > 0) {
+            results = [
+                ...results,
+                ...videos.map(v => ({
+                    icon: Video,
+                    label: v.title,
+                    path: `/dashboard/videos?id=${v.id}`,
+                    category: "Videos",
+                    sublabel: v.category
+                }))
+            ];
+        }
+
+        if (!search) return results.slice(0, 20); // Limit initial view
+
+        return results.filter(c =>
             c.label.toLowerCase().includes(search.toLowerCase()) ||
-            c.category.toLowerCase().includes(search.toLowerCase())
-        );
-    }, [commands, search]);
+            c.category.toLowerCase().includes(search.toLowerCase()) ||
+            (c.sublabel && c.sublabel.toLowerCase().includes(search.toLowerCase()))
+        ).slice(0, 30);
+    }, [commands, search, creators, videos]);
 
     const handleOpen = useCallback(() => setIsOpen(true), []);
     const handleClose = useCallback(() => {
@@ -175,8 +220,15 @@ export default function CommandPalette() {
                                                                 <div className={`text-sm font-bold ${isActive ? "text-white" : "text-white/70"}`}>
                                                                     {item.label}
                                                                 </div>
-                                                                <div className="text-[10px] text-white/30 font-mono">
-                                                                    {item.path}
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="text-[10px] text-white/30 font-mono">
+                                                                        {item.path}
+                                                                    </div>
+                                                                    {item.sublabel && (
+                                                                        <div className="text-[10px] text-orange-500/50 font-black uppercase tracking-widest">
+                                                                            • {item.sublabel}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
