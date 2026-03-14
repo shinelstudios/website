@@ -342,7 +342,7 @@ const CreatorsWorkedWithMarquee = ({
               </div>
               <div className="flex flex-col items-start justify-center">
                 <span className="text-sm font-black uppercase tracking-widest text-[var(--orange)] leading-none">
-                  {fmt(ytReach)}+ YouTube Reach
+                  {fmt(ytReach)}+ Network Reach
                 </span>
                 {igReach > 0 && (
                   <span className="text-[10px] font-black uppercase tracking-widest text-pink-500 leading-none mt-1 opacity-90">
@@ -355,7 +355,7 @@ const CreatorsWorkedWithMarquee = ({
 
           <motion.h2
             id="marquee-heading"
-            className="text-4xl md:text-5xl lg:text-7xl font-black italic uppercase tracking-tighter mb-4"
+            className="text-4xl md:text-5xl lg:text-7xl font-black italic uppercase tracking-tighter mb-4 py-6 leading-tight"
             style={{ color: "var(--text)" }}
             variants={itemVariant}
           >

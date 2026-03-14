@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, Users, Crown, Medal, Activity } from 'lucide-react';
+import { Trophy, TrendingUp, Users, Crown, Medal, Activity, ShieldCheck } from 'lucide-react';
 import { AUTH_BASE } from "../../config/constants";
 import MetaTags from "../MetaTags";
 
@@ -53,8 +53,11 @@ export default function EditorLeaderboardPage() {
 
     }, [videos]);
 
+    const myName = localStorage.getItem("firstName") || "";
+    const myStats = useMemo(() => leaderboard.find(e => e.name === myName), [leaderboard, myName]);
+
     return (
-        <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] pt-32 pb-24 relative overflow-hidden">
+        <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] pt-32 pb-24 relative overflow-hidden selection:bg-orange-500/30">
             <MetaTags
                 title="Editor Hall of Fame - Shinel Studios"
                 description="Top performing editors driving retention and views."
@@ -66,16 +69,68 @@ export default function EditorLeaderboardPage() {
 
             <div className="container mx-auto px-6 relative z-10">
                 <div className="text-center max-w-2xl mx-auto mb-16">
-                    <div className="inline-flex items-center gap-2 text-[var(--orange)] font-bold text-sm tracking-widest uppercase mb-4">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="inline-flex items-center gap-2 text-[var(--orange)] font-bold text-sm tracking-widest uppercase mb-4"
+                    >
                         <Trophy size={16} />
                         Performance Leaderboard
-                    </div>
-                    <h1 className="text-4xl md:text-5xl font-black mb-6">
+                    </motion.div>
+                    <motion.h1
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="text-4xl md:text-5xl font-black mb-6"
+                    >
                         Hall of <span className="text-[var(--orange)]">Fame</span>
-                    </h1>
-                    <p className="text-lg text-[var(--text-muted)]">
+                    </motion.h1>
+                    <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-lg text-[var(--text-muted)] border-b border-white/5 pb-10 mb-10"
+                    >
                         Celebrating the retention architects driving millions of views.
-                    </p>
+                    </motion.p>
+
+                    {/* PERSONAL STATS HEADER (Only if editor) */}
+                    {myStats && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-orange-500/10 border border-orange-500/20 rounded-3xl p-8 mb-16 text-left relative overflow-hidden group shadow-2xl shadow-orange-500/5"
+                        >
+                            <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:rotate-12 transition-transform">
+                                <Crown size={120} className="text-orange-500/10" />
+                            </div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-orange-500/20">
+                                        {myName.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-black">Logged in as {myName}</h2>
+                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-orange-500">
+                                            <ShieldCheck size={12} /> Personal Performance Node
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <StatMetric label="Current Rank" value={`#${myStats.rank}`} />
+                                    <StatMetric label="Total Views" value={`${(myStats.views / 1000000).toFixed(1)}M`} />
+                                    <StatMetric label="Hype Score" value={myStats.hype.toLocaleString()} primary />
+                                    <StatMetric label="Video Count" value={myStats.videos} />
+                                </div>
+                                <div className="mt-8 pt-6 border-t border-orange-500/10 flex flex-wrap gap-2">
+                                    <Badge title="Performance King" condition={myStats.rank <= 3} />
+                                    <Badge title="Viral Master" condition={myStats.views > 10000000} />
+                                    <Badge title="Hype Monster" condition={myStats.hype > 5000} />
+                                    <Badge title="Consistency Pro" condition={myStats.videos >= 10} />
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
                 </div>
 
                 <div className="max-w-4xl mx-auto">
@@ -93,9 +148,11 @@ export default function EditorLeaderboardPage() {
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: idx * 0.1 }}
-                                    className={`relative p-6 rounded-2xl border transition-all hover:scale-[1.01] ${idx === 0
-                                        ? "bg-gradient-to-r from-[var(--surface-alt)] to-[var(--orange)]/5 border-[var(--orange)] shadow-xl shadow-[var(--orange)]/10"
-                                        : "bg-[var(--surface-alt)] border-[var(--border)] hover:border-[var(--text-muted)]"
+                                    className={`relative p-6 rounded-2xl border transition-all hover:scale-[1.01] ${editor.name === myName
+                                        ? "bg-orange-500/5 border-orange-500/40 shadow-xl shadow-orange-500/5 ring-1 ring-orange-500/20"
+                                        : idx === 0
+                                            ? "bg-gradient-to-r from-[var(--surface-alt)] to-[var(--orange)]/5 border-[var(--orange)] shadow-xl shadow-[var(--orange)]/10"
+                                            : "bg-[var(--surface-alt)] border-[var(--border)] hover:border-[var(--text-muted)]"
                                         }`}
                                 >
                                     <div className="flex items-center gap-6">
@@ -104,7 +161,12 @@ export default function EditorLeaderboardPage() {
                                         </div>
 
                                         <div className="flex-1">
-                                            <h3 className="text-xl font-black">{editor.name}</h3>
+                                            <div className="flex items-center gap-3">
+                                                <h3 className="text-xl font-black">{editor.name}</h3>
+                                                {editor.name === myName && (
+                                                    <span className="px-2 py-0.5 rounded-full bg-orange-500 text-white text-[8px] font-black uppercase tracking-widest">You</span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mt-1">
                                                 <span className="flex items-center gap-1">
                                                     <Activity size={12} /> {editor.videos} Videos
@@ -143,6 +205,24 @@ export default function EditorLeaderboardPage() {
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function StatMetric({ label, value, primary = false }) {
+    return (
+        <div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">{label}</div>
+            <div className={`text-2xl font-black ${primary ? 'text-orange-500' : 'text-white'}`}>{value}</div>
+        </div>
+    );
+}
+
+function Badge({ title, condition }) {
+    if (!condition) return null;
+    return (
+        <div className="px-3 py-1.5 rounded-xl bg-orange-500/20 border border-orange-500/20 text-orange-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+            <Medal size={12} /> {title}
         </div>
     );
 }
