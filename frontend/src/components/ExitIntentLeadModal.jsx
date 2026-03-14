@@ -197,8 +197,8 @@ const ExitIntentLeadModal = ({
             exit={sheet ? { y: "100%" } : { y: 30, opacity: 0, scale: 0.98 }}
             transition={{ type: "spring", damping: 28, stiffness: 220 }}
             className={sheet
-              ? "fixed left-0 right-0 bottom-0 w-full max-h-[92vh] overflow-auto rounded-t-[2.5rem] shadow-2xl"
-              : "fixed left-1/2 top-[10%] -translate-x-1/2 w-[min(94vw,640px)] max-h-[85vh] overflow-auto rounded-[2.5rem] shadow-2xl"
+              ? "fixed left-0 right-0 bottom-0 w-full max-h-[92vh] overflow-y-auto rounded-t-[2.5rem] shadow-2xl custom-scrollbar"
+              : "fixed left-1/2 top-[10%] -translate-x-1/2 w-[min(94vw,640px)] max-h-[80vh] overflow-y-auto rounded-[2.5rem] shadow-2xl custom-scrollbar"
             }
             style={{
               zIndex: zIndex + 1,
@@ -308,6 +308,25 @@ const ExitIntentLeadModal = ({
                 </div>
               </div>
             </div>
+            <style>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 6px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.2);
+              }
+              .custom-scrollbar {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+              }
+            `}</style>
           </motion.div>
         </>
       )}

@@ -1,0 +1,30 @@
+﻿d6694e5 updated
+3c35ff0 updated
+e0c2a5a updated
+add5a61 updated
+3e63fa6 updated
+84dc9e0 updated
+60ffc33 updated
+193ef56 updated
+f1dcd87 updated
+6a69d39 debug: add file listing to ytdlp attempts
+a1b4405 fix: add mweb client and node js runtime hint for n-challenge
+9806048 feat: implement multi-client fallback for caption fetching
+6ca543a fix: align ytdlp user-agent and add po_token support
+1089037 fix: optimize ytdlp client selection for cookie support
+e4f9bb2 fix: resolve syntax error and streamline cookie path
+ddf1c8a feat: add support for YOUTUBE_COOKIES bypass
+6543467 fix: remove shell:true to resolve linux syntax error
+5e09e4b fix: robust ytdlp path and diagnostic logging
+49498fa fix: route captions through worker bridge
+a95ba2e updated
+3de255f updated
+4a2c809 updated
+ba480f0 updated
+4f67f56 updated
+623d33c updated
+a89427b updated
+779b91e updated
+e81c055 chore: add .gitignore and remove .wrangler from tracking
+d4c6dcc feat: full client crud in worker
+b57e91b fix: frontend crash, CSP, and missing worker endpoints

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useSpring, useMotionValue, useTransform } from "framer-motion";
+import { motion, useSpring, useMotionValue, useTransform, useScroll } from "framer-motion";
 import {
   ArrowRight,
   Sparkles,
@@ -241,11 +241,13 @@ const MockAnalytics = () => (
   </div>
 );
 
-/* 3D Stack */
 const ThreeDVisuals = () => {
   const ref = useRef(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+
+  const { scrollY } = useScroll();
+  const parallaxY = useTransform(scrollY, [0, 500], [0, -40]);
 
   const springConfig = { damping: 35, stiffness: 180 };
   const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [5, -5]), springConfig);
@@ -271,7 +273,7 @@ const ThreeDVisuals = () => {
     <motion.div
       ref={ref}
       className="relative w-full aspect-[4/3] flex items-center justify-center select-none"
-      style={{ perspective: 1400 }}
+      style={{ perspective: 1400, y: parallaxY }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.9, delay: 0.4 }}
@@ -304,8 +306,15 @@ const ThreeDVisuals = () => {
         <motion.div
           className="absolute -left-14 bottom-16 z-30"
           style={{ transform: "translateZ(100px)" }}
-          animate={{ y: [0, -12, 0] }}
-          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          animate={{
+            y: [0, -12, 0],
+            rotateZ: [-1, 1, -1]
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
         >
           <GlassCard className="px-7 py-5 flex items-center gap-4 !bg-[#E85002] !border-[#E85002] shadow-[0_25px_50px_-10px_rgba(232,80,2,0.6)]">
             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-xl">
@@ -322,8 +331,16 @@ const ThreeDVisuals = () => {
         <motion.div
           className="absolute -right-8 top-12 z-20"
           style={{ transform: "translateZ(70px)" }}
-          animate={{ y: [0, -8, 0] }}
-          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          animate={{
+            y: [0, -8, 0],
+            rotateZ: [1, -1, 1]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 1
+          }}
         >
           <GlassCard className="px-5 py-4 !bg-[var(--surface)]/90 !border-[var(--border)]">
             <div className="text-[9px] text-[var(--text-muted)] font-bold uppercase tracking-widest mb-1">Avg CTR</div>

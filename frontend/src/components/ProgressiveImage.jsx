@@ -16,6 +16,7 @@ const ProgressiveImage = ({
     loading = 'lazy',
     aspectRatio,
     objectFit = 'cover',
+    showShimmer = true,
     ...props
 }) => {
     const [imgSrc, setImgSrc] = useState(placeholder || src);
@@ -102,28 +103,49 @@ const ProgressiveImage = ({
     }
 
     return (
-        <motion.img
-            ref={imgRef}
-            src={imgSrc}
-            alt={alt}
-            className={className}
-            style={{
-                ...style,
-                objectFit,
-                aspectRatio: aspectRatio || 'auto',
-            }}
-            loading={loading}
-            initial={{ opacity: 0 }}
-            animate={{
-                opacity: isLoading ? 0.7 : 1,
-                filter: isLoading ? 'blur(10px)' : 'blur(0px)',
-            }}
-            transition={{
-                opacity: { duration: 0.3 },
-                filter: { duration: 0.5 },
-            }}
-            {...props}
-        />
+        <div className="relative overflow-hidden" style={{ aspectRatio: aspectRatio || 'auto' }}>
+            {isLoading && showShimmer && (
+                <div className="absolute inset-0 z-10 shimmer-loading" />
+            )}
+            <motion.img
+                ref={imgRef}
+                src={imgSrc}
+                alt={alt}
+                className={className}
+                style={{
+                    ...style,
+                    objectFit,
+                    aspectRatio: aspectRatio || 'auto',
+                }}
+                loading={loading}
+                initial={{ opacity: 0 }}
+                animate={{
+                    opacity: isLoading ? 0.7 : 1,
+                    filter: isLoading ? 'blur(10px)' : 'blur(0px)',
+                }}
+                transition={{
+                    opacity: { duration: 0.3 },
+                    filter: { duration: 0.5 },
+                }}
+                {...props}
+            />
+            <style>{`
+                .shimmer-loading {
+                    background: linear-gradient(
+                        90deg,
+                        rgba(255, 255, 255, 0) 0%,
+                        rgba(255, 255, 255, 0.05) 50%,
+                        rgba(255, 255, 255, 0) 100%
+                    );
+                    background-size: 200% 100%;
+                    animation: shimmer 1.5s infinite;
+                }
+                @keyframes shimmer {
+                    0% { background-position: -200% 0; }
+                    100% { background-position: 200% 0; }
+                }
+            `}</style>
+        </div>
     );
 };
 

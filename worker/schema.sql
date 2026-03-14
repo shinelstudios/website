@@ -17,9 +17,13 @@ CREATE TABLE IF NOT EXISTS clients (
     name TEXT NOT NULL,
     youtube_id TEXT UNIQUE,
     handle TEXT,
+    instagram_handle TEXT,
     uploads_playlist_id TEXT,
     category TEXT,
     status TEXT DEFAULT 'active',
+    subscribers INTEGER DEFAULT 0,
+    instagram_followers INTEGER DEFAULT 0,
+    instagram_logo TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS client_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id TEXT NOT NULL,
     subscribers INTEGER DEFAULT 0,
+    instagram_followers INTEGER DEFAULT 0,
     view_count INTEGER DEFAULT 0,
     video_count INTEGER DEFAULT 0,
     captured_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -1072,7 +1072,7 @@ const TestimonialsSection = ({ isDark }) => {
       tag: "Gaming • 38.6K",
       avatarKey: "katkagaming",
       logo: "https://yt3.ggpht.com/mCFOqYFCVGR3HJhMpCOh6aUmqM37b9P1yLVxfeHsa14fcUZZ30sCyhcGjkBFjBxYQBnPGpUj=s800-c-k-c0x00ffffff-no-rj",
-      image: "/assets/testimonials/katka-analytics.png",
+      image: svgPlaceholder("Katka Gaming Analytics"),
       alt: "YouTube Studio analytics for Katka Gaming",
       quote: "Professional editing quality that elevated my gaming content.",
       metrics: [{ label: "Avg View Dur.", value: "+32%" }],
