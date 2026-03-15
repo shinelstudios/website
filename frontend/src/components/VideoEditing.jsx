@@ -32,7 +32,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Cache key (ETag) ---------------- */
-const STORAGE_KEY = "videosCacheV3";
+const STORAGE_KEY = "videosCacheV4";
 
 /* ---------------- Helpers (copied / extended) ---------------- */
 function formatViews(count) {
@@ -150,9 +150,10 @@ export default function VideoEditing() {
       if (status !== 304 && data?.videos) {
         // normalize to the fields our UI needs
         const normalized = data.videos.map((v) => {
-          // PRIMARY URL MUST WIN
+          // SHINEL URL MUST WIN
+          const shinelUrl = v.mirror_url || v.mirrorUrl || v.youtube_url || v.primaryUrl || v.primary_url;
           const youtubeId =
-            extractYouTubeId(v.youtube_url || v.primaryUrl) ||
+            extractYouTubeId(shinelUrl) ||
             extractYouTubeId(v.creatorUrl) ||
             v.video_id ||
             v.videoId ||
@@ -172,8 +173,8 @@ export default function VideoEditing() {
             kind: v.kind || "LONG",
             primaryUrl: v.youtube_url || v.primaryUrl || "",
             creatorUrl: v.creatorUrl || "",
-            youtubeId, // <-- now based on primaryUrl first
-            views: Number(v.youtubeViews ?? v.views ?? 0),
+            youtubeId, // <-- now based on shinelUrl first
+            views: Number(v.youtube_views ?? v.youtubeViews ?? v.views ?? 0),
             lastViewUpdate: v.lastViewUpdate || v.updated || null,
             tags: Array.isArray(v.tags) ? v.tags : [],
             hype:
@@ -580,15 +581,23 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
         {/* 16:9 responsive iframe box */}
         <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
           {youtubeId ? (
-            <iframe
-              key={youtubeId}
-              title={title || "YouTube video"}
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&start=0&vq=highres`}
-              allow="autoplay; encrypted-media; picture-in-picture; web-share"
-              allowFullScreen
-              className="absolute top-0 left-0 w-full h-full"
-              loading="eager"
-            />
+            <>
+              <iframe
+                key={youtubeId}
+                title={title || "YouTube video"}
+                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&start=0&vq=highres&controls=0&disablekb=1&fs=0`}
+                allow="autoplay; encrypted-media; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                loading="eager"
+                tabIndex="-1"
+              />
+              {/* Invisible overlay to block ALL pointer events/right-clicks from hitting the iframe */}
+              <div
+                className="absolute inset-0 z-10 bg-transparent"
+                onContextMenu={(e) => e.preventDefault()}
+              ></div>
+            </>
           ) : null}
         </div>
 

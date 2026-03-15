@@ -15,7 +15,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Client cache keys ---------------- */
-const STORAGE_KEY = "thumbnailsCacheV7"; // bump to invalidate older session caches {etag, items, ts}
+const STORAGE_KEY = "thumbnailsCacheV8"; // bump to invalidate older session caches {etag, items, ts}
 
 /* ---------------- Fallback ---------------- */
 const FALLBACK = [
@@ -913,9 +913,9 @@ export default function Thumbnails() {
         imageUrl: t.image_url || t.imageUrl || t.image || t.thumb, // normalize
         image: t.image_url || t.imageUrl || t.image || t.thumb,
         videoId: t.video_id || t.videoId || t.youtubeId,
-        views: t.youtubeViews || t.views,
+        views: Number(t.youtube_views ?? t.youtubeViews ?? t.views ?? 0),
         viewStatus: t.viewStatus,
-        lastViewUpdate: t.lastViewUpdate,
+        lastViewUpdate: t.lastViewUpdate || t.last_updated,
         dateAdded: t.dateAdded,
         lastUpdated: t.lastUpdated,
       }));

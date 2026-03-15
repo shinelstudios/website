@@ -26,7 +26,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 // LocalStorage cache key for this page
-const STORAGE_KEY = "shortsCacheV3";
+const STORAGE_KEY = "shortsCacheV4";
 
 /* ---------------- Helpers ---------------- */
 
@@ -281,9 +281,10 @@ export default function Shorts() {
 
       if (status !== 304 && data?.videos) {
         const normalized = data.videos.map((v) => {
-          // PRIMARY URL MUST WIN for what we play
+          // SHINEL URL MUST WIN for what we play
+          const shinelUrl = v.mirror_url || v.mirrorUrl || v.youtube_url || v.primaryUrl || v.primary_url;
           const youtubeId =
-            extractYouTubeId(v.youtube_url || v.primaryUrl) ||
+            extractYouTubeId(shinelUrl) ||
             extractYouTubeId(v.creatorUrl) ||
             v.video_id ||
             v.videoId ||
@@ -306,8 +307,8 @@ export default function Shorts() {
             primaryUrl: v.youtube_url || v.primaryUrl || "",
             creatorUrl: v.creatorUrl || "",
             youtubeId,
-            views: Number(v.youtubeViews ?? v.views ?? 0),
-            lastViewUpdate: v.lastViewUpdate || v.updated || null,
+            views: Number(v.youtube_views ?? v.youtubeViews ?? v.views ?? 0),
+            lastViewUpdate: v.lastViewUpdate || v.updated || v.last_updated || null,
             tags: Array.isArray(v.tags) ? v.tags : [],
             hype:
               typeof v.hype === "number"
@@ -852,17 +853,23 @@ function VideoPlayerModal({ open, youtubeId, title, onClose, onNext, onPrev }) {
           style={{ height: `${dims.height}px` }}
         >
           {youtubeId ? (
-            <iframe
-              key={youtubeId}
-              title={title || "YouTube short"}
-              // start=0 -> always from beginning
-              // vq=hd1080 -> request highest quality; YouTube may still downgrade
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=1&fs=1&start=0&vq=hd1080`}
-              allow="autoplay; encrypted-media; picture-in-picture; web-share"
-              allowFullScreen
-              className="absolute top-0 left-0 w-full h-full"
-              loading="eager"
-            />
+            <>
+              <iframe
+                key={youtubeId}
+                title={title || "YouTube short"}
+                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1&controls=0&fs=0&disablekb=1&start=0&vq=hd1080`}
+                allow="autoplay; encrypted-media; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                loading="eager"
+                tabIndex="-1"
+              />
+              {/* Invisible overlay to block ALL pointer events/right-clicks from hitting the iframe */}
+              <div
+                className="absolute inset-0 z-10 bg-transparent"
+                onContextMenu={(e) => e.preventDefault()}
+              ></div>
+            </>
           ) : null}
 
           {/* Close button only, in the corner – not covering quality/settings */}
