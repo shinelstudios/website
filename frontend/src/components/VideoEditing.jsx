@@ -32,7 +32,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Cache key (ETag) ---------------- */
-const STORAGE_KEY = "videosCacheV1";
+const STORAGE_KEY = "videosCacheV2";
 
 /* ---------------- Helpers (copied / extended) ---------------- */
 function formatViews(count) {
@@ -105,6 +105,20 @@ async function fetchJSONWithETag(
     }
   }
   throw lastErr || new Error("Network error");
+}
+
+function extractYouTubeId(url = "") {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+    if (u.hostname.includes("youtube.com")) {
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/shorts\/([^/]+)/);
+      if (m) return m[1];
+    }
+  } catch { }
+  return null;
 }
 
 /* ---------------- Main page ---------------- */

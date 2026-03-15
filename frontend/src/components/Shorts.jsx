@@ -26,7 +26,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 // LocalStorage cache key for this page
-const STORAGE_KEY = "shortsCacheV1";
+const STORAGE_KEY = "shortsCacheV2";
 
 /* ---------------- Helpers ---------------- */
 
