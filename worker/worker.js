@@ -630,6 +630,288 @@ function computeHype(views = 0, lastViewUpdate = null, dateAdded = null, now = D
   return Math.round(Math.min(999, raw));
 }
 
+
+/* ============================== Pulse Sync ============================== */
+/**
+ * performClientSync
+ * - Orchestrates deep sync for all creators (YouTube + Instagram)
+ * - Can be called by manual trigger (fetch) or cron (scheduled)
+ */
+async function performClientSync(env, isForced = false, debug = false) {
+  const lastSyncKey = "app:clients:last_sync_ts";
+  const lastSyncTs = Number(await env.SHINEL_AUDIT.get(lastSyncKey) || "0");
+  const now = Date.now();
+  const cooldown = 15 * 60 * 1000; // 15 mins
+
+  if (!isForced && (now - lastSyncTs < cooldown)) {
+    const remaining = Math.ceil((cooldown - (now - lastSyncTs)) / 60000);
+    const err = new Error(`Sync cooldown active. Please wait ${remaining}m or use ?force=1`);
+    err.status = 429;
+    throw err;
+  }
+
+  const clients = await getClients(env);
+  const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+  const existingStatsArray = Array.isArray(existingStatsRaw) ? existingStatsRaw : (existingStatsRaw.stats || []);
+  const existingStatsMap = new Map(existingStatsArray.map(s => [s.id, s]));
+
+  const allStats = [];
+  const pulseActivities = [];
+  const channelMeta = {};
+  const errors = [];
+  let registryMutated = false;
+
+  for (let i = 0; i < clients.length; i++) {
+    const c = clients[i];
+    let statsObj = null;
+    let ytError = null;
+    let igError = null;
+    try {
+      const ytIdentifier = c.youtubeId || c.handle;
+
+      // 1. YouTube Stats
+      if (ytIdentifier) {
+        const result = await fetchYouTubeChannelInfo(env, ytIdentifier);
+        if (result?.error) ytError = result.error;
+        if (result && !result.error) {
+          statsObj = { ...result, internalId: c.id };
+          channelMeta[result.id] = { logo: result.logo, title: result.title };
+
+          if (result.id && c.youtubeId !== result.id) {
+            c.youtubeId = result.id;
+            registryMutated = true;
+            if (env.DB) {
+              try {
+                await env.DB.prepare("UPDATE clients SET youtube_id = ? WHERE id = ?").bind(result.id, c.id).run();
+              } catch (e) { console.error("D1 Canonical ID Update Error:", e.message); }
+            }
+          }
+          if (result.uploadsPlaylistId && c.uploadsPlaylistId !== result.uploadsPlaylistId) {
+            c.uploadsPlaylistId = result.uploadsPlaylistId;
+            registryMutated = true;
+          }
+
+          if (c.status !== "old") {
+            const resultPulse = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
+            const videos = resultPulse.items || [];
+            if (resultPulse.error) ytError = resultPulse.error;
+
+            const windowLimit = now - (24 * 60 * 60 * 1000);
+
+            if (resultPulse.error || (videos.length === 0 && ytError)) {
+              const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
+              const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
+              oldPulseActivities.forEach(oa => {
+                if (oa.channelId === result.id && oa.timestamp >= windowLimit) {
+                  pulseActivities.push(oa);
+                }
+              });
+            } else {
+              for (const v of videos) {
+                const ts = new Date(v.publishedAt).getTime();
+                if (ts >= windowLimit) {
+                  const act = {
+                    id: `act-${v.id}-${ts}`,
+                    clientName: result.title,
+                    channelId: result.id,
+                    title: v.title,
+                    thumbnail: v.thumbnail,
+                    url: `https://youtube.com/watch?v=${v.id}`,
+                    type: "VIDEO",
+                    timestamp: ts,
+                    publishedAt: v.publishedAt
+                  };
+                  pulseActivities.push(act);
+
+                  if (env.DB) {
+                    try {
+                      await env.DB.prepare(
+                        "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                      ).bind(act.id, result.id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
+                    } catch (e) { console.error("D1 Pulse Insert Error:", e.message); }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+          if (old) {
+            statsObj = { ...old, internalId: c.id, _stale: true };
+            channelMeta[old.id] = { logo: old.logo, title: old.title };
+          }
+          const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
+          const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
+          const windowLimit = now - (24 * 60 * 60 * 1000);
+          oldPulseActivities.forEach(oa => {
+            if (oa.channelId === (c.youtubeId || c.id) && oa.timestamp >= windowLimit) {
+              pulseActivities.push(oa);
+            }
+          });
+        }
+      } else {
+        const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+        if (old) {
+          statsObj = { ...old, internalId: c.id, _stale: true };
+          channelMeta[old.id] = { logo: old.logo, title: old.title };
+        }
+      }
+
+      // 2. Instagram Stats
+      if (c.instagramHandle || c.instagram_handle) {
+        const igHandle = c.instagramHandle || c.instagram_handle;
+        const igResult = await fetchInstagramInfo(env, igHandle);
+        if (igResult?.error) igError = igResult.error;
+        if (igResult && !igResult.error) {
+          if (!statsObj) {
+            statsObj = {
+              id: c.youtubeId || igResult.handle,
+              internalId: c.id,
+              title: c.name,
+              logo: igResult.logo,
+              subscribers: 0, viewCount: 0, videoCount: 0
+            };
+          }
+          statsObj.instagramHandle = igResult.handle;
+          statsObj.instagramFollowers = igResult.followers;
+          statsObj.instagramLogo = igResult.logo;
+          if (!statsObj.logo) statsObj.logo = igResult.logo;
+        }
+      }
+
+      // 3. Manual Overrides
+      if (statsObj || c.subscribers || c.instagramFollowers || c.instagram_followers) {
+        if (!statsObj) {
+          statsObj = {
+            id: c.youtubeId || c.instagramHandle || c.instagram_handle || c.id,
+            internalId: c.id, title: c.name, logo: c.instagramLogo || c.instagram_logo || null,
+            subscribers: 0, viewCount: 0, videoCount: 0
+          };
+        }
+        if (c.subscribers != null && c.subscribers > 0) statsObj.subscribers = Number(c.subscribers);
+        if ((c.instagramFollowers != null && c.instagramFollowers > 0) || (c.instagram_followers != null && c.instagram_followers > 0)) {
+          statsObj.instagramFollowers = Number(c.instagramFollowers || c.instagram_followers);
+        }
+        if (c.instagramLogo || c.instagram_logo) statsObj.logo = c.instagramLogo || c.instagram_logo;
+      }
+
+      if (statsObj) {
+        allStats.push(statsObj);
+      } else {
+        const parts = [];
+        if (ytIdentifier && ytError) parts.push(`YT: ${ytError}`);
+        else if (ytIdentifier) parts.push("YT: Failed");
+        if ((c.instagramHandle || c.instagram_handle) && igError) parts.push(`IG: ${igError}`);
+        const err = parts.length > 0 ? parts.join(", ") : "No successful fetches";
+        errors.push({ id: c.id, name: c.name, error: err });
+        const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+        if (old) {
+          allStats.push({ ...old, _stale: true });
+          if (old.id) channelMeta[old.id] = { logo: old.logo, title: old.title };
+        }
+      }
+    } catch (err) {
+      console.error(`Sync error for ${c.name}:`, err.message);
+      errors.push({ id: c.id, name: c.name, error: err.message });
+      const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
+      if (old) {
+        allStats.push({ ...old, _stale: true });
+        if (old.id) channelMeta[old.id] = { logo: old.logo, title: old.title };
+      }
+    }
+  }
+
+  pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
+
+  const MIN_RETENTION_RATIO = 0.8;
+  if (allStats.length < (existingStatsArray.length * MIN_RETENTION_RATIO) && !isForced) {
+    const err = new Error("Safety check active: Sync output is significantly lower than existing records.");
+    err.status = 422;
+    err.data = { synced: allStats.length, existing: existingStatsArray.length };
+    throw err;
+  }
+
+  if (registryMutated) {
+    await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
+  }
+
+  await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
+  await env.SHINEL_AUDIT.put("app:clients:stats:backup", JSON.stringify(allStats));
+
+  const historicalRaw = await env.SHINEL_AUDIT.get("app:clients:stats:historical", "json") || {};
+  const historical = (typeof historicalRaw === 'object' && historicalRaw !== null) ? historicalRaw : {};
+  allStats.forEach(s => {
+    if (s.internalId) historical[s.internalId] = { ...s, _last_seen: now };
+  });
+  await env.SHINEL_AUDIT.put("app:clients:stats:historical", JSON.stringify(historical));
+
+  await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
+    activities: pulseActivities,
+    meta: channelMeta,
+    ts: now,
+    quotaExceeded: (await getYoutubeKey(env)) === null
+  }));
+  await env.SHINEL_AUDIT.put("app:clients:sync_errors", JSON.stringify({ errors, ts: now }));
+  await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
+
+  // --- ADDITIONAL SNAPSHOTS & AUDITS ---
+  const dateStr = new Date(now).toISOString().split('T')[0];
+  const historyKey = `history:${dateStr}`;
+  const historySnapshot = {
+    ts: now,
+    stats: allStats.map(s => ({
+      id: s.id || s.youtubeId,
+      subscribers: Number(s.subscribers || 0),
+      viewCount: Number(s.viewCount || 0)
+    }))
+  };
+  await env.SHINEL_AUDIT.put(historyKey, JSON.stringify(historySnapshot), { expirationTtl: 35 * 24 * 60 * 60 });
+
+  const lastWeeklyAudit = await env.SHINEL_AUDIT.get("app:audits:weekly_last_ts");
+  const weekInMs = 7 * 24 * 60 * 60 * 1000;
+  if (!lastWeeklyAudit || (now - Number(lastWeeklyAudit)) > weekInMs) {
+    const totalSubs = allStats.reduce((sum, s) => sum + (Number(s.subscribers) || 0), 0);
+    const totalViews = allStats.reduce((sum, s) => sum + (Number(s.viewCount) || 0), 0);
+    const totalIG = allStats.reduce((sum, s) => sum + (Number(s.instagramFollowers) || 0), 0);
+    const totalReach = totalSubs + totalIG;
+    const activeCreators = clients.filter(c => c.status !== 'old').length;
+
+    const auditSummary = {
+      ts: now,
+      date: new Date(now).toISOString(),
+      totalCreators: clients.length, activeCreators,
+      totalSubscribers: totalSubs, 
+      totalInstagramFollowers: totalIG,
+      totalReach: totalReach,
+      totalViews: totalViews,
+      syncErrors: allStats.filter(s => s._stale).length
+    };
+
+    const auditHistory = await env.SHINEL_AUDIT.get("app:audits:weekly", "json") || [];
+    auditHistory.unshift(auditSummary);
+    await env.SHINEL_AUDIT.put("app:audits:weekly", JSON.stringify(auditHistory.slice(0, 10)));
+    await env.SHINEL_AUDIT.put("app:audits:weekly_last_ts", String(now));
+  }
+
+  const responseData = {
+    ok: true, synced: allStats.length, total: clients.length, errors, ts: now
+  };
+
+  if (debug) {
+    responseData.debug = {
+      trace: [
+        ...allStats.map(s => ({ name: s.title, id: s.id, status: 'success', count: s.videoCount })),
+        ...errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error }))
+      ],
+      keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
+      keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
+      keyValid: true
+    };
+  }
+
+  return responseData;
+}
+
 /* ================================= worker ================================= */
 export default {
   async fetch(request, env) {
@@ -670,281 +952,14 @@ export default {
     if (isSync) {
       try {
         await requireTeamOrThrow(request, secret);
-
-        // --- COOLDOWN CHECK ---
-        const lastSyncKey = "app:clients:last_sync_ts";
-        const lastSyncTs = Number(await env.SHINEL_AUDIT.get(lastSyncKey) || "0");
-        const now = Date.now();
-        const cooldown = 15 * 60 * 1000; // 15 mins
-        const isForced = url.searchParams.has("force"); // Admin can force if needed
-
-        if (!isForced && (now - lastSyncTs < cooldown)) {
-          const remaining = Math.ceil((cooldown - (now - lastSyncTs)) / 60000);
-          return json({ error: `Sync cooldown active. Please wait ${remaining}m or use ?force=1` }, 429, cors);
-        }
-
-        // --- PERMANENT DATA RULE ---
-        // Creators must NEVER be automatically removed from the registry during sync.
-        // The list of 'clients' fetched here is the Source of Truth.
-        const clients = await getClients(env);
-        const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
-        const existingStatsArray = Array.isArray(existingStatsRaw) ? existingStatsRaw : (existingStatsRaw.stats || []);
-        const existingStatsMap = new Map(existingStatsArray.map(s => [s.id, s]));
-
-        const allStats = [];
-        const pulseActivities = [];
-        const channelMeta = {};
-        const errors = [];
-        let registryMutated = false;
-
-        for (let i = 0; i < clients.length; i++) {
-          const c = clients[i];
-          let statsObj = null;
-          let ytError = null;
-          let igError = null;
-          try {
-            const ytIdentifier = c.youtubeId || c.handle;
-
-            // 1. YouTube Stats
-            if (ytIdentifier) {
-              const result = await fetchYouTubeChannelInfo(env, ytIdentifier);
-              if (result?.error) ytError = result.error;
-              if (result && !result.error) {
-                statsObj = { ...result, internalId: c.id };
-                channelMeta[result.id] = { logo: result.logo, title: result.title };
-
-                // Cache canonical YouTube ID and uploadsPlaylistId if missing/different
-                if (result.id && c.youtubeId !== result.id) {
-                  const oldId = c.youtubeId;
-                  c.youtubeId = result.id;
-                  registryMutated = true;
-
-                  // Update D1 to keep canonical IDs in sync
-                  if (env.DB) {
-                    try {
-                      await env.DB.prepare("UPDATE clients SET youtube_id = ? WHERE id = ?").bind(result.id, c.id).run();
-                    } catch (e) { console.error("D1 Canonical ID Update Error:", e.message); }
-                  }
-                }
-                if (result.uploadsPlaylistId && c.uploadsPlaylistId !== result.uploadsPlaylistId) {
-                  c.uploadsPlaylistId = result.uploadsPlaylistId;
-                  registryMutated = true;
-                }
-
-                // --- ACTIVE ONLY FILTER ---
-                // Only fetch Pulse (videos/shorts) if the client is NOT marked as 'old' (undefined/null defaults to active)
-                if (c.status !== "old") {
-                  const resultPulse = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
-                  const videos = resultPulse.items || [];
-                  if (resultPulse.error) ytError = resultPulse.error;
-
-                  const windowLimit = now - (24 * 60 * 60 * 1000); // 24h Window
-
-                  if (resultPulse.error || (videos.length === 0 && ytError)) {
-                    // Fallback: Restore old pulse activities from cache if API failed
-                    const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
-                    const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
-                    oldPulseActivities.forEach(oa => {
-                      if (oa.channelId === result.id && oa.timestamp >= windowLimit) {
-                        pulseActivities.push(oa);
-                      }
-                    });
-                  } else {
-                    videos.forEach(v => {
-                      const ts = new Date(v.publishedAt).getTime();
-                      if (ts >= windowLimit) {
-                        pulseActivities.push({
-                          id: `act-${v.id}-${ts}`,
-                          clientName: result.title,
-                          channelId: result.id,
-                          title: v.title,
-                          thumbnail: v.thumbnail,
-                          url: `https://youtube.com/watch?v=${v.id}`,
-                          type: v.type === "VIDEO" ? "VIDEO" : (v.type === "upload" ? "VIDEO" : "VIDEO"),
-                          timestamp: ts,
-                          publishedAt: v.publishedAt
-                        });
-                      }
-                    });
-                  }
-                }
-              } else {
-                // 1b. YouTube Fallback: carry over previous stats and pulse if metadata fetch failed
-                const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-                if (old) {
-                  statsObj = { ...old, internalId: c.id, _stale: true };
-                  channelMeta[old.id] = { logo: old.logo, title: old.title };
-                }
-                const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
-                const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
-                const windowLimit = now - (24 * 60 * 60 * 1000);
-                oldPulseActivities.forEach(oa => {
-                  if (oa.channelId === (c.youtubeId || c.id) && oa.timestamp >= windowLimit) {
-                    pulseActivities.push(oa);
-                  }
-                });
-              }
-            } else {
-              // 1c. No ytIdentifier, still check existing cache just in case
-              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-              if (old) {
-                statsObj = { ...old, internalId: c.id, _stale: true };
-                channelMeta[old.id] = { logo: old.logo, title: old.title };
-              }
-            }
-
-            // 2. Instagram Stats
-            if (c.instagramHandle || c.instagram_handle) {
-              const igHandle = c.instagramHandle || c.instagram_handle;
-              const igResult = await fetchInstagramInfo(env, igHandle);
-              if (igResult?.error) igError = igResult.error;
-              if (igResult && !igResult.error) {
-                if (!statsObj) {
-                  statsObj = {
-                    id: c.youtubeId || igResult.handle,
-                    internalId: c.id,
-                    title: c.name,
-                    logo: igResult.logo,
-                    subscribers: 0,
-                    viewCount: 0,
-                    videoCount: 0
-                  };
-                }
-                statsObj.instagramHandle = igResult.handle;
-                statsObj.instagramFollowers = igResult.followers;
-                statsObj.instagramLogo = igResult.logo; // Explicitly save IG logo
-                if (!statsObj.logo) statsObj.logo = igResult.logo;
-              }
-            }
-
-            // 3. Manual Overrides (Priority)
-            if (statsObj || c.subscribers || c.instagramFollowers || c.instagram_followers) {
-              if (!statsObj) {
-                statsObj = {
-                  id: c.youtubeId || c.instagramHandle || c.instagram_handle || c.id,
-                  internalId: c.id,
-                  title: c.name,
-                  logo: c.instagramLogo || c.instagram_logo || null,
-                  subscribers: 0,
-                  viewCount: 0,
-                  videoCount: 0
-                };
-              }
-
-              if (c.subscribers != null && c.subscribers > 0) {
-                statsObj.subscribers = Number(c.subscribers);
-              }
-              if ((c.instagramFollowers != null && c.instagramFollowers > 0) || (c.instagram_followers != null && c.instagram_followers > 0)) {
-                statsObj.instagramFollowers = Number(c.instagramFollowers || c.instagram_followers);
-              }
-              if (c.instagramLogo || c.instagram_logo) {
-                statsObj.logo = c.instagramLogo || c.instagram_logo;
-              }
-            }
-
-            if (statsObj) {
-              allStats.push(statsObj);
-            } else {
-              const parts = [];
-              if (ytIdentifier && ytError) parts.push(`YT: ${ytError}`);
-              else if (ytIdentifier) parts.push("YT: Failed");
-
-              if ((c.instagramHandle || c.instagram_handle) && igError) parts.push(`IG: ${igError}`);
-
-              const err = parts.length > 0 ? parts.join(", ") : "No successful fetches";
-              errors.push({ id: c.id, name: c.name, error: err });
-
-              // STICKY STATS fallback
-              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-              if (old) {
-                allStats.push({ ...old, _stale: true });
-                if (old.id) channelMeta[old.id] = { logo: old.logo, title: old.title };
-              }
-            }
-          } catch (err) {
-            console.error(`Sync error for ${c.name}:`, err.message);
-            errors.push({ id: c.id, name: c.name, error: err.message });
-
-            const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-            if (old) {
-              allStats.push({ ...old, _stale: true });
-              if (old.id) channelMeta[old.id] = { logo: old.logo, title: old.title };
-            }
-          }
-        }
-
-        pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
-
-        // --- FAIL-SAFE: Prevent data loss if sync returns significantly less data than before ---
-        // We set a high retention ratio to protect against catastrophic API failures.
-        // Even if an entry fails to sync, it will be kept as 'stale' rather than being deleted.
-        const MIN_RETENTION_RATIO = 0.8;
-        if (allStats.length < (existingStatsArray.length * MIN_RETENTION_RATIO) && !isForced) {
-          return json({
-            error: "Safety check active: Sync output is significantly lower than existing records. This protects against data loss. Use ?force=1 to override if this is intentional.",
-            synced: allStats.length,
-            existing: existingStatsArray.length
-          }, 422, cors);
-        }
-
-        if (registryMutated) {
-          await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
-        }
-
-        // Save Main Stats
-        await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
-
-        // --- BACKUP: Save a separate snapshot for emergencies ---
-        await env.SHINEL_AUDIT.put("app:clients:stats:backup", JSON.stringify(allStats));
-
-        // --- HISTORICAL POOL: Keep last known stats for every client ID ever seen ---
-        // This ensures that even if a client is deleted or sync fails persistently, 
-        // their contribution to 'Total Reach' can be recovered.
-        const historicalRaw = await env.SHINEL_AUDIT.get("app:clients:stats:historical", "json") || {};
-        const historical = (typeof historicalRaw === 'object' && historicalRaw !== null) ? historicalRaw : {};
-
-        allStats.forEach(s => {
-          if (s.internalId) {
-            historical[s.internalId] = {
-              ...s,
-              _last_seen: now
-            };
-          }
-        });
-        await env.SHINEL_AUDIT.put("app:clients:stats:historical", JSON.stringify(historical));
-
-        await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
-          activities: pulseActivities,
-          meta: channelMeta,
-          ts: now,
-          quotaExceeded: (await getYoutubeKey(env)) === null
-        }));
-        await env.SHINEL_AUDIT.put("app:clients:sync_errors", JSON.stringify({ errors, ts: now }));
-        await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
-
-        const responseData = {
-          ok: true,
-          synced: allStats.length,
-          total: clients.length,
-          errors,
-          ts: now
-        };
-
-        if (url.searchParams.has("debug")) {
-          responseData.debug = {
-            trace: [
-              ...allStats.map(s => ({ name: s.title, id: s.id, status: 'success', count: s.videoCount })),
-              ...errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error }))
-            ],
-            keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
-            keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
-            keyValid: true
-          };
-        }
-
-        return json(responseData, 200, cors);
+        const isForced = url.searchParams.has("force");
+        const isDebug = url.searchParams.has("debug");
+        const result = await performClientSync(env, isForced, isDebug);
+        return json(result, 200, cors);
       } catch (e) {
-        return json({ error: e.message || "Sync failed" }, e.status || 500, cors);
+        const status = e.status || 500;
+        const data = e.data || {};
+        return json({ error: e.message || "Sync failed", ...data }, status, cors);
       }
     }
 
@@ -1099,7 +1114,8 @@ export default {
           status: 200,
           headers,
         });
-      } catch {
+      } catch (err) {
+        console.error("Refresh Error:", err.message);
         const clear = delCookie("ss_refresh", {
           httpOnly: true,
           secure: true,
@@ -1107,8 +1123,8 @@ export default {
           path: "/",
         });
         const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
-        return new Response(JSON.stringify({ error: "Invalid refresh" }), {
-          status: 403,
+        return new Response(JSON.stringify({ error: "Invalid refresh session", details: err.message }), {
+          status: 401,
           headers,
         });
       }
@@ -1556,17 +1572,59 @@ export default {
 
     /* =============================== /stats =============================== */
     if (url.pathname === "/stats" && request.method === "GET") {
-      const thumbs = await getJsonList(env, KV_THUMBS_KEY);
-      const videos = await getJsonList(env, KV_VIDEOS_KEY);
-      return json(
-        {
+      try {
+        const thumbs = await getJsonList(env, KV_THUMBS_KEY);
+        const videos = await getJsonList(env, KV_VIDEOS_KEY);
+        const clients = await getClients(env);
+        
+        // Calculate total reach (sum of subscribers/followers)
+        const statsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
+        const stats = Array.isArray(statsRaw) ? statsRaw : (statsRaw.stats || []);
+        
+        let reach = 0;
+        if (stats.length > 0) {
+          reach = stats.reduce((acc, s) => acc + Number(s.subscribers || 0) + Number(s.instagramFollowers || 0), 0);
+        } else {
+          // Fallback to registry data if stats are missing/empty
+          reach = clients.reduce((acc, c) => acc + Number(c.subscribers || 0) + Number(c.instagramFollowers || c.instagram_followers || 0), 0);
+        }
+
+        return json(
+          {
+            ok: true,
+            time: Date.now(),
+            counts: { 
+              thumbnails: thumbs.length, 
+              videos: videos.length,
+              creators: clients.length,
+              reach
+            },
+          },
+          200,
+          cors
+        );
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    /* =========================== /thumbnails/stats =========================== */
+    if (url.pathname === "/thumbnails/stats" && request.method === "GET") {
+      try {
+        const thumbs = await getJsonList(env, KV_THUMBS_KEY);
+        // Estimate size (roughly 1kb per entry metadata + cache considerations)
+        const totalSize = JSON.stringify(thumbs).length;
+        
+        return json({
           ok: true,
-          time: Date.now(),
-          counts: { thumbnails: thumbs.length, videos: videos.length },
-        },
-        200,
-        cors
-      );
+          totalCount: thumbs.length,
+          totalSize: totalSize,
+          storageUsed: `${(totalSize / 1024 / 1024).toFixed(2)} MB`,
+          lastUpdated: Date.now()
+        }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
     }
 
     /* =============================== /videos ============================== */
@@ -2257,263 +2315,107 @@ export default {
       }
     }
 
+    /* -------------------------- Media Hub (R2 Storage) -------------------------- */
+    if (url.pathname === "/api/media/upload" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        if (!env.MEDIA_STORAGE) return json({ error: "MEDIA_STORAGE R2 binding missing" }, 501, cors);
+
+        const formData = await request.formData();
+        const file = formData.get("file");
+        if (!file) return json({ error: "No file uploaded" }, 400, cors);
+
+        const id = crypto.randomUUID();
+        const extension = file.name.split('.').pop();
+        const key = `media/${id}.${extension}`;
+
+        await env.MEDIA_STORAGE.put(key, file.stream(), {
+          httpMetadata: { contentType: file.type }
+        });
+
+        return json({ ok: true, id, url: `/api/media/view/${id}.${extension}`, key }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/media/view/") && request.method === "GET") {
+      try {
+        if (!env.MEDIA_STORAGE) return json({ error: "MEDIA_STORAGE R2 binding missing" }, 501, cors);
+        const fileName = url.pathname.replace("/api/media/view/", "");
+        const key = `media/${fileName}`;
+
+        const object = await env.MEDIA_STORAGE.get(key);
+        if (!object) {
+          // Fallback to archived folder if not in media
+          const archivedKey = `archived/${fileName}`;
+          const archivedObject = await env.MEDIA_STORAGE.get(archivedKey);
+          if (!archivedObject) return json({ error: "Object not found" }, 404, cors);
+          
+          const headers = new Headers(cors);
+          archivedObject.writeHttpMetadata(headers);
+          headers.set("etag", archivedObject.httpEtag);
+          headers.set("Cache-Control", "public, max-age=31536000, immutable");
+          headers.set("Access-Control-Allow-Origin", "*");
+          return new Response(archivedObject.body, { headers });
+        }
+
+        const headers = new Headers(cors);
+        object.writeHttpMetadata(headers);
+        headers.set("etag", object.httpEtag);
+        headers.set("Cache-Control", "public, max-age=31536000, immutable");
+        headers.set("Access-Control-Allow-Origin", "*");
+
+        return new Response(object.body, { headers });
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    // Mirror external media to R2
+    if (url.pathname === "/api/media/archive-external" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        if (!env.MEDIA_STORAGE) return json({ error: "MEDIA_STORAGE R2 binding missing" }, 501, cors);
+
+        const { url: targetUrl } = await request.json();
+        if (!targetUrl) return json({ error: "No URL provided" }, 400, cors);
+
+        // Fetch the external media
+        const res = await fetch(targetUrl);
+        if (!res.ok) return json({ error: "Failed to fetch external media" }, 400, cors);
+
+        const contentType = res.headers.get("content-type");
+        const id = crypto.randomUUID();
+        const extension = contentType.split('/').pop().split(';')[0] || "bin";
+        const key = `archived/${id}.${extension}`;
+
+        await env.MEDIA_STORAGE.put(key, res.body, {
+          httpMetadata: { contentType }
+        });
+
+        return json({ ok: true, archivedUrl: `/api/media/view/${id}.${extension}`, key }, 200, cors);
+      } catch (e) {
+        return json({ error: "Archival failed: " + e.message }, 500, cors);
+      }
+    }
+
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
   },
 
   async scheduled(event, env, ctx) {
-    console.log("CRON TRIGGER: Starting Pulse Sync...");
+    console.log("CRON TRIGGER: Starting Automatic Pulse Sync...");
     ctx.waitUntil((async () => {
       try {
-        const lastSyncKey = "app:clients:last_sync_ts";
-        const clients = await getClients(env);
-        const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
-        const existingStatsArray = Array.isArray(existingStatsRaw) ? existingStatsRaw : (existingStatsRaw.stats || []);
-        const existingStatsMap = new Map(existingStatsArray.map(s => [s.id, s]));
-
-        const allStats = [];
-        const pulseActivities = [];
-        const channelMeta = {};
-        const now = Date.now();
-        let registryMutated = false;
-
-        for (const c of clients) {
-          try {
-            let statsObj = null;
-
-            // --- STATUS FILTER ---
-            // If client is 'old', skip YouTube fetch but keep their stats for marquee
-            if (c.status === "old") {
-              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-              if (old) {
-                allStats.push({ ...old, _stale: true, _source: 'legacy_status' });
-                channelMeta[old.id] = { logo: old.logo, title: old.title };
-              } else {
-                // If no stats exist, push a placeholder so they stay in registry
-                allStats.push({ id: c.youtubeId || c.id, title: c.name, logo: c.logo || null, subscribers: c.subscribers || 0, _stale: true });
-              }
-              continue;
-            }
-
-            // 1. YouTube Stats
-            const ytIdentifier = c.youtubeId || c.handle;
-            if (ytIdentifier) {
-              const result = await fetchYouTubeChannelInfo(env, ytIdentifier);
-              if (result && !result.error) {
-                statsObj = { ...result, internalId: c.id };
-                channelMeta[result.id] = { logo: result.logo, title: result.title };
-
-                if (result.id && c.youtubeId !== result.id) {
-                  c.youtubeId = result.id;
-                  registryMutated = true;
-                  // Sync canonical ID to D1
-                  if (env.DB) {
-                    try {
-                      await env.DB.prepare("UPDATE clients SET youtube_id = ? WHERE id = ?").bind(result.id, c.id).run();
-                    } catch (e) { console.error("D1 Scheduled Canonical ID Update Error:", e.message); }
-                  }
-                }
-                if (result.uploadsPlaylistId && c.uploadsPlaylistId !== result.uploadsPlaylistId) {
-                  c.uploadsPlaylistId = result.uploadsPlaylistId;
-                  registryMutated = true;
-                }
-
-                // --- ACTIVE ONLY FILTER ---
-                // Must match manual sync logic: include any client not explicitly marked 'old'
-                if (c.status !== 'old') {
-                  const resultPulse = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
-                  const videos = resultPulse.items || [];
-                  const windowLimit = now - (24 * 60 * 60 * 1000);
-
-                  if (resultPulse.error || (videos.length === 0 && resultPulse.error)) {
-                    // Fallback: Restore old pulse activities from cache if API failed
-                    const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
-                    const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
-                    oldPulseActivities.forEach(oa => {
-                      if (oa.channelId === result.id && oa.timestamp >= windowLimit) {
-                        pulseActivities.push(oa);
-                      }
-                    });
-                  } else {
-                    for (const v of videos) {
-                      const ts = new Date(v.publishedAt).getTime();
-                      if (ts >= windowLimit) {
-                        pulseActivities.push({
-                          id: `act-${v.id}-${ts}`,
-                          clientName: result.title,
-                          channelId: result.id,
-                          title: v.title,
-                          thumbnail: v.thumbnail,
-                          url: `https://youtube.com/watch?v=${v.id}`,
-                          type: v.type === "VIDEO" ? "VIDEO" : (v.type === "upload" ? "VIDEO" : "VIDEO"),
-                          timestamp: ts,
-                          publishedAt: v.publishedAt
-                        });
-
-                        // ALSO PIPELINE TO D1 IF AVAILABLE
-                        if (env.DB) {
-                          try {
-                            await env.DB.prepare(
-                              "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-                            ).bind(`act-${v.id}-${ts}`, result.id, v.id, v.title, v.thumbnail, `https://youtube.com/watch?v=${v.id}`, v.publishedAt, ts).run();
-                          } catch (e) { console.error("D1 Pulse Insert Error:", e.message); }
-                        }
-                      }
-                    }
-                  }
-                }
-              } else {
-                // YT HTTP fetch failed, fallback to existing stats and push carryover pulse
-                const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-                if (old) {
-                  statsObj = { ...old, internalId: c.id, _stale: true };
-                  channelMeta[old.id] = { logo: old.logo, title: old.title };
-                }
-                const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
-                const oldPulseActivities = Array.isArray(oldPulseRaw.activities) ? oldPulseRaw.activities : [];
-                const windowLimit = now - (24 * 60 * 60 * 1000);
-                oldPulseActivities.forEach(oa => {
-                  if (oa.channelId === (c.youtubeId || c.id) && oa.timestamp >= windowLimit) {
-                    pulseActivities.push(oa);
-                  }
-                });
-              }
-            } else {
-              // No YT identifier, but check existing cache anyway just in case
-              const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-              if (old) {
-                statsObj = { ...old, internalId: c.id, _stale: true };
-              }
-            }
-
-            // 2. Instagram Stats
-            if (c.instagramHandle || c.instagram_handle) {
-              const igHandle = c.instagramHandle || c.instagram_handle;
-              const igResult = await fetchInstagramInfo(env, igHandle);
-              if (igResult && !igResult.error) {
-                if (!statsObj) {
-                  statsObj = {
-                    id: c.youtubeId || igResult.handle,
-                    internalId: c.id,
-                    title: c.name,
-                    logo: igResult.logo,
-                    subscribers: 0,
-                    viewCount: 0,
-                    videoCount: 0
-                  };
-                }
-                statsObj.instagramHandle = igResult.handle;
-                statsObj.instagramFollowers = igResult.followers;
-                statsObj.instagramLogo = igResult.logo;
-                if (!statsObj.logo) statsObj.logo = igResult.logo;
-              }
-            }
-
-            // 3. Finalize and push
-            if (statsObj || c.subscribers || c.instagramFollowers || c.instagram_followers) {
-              if (!statsObj) {
-                statsObj = {
-                  id: c.youtubeId || c.instagramHandle || c.instagram_handle || c.id,
-                  internalId: c.id,
-                  title: c.name,
-                  logo: c.instagramLogo || c.instagram_logo || null,
-                  subscribers: 0,
-                  viewCount: 0,
-                  videoCount: 0
-                };
-              }
-
-              // Apply overrides
-              if (c.subscribers) statsObj.subscribers = Math.max(statsObj.subscribers || 0, c.subscribers);
-              if (c.instagramFollowers || c.instagram_followers) {
-                statsObj.instagramFollowers = Math.max(statsObj.instagramFollowers || 0, c.instagramFollowers || c.instagram_followers);
-              }
-
-              allStats.push(statsObj);
-              if (statsObj.id && !channelMeta[statsObj.id] && statsObj.logo) {
-                channelMeta[statsObj.id] = { logo: statsObj.logo, title: statsObj.title };
-              }
-            }
-
-          } catch (err) {
-            console.error(`Scheduled Sync Error for ${c.name}:`, err.message);
-            const old = existingStatsMap.get(c.id) || existingStatsMap.get(c.youtubeId);
-            if (old) {
-              allStats.push({ ...old, _stale: true });
-              if (old.id && old.logo) {
-                channelMeta[old.id] = { logo: old.logo, title: old.title };
-              }
-            }
-          }
-        }
-
-        pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
-
-        // --- FAIL-SAFE for Cron ---
-        const MIN_RETENTION_RATIO = 0.5;
-        if (allStats.length < (existingStatsArray.length * MIN_RETENTION_RATIO) && existingStatsArray.length > 5) {
-          console.error(`Scheduled Sync SAFETY TRIP: Produced ${allStats.length} stats vs ${existingStatsArray.length} existing. Aborting overwrite.`);
-          return;
-        }
-
-        if (registryMutated) {
-          await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
-        }
-
-        await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
-        await env.SHINEL_AUDIT.put("app:clients:stats:backup", JSON.stringify(allStats));
-
-        await env.SHINEL_AUDIT.put("app:clients:stats:historical", JSON.stringify(historical));
-
-        // Create Daily History Snapshot for Sparklines/Health Score
-        const dateStr = new Date(now).toISOString().split('T')[0];
-        const historyKey = `history:${dateStr}`;
-        const historySnapshot = {
-          ts: now,
-          stats: allStats.map(s => ({
-            id: s.id || s.youtubeId,
-            subscribers: Number(s.subscribers || 0),
-            viewCount: Number(s.viewCount || 0)
-          }))
-        };
-        await env.SHINEL_AUDIT.put(historyKey, JSON.stringify(historySnapshot), { expirationTtl: 35 * 24 * 60 * 60 }); // Expire after 35 days
-
-        await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
-          activities: pulseActivities,
-          meta: channelMeta,
-          ts: now,
-          quotaExceeded: (await getYoutubeKey(env)) === null
-        }));
-        await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
-
-        // --- WEEKLY AUDIT AGGREGATION ---
-        const lastWeeklyAudit = await env.SHINEL_AUDIT.get("app:audits:weekly_last_ts");
-        const weekInMs = 7 * 24 * 60 * 60 * 1000;
-        if (!lastWeeklyAudit || (now - Number(lastWeeklyAudit)) > weekInMs) {
-          const totalSubs = allStats.reduce((sum, s) => sum + (Number(s.subscribers) || 0), 0);
-          const totalViews = allStats.reduce((sum, s) => sum + (Number(s.viewCount) || 0), 0);
-          const activeCreators = clients.filter(c => c.status !== 'old').length;
-
-          const auditSummary = {
-            ts: now,
-            date: new Date(now).toISOString(),
-            totalCreators: clients.length,
-            activeCreators,
-            totalSubscribers: totalSubs,
-            totalViews: totalViews,
-            syncErrors: allStats.filter(s => s._stale).length
-          };
-
-          const auditHistory = await env.SHINEL_AUDIT.get("app:audits:weekly", "json") || [];
-          auditHistory.unshift(auditSummary);
-          await env.SHINEL_AUDIT.put("app:audits:weekly", JSON.stringify(auditHistory.slice(0, 10))); // Keep last 10 weeks
-          await env.SHINEL_AUDIT.put("app:audits:weekly_last_ts", String(now));
-          console.log("WEEKLY AUDIT GENERATED:", auditSummary);
-        }
-
-        console.log(`CRON SUCCESS: Synced ${allStats.length} creators.`);
+        const result = await performClientSync(env, false, false);
+        console.log(`CRON SUCCESS: Synced ${result.synced} creators.`);
       } catch (e) {
-        console.error("CRON ERROR:", e.message);
+        if (e.status === 429) {
+          console.log("CRON SKIP: Last sync too recent.");
+        } else {
+          console.error("CRON ERROR:", e.message);
+        }
       }
     })());
   }

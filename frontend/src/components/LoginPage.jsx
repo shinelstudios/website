@@ -1,7 +1,20 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Mail, Eye, EyeOff, ShieldCheck, Cpu, Terminal, ChevronRight, AlertTriangle } from "lucide-react";
+import { 
+    Lock, 
+    Mail, 
+    Eye, 
+    EyeOff, 
+    ShieldCheck, 
+    Cpu, 
+    Terminal, 
+    ChevronRight, 
+    AlertTriangle,
+    Fingerprint,
+    Zap,
+    Activity
+} from "lucide-react";
 import CpuBackground from "./CpuBackground";
 
 import { AUTH_BASE } from "../config/constants";
@@ -42,261 +55,288 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   const next = safeNextPath(params.get("next"));
 
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [show, setShow] = React.useState(false);
-  const [remember, setRemember] = React.useState(() => localStorage.getItem("rememberMe") === "1");
-  const [loading, setLoading] = React.useState(false);
-  const [err, setErr] = React.useState("");
-  const [success, setSuccess] = React.useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [remember, setRemember] = useState(() => localStorage.getItem("rememberMe") === "1");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  // Shake animation for errors
+  const [shake, setShake] = useState(false);
+
+  const triggerShake = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
     setLoading(true);
 
-    // Artificial delay for "Processing" effect
-    await new Promise(r => setTimeout(r, 800));
-
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "content-type": "application/json" },
+        credentials: "include", // CRITICAL: Allows browser to store the refresh cookie
         body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data?.token) {
-        setErr("ACCESS DENIED: Invalid credentials.");
+        setErr(data.error || "ACCESS DENIED: Authentication failed.");
+        triggerShake();
         setLoading(false);
         return;
       }
 
-      setSuccess(true); // Trigger success animation
-
+      setSuccess(true);
       const payload = parseJwt(data.token) || {};
 
-      let finalRole = "";
       try {
         localStorage.setItem("rememberMe", remember ? "1" : "0");
         localStorage.setItem("token", data.token);
-        if (data.refresh) localStorage.setItem("refresh", data.refresh);
-
+        
         const finalEmail = String(data.email || payload.email || email || "").trim();
-        finalRole = String(data.role || payload.role || "").trim();
-        const firstName = String(data.firstName || payload.firstName || payload.first_name || "").trim();
-        const lastName = String(data.lastName || payload.lastName || payload.last_name || "").trim();
+        const finalRole = String(data.role || payload.role || "").trim();
+        const firstName = String(data.firstName || payload.firstName || "").trim();
+        const lastName = String(data.lastName || payload.lastName || "").trim();
 
         if (finalEmail) localStorage.setItem("userEmail", finalEmail);
         if (finalRole) localStorage.setItem("role", finalRole);
         if (firstName) localStorage.setItem("firstName", firstName);
         if (lastName) localStorage.setItem("lastName", lastName);
 
-        ["userRole", "userFirst", "userLast", "userFirstName", "userLastName"].forEach((k) =>
-          localStorage.removeItem(k)
-        );
-      } catch { }
-
-      try {
         window.dispatchEvent(new Event("auth:changed"));
-      } catch { }
+      } catch (e) { console.error("Persistence Error:", e); }
 
       // Intelligent Redirect
       let targetPath = next;
       if (targetPath === "/" || !targetPath) {
-        const roleLower = finalRole.toLowerCase();
-        if (roleLower.includes("admin")) {
-          targetPath = "/dashboard";
-        } else if (roleLower.includes("client")) {
-          targetPath = "/dashboard/overview";
-        } else {
-          targetPath = "/dashboard";
-        }
+        const roleLower = (data.role || payload.role || "").toLowerCase();
+        targetPath = roleLower.includes("admin") || roleLower.includes("team") ? "/dashboard" : "/dashboard/overview";
       }
 
-      setTimeout(() => nav(targetPath, { replace: true }), 1000);
-    } catch {
-      setErr("SYSTEM ERROR: Connection failed.");
+      setTimeout(() => nav(targetPath, { replace: true }), 1200);
+    } catch (e) {
+      setErr("SYSTEM ERROR: Failed to communicate with auth server.");
+      triggerShake();
       setLoading(false);
     }
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 bg-black overflow-hidden selection:bg-orange-500/30 selection:text-orange-200">
-      <CpuBackground />
+    <div className="relative min-h-screen flex items-center justify-center p-6 bg-[#030303] overflow-hidden selection:bg-orange-500/30 selection:text-orange-200 font-inter">
+      {/* Dynamic Background Elements */}
+      <div className="absolute inset-0 z-0">
+          <CpuBackground />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-500/5 blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
+      </div>
 
-      {/* Main Terminal Card */}
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5, ease: "backOut" }}
-        className="relative z-10 w-full max-w-[420px]"
-      >
-        {/* Holographic Border Container */}
-        <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl bg-black/60 border border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
-
-          {/* Top Bar "HUD" */}
-          <div className="h-10 bg-white/5 border-b border-white/5 flex items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-              </div>
-              <div className="h-4 w-[1px] bg-white/10 mx-1" />
-              <span className="text-[10px] font-mono text-white/40 tracking-widest uppercase">SECURE_SHELL_V2.0</span>
-            </div>
-            <Cpu size={14} className="text-white/20 animate-pulse" />
-          </div>
-
-          <div className="p-8">
-            {/* Header */}
-            <div className="mb-8 text-center relative">
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-500/20 to-orange-600/5 border border-orange-500/30 mb-4 relative group"
-              >
-                <div className="absolute inset-0 bg-orange-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                <Lock size={32} className="text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
-              </motion.div>
-              <h1 className="text-3xl font-black text-white tracking-tight">
-                SYSTEM <span className="text-orange-500">ACCESS</span>
-              </h1>
-              <p className="text-xs font-mono text-white/40 mt-2 tracking-widest uppercase">
-                Identify authentication required
-              </p>
-            </div>
-
-            {/* Error Display */}
-            <AnimatePresence>
-              {err && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="mb-6 overflow-hidden"
-                >
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
-                    <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
-                    <div className="text-xs text-red-200 font-mono">{err}</div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <form onSubmit={onSubmit} className="space-y-5">
-              <div className="space-y-1.5 group">
-                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest pl-1 group-focus-within:text-orange-500 transition-colors">
-                  usr_identification
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Terminal size={16} className="text-white/30 group-focus-within:text-orange-500 transition-colors" />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm font-mono text-white placeholder-white/20 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 focus:bg-orange-500/5 transition-all outline-none"
-                    placeholder="ENTER_EMAIL_ID"
-                  />
+      <AnimatePresence mode="wait">
+        <motion.div
+            key="login-card"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ 
+                y: 0, 
+                opacity: 1,
+                x: shake ? [-5, 5, -5, 5, 0] : 0
+            }}
+            transition={{ 
+                y: { duration: 0.6, ease: [0.23, 1, 0.32, 1] },
+                opacity: { duration: 0.4 },
+                x: { duration: 0.4 }
+            }}
+            className="relative z-10 w-full max-w-[440px]"
+        >
+            {/* Glassmorphic Container */}
+            <div className="relative rounded-[32px] overflow-hidden backdrop-blur-[32px] bg-white/[0.03] border border-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+                
+                {/* Header Section */}
+                <div className="p-10 pb-6 text-center">
+                    <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ delay: 0.2, duration: 0.5 }}
+                        className="inline-flex relative mb-8"
+                    >
+                        <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full scale-150 animate-pulse" />
+                        <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-[0_0_30px_rgba(234,88,12,0.4)]">
+                            <Lock size={36} className="text-white fill-white/10" />
+                        </div>
+                    </motion.div>
+                    
+                    <h1 className="text-4xl font-[900] text-white tracking-tight mb-2 uppercase italic leading-none">
+                        SHINEL <span className="text-orange-500">Log In.</span>
+                    </h1>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                        Sign in to your workspace
+                    </p>
                 </div>
-              </div>
 
-              <div className="space-y-1.5 group">
-                <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest pl-1 group-focus-within:text-orange-500 transition-colors">
-                  access_key
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <ShieldCheck size={16} className="text-white/30 group-focus-within:text-orange-500 transition-colors" />
-                  </div>
-                  <input
-                    type={show ? "text" : "password"}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-10 text-sm font-mono text-white placeholder-white/20 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 focus:bg-orange-500/5 transition-all outline-none"
-                    placeholder="••••••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShow(!show)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/30 hover:text-white transition-colors"
-                  >
-                    {show ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                <div className="flex justify-between items-center pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer group/check">
-                    <div className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${remember ? 'bg-orange-500 border-orange-500' : 'border-white/20 bg-transparent'}`}>
-                      {remember && <div className="w-1.5 h-1.5 bg-black rounded-[1px]" />}
+                <div className="px-10 pb-10 space-y-6">
+                    {/* Error Feedback */}
+                    <AnimatePresence>
+                        {err && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center gap-4"
+                            >
+                                <div className="w-8 h-8 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                                    <AlertTriangle size={16} className="text-red-500" />
+                                </div>
+                                <span className="text-[11px] font-black uppercase tracking-wider text-red-200">{err}</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    <form onSubmit={onSubmit} className="space-y-5">
+                        {/* ID Input */}
+                        <div className="space-y-2 group">
+                            <label className="text-[9px] font-black uppercase tracking-widest text-white/20 pl-1 group-focus-within:text-orange-500 transition-colors">
+                                Email Address
+                            </label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Mail size={18} className="text-white/20 group-focus-within:text-orange-500 transition-colors" />
+                                </div>
+                                <input
+                                    type="email"
+                                    required
+                                    autoFocus
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full bg-white/[0.03] border border-white/[0.05] rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-white placeholder-white/10 focus:border-orange-500/50 focus:bg-orange-500/5 transition-all outline-none"
+                                    placeholder="Enter your email"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Pass Input */}
+                        <div className="space-y-2 group">
+                            <div className="flex justify-between items-center pl-1">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-white/20 group-focus-within:text-orange-500 transition-colors">
+                                    Password
+                                </label>
+                                <Link to="#" className="text-[9px] font-black uppercase tracking-widest text-white/20 hover:text-orange-500 transition-colors">Forgot password?</Link>
+                            </div>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <ShieldCheck size={18} className="text-white/20 group-focus-within:text-orange-500 transition-colors" />
+                                </div>
+                                <input
+                                    type={show ? "text" : "password"}
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full bg-white/[0.03] border border-white/[0.05] rounded-2xl py-4 pl-12 pr-12 text-sm font-bold text-white placeholder-white/10 focus:border-orange-500/50 focus:bg-orange-500/5 transition-all outline-none"
+                                    placeholder="••••••••••••"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShow(!show)}
+                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-white/20 hover:text-white transition-colors"
+                                >
+                                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Remember & Meta */}
+                        <div className="flex items-center justify-between px-1">
+                            <label className="flex items-center gap-3 cursor-pointer group/check">
+                                <div className={`relative w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${remember ? 'bg-orange-500 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.4)]' : 'border-white/10 bg-white/5'}`}>
+                                    {remember && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-2.5 h-2.5 bg-black rounded-[2px]" />}
+                                </div>
+                                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="hidden" />
+                                <span className="text-[10px] font-black text-white/30 group-hover/check:text-white/60 transition-colors uppercase tracking-widest">Keep me signed in</span>
+                            </label>
+                            
+                            <div className="flex items-center gap-2 text-[10px] font-black text-white/10 italic">
+                                <span>SECURE</span>
+                                <div className="w-1 h-1 bg-white/10 rounded-full" />
+                                <span>ENCRYPTED</span>
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <motion.button
+                            type="submit"
+                            disabled={loading || success}
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full relative h-[60px] rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-wait overflow-hidden group/btn"
+                        >
+                            <div className={`absolute inset-0 transition-opacity duration-500 ${success ? 'bg-green-500' : 'bg-gradient-to-r from-orange-500 to-orange-600'}`} />
+                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover/btn:opacity-100 transition-opacity" />
+                            
+                            <div className="relative z-10 flex items-center gap-3">
+                                {loading ? (
+                                    <>
+                                        <RefreshCircle />
+                                        <span>Sign In...</span>
+                                    </>
+                                ) : success ? (
+                                    <>
+                                        <Fingerprint size={20} className="animate-pulse" />
+                                        <span>Welcome back</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Sign In</span>
+                                        <ChevronRight size={18} />
+                                    </>
+                                )}
+                            </div>
+                        </motion.button>
+                    </form>
+
+                    {/* Footer Connections */}
+                    <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
+                        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest">
+                            <div className="flex gap-4">
+                                <Link to="/privacy" className="text-white/20 hover:text-orange-500 transition-colors">Privacy Policy</Link>
+                                <Link to="/terms" className="text-white/20 hover:text-orange-500 transition-colors">Terms of Service</Link>
+                            </div>
+                            <span className="text-white/10">v.4.0.2</span>
+                        </div>
+                        <p className="text-[8px] font-bold text-center text-white/10 uppercase tracking-[0.3em]">
+                            Global security infrastructure by Shinel Studios
+                        </p>
                     </div>
-                    <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="hidden" />
-                    <span className="text-[10px] font-mono text-white/40 group-hover/check:text-white/60 transition-colors uppercase">Stay_Connected</span>
-                  </label>
                 </div>
-              </div>
 
-              <motion.button
-                type="submit"
-                disabled={loading || success}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="w-full relative overflow-hidden h-12 rounded-xl font-bold text-sm tracking-wide uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-wait mt-4"
-                style={{
-                  background: success ? "#22c55e" : "linear-gradient(135deg, #f97316, #ea580c)",
-                  color: "white",
-                  boxShadow: success ? "0 0 20px rgba(34,197,94,0.4)" : "0 0 20px rgba(234,88,12,0.3)"
-                }}
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span className="font-mono">INITIALIZING...</span>
-                  </div>
-                ) : success ? (
-                  <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="flex items-center gap-2"
-                  >
-                    <ShieldCheck size={18} />
-                    <span className="font-mono">ACCESS_GRANTED</span>
-                  </motion.div>
-                ) : (
-                  <>
-                    <span>Initiate Session</span>
-                    <ChevronRight size={16} className="bg-white/20 rounded-full p-0.5" />
-                  </>
-                )}
-              </motion.button>
-            </form>
-
-            <div className="mt-8 flex items-center justify-between text-[10px] font-mono text-white/30 border-t border-white/5 pt-4">
-              <div className="flex gap-4">
-                <Link to="/privacy" className="hover:text-orange-500 transition-colors">PRIVACY_PROTOCOL</Link>
-                <Link to="/terms" className="hover:text-orange-500 transition-colors">T&C_V1.0</Link>
-              </div>
-              <a href="mailto:access@shinelstudios.com" className="hover:text-white transition-colors">NEED_ASSISTANCE?</a>
+                {/* Cyberpunk Scanline */}
+                <div className="absolute inset-0 pointer-events-none opacity-[0.02] z-20"
+                    style={{ background: "repeating-linear-gradient(0deg, transparent, transparent 1px, #fff 2px)" }}
+                />
             </div>
-          </div>
-
-          {/* Scanline Effect Overlay for Card */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03] z-20"
-            style={{ background: "repeating-linear-gradient(0deg, transparent, transparent 2px, #fff 3px)" }}
-          />
-        </div>
-
-        {/* Decorative corner accents */}
-        <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-orange-500/30 -translate-x-2 -translate-y-2 rounded-tl-lg pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-orange-500/30 translate-x-2 translate-y-2 rounded-br-lg pointer-events-none" />
-      </motion.div>
+            
+            {/* Ambient HUD elements fixed to card corners */}
+            <div className="absolute -top-10 -right-10 w-24 h-24 border border-white/5 rounded-full flex items-center justify-center rotate-45 pointer-events-none">
+                <div className="w-12 h-[1px] bg-white/10" />
+            </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
+}
+
+function RefreshCircle() {
+    return (
+        <div className="relative w-5 h-5">
+            <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                className="w-full h-full border-2 border-white/20 border-t-white rounded-full"
+            />
+        </div>
+    );
 }
 

@@ -9,7 +9,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Facebook, Twitter, Instagram, Linkedin, Mail, MessageCircle,
   Send, Heart, Sparkles, TrendingUp, Users, Award, Clock,
-  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle, Radio, HelpCircle,
+  CheckCircle2, ArrowUpRight, ExternalLink, MapPin, AlertTriangle, Radio, HelpCircle, User,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import logoLight from "../assets/logo_light.png"; // WHITE logo (dark bg)

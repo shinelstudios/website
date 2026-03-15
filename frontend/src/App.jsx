@@ -99,6 +99,7 @@ const AdminLeadsPage = React.lazy(() => import("./components/AdminLeadsPage.jsx"
 const WeeklyAuditLog = React.lazy(() => import("./components/WeeklyAuditLog.jsx"));
 const AdminBlogPage = React.lazy(() => import("./components/AdminBlogPage.jsx"));
 const AdminBlogEditor = React.lazy(() => import("./components/AdminBlogEditor.jsx"));
+const MediaHub = React.lazy(() => import("./components/hub/MediaHub.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
@@ -214,7 +215,9 @@ function Layout() {
       >
         <Outlet />
       </main>
-      <SiteFooter isDark={isDark} />
+      {!location.pathname.startsWith("/dashboard") && !location.pathname.startsWith("/studio") && (
+        <SiteFooter isDark={isDark} />
+      )}
       <Toaster />
       <CookieConsent />
       <CommandPalette />
@@ -433,11 +436,11 @@ export default function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="clients" element={<AdminClientsPage />} />
             <Route path="leads" element={<AdminLeadsPage />} />
-            <Route path="videos" element={<AdminVideosPage />} />
-
-            <Route path="thumbnails" element={<AdminThumbnailsPage />} />
+            <Route path="videos" element={<Navigate to="/dashboard/media?tab=videos" replace />} />
+            <Route path="thumbnails" element={<Navigate to="/dashboard/media?tab=thumbnails" replace />} />
             <Route path="blog" element={<AdminBlogPage />} />
             <Route path="blog/:slug" element={<AdminBlogEditor />} />
+            <Route path="media" element={<MediaHub />} />
             <Route path="audits" element={<WeeklyAuditLog />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>

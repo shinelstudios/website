@@ -21,7 +21,8 @@ import {
     Mail,
     ExternalLink,
     Settings as SettingsIcon,
-    FileText
+    FileText,
+    Archive
 } from "lucide-react";
 
 
@@ -92,18 +93,11 @@ export default function ManagementHub() {
         },
 
         {
-            id: 'videos',
-            label: 'Video Manager',
-            path: '/dashboard/videos',
-            icon: Video,
-            roles: ['admin', 'editor']
-        },
-        {
-            id: 'thumbnails',
-            label: 'Thumbnail Manager',
-            path: '/dashboard/thumbnails',
-            icon: ImageIcon,
-            roles: ['admin', 'artist']
+            id: 'media',
+            label: 'Media Center',
+            path: '/dashboard/media',
+            icon: Archive,
+            roles: ['admin', 'editor', 'artist']
         },
         {
             id: 'blog',
@@ -202,7 +196,7 @@ export default function ManagementHub() {
     }, [location.pathname, isAdmin, navigate, tabs, activeTabs, userRoles]);
 
     return (
-        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex pt-20">
+        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex">
             {/* --- MOBILE TOGGLE --- */}
             <button
                 onClick={() => setSidebarOpen(true)}

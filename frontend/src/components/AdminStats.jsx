@@ -33,7 +33,18 @@ export default function AdminStats() {
     const [keyStatus, setKeyStatus] = useState(null);
     const [quotaHealth, setQuotaHealth] = useState([]);
     const [busy, setBusy] = useState(false);
-    const [showWorkspace, setShowWorkspace] = useState(true);
+    const [showWorkspace, setShowWorkspace] = useState(() => {
+        try {
+            return localStorage.getItem("workspace_hub_visible") !== "false";
+        } catch { return true; }
+    });
+
+    const handleHideWorkspace = () => {
+        setShowWorkspace(false);
+        try {
+            localStorage.setItem("workspace_hub_visible", "false");
+        } catch { }
+    };
 
     const { stats: allClients, getGrowth, liveMode, setLiveMode } = useClientStats();
 
@@ -391,7 +402,7 @@ export default function AdminStats() {
                                 className="p-8 rounded-[32px] bg-gradient-to-br from-orange-600 to-orange-500 text-white shadow-2xl shadow-orange-900/20 relative overflow-hidden group"
                             >
                                 <button
-                                    onClick={() => setShowWorkspace(false)}
+                                    onClick={handleHideWorkspace}
                                     className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/10 text-white/50 hover:text-white transition-all z-20"
                                 >
                                     <X size={16} />
@@ -410,9 +421,9 @@ export default function AdminStats() {
                                             <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                             CORE_SYSTEM_STABLE
                                         </div>
-                                        <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-center border border-white/10 transition-all">
+                                        <Link to="/dashboard/audits" className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase tracking-widest text-center border border-white/10 transition-all">
                                             View System Logs
-                                        </button>
+                                        </Link>
                                     </div>
                                 </div>
                             </motion.div>

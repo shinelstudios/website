@@ -102,14 +102,14 @@ const WeeklyAuditLog = () => {
 
                                 <div className="flex flex-wrap gap-4">
                                     <AuditStat label="Active Creators" value={audit.activeCreators} icon={Users} color="text-blue-500" />
-                                    <AuditStat label="Total Subs" value={(audit.totalSubscribers / 1000000).toFixed(1) + 'M'} icon={TrendingUp} color="text-green-500" />
+                                    <AuditStat label="Total Reach" value={((audit.totalReach || (audit.totalSubscribers + (audit.totalInstagramFollowers || 0))) / 1000000).toFixed(1) + 'M'} icon={TrendingUp} color="text-green-500" />
                                     <AuditStat label="Sync Health" value={`${audit.syncErrors === 0 ? 'PERFECT' : audit.syncErrors + ' Errors'}`} icon={ShieldCheck} color={audit.syncErrors === 0 ? 'text-green-500' : 'text-red-500'} />
                                 </div>
                             </div>
 
                             <div className="mt-8 pt-8 border-t border-[var(--border)] grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
-                                    <p className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Total Reach</p>
+                                    <p className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Total Views</p>
                                     <p className="text-xl font-black text-white">{(audit.totalViews / 1000000000).toFixed(2)}B</p>
                                 </div>
                                 <div>

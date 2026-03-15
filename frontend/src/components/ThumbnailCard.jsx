@@ -28,6 +28,9 @@ const ThumbnailCard = ({
     onCopyUrl,
     flashKey
 }) => {
+    // Safety check for undefined thumbnail data
+    if (!t) return null;
+
     const isFlash = flashKey === String(t.id);
 
     const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
