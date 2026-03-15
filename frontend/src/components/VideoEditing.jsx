@@ -32,7 +32,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Cache key (ETag) ---------------- */
-const STORAGE_KEY = "videosCacheV2";
+const STORAGE_KEY = "videosCacheV3";
 
 /* ---------------- Helpers (copied / extended) ---------------- */
 function formatViews(count) {
@@ -107,20 +107,6 @@ async function fetchJSONWithETag(
   throw lastErr || new Error("Network error");
 }
 
-function extractYouTubeId(url = "") {
-  if (!url) return null;
-  try {
-    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const m = u.pathname.match(/\/shorts\/([^/]+)/);
-      if (m) return m[1];
-    }
-  } catch { }
-  return null;
-}
-
 /* ---------------- Main page ---------------- */
 export default function VideoEditing() {
   // ONLY server-managed videos (no hard-coded imports)
@@ -166,14 +152,16 @@ export default function VideoEditing() {
         const normalized = data.videos.map((v) => {
           // PRIMARY URL MUST WIN
           const youtubeId =
-            extractYouTubeId(v.primaryUrl) ||
+            extractYouTubeId(v.youtube_url || v.primaryUrl) ||
             extractYouTubeId(v.creatorUrl) ||
+            v.video_id ||
             v.videoId ||
             v.youtubeId;
 
           return {
             id:
               v.id ||
+              v.video_id ||
               v.videoId ||
               v.youtubeId ||
               v.primaryUrl ||
@@ -182,7 +170,7 @@ export default function VideoEditing() {
             category: v.category || "OTHER",
             subcategory: v.subcategory || "",
             kind: v.kind || "LONG",
-            primaryUrl: v.primaryUrl || "",
+            primaryUrl: v.youtube_url || v.primaryUrl || "",
             creatorUrl: v.creatorUrl || "",
             youtubeId, // <-- now based on primaryUrl first
             views: Number(v.youtubeViews ?? v.views ?? 0),
@@ -195,6 +183,9 @@ export default function VideoEditing() {
                   ? v.hypeScore
                   : null,
             thumb:
+              v.image_url ||
+              v.imageUrl ||
+              v.image ||
               v.thumb ||
               (youtubeId
                 ? (["t-vPWTJUIO4", "R2jcaMDAvOU"].includes(youtubeId)

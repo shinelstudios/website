@@ -26,7 +26,7 @@ import { AUTH_BASE } from "../config/constants";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 // LocalStorage cache key for this page
-const STORAGE_KEY = "shortsCacheV2";
+const STORAGE_KEY = "shortsCacheV3";
 
 /* ---------------- Helpers ---------------- */
 
@@ -283,8 +283,9 @@ export default function Shorts() {
         const normalized = data.videos.map((v) => {
           // PRIMARY URL MUST WIN for what we play
           const youtubeId =
-            extractYouTubeId(v.primaryUrl) ||
+            extractYouTubeId(v.youtube_url || v.primaryUrl) ||
             extractYouTubeId(v.creatorUrl) ||
+            v.video_id ||
             v.videoId ||
             v.youtubeId;
 
@@ -293,6 +294,7 @@ export default function Shorts() {
           return {
             id:
               v.id ||
+              v.video_id ||
               v.videoId ||
               v.youtubeId ||
               v.primaryUrl ||
@@ -301,7 +303,7 @@ export default function Shorts() {
             category: v.category || "OTHER", // kept for reference
             subcategory: v.subcategory || "Uncategorized",
             kind,
-            primaryUrl: v.primaryUrl || "",
+            primaryUrl: v.youtube_url || v.primaryUrl || "",
             creatorUrl: v.creatorUrl || "",
             youtubeId,
             views: Number(v.youtubeViews ?? v.views ?? 0),
@@ -314,6 +316,9 @@ export default function Shorts() {
                   ? v.hypeScore
                   : null,
             thumb:
+              v.image_url ||
+              v.imageUrl ||
+              v.image ||
               v.thumb ||
               (youtubeId
                 ? (["t-vPWTJUIO4", "R2jcaMDAvOU"].includes(youtubeId)
