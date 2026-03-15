@@ -40,6 +40,8 @@ binding = "DB"
 database_name = "shinel-db"
 database_id = "907df36d-0254-4744-8473-bcfcc4aa8e0c"
 
+# --- R2 Buckets --- (Removed: using YouTube Mirror instead)
+
 # --- Cron Triggers ---
 [triggers]
 crons = ["*/30 * * * *"] # Every 30 mins

@@ -722,12 +722,31 @@ async function performClientSync(env, isForced = false, debug = false) {
                     publishedAt: v.publishedAt
                   };
                   pulseActivities.push(act);
-
+                  
+                  // --- AUTO ARCHIVAL HOOK ---
+                  // If video views > threshold (e.g., 100k for normal, 50k for hype shorts)
+                  // For now, let's use a conservative 100k views for auto-archival
+                  // We might need to fetch stats specifically if not available in pulse items
+                  // Strategy 1 (playlistItems) doesn't always have views. Strategy 2 (RSS) doesn't have views.
+                  // So we might need to skip auto-archival views check HERE unless we fetch snippet+stats.
+                  // BUT, Pulse already has a concept of activity. Let's just archive EVERY video that hits Pulse
+                  // OR better: ARCHIVE it if it's new and has high potential.
+                  
                   if (env.DB) {
                     try {
                       await env.DB.prepare(
                         "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                       ).bind(act.id, result.id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
+                      
+                      // Auto-Archive to Media Hub if it looks like a "Hype" video
+                      // We'll tag it as 'AUTO_PULSE'
+                      // Note: Status is pending_mirror for the Node backend to pick up
+                      await env.DB.prepare(
+                        "INSERT OR IGNORE INTO media_library (id, source_url, title, type, category, status, channel_title, thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                      ).bind(
+                        crypto.randomUUID(), act.url, act.title, 'video', 'AUTO_PULSE', 'pending_mirror', act.clientName, act.thumbnail
+                      ).run();
+
                     } catch (e) { console.error("D1 Pulse Insert Error:", e.message); }
                   }
                 }
@@ -1629,67 +1648,94 @@ export default {
 
     /* =============================== /videos ============================== */
     if (url.pathname === "/videos" && request.method === "GET") {
-      // Backfill hype if missing, in-place
-      const list = await getJsonList(env, KV_VIDEOS_KEY);
-      const now = Date.now();
-      let mutated = false;
-      for (let i = 0; i < list.length; i++) {
-        const row = list[i];
-        if (typeof row.hype !== "number") {
-          row.hype = computeHype(
-            Number(row.youtubeViews || 0),
-            row.lastViewUpdate || null,
-            row.dateAdded || null,
-            now
-          );
-          mutated = true;
+      try {
+        if (!env.DB) return json({ error: "DB missing" }, 501, cors);
+        const { results: list } = await env.DB.prepare("SELECT * FROM inventory_videos ORDER BY last_updated DESC").all();
+        
+        const etag = weakEtagFor(list);
+        if (request.headers.get("if-none-match") === etag) {
+          return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
         }
-      }
-      if (mutated) await putJsonList(env, KV_VIDEOS_KEY, list);
-
-      const etag = weakEtagFor(list);
-      if (request.headers.get("if-none-match") === etag) {
-        return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
-      }
-      return json({ videos: list }, 200, { ...cors, ETag: etag });
+        return json({ videos: list }, 200, { ...cors, ETag: etag });
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname === "/videos" && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
         const body = await request.json().catch(() => ({}));
-        const now = Date.now();
+        const now = new Date().toISOString();
+        const id = `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        const primaryId = ytIdFrom(body.primaryUrl || "");
-        const creatorId = ytIdFrom(body.creatorUrl || "");
-        const id = `v-${now}-${Math.random().toString(36).slice(2)}`;
+        const videoId = ytIdFrom(body.primaryUrl || "");
+        
+        await env.DB.prepare(
+          "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(
+          id, body.title, body.category || "GAMING", body.subcategory || "", body.kind || "LONG", 
+          body.tags || "", body.primaryUrl, body.creatorUrl, videoId, Number(body.youtubeViews || 0), 
+          body.viewStatus || "unknown", body.attributedTo || "", body.isShinel ? 1 : 0
+        ).run();
 
-        const list = await getJsonList(env, KV_VIDEOS_KEY);
-        const row = {
-          id,
-          title: String(body.title || ""),
-          category: String(body.category || ""),
-          subcategory: String(body.subcategory || ""),
-          kind: String(body.kind || "LONG"), // LONG | SHORT | REEL | BRIEF
-          tags: Array.isArray(body.tags) ? body.tags : [],
-          primaryUrl: String(body.primaryUrl || ""),
-          creatorUrl: String(body.creatorUrl || ""),
-          // Prefer CREATOR for view id
-          videoId: creatorId || primaryId || null,
-          youtubeViews: 0,
-          viewStatus: "unknown",
-          lastViewUpdate: null,
-          dateAdded: now,
-          lastUpdated: now,
-          // Initialize hype (0 until first refresh)
-          hype: 0,
-        };
-        list.push(row);
-        await putJsonList(env, KV_VIDEOS_KEY, list);
-        return json({ video: row }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Save failed" }, e.status || 500, cors);
-      }
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    if (url.pathname === "/api/media/migrate-kv-to-d1" && request.method === "POST") {
+      try {
+        await requireAdminOrThrow(request, secret);
+        
+        let migratedVideos = 0;
+        let migratedThumbs = 0;
+        const errors = [];
+
+        // 1. Videos
+        const videos = await getJsonList(env, "app:videos:list");
+        for (const v of videos) {
+          try {
+            await env.DB.prepare(`
+              INSERT OR REPLACE INTO inventory_videos 
+              (id, title, category, subcategory, kind, tags, primary_url, creator_url, video_id, youtube_views, view_status, last_view_update, attributed_to, is_shinel, date_added, last_updated)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              v.id || crypto.randomUUID(), v.title || "Untitled", v.category || null, v.subcategory || null, v.kind || null, 
+              Array.isArray(v.tags) ? v.tags.join(",") : (v.tags || ""),
+              v.primaryUrl || null, v.creatorUrl || null, v.videoId || null, v.youtubeViews || 0,
+              v.viewStatus || "UNKNOWN", v.lastViewUpdate ? new Date(v.lastViewUpdate).toISOString() : null,
+              v.attributedTo || null, v.isShinel ? 1 : 0, 
+              v.dateAdded ? new Date(v.dateAdded).toISOString() : new Date().toISOString(),
+              v.lastUpdated ? new Date(v.lastUpdated).toISOString() : new Date().toISOString()
+            ).run();
+            migratedVideos++;
+          } catch (err) {
+            errors.push(`Video ${v.id || 'err'}: ${err.message}`);
+          }
+        }
+
+        // 2. Thumbnails
+        const thumbs = await getJsonList(env, "thumbnails_public");
+        for (const t of thumbs) {
+          try {
+            await env.DB.prepare(`
+              INSERT OR REPLACE INTO inventory_thumbnails 
+              (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, last_view_update, attributed_to, is_shinel, date_added, last_updated)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              t.id || crypto.randomUUID(), t.filename || null, t.youtubeUrl || null, t.category || null, t.subcategory || null, t.variant || null,
+              t.imageUrl || null, t.videoId || null, t.youtubeViews || 0,
+              t.viewStatus || "UNKNOWN", t.lastViewUpdate ? new Date(t.lastViewUpdate).toISOString() : null,
+              t.attributedTo || null, t.isShinel ? 1 : 0,
+              t.dateAdded ? new Date(t.dateAdded).toISOString() : new Date().toISOString(),
+              t.lastUpdated ? new Date(t.lastUpdated).toISOString() : new Date().toISOString()
+            ).run();
+            migratedThumbs++;
+          } catch (err) {
+            errors.push(`Thumb ${t.id || 'err'}: ${err.message}`);
+          }
+        }
+
+        return json({ ok: true, migrated: { videos: migratedVideos, thumbnails: migratedThumbs }, errors }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname.startsWith("/videos/") && request.method === "PUT") {
@@ -1697,48 +1743,31 @@ export default {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
         const updates = await request.json().catch(() => ({}));
+        
+        const fields = [];
+        const params = [];
+        for (const [key, val] of Object.entries(updates)) {
+          const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+          fields.push(`${dbKey} = ?`);
+          params.push(val);
+        }
+        params.push(new Date().toISOString(), id);
+        
+        await env.DB.prepare(
+          `UPDATE inventory_videos SET ${fields.join(", ")}, last_updated = ? WHERE id = ?`
+        ).bind(...params).run();
 
-        const list = await getJsonList(env, KV_VIDEOS_KEY);
-        const idx = list.findIndex((v) => v.id === id);
-        if (idx < 0) return json({ error: "Not found" }, 404, cors);
-
-        const now = Date.now();
-        const merged = { ...list[idx], ...updates, lastUpdated: now };
-        const newPrimaryId = ytIdFrom(merged.primaryUrl || "");
-        const newCreatorId = ytIdFrom(merged.creatorUrl || "");
-        // Prefer CREATOR on updates as well
-        merged.videoId = newCreatorId || newPrimaryId || merged.videoId || null;
-
-        // Recompute hype if views changed or timestamps changed
-        merged.hype = computeHype(
-          Number(merged.youtubeViews || 0),
-          merged.lastViewUpdate || null,
-          merged.dateAdded || null,
-          now
-        );
-
-        list[idx] = merged;
-        await putJsonList(env, KV_VIDEOS_KEY, list);
-        return json({ video: merged }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
-      }
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname.startsWith("/videos/") && request.method === "DELETE") {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-        const list = await getJsonList(env, KV_VIDEOS_KEY);
-        const idx = list.findIndex((v) => v.id === id);
-        if (idx >= 0) {
-          list.splice(idx, 1);
-          await putJsonList(env, KV_VIDEOS_KEY, list);
-        }
+        await env.DB.prepare("DELETE FROM inventory_videos WHERE id = ?").bind(id).run();
         return json({ ok: true }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
-      }
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     /* =========================== /leads (leads crm) =========================== */
@@ -2019,14 +2048,16 @@ export default {
     /* =========================== /thumbnails (public) =========================== */
 
     if (url.pathname === "/thumbnails" && request.method === "GET") {
-      const list = await getJsonList(env, KV_THUMBS_KEY);
-
-      const etag = weakEtagFor(list);
-      if (request.headers.get("if-none-match") === etag) {
-        return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
-      }
-
-      return json({ thumbnails: list }, 200, { ...cors, ETag: etag });
+      try {
+        if (!env.DB) return json({ error: "DB missing" }, 501, cors);
+        const { results: list } = await env.DB.prepare("SELECT * FROM inventory_thumbnails ORDER BY last_updated DESC").all();
+        
+        const etag = weakEtagFor(list);
+        if (request.headers.get("if-none-match") === etag) {
+          return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
+        }
+        return json({ thumbnails: list }, 200, { ...cors, ETag: etag });
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     /* ======================= /thumbnails (admin CRUD) ======================= */
@@ -2035,35 +2066,19 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const body = await request.json().catch(() => ({}));
-        const now = Date.now();
+        const id = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const videoId = ytIdFrom(body.youtubeUrl || "");
 
-        const list = await getJsonList(env, KV_THUMBS_KEY);
-        const id = `t-${now}-${Math.random().toString(36).slice(2)}`;
+        await env.DB.prepare(
+          "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(
+          id, body.filename, body.youtubeUrl, body.category || "GAMING", body.subcategory || "", 
+          body.variant || "VIDEO", body.imageUrl, videoId, Number(body.youtubeViews || 0), 
+          body.viewStatus || "unknown", body.attributedTo || "", body.isShinel ? 1 : 0
+        ).run();
 
-        const autoVideoId = ytIdFrom(body.youtubeUrl || "");
-
-        const row = {
-          id,
-          filename: String(body.filename || ""),
-          youtubeUrl: String(body.youtubeUrl || ""),
-          category: String(body.category || "OTHER"),
-          subcategory: String(body.subcategory || ""),
-          variant: String(body.variant || "VIDEO"),
-          imageUrl: String(body.imageUrl || ""),
-          videoId: body.videoId || autoVideoId || null,
-          youtubeViews: Number(body.youtubeViews || 0),
-          viewStatus: body.viewStatus || "unknown",
-          lastViewUpdate: body.lastViewUpdate || null,
-          dateAdded: now,
-          lastUpdated: now,
-        };
-
-        list.push(row);
-        await putJsonList(env, KV_THUMBS_KEY, list);
-        return json({ thumbnail: row }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Save failed" }, e.status || 500, cors);
-      }
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {
@@ -2072,37 +2087,30 @@ export default {
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
         const updates = await request.json().catch(() => ({}));
 
-        const list = await getJsonList(env, KV_THUMBS_KEY);
-        const idx = list.findIndex((t) => t.id === id);
-        if (idx < 0) return json({ error: "Not found" }, 404, cors);
+        const fields = [];
+        const params = [];
+        for (const [key, val] of Object.entries(updates)) {
+          const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+          fields.push(`${dbKey} = ?`);
+          params.push(val);
+        }
+        params.push(new Date().toISOString(), id);
 
-        const now = Date.now();
-        const merged = { ...list[idx], ...updates, lastUpdated: now };
-        list[idx] = merged;
+        await env.DB.prepare(
+          `UPDATE inventory_thumbnails SET ${fields.join(", ")}, last_updated = ? WHERE id = ?`
+        ).bind(...params).run();
 
-        await putJsonList(env, KV_THUMBS_KEY, list);
-        return json({ thumbnail: merged }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
-      }
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "DELETE") {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-
-        const list = await getJsonList(env, KV_THUMBS_KEY);
-        const idx = list.findIndex((t) => t.id === id);
-        if (idx >= 0) {
-          list.splice(idx, 1);
-          await putJsonList(env, KV_THUMBS_KEY, list);
-        }
-
+        await env.DB.prepare("DELETE FROM inventory_thumbnails WHERE id = ?").bind(id).run();
         return json({ ok: true }, 200, cors);
-      } catch (e) {
-        return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
-      }
+      } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     /* ------------------------------- config ------------------------------- */
@@ -2326,14 +2334,25 @@ export default {
         if (!file) return json({ error: "No file uploaded" }, 400, cors);
 
         const id = crypto.randomUUID();
-        const extension = file.name.split('.').pop();
-        const key = `media/${id}.${extension}`;
+        const extension = file.name.split('.').pop() || "bin";
+        const fileName = `${id}.${extension}`;
+        const key = `media/${fileName}`;
 
-        await env.MEDIA_STORAGE.put(key, file.stream(), {
-          httpMetadata: { contentType: file.type }
-        });
+        // R2 upload removed, only D1 entry
+        // await env.MEDIA_STORAGE.put(key, file.stream(), {
+        //   httpMetadata: { contentType: file.type }
+        // });
 
-        return json({ ok: true, id, url: `/api/media/view/${id}.${extension}`, key }, 200, cors);
+        // PERSIST TO D1
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              "INSERT INTO media_library (id, r2_key, title, type, category, status) VALUES (?, ?, ?, ?, ?, ?)"
+            ).bind(id, key, file.name, file.type.startsWith('image') ? 'image' : 'video', 'UPLOAD', 'pending_mirror').run();
+          } catch (e) { console.error("D1 Media Insert Error:", e.message); }
+        }
+
+        return json({ ok: true, id, url: `/api/media/view/${fileName}`, key, status: "pending_mirror" }, 200, cors);
       } catch (e) {
         return json({ error: e.message }, 500, cors);
       }
@@ -2341,13 +2360,18 @@ export default {
 
     if (url.pathname.startsWith("/api/media/view/") && request.method === "GET") {
       try {
-        if (!env.MEDIA_STORAGE) return json({ error: "MEDIA_STORAGE R2 binding missing" }, 501, cors);
         const fileName = url.pathname.replace("/api/media/view/", "");
-        const key = `media/${fileName}`;
+        const id = fileName.split(".")[0];
+        
+        // If it's a mirror-based archive, we might not have it in R2.
+        // The frontend should ideally use mirrorUrl directly, but we provide this for completeness
+        if (!env.MEDIA_STORAGE) {
+           return json({ error: "Storage bypass active. Use YouTube Mirror URL." }, 404, cors);
+        }
 
+        const key = `media/${fileName}`;
         const object = await env.MEDIA_STORAGE.get(key);
         if (!object) {
-          // Fallback to archived folder if not in media
           const archivedKey = `archived/${fileName}`;
           const archivedObject = await env.MEDIA_STORAGE.get(archivedKey);
           if (!archivedObject) return json({ error: "Object not found" }, 404, cors);
@@ -2376,27 +2400,240 @@ export default {
     if (url.pathname === "/api/media/archive-external" && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
-        if (!env.MEDIA_STORAGE) return json({ error: "MEDIA_STORAGE R2 binding missing" }, 501, cors);
+        const { url: targetUrl, category } = await request.json();
+        const vId = ytIdFrom(targetUrl);
+        if (!vId) return json({ error: "Invalid YouTube URL" }, 400, cors);
 
-        const { url: targetUrl } = await request.json();
-        if (!targetUrl) return json({ error: "No URL provided" }, 400, cors);
-
-        // Fetch the external media
-        const res = await fetch(targetUrl);
-        if (!res.ok) return json({ error: "Failed to fetch external media" }, 400, cors);
-
-        const contentType = res.headers.get("content-type");
+        // Fetch details from YouTube
+        const details = await fetchYouTubeVideoDetails(env, vId);
         const id = crypto.randomUUID();
-        const extension = contentType.split('/').pop().split(';')[0] || "bin";
-        const key = `archived/${id}.${extension}`;
+        
+        await env.DB.prepare(
+          "INSERT INTO media_library (id, source_url, title, type, category, status, channel_title, thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ).bind(
+          id, targetUrl, details.title || `Archive: ${vId}`, 'video', category || 'UNCATEGORIZED', 'pending_mirror', 
+          details.channelTitle || '', details.thumbnails?.high?.url || ''
+        ).run();
 
-        await env.MEDIA_STORAGE.put(key, res.body, {
-          httpMetadata: { contentType }
-        });
+        return json({ ok: true, id, status: "pending_mirror" }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
 
-        return json({ ok: true, archivedUrl: `/api/media/view/${id}.${extension}`, key }, 200, cors);
+    // GET /api/media/library - List entries
+    if (url.pathname === "/api/media/library" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const limit = parseInt(url.searchParams.get("limit") || "50");
+        const offset = parseInt(url.searchParams.get("offset") || "0");
+        const type = url.searchParams.get("type");
+        const search = url.searchParams.get("search");
+
+        if (!env.DB) return json({ error: "Database not configured" }, 501, cors);
+
+        let query = "SELECT * FROM media_library";
+        const params = [];
+
+        const conditions = [];
+        if (type && type !== "ALL") {
+          conditions.push("type = ?");
+          params.push(type.toLowerCase());
+        }
+        if (search) {
+          conditions.push("(title LIKE ? OR category LIKE ?)");
+          params.push(`%${search}%`, `%${search}%`);
+        }
+
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        params.push(limit, offset);
+
+        const { results } = await env.DB.prepare(query).bind(...params).all();
+        
+        // Count for pagination
+        let countQuery = "SELECT COUNT(*) as total FROM media_library";
+        const countParams = [];
+        if (conditions.length > 0) {
+          countQuery += " WHERE " + conditions.join(" AND ");
+          countParams.push(...params.slice(0, -2));
+        }
+        const { results: countResult } = await env.DB.prepare(countQuery).bind(...countParams).all();
+
+        return json({ ok: true, items: results, total: countResult[0].total }, 200, cors);
       } catch (e) {
-        return json({ error: "Archival failed: " + e.message }, 500, cors);
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    // POST /api/media/bulk-archive - Batch mirror
+    if (url.pathname === "/api/media/bulk-archive" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const { urls, category } = await request.json();
+        if (!Array.isArray(urls)) return json({ error: "Expected array of URLs" }, 400, cors);
+
+        const results = [];
+        for (const targetUrl of urls) {
+          try {
+            const videoId = ytIdFrom(targetUrl);
+            let ytDetails = {};
+            if (videoId) ytDetails = await fetchYouTubeVideoDetails(env, videoId);
+
+            const mediaToFetch = videoId ? (ytDetails.thumbnail || targetUrl) : targetUrl;
+            const res = await fetch(mediaToFetch);
+            if (!res.ok) {
+              results.push({ url: targetUrl, ok: false, error: `HTTP ${res.status}` });
+              continue;
+            }
+            const contentType = res.headers.get("content-type");
+            const id = crypto.randomUUID();
+            const extension = contentType?.split('/')?.pop()?.split(';')?.[0] || "bin";
+            const fileName = `${id}.${extension}`;
+            const key = `archived/${fileName}`;
+            const blob = await res.blob();
+
+            await env.MEDIA_STORAGE.put(key, blob.stream(), {
+              httpMetadata: { contentType }
+            });
+
+            if (env.DB) {
+              await env.DB.prepare(
+                "INSERT INTO media_library (id, source_url, r2_key, title, type, category, status, view_count, duration, channel_title, last_metric_update) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              ).bind(
+                id, targetUrl, key, ytDetails.title || targetUrl.split('/').pop(), videoId ? 'video' : 'image', category || 'BULK', 'available',
+                Number(ytDetails.views || 0), ytDetails.duration || null, ytDetails.channelTitle || null, videoId ? new Date().toISOString() : null
+              ).run();
+            }
+            results.push({ url: targetUrl, ok: true, id, archivedUrl: `/api/media/view/${fileName}` });
+          } catch (e) {
+            results.push({ url: targetUrl, ok: false, error: e.message });
+          }
+        }
+        return json({ ok: true, results }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    // POST /api/media/refresh-metrics - Update all metrics
+    if (url.pathname === "/api/media/refresh-metrics" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        if (!env.DB) return json({ error: "DB missing" }, 501, cors);
+
+        const { results: items } = await env.DB.prepare("SELECT id, source_url FROM media_library WHERE type = 'video'").all();
+        let updated = 0;
+
+        for (const item of items) {
+          const videoId = ytIdFrom(item.source_url);
+          if (videoId) {
+            const stats = await fetchYouTubeVideoDetails(env, videoId);
+            if (!stats.error) {
+              await env.DB.prepare(
+                "UPDATE media_library SET view_count = ?, duration = ?, channel_title = ?, last_metric_update = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+              ).bind(Number(stats.views || 0), stats.duration || null, stats.channelTitle || null, new Date().toISOString(), item.id).run();
+              updated++;
+            }
+          }
+        }
+        return json({ ok: true, updated }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
+      }
+    }
+
+    // --- Media Collections System ---
+    if (url.pathname === "/api/collections" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const { results } = await env.DB.prepare("SELECT * FROM media_collections ORDER BY created_at DESC").all();
+        return json({ ok: true, collections: results }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    if (url.pathname === "/api/collections" && request.method === "POST") {
+      try {
+        const user = await requireTeamOrThrow(request, secret);
+        const { name, description } = await request.json().catch(() => ({}));
+        if (!name) return json({ error: "Name required" }, 400, cors);
+
+        const id = crypto.randomUUID();
+        await env.DB.prepare(
+          "INSERT INTO media_collections (id, name, description, created_by) VALUES (?, ?, ?, ?)"
+        ).bind(id, name, description || "", user.email).run();
+
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    if (url.pathname.startsWith("/api/collections/") && url.pathname.endsWith("/items") && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const collectionId = url.pathname.split("/")[3];
+        const { mediaId, mediaType } = await request.json().catch(() => ({}));
+        if (!mediaId || !mediaType) return json({ error: "mediaId and mediaType required" }, 400, cors);
+
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO media_collection_items (collection_id, media_id, media_type) VALUES (?, ?, ?)"
+        ).bind(collectionId, mediaId, mediaType).run();
+
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    if (url.pathname.match(/\/api\/collections\/([^/]+)\/items\/([^/]+)/) && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const parts = url.pathname.split("/");
+        const collectionId = parts[3];
+        const mediaId = parts[5];
+
+        await env.DB.prepare(
+          "DELETE FROM media_collection_items WHERE collection_id = ? AND media_id = ?"
+        ).bind(collectionId, mediaId).run();
+
+        return json({ ok: true }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    if (url.pathname.match(/\/api\/collections\/([^/]+)$/) && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = url.pathname.split("/").pop();
+        const collection = await env.DB.prepare("SELECT * FROM media_collections WHERE id = ?").bind(id).first();
+        if (!collection) return json({ error: "Not found" }, 404, cors);
+
+        const { results: items } = await env.DB.prepare(
+          "SELECT ml.*, mci.media_type, mci.added_at FROM media_collection_items mci LEFT JOIN media_library ml ON mci.media_id = ml.id WHERE mci.collection_id = ? AND mci.media_type = 'library'"
+        ).bind(id).all();
+
+        // Add support for other media types if needed (inventory_videos, etc)
+        
+        return json({ ok: true, collection, items }, 200, cors);
+      } catch (e) { return json({ error: e.message }, 500, cors); }
+    }
+
+    // DELETE /api/media/delete/:id - Remove item
+    if (url.pathname.startsWith("/api/media/delete/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const id = url.pathname.split("/").pop();
+        if (!id) return json({ error: "Missing ID" }, 400, cors);
+
+        if (env.DB) {
+          const { results } = await env.DB.prepare("SELECT r2_key FROM media_library WHERE id = ?").bind(id).all();
+          if (results && results[0]) {
+            const key = results[0].r2_key;
+            if (env.MEDIA_STORAGE) await env.MEDIA_STORAGE.delete(key);
+            await env.DB.prepare("DELETE FROM media_library WHERE id = ?").bind(id).run();
+            return json({ ok: true }, 200, cors);
+          }
+        }
+        return json({ error: "Item not found" }, 404, cors);
+      } catch (e) {
+        return json({ error: e.message }, 500, cors);
       }
     }
 

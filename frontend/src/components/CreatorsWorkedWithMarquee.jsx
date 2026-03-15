@@ -196,7 +196,6 @@ const CreatorsWorkedWithMarquee = ({
       return items;
     });
   }, [creatorsProp, stats, loading]);
-  if (!finalCreators || finalCreators.length === 0) return null;
 
   // Platform-specific reach calculations
   const ytReach = useMemo(() => {
@@ -246,7 +245,7 @@ const CreatorsWorkedWithMarquee = ({
     };
 
     const rafId = requestAnimationFrame(updateMarqueeMetrics);
-    // ... rest of the effect ...
+    
     let ro;
     if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
       ro = new ResizeObserver(updateMarqueeMetrics);
@@ -263,7 +262,6 @@ const CreatorsWorkedWithMarquee = ({
     }
   }, [speedPps, gapRem]);
 
-
   // Pause when scrolled out of view
   useEffect(() => {
     if (!trackRef.current || typeof window === 'undefined' || !("IntersectionObserver" in window)) {
@@ -278,6 +276,8 @@ const CreatorsWorkedWithMarquee = ({
     io.observe(trackRef.current);
     return () => io.disconnect();
   }, []);
+
+  if (!finalCreators || finalCreators.length === 0) return null;
 
 
   // Determine animation states
