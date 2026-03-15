@@ -7,6 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Eye } from "lucide-react";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
@@ -193,6 +194,7 @@ export default function VideoEditing() {
                   ? "https://placehold.co/600x400/202020/white?text=No+Preview"
                   : `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`)
                 : null),
+            shinelUrl,
           };
         });
 
@@ -376,7 +378,13 @@ export default function VideoEditing() {
             </div>
           </div>
 
-          {filteredVideos.length === 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 py-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : filteredVideos.length === 0 ? (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-alt)] p-6 text-center">
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 No videos in this category yet. Try another filter or add more
@@ -410,6 +418,26 @@ export default function VideoEditing() {
   );
 }
 
+const SkeletonCard = () => (
+  <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
+    <div className="w-full aspect-[16/9] bg-[var(--text-muted)]/10" />
+    <div className="p-4 sm:p-5 space-y-3">
+      <div className="flex gap-2">
+        <div className="h-5 bg-[var(--text-muted)]/10 rounded w-20"></div>
+        <div className="h-5 bg-[var(--text-muted)]/10 rounded w-14"></div>
+      </div>
+      <div className="h-6 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded w-16"></div>
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded w-24"></div>
+      </div>
+      <div className="pt-2">
+        <div className="h-9 bg-[var(--text-muted)]/10 rounded w-24"></div>
+      </div>
+    </div>
+  </div>
+);
+
 /* ---------------- Card ---------------- */
 function VideoCard({ v, onPlay }) {
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -419,14 +447,6 @@ function VideoCard({ v, onPlay }) {
 
 
   // Hype: prefer API-provided; else cheap fallback based on views + freshness
-  const hype = useMemo(() => {
-    if (typeof v.hype === "number") return v.hype;
-    const base =
-      typeof v.hypeScore === "number"
-        ? v.hypeScore
-        : computeFallbackHype(v.views, v.lastViewUpdate);
-    return base;
-  }, [v.hype, v.hypeScore, v.views, v.lastViewUpdate]);
 
   return (
     <article
@@ -479,14 +499,6 @@ function VideoCard({ v, onPlay }) {
           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-[var(--surface-alt)] text-[var(--text-muted)] border-[var(--border)]">
             {v.kind || "LONG"}
           </span>
-          {hype != null && (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-amber-500/15 text-amber-300 border-amber-500/30"
-              title="Hype (engagement momentum)"
-            >
-              🔥 {formatHype(hype)}
-            </span>
-          )}
         </div>
 
         <h3 className="text-[var(--text)] text-sm sm:text-base font-semibold line-clamp-2 min-h-[2.5rem] leading-tight">
@@ -504,7 +516,10 @@ function VideoCard({ v, onPlay }) {
                   : ""
               }
             >
-              👁️‍🗨️ <span className="font-medium">{formattedViews}</span>
+              <div className="flex items-center gap-1">
+                <Eye size={12} className="opacity-70" />
+                <span className="font-medium text-[var(--text-muted)]">{formattedViews}</span>
+              </div>
             </div>
           )}
           {v.tags?.length > 0 && (
@@ -540,8 +555,14 @@ function VideoCard({ v, onPlay }) {
 }
 
 /* ---------------- Inline Modal Player ---------------- */
-function VideoPlayerModal({ open, youtubeId, title, onClose }) {
+function VideoPlayerModal({ open, youtubeId, shinelUrl, title, onClose }) {
   const refBackdrop = useRef(null);
+
+  // If we have a mirrorUrl that is NOT a YouTube ID, it might be a direct link
+  const isDirectVideo = shinelUrl && !extractYouTubeId(shinelUrl) && (
+    shinelUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i) || 
+    shinelUrl.includes("drive.google.com/file/d/") // handle drive links if shared as raw (though uncommon for iframe)
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -566,21 +587,29 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
       aria-modal="true"
       aria-label={title || "Video player"}
       onMouseDown={(e) => {
-        // close when clicking the backdrop (not the dialog box)
         if (e.target === refBackdrop.current) onClose();
       }}
       style={{
-        background: "rgba(0,0,0,0.6)",
+        background: "rgba(0,0,0,0.85)",
+        backdropFilter: "blur(8px)",
         transition: "opacity 150ms ease-out",
       }}
     >
       <div
-        className="relative w-full max-w-5xl rounded-xl overflow-hidden border"
-        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        className="relative w-full max-w-5xl rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+        style={{ background: "#000" }}
       >
-        {/* 16:9 responsive iframe box */}
-        <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-          {youtubeId ? (
+        {/* 16:9 responsive box */}
+        <div className="relative w-full bg-black/40" style={{ paddingTop: "56.25%" }}>
+          {isDirectVideo ? (
+            <video
+              src={shinelUrl}
+              controls
+              autoPlay
+              className="absolute top-0 left-0 w-full h-full"
+              onContextMenu={(e) => e.preventDefault()}
+            />
+          ) : youtubeId ? (
             <>
               <iframe
                 key={youtubeId}
@@ -592,13 +621,17 @@ function VideoPlayerModal({ open, youtubeId, title, onClose }) {
                 loading="eager"
                 tabIndex="-1"
               />
-              {/* Invisible overlay to block ALL pointer events/right-clicks from hitting the iframe */}
+              {/* Invisible overlay for protection */}
               <div
                 className="absolute inset-0 z-10 bg-transparent"
                 onContextMenu={(e) => e.preventDefault()}
               ></div>
             </>
-          ) : null}
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-sm italic">
+              Video source unavailable
+            </div>
+          )}
         </div>
 
         <button
@@ -636,39 +669,8 @@ function extractYouTubeId(url = "") {
   return null;
 }
 
-// Cheap, bounded "hype" fallback; returns a small integer (0–999)
-function computeFallbackHype(views = 0, lastViewUpdate = null) {
-  if (!views) return 0;
-  const days = lastViewUpdate
-    ? Math.max(0, (Date.now() - Number(lastViewUpdate)) / 86400000)
-    : 7;
-  // fresh videos score slightly higher; very stale capped down
-  const freshness = Math.max(0.5, Math.min(1, 1 - days / 30)); // 0.5–1 range
-  const raw = Math.log10(views + 1) * 100 * freshness; // ~0–(300+) range
-  return Math.round(Math.min(999, raw));
-}
-function formatHype(n) {
-  if (n == null) return null;
-  if (n >= 900) return "S+";
-  if (n >= 750) return "S";
-  if (n >= 600) return "A";
-  if (n >= 450) return "B";
-  if (n >= 300) return "C";
-  return "D";
-}
 
-/* ---------------- Reusable bits ---------------- */
-const SkeletonCard = () => (
-  <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
-    <div className="w-full aspect-[16/9] bg-[var(--text-muted)]/10" />
-    <div className="p-4 space-y-2.5">
-      <div className="h-6 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
-      <div className="h-4 bg-[var(--text-muted)]/10 rounded w-1/2"></div>
-      <div className="h-9 bg-[var(--text-muted)]/10 rounded w-full"></div>
-    </div>
-  </div>
-);
-
+/* ---------------- Protected Img ---------------- */
 function ProtectedImg({
   src,
   alt,

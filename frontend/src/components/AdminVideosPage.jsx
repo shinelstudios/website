@@ -31,6 +31,7 @@ const DEFAULT_FORM = {
   title: "",
   primaryUrl: "",
   creatorUrl: "",
+  mirrorUrl: "",
   category: "GAMING",
   subcategory: "",
   kind: "LONG",

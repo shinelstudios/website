@@ -69,6 +69,13 @@ const VideoForm = ({
                         required
                     />
 
+                    <Input
+                        label="Mirror URL (Backup/Protected)"
+                        value={form.mirrorUrl || ""}
+                        onChange={(v) => handleInputChange("mirrorUrl", v)}
+                        placeholder="Custom or protected player link"
+                    />
+
                     {/* Preview Container */}
                     {formVideoId && (
                         <div className="rounded-xl overflow-hidden aspect-video border border-white/10 bg-black animate-in fade-in duration-500 mt-2">

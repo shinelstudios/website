@@ -152,6 +152,14 @@ export default function AdminThumbnailsPage() {
     return () => window.removeEventListener("auth:changed", update);
   }, [token]);
 
+  // Persist form draft (Safe: exclude large base64 strings)
+  useEffect(() => {
+    const { imageUrl, ...safeData } = form;
+    if (Object.keys(safeData).length > 0) {
+      localStorage.setItem(LS_FORM_DRAFT_KEY, JSON.stringify(safeData));
+    }
+  }, [form]);
+
   // ---------- Actions ----------
   const surfaceError = (msg, details = "", retryFn = null, retryArgs = []) => {
     setErr(msg);

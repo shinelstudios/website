@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Eye } from "lucide-react";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
@@ -106,6 +107,7 @@ const canAnimate =
   typeof window !== "undefined" &&
   !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+
 function extractYouTubeId(url = "") {
   if (!url) return null;
   try {
@@ -120,33 +122,19 @@ function extractYouTubeId(url = "") {
   return null;
 }
 
-// Cheap, bounded "hype" fallback; returns a small integer (0–999)
-function computeFallbackHype(views = 0, lastViewUpdate = null) {
-  if (!views) return 0;
-  const days = lastViewUpdate
-    ? Math.max(0, (Date.now() - Number(lastViewUpdate)) / 86400000)
-    : 7;
-  const freshness = Math.max(0.5, Math.min(1, 1 - days / 30)); // 0.5–1 range
-  const raw = Math.log10(views + 1) * 100 * freshness; // ~0–(300+) range
-  return Math.round(Math.min(999, raw));
-}
-function formatHype(n) {
-  if (n == null) return null;
-  if (n >= 900) return "S+";
-  if (n >= 750) return "S";
-  if (n >= 600) return "A";
-  if (n >= 450) return "B";
-  if (n >= 300) return "C";
-  return "D";
-}
-
 const SkeletonCard = () => (
   <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">
     <div className="w-full aspect-[9/16] bg-[var(--text-muted)]/10" />
-    <div className="p-4 space-y-2.5">
-      <div className="h-6 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
-      <div className="h-4 bg-[var(--text-muted)]/10 rounded w-1/2"></div>
-      <div className="h-9 bg-[var(--text-muted)]/10 rounded w-full"></div>
+    <div className="p-3 sm:p-4 space-y-3">
+      <div className="flex gap-2">
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded w-16"></div>
+        <div className="h-4 bg-[var(--text-muted)]/10 rounded w-12"></div>
+      </div>
+      <div className="h-5 bg-[var(--text-muted)]/10 rounded w-3/4"></div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="h-3 bg-[var(--text-muted)]/10 rounded w-12"></div>
+        <div className="h-3 bg-[var(--text-muted)]/10 rounded w-16"></div>
+      </div>
     </div>
   </div>
 );
@@ -317,15 +305,13 @@ export default function Shorts() {
                   ? v.hypeScore
                   : null,
             thumb:
-              v.image_url ||
-              v.imageUrl ||
-              v.image ||
               v.thumb ||
               (youtubeId
                 ? (["t-vPWTJUIO4", "R2jcaMDAvOU"].includes(youtubeId)
                   ? "https://placehold.co/600x400/202020/white?text=No+Preview"
                   : `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`)
                 : null),
+            shinelUrl,
           };
         });
 
@@ -450,12 +436,14 @@ export default function Shorts() {
   }, [filteredVideos.length, playerOpen, activeIndex]);
 
   const openPlayer = useCallback(
-    (index, youtubeId, title = "") => {
-      if (!youtubeId) return;
+    (index, youtubeId, title = "", shinelUrl) => {
+      if (!youtubeId && !shinelUrl) return;
       setActiveIndex(index);
       setActiveYouTubeId(youtubeId);
       setActiveTitle(title || "");
       setPlayerOpen(true);
+      // Track shinelUrl if needed for direct playback
+      window._activeShinelUrl = shinelUrl;
     },
     []
   );
@@ -478,10 +466,11 @@ export default function Shorts() {
       return;
     const nextIndex = (activeIndex + 1) % filteredVideos.length;
     const next = filteredVideos[nextIndex];
-    if (!next?.youtubeId) return;
+    if (!next?.youtubeId && !next?.shinelUrl) return;
     setActiveIndex(nextIndex);
     setActiveYouTubeId(next.youtubeId);
     setActiveTitle(next.title || "");
+    window._activeShinelUrl = next.shinelUrl;
   }, [activeIndex, filteredVideos]);
 
   const goPrev = useCallback(() => {
@@ -494,10 +483,11 @@ export default function Shorts() {
     const prevIndex =
       (activeIndex - 1 + filteredVideos.length) % filteredVideos.length;
     const prev = filteredVideos[prevIndex];
-    if (!prev?.youtubeId) return;
+    if (!prev?.youtubeId && !prev?.shinelUrl) return;
     setActiveIndex(prevIndex);
     setActiveYouTubeId(prev.youtubeId);
     setActiveTitle(prev.title || "");
+    window._activeShinelUrl = prev.shinelUrl;
   }, [activeIndex, filteredVideos]);
 
   return (
@@ -664,10 +654,6 @@ function ShortCard({ v, index, onPlay }) {
   const youtubeId = v.youtubeId;
   const playable = !!youtubeId;
 
-  const hype = useMemo(() => {
-    if (typeof v.hype === "number") return v.hype;
-    return computeFallbackHype(v.views, v.lastViewUpdate);
-  }, [v.hype, v.views, v.lastViewUpdate]);
 
   return (
     <article
@@ -715,14 +701,6 @@ function ShortCard({ v, index, onPlay }) {
               {v.subcategory}
             </span>
           )}
-          {hype != null && (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border bg-amber-500/15 text-amber-300 border-amber-500/30 ml-auto"
-              title="Hype (engagement momentum)"
-            >
-              🔥 {formatHype(hype)}
-            </span>
-          )}
         </div>
 
         <h3 className="text-[var(--text)] text-xs sm:text-sm font-semibold line-clamp-2 min-h-[2.1rem] leading-snug">
@@ -731,8 +709,9 @@ function ShortCard({ v, index, onPlay }) {
 
         <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] sm:text-xs text-[var(--text-muted)]">
           {formattedViews && (
-            <div>
-              👁️‍🗨️ <span className="font-medium">{formattedViews}</span>
+            <div className="flex items-center gap-1">
+              <Eye size={12} className="opacity-70" />
+              <span className="font-medium text-[var(--text-muted)]">{formattedViews}</span>
             </div>
           )}
           <span className="px-2 py-0.5 rounded-full border text-[9px] sm:text-[10px] uppercase tracking-wide">
@@ -744,7 +723,7 @@ function ShortCard({ v, index, onPlay }) {
           <div className="mt-2">
             <button
               type="button"
-              onClick={() => onPlay(index, youtubeId, v.title)}
+              onClick={() => onPlay(index, youtubeId, v.title, v.shinelUrl)}
               className="w-full inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-white text-xs sm:text-sm"
               style={{ background: "var(--orange)" }}
             >
@@ -762,6 +741,13 @@ function ShortCard({ v, index, onPlay }) {
 function VideoPlayerModal({ open, youtubeId, title, onClose, onNext, onPrev }) {
   const refBackdrop = useRef(null);
   const [dims, setDims] = useState({ width: 320, height: 568 });
+
+  // If we have a mirrorUrl that is NOT a YouTube ID, it might be a direct link
+  const shinelUrl = window._activeShinelUrl;
+  const isDirectVideo = shinelUrl && !extractYouTubeId(shinelUrl) && (
+    shinelUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i) || 
+    shinelUrl.includes("drive.google.com/file/d/")
+  );
 
   // Calculate best 9:16 box that fits viewport (90% of width/height)
   useEffect(() => {
@@ -852,7 +838,15 @@ function VideoPlayerModal({ open, youtubeId, title, onClose, onNext, onPrev }) {
           className="relative w-full"
           style={{ height: `${dims.height}px` }}
         >
-          {youtubeId ? (
+          {isDirectVideo ? (
+            <video
+              src={shinelUrl}
+              controls
+              autoPlay
+              className="absolute top-0 left-0 w-full h-full"
+              onContextMenu={(e) => e.preventDefault()}
+            />
+          ) : youtubeId ? (
             <>
               <iframe
                 key={youtubeId}
@@ -864,13 +858,17 @@ function VideoPlayerModal({ open, youtubeId, title, onClose, onNext, onPrev }) {
                 loading="eager"
                 tabIndex="-1"
               />
-              {/* Invisible overlay to block ALL pointer events/right-clicks from hitting the iframe */}
+              {/* Invisible overlay for protection */}
               <div
                 className="absolute inset-0 z-10 bg-transparent"
                 onContextMenu={(e) => e.preventDefault()}
               ></div>
             </>
-          ) : null}
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white/40 text-sm italic bg-black">
+              Video source unavailable
+            </div>
+          )}
 
           {/* Close button only, in the corner – not covering quality/settings */}
           <button
