@@ -13,6 +13,20 @@ import {
   ExternalLink,
   Search,
 } from "lucide-react";
+
+// Shared animation helpers — CPU-friendly: opacity + Y only, no scale blur etc.
+const mkFade = (reduced, delay = 0) => ({
+  initial: reduced ? {} : { opacity: 0, y: 18 },
+  animate: reduced ? {} : { opacity: 1, y: 0 },
+  transition: { duration: 0.45, ease: "easeOut", delay },
+});
+
+const mkViewFade = (reduced, delay = 0) => ({
+  initial: reduced ? {} : { opacity: 0, y: 18 },
+  whileInView: reduced ? {} : { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.45, ease: "easeOut", delay },
+});
 import { Link } from "react-router-dom";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import PortfolioItem from "./PortfolioItem";
@@ -163,55 +177,54 @@ function FilterPill({ label, active, onClick }) {
   );
 }
 
-function ServiceNavCard({ card, index }) {
+function ServiceNavCard({ card, index, reduced }) {
   const Icon = card.icon;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.07 }}
+      className="h-full"
+      {...mkViewFade(reduced, index * 0.06)}
     >
       <Link
         to={card.path}
-        className={`group relative flex flex-col gap-3 p-5 rounded-2xl border bg-gradient-to-br ${card.color} ${card.border} ${card.hover} transition-all duration-300 hover:shadow-xl hover:-translate-y-1`}
+        className={`group relative flex flex-col justify-between gap-4 p-5 rounded-2xl border h-full bg-gradient-to-br ${card.color} ${card.border} ${card.hover} transition-colors duration-200`}
+        style={{ willChange: "auto" }}
       >
-        {/* badge */}
+        {/* top: badge */}
         <span className="self-start px-2 py-0.5 rounded-md text-[9px] font-black tracking-widest uppercase bg-white/10 text-white/70">
           {card.badge}
         </span>
 
-        {/* icon + arrow */}
+        {/* middle: icon row */}
         <div className="flex items-center justify-between">
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
             <Icon size={20} className="text-white" />
           </div>
           <ArrowUpRight
             size={18}
-            className="text-white/40 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all"
+            className="text-white/40 group-hover:text-white transition-colors"
           />
         </div>
 
-        {/* label + desc */}
-        <div>
-          <p className="text-sm font-black text-white">{card.label}</p>
-          <p className="text-[11px] text-white/50 mt-0.5">{card.desc}</p>
+        {/* bottom: label + desc */}
+        <div className="mt-auto">
+          <p className="text-sm font-black text-white leading-tight">{card.label}</p>
+          <p className="text-[11px] text-white/50 mt-1 leading-snug">{card.desc}</p>
         </div>
       </Link>
     </motion.div>
   );
 }
 
-function ProjectCard({ project, index }) {
+function ProjectCard({ project, index, reduced }) {
   const [imgFailed, setImgFailed] = useState(false);
   const isVideo = project.kind === "video";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.35, delay: index * 0.04 }}
+      initial={reduced ? {} : { opacity: 0, y: 16 }}
+      animate={reduced ? {} : { opacity: 1, y: 0 }}
+      exit={reduced ? {} : { opacity: 0 }}
+      transition={{ duration: 0.3, delay: reduced ? 0 : index * 0.04 }}
     >
       <Link
         to={project.link}
@@ -289,6 +302,7 @@ function ProjectCard({ project, index }) {
 
 // ─── main page ────────────────────────────────────────────────────────────────
 export default function WorkPage() {
+  const reduced = useReducedMotion();
   const { config } = useGlobalConfig();
   const [activeFilter, setActiveFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -423,19 +437,15 @@ export default function WorkPage() {
 
         <div className="container mx-auto px-6 relative z-10 text-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
+            {...mkFade(reduced, 0)}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--surface-alt)] border border-[var(--border)] text-[10px] font-black tracking-widest uppercase text-[var(--orange)] mb-6"
           >
-            <Sparkles size={13} className="animate-pulse" />
+            <Sparkles size={13} className={reduced ? "" : "animate-pulse"} />
             Our Creative Portfolio
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+            {...mkFade(reduced, 0.1)}
             className="text-5xl sm:text-7xl lg:text-8xl font-black mb-5 tracking-tighter leading-[0.88] text-[var(--text)]"
           >
             CREATIVE{" "}
@@ -445,9 +455,7 @@ export default function WorkPage() {
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
+            {...mkFade(reduced, 0.2)}
             className="text-lg sm:text-xl max-w-2xl mx-auto mb-10 text-[var(--text-muted)] font-medium"
           >
             We don't just edit videos — we build visual engines that drive
@@ -456,9 +464,7 @@ export default function WorkPage() {
 
           {/* Stats */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
+            {...mkFade(reduced, 0.3)}
             className="grid grid-cols-3 gap-6 max-w-lg mx-auto mb-10"
           >
             <StatsCounter
@@ -488,9 +494,7 @@ export default function WorkPage() {
 
           {/* Hero CTAs */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
+            {...mkFade(reduced, 0.4)}
             className="flex flex-col sm:flex-row items-center justify-center gap-3"
           >
             <a
@@ -525,10 +529,7 @@ export default function WorkPage() {
         <div className="container mx-auto px-6">
           <motion.div
             className="text-center mb-10"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
+            {...mkViewFade(reduced)}
           >
             <h2 className="text-3xl sm:text-4xl font-black mb-2 text-[var(--text)]">
               Browse by{" "}
@@ -540,9 +541,9 @@ export default function WorkPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 max-w-6xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 max-w-6xl mx-auto items-stretch">
             {SERVICE_CARDS.map((card, i) => (
-              <ServiceNavCard key={card.key} card={card} index={i} />
+              <ServiceNavCard key={card.key} card={card} index={i} reduced={!!reduced} />
             ))}
           </div>
         </div>
@@ -577,10 +578,7 @@ export default function WorkPage() {
         <div className="container mx-auto px-6">
           <motion.div
             className="text-center mb-10"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
+            {...mkViewFade(reduced)}
           >
             <h2 className="text-4xl sm:text-5xl font-black mb-3 text-[var(--text)]">
               Featured <span className="text-[var(--orange)]">Work</span>
@@ -639,7 +637,7 @@ export default function WorkPage() {
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
               >
                 {filteredProjects.slice(0, 9).map((project, i) => (
-                  <ProjectCard key={project.id} project={project} index={i} />
+                  <ProjectCard key={project.id} project={project} index={i} reduced={!!reduced} />
                 ))}
               </motion.div>
             </AnimatePresence>
