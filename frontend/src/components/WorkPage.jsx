@@ -24,18 +24,33 @@ import { AUTH_BASE } from "../config/constants";
 const ProofSection = React.lazy(() => import("./ProofSection"));
 const CaseStudies = React.lazy(() => import("./CaseStudies"));
 
+function extractYouTubeId(url = "") {
+  if (!url) return null;
+  try {
+    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+    if (u.hostname.includes("youtube.com")) {
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      const m = u.pathname.match(/\/shorts\/([^/]+)/);
+      if (m) return m[1];
+    }
+  } catch { }
+  return null;
+}
+
 function normalizeWork(item, type) {
   const isVideo = type === 'video';
   const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
-  const useMq = KNOWN_BAD_IDS.includes(item.videoId);
+  const ytId = extractYouTubeId(item.primaryUrl) || extractYouTubeId(item.creatorUrl) || item.youtubeId || item.videoId || "";
+  const useMq = KNOWN_BAD_IDS.includes(ytId);
 
   return {
-    id: item.id || (isVideo ? item.videoId : item.filename),
+    id: item.id || ytId || item.filename,
     title: item.title || item.filename,
     description: item.description || (isVideo ? `Video Category: ${item.category}` : `Thumbnail Project: ${item.category}`),
     category: item.category || "OTHER",
     image: isVideo
-      ? `https://img.youtube.com/vi/${item.videoId}/${useMq ? 'mqdefault' : 'maxresdefault'}.jpg`
+      ? (ytId ? `https://img.youtube.com/vi/${ytId}/${useMq ? 'mqdefault' : 'maxresdefault'}.jpg` : "https://placehold.co/600x400/202020/white?text=No+Preview")
       : item.imageUrl,
     link: isVideo ? "/video-editing" : "/thumbnails",
     kind: isVideo ? "video" : "gfx",
