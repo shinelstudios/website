@@ -1,0 +1,16 @@
+{
+  "name": "backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "mirror": "node mirror-service.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "googleapis": "^134.0.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.6.8"
+  }
+}

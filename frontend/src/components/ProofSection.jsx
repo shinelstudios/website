@@ -1,0 +1,514 @@
+/* ===================== Imports ===================== */
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { BarChart3, Image as IconImage, Gamepad2, Video, Zap } from "lucide-react";
+import { BeforeAfter } from './BeforeAfter';
+import { LazyImage } from "./ProgressiveImage";
+import { SAMPLE_BEFORE, SAMPLE_AFTER } from '../lib/helpers';
+import { useGlobalConfig } from "../context/GlobalConfigContext";
+import { useReducedMotion } from "../hooks/useReducedMotion";
+
+// --- Import available images ---
+import SAMPLE_VLOG_BEFORE from '../assets/Vlog_sample_before.jpg';
+import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
+import BGMI_BEFORE from '../assets/bgmi-thumbnail-base.jpg';
+import BGMI_AFTER from '../assets/bgmi-thumbnail-creator1.jpg';
+import BGMI_AFTER_2 from '../assets/bgmi-thumbnail-creator2.jpg';
+
+// --- Showcase Data ---
+const DEFAULT_SHOWCASES = [
+  {
+    category: "Gaming (BGMI - Rank Push)",
+    icon: Gamepad2,
+    beforeImage: BGMI_BEFORE,
+    afterImage: BGMI_AFTER,
+    stats: {
+      ctrIncrease: 78,
+      viewsMultiplier: "3.1x",
+      turnaroundDays: "2",
+    },
+  },
+  {
+    category: "Lifestyle Vlog",
+    icon: Video,
+    beforeImage: SAMPLE_VLOG_BEFORE,
+    afterImage: SAMPLE_VLOG_AFTER,
+    stats: {
+      ctrIncrease: 62,
+      viewsMultiplier: "2.3x",
+      turnaroundDays: "3",
+    },
+  },
+  {
+    category: "Gaming (BGMI - Montage)",
+    icon: Zap,
+    beforeImage: BGMI_BEFORE,
+    afterImage: BGMI_AFTER_2,
+    stats: {
+      ctrIncrease: 94,
+      viewsMultiplier: "4.5x",
+      turnaroundDays: "2",
+    },
+  },
+];
+
+
+/* ===================== Enhanced Proof Section ===================== */
+const ProofSection = () => {
+  const { config } = useGlobalConfig();
+  const prefersReducedMotion = useReducedMotion();
+
+  const showcases = useMemo(() => {
+    return (config?.proofShowcases && config.proofShowcases.length > 0)
+      ? config.proofShowcases
+      : DEFAULT_SHOWCASES;
+  }, [config.proofShowcases]);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [countUp, setCountUp] = useState(0);
+  const [isInView, setIsInView] = useState(false);
+  const sectionRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  const currentShowcase = showcases[activeIndex];
+
+  // Effect to detect when the section is scrolled into view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.2, rootMargin: "0px" }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Animated counter effect
+  useEffect(() => {
+    if (!currentShowcase?.stats?.ctrIncrease) {
+      setCountUp(0);
+      return;
+    };
+
+    if (!isInView || prefersReducedMotion) {
+      setCountUp(currentShowcase.stats.ctrIncrease);
+      return;
+    }
+
+    const start = 0;
+    const end = currentShowcase.stats.ctrIncrease;
+    const duration = 1500;
+    const startTime = Date.now();
+
+    const animate = () => {
+      const now = Date.now();
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const current = Math.floor(start + (end - start) * eased);
+
+      setCountUp(current);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [activeIndex, isInView, currentShowcase.stats.ctrIncrease, prefersReducedMotion]);
+
+  const stats = [
+    {
+      icon: <BarChart3 size={20} />,
+      label: "CTR Improvement",
+      value: `+${currentShowcase.stats.ctrIncrease}%`,
+      suffix: "CTR"
+    },
+    {
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" stroke="currentColor" strokeWidth="2" />
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      ),
+      label: "More Views",
+      value: currentShowcase.stats.viewsMultiplier,
+      suffix: "avg"
+    },
+    {
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+      label: "Turnaround",
+      value: currentShowcase.stats.turnaroundDays,
+      suffix: "days"
+    },
+  ];
+
+  return (
+    <section
+      id="proof"
+      ref={sectionRef}
+      className="py-20 relative overflow-hidden"
+      style={{
+        background: "var(--surface-alt)",
+        contentVisibility: "auto",
+        containIntrinsicSize: "900px"
+      }}
+      aria-labelledby="proof-heading"
+    >
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes float-particle {
+          0%, 100% {
+            transform: translate3d(0, 0, 0);
+            opacity: 0.3;
+          }
+          50% {
+            transform: translate3d(20px, -30px, 0);
+            opacity: 0.6;
+          }
+        }
+
+        .floating-particle {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: var(--orange);
+          border-radius: 50%;
+          animation: float-particle 8s ease-in-out infinite;
+          will-change: transform, opacity;
+        }
+
+        .thumbnail-glow {
+          position: absolute;
+          inset: -20px;
+          background: radial-gradient(
+            circle at center,
+            rgba(232, 80, 2, 0.15) 0%,
+            transparent 70%
+          );
+          filter: blur(40px);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .thumbnail-showcase-wrapper {
+          position: relative;
+        }
+
+        .thumbnail-showcase-wrapper:hover .thumbnail-glow {
+          opacity: 1;
+        }
+
+        @keyframes pulse-glow {
+          0%, 100% {
+            box-shadow: 0 10px 30px rgba(232,80,2,0.3);
+          }
+          50% {
+            box-shadow: 0 10px 40px rgba(232,80,2,0.5);
+          }
+        }
+
+        .ctr-badge-pulse {
+          animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .floating-particle,
+          .ctr-badge-pulse {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
+      {/* Background patterns and gradients */}
+      <div
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `radial-gradient(circle, var(--text) 1px, transparent 1px)`,
+          backgroundSize: '40px 40px',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Floating Particles */}
+      {!prefersReducedMotion && (
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+          {[...Array(8)].map((_, i) => (
+            <div
+              key={i}
+              className="floating-particle"
+              style={{
+                left: `${10 + (i * 12)}%`,
+                top: `${20 + (i % 3) * 25}%`,
+                animationDelay: `${i * 0.5}s`
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Gradient blobs */}
+      <>
+        <div
+          className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+          style={{
+            background: "radial-gradient(circle, var(--orange), transparent 60%)",
+          }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute bottom-0 right-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl pointer-events-none"
+          style={{
+            background: "radial-gradient(circle, #F16001, transparent 60%)",
+          }}
+          aria-hidden="true"
+        />
+      </>
+
+      <div className="container mx-auto px-4 relative z-10">
+        {/* Header */}
+        <motion.div
+          className="text-center mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-10%" }}
+          transition={{ duration: 0.5 }}
+        >
+          <motion.div
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-5"
+            style={{
+              color: "var(--orange)",
+              border: "1px solid var(--border)",
+              background: "rgba(232,80,2,0.08)",
+              boxShadow: "0 4px 12px rgba(232,80,2,0.1)",
+            }}
+            whileHover={{ scale: 1.05, y: -2 }}
+          >
+            <IconImage size={14} />
+            Real Results
+          </motion.div>
+          <h2
+            id="proof-heading"
+            className="text-3xl md:text-5xl font-bold font-['Poppins'] mb-3"
+            style={{ color: "var(--text)" }}
+          >
+            Packaging That Lifts CTR
+          </h2>
+          <p className="text-base md:text-xl max-w-2xl mx-auto" style={{ color: "var(--text-muted)" }}>
+            Real thumbnails revamped for higher clarity, curiosity, and clicks.
+          </p>
+        </motion.div>
+
+        {/* Enhanced Category Tabs with Icons */}
+        <div className="mb-8 flex justify-center flex-wrap gap-3">
+          {showcases.map((showcase, index) => {
+            const Icon = showcase.icon || IconImage;
+            return (
+              <motion.button
+                key={showcase.category}
+                onClick={() => setActiveIndex(index)}
+                className={`px-4 py-2.5 text-sm font-semibold rounded-full transition-all duration-300 flex items-center gap-2 ${activeIndex === index
+                  ? "text-white"
+                  : "text-[var(--text-muted)] bg-[var(--surface)] hover:bg-[var(--surface-alt)]"
+                  }`}
+                style={{
+                  border: "1px solid var(--border)",
+                  background: activeIndex === index ? "linear-gradient(135deg, var(--orange), #F16001)" : "var(--surface)",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Icon size={16} />
+                {showcase.category}
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Before/After Comparison with Smooth Transitions */}
+        <div className="thumbnail-showcase-wrapper">
+          <div className="thumbnail-glow" />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              style={{ position: 'relative', zIndex: 1 }}
+            >
+              <BeforeAfter
+                before={currentShowcase.beforeImage}
+                after={currentShowcase.afterImage}
+                label="Drag to compare (Before → After)"
+                beforeAlt={`Original thumbnail for ${currentShowcase.category}`}
+                afterAlt={`Optimized thumbnail for ${currentShowcase.category}`}
+                width={1280}
+                height={720}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Animated CTR Badge with Pulse */}
+        <motion.div
+          className="mt-8 flex justify-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <motion.div
+            className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl ${!prefersReducedMotion ? 'ctr-badge-pulse' : ''}`}
+            style={{
+              background: "linear-gradient(135deg, var(--orange), #F16001)",
+              boxShadow: "0 10px 30px rgba(232,80,2,0.3)",
+              WebkitTapHighlightColor: "transparent",
+              WebkitBackdropFilter: "blur(8px)",
+            }}
+            whileHover={{ scale: 1.05, y: -2 }}
+          >
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl md:text-4xl font-bold text-white">
+                +{countUp}%
+              </span>
+              <span className="text-sm text-white/90">CTR</span>
+            </div>
+            <div className="h-8 w-px bg-white/30" aria-hidden="true" />
+            <div className="text-left">
+              <div className="text-xs text-white/80">After revamp</div>
+              <div className="text-sm font-semibold text-white">{currentShowcase.category}</div>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        {/* Action CTA */}
+        <motion.div
+          className="mt-6 text-center"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          <a
+            href="#contact"
+            className="inline-flex items-center gap-2 text-sm font-bold ss-btn-pulse"
+            style={{ color: "var(--orange)" }}
+          >
+            Start Your Revamp
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+        </motion.div>
+
+        {/* Stats Grid with Enhanced Hover Effects */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto"
+            key={`stats-${activeIndex}`}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            {stats.map((stat, idx) => (
+              <motion.div
+                key={idx}
+                className="p-5 rounded-xl border backdrop-blur-xl"
+                style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  borderColor: "var(--border)",
+                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+                  WebkitBackdropFilter: "blur(12px)",
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: 0.3 + (idx * 0.1) }}
+                whileHover={{
+                  y: -4,
+                  boxShadow: "0 12px 40px rgba(232, 80, 2, 0.15)",
+                  transition: { duration: 0.2 }
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div style={{ color: "var(--orange)" }}>
+                    {stat.icon}
+                  </div>
+                  <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                    {stat.label}
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <div className="text-2xl md:text-3xl font-bold" style={{ color: "var(--text)" }}>
+                    {stat.value}
+                  </div>
+                  <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    {stat.suffix}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Trust indicators */}
+        <motion.div
+          className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs"
+          style={{ color: "var(--text-muted)" }}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          {[
+            "✓ A/B tested designs",
+            "✓ Data-backed iterations",
+            "✓ Real creator results",
+            "✓ 48-72h turnaround"
+          ].map((item, i) => (
+            <motion.span
+              key={i}
+              className="px-3 py-1.5 rounded-full"
+              style={{
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+              }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.3, delay: 0.6 + (i * 0.1) }}
+            >
+              {item}
+            </motion.span>
+          ))}
+        </motion.div>
+      </div>
+
+    </section>
+  );
+};
+
+export default ProofSection;

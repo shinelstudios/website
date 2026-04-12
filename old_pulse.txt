@@ -1,0 +1,1108 @@
+﻿commit e0c2a5ae1f9a6857efea0e6a75250aaa12d10312
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Wed Feb 11 05:38:54 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 3374fac..b37b25a 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -25,7 +25,6 @@ import { useClientStats } from "../context/ClientStatsContext";
+ const ClientPulsePage = () => {
+     const [activities, setActivities] = useState([]);
+     const [channelMeta, setChannelMeta] = useState({}); // id -> { title, logo }
+-    const [clients, setClients] = useState([]);
+     const [loading, setLoading] = useState(true);
+     const [lastSync, setLastSync] = useState(Date.now());
+     const [error, setError] = useState(null);
+@@ -33,7 +32,7 @@ const ClientPulsePage = () => {
+     const [isRefreshing, setIsRefreshing] = useState(false);
+     const [lastChecked, setLastChecked] = useState(Date.now());
+     const [isAdmin, setIsAdmin] = useState(false);
+-    const { getProxiedImage } = useClientStats();
++    const { stats, getProxiedImage, loading: statsLoading } = useClientStats();
+ 
+     // Check for admin role
+     useEffect(() => {
+@@ -46,19 +45,37 @@ const ClientPulsePage = () => {
+         return () => window.removeEventListener("auth:changed", checkAdmin);
+     }, []);
+ 
+-    // Filter relevant activities (Strict 24 hours)
++    // Filter relevant activities (Strict 24 hours + Active Clients Only)
+     const activeFeeds = useMemo(() => {
+         const now = Date.now();
+         const windowSize = 24 * 60 * 60 * 1000; // Strict 24 hours
++
++        // Use stats for O(1) canonical ID lookup
++        // We filter for 'active' status and map to the YouTube canonical ID (UC...)
++        const activeCanonicalIds = new Set(
++            stats
++                .filter(s => s.status === 'active')
++                .map(s => s.youtube_canonical_id) // This is the UC... ID priority
++                .filter(Boolean)
++        );
++
+         return activities
+-            .filter(a => (now - Number(a.timestamp || 0)) < windowSize)
++            .filter(a => {
++                const isWithinWindow = (now - Number(a.timestamp || 0)) < windowSize;
++
++                // If stats are still loading, don't filter out yet (prevent flicker)
++                if (statsLoading && stats.length === 0) return isWithinWindow;
++
++                // Check if the activity's channel is in our active set
++                return isWithinWindow && activeCanonicalIds.has(a.channelId);
++            })
+             .sort((a, b) => {
+                 // Priority: LIVE > Newest
+                 if (a.isLive && !b.isLive) return -1;
+                 if (!a.isLive && b.isLive) return 1;
+                 return b.timestamp - a.timestamp;
+             });
+-    }, [activities]);
++    }, [activities, stats, statsLoading]);
+ 
+     const fetchPulse = useCallback(async (isBackground = false) => {
+         if (isBackground) setIsRefreshing(true);
+@@ -79,15 +96,7 @@ const ClientPulsePage = () => {
+             setQuotaExceeded(!!data.quotaExceeded);
+             setLastChecked(Date.now());
+ 
+-            // Also load reg for stats if needed ONLY on full load
+-            if (!isBackground) {
+-                const cRes = await fetch(`${AUTH_BASE}/clients`);
+-                if (cRes.ok) {
+-                    const cData = await cRes.json();
+-                    setClients(cData.clients || []);
+-                }
+-            }
+-
++            setLastChecked(Date.now());
+         } catch (err) {
+             setError("Pulse sync failed. Backend may be unavailable.");
+             console.error("Pulse fetch failed:", err);
+@@ -223,7 +232,7 @@ const ClientPulsePage = () => {
+                                 ))}
+                             </AnimatePresence>
+                         </div>
+-                    ) : !loading && clients.length === 0 ? (
++                    ) : !loading && stats.length === 0 ? (
+                         <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
+                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
+                             <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Registry is empty</h3>
+@@ -236,7 +245,7 @@ const ClientPulsePage = () => {
+                         <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
+                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
+                             <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
+-                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {clients.length} registered channels.</p>
++                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {stats.length} registered channels.</p>
+                         </div>
+                     )
+                 }
+@@ -256,6 +265,7 @@ const ClientPulsePage = () => {
+ };
+ 
+ const ActivityCard = ({ activity, index, meta }) => {
++    const { getProxiedImage } = useClientStats();
+     const isLive = activity.isLive;
+     const [isHovered, setIsHovered] = useState(false);
+     const videoId = useMemo(() => {
+@@ -287,7 +297,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                             key="thumb"
+                             initial={{ opacity: 1 }}
+                             exit={{ opacity: 0 }}
+-                            src={activity.thumbnail}
++                            src={getProxiedImage(activity.thumbnail)}
+                             alt={activity.title}
+                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                             loading="lazy"
+
+commit 3e63fa6a1d7f2f0c00912f9050af93fa06fa5127
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Tue Feb 10 05:29:34 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index a78b0c2..3374fac 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -15,6 +15,7 @@ import {
+ } from "lucide-react";
+ import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
+ import PremiumPlayer from "./PremiumPlayer";
++import { useClientStats } from "../context/ClientStatsContext";
+ 
+ /**
+  * ClientPulsePage Component
+@@ -32,6 +33,7 @@ const ClientPulsePage = () => {
+     const [isRefreshing, setIsRefreshing] = useState(false);
+     const [lastChecked, setLastChecked] = useState(Date.now());
+     const [isAdmin, setIsAdmin] = useState(false);
++    const { getProxiedImage } = useClientStats();
+ 
+     // Check for admin role
+     useEffect(() => {
+@@ -300,7 +302,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                         >
+                             <PremiumPlayer
+                                 videoId={videoId}
+-                                thumbnail={activity.thumbnail}
++                                thumbnail={getProxiedImage(activity.thumbnail)}
+                                 autoplay={true}
+                                 className="w-full h-full"
+                             />
+@@ -331,7 +333,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                     {/* Channel Logo */}
+                     <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] flex-shrink-0">
+                         {meta?.logo ? (
+-                            <img src={meta.logo} alt={activity.clientName} className="w-full h-full object-cover" />
++                            <img src={getProxiedImage(meta.logo)} alt={activity.clientName} className="w-full h-full object-cover" />
+                         ) : (
+                             <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-orange-500 uppercase">
+                                 {activity.clientName.charAt(0)}
+
+commit 4a2c809455a7bc278ddca040e0f7e5224b7402d0
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Tue Feb 3 18:51:47 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 9bb3275..a78b0c2 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -353,9 +353,9 @@ const ActivityCard = ({ activity, index, meta }) => {
+                     )}
+                 </div>
+ 
+-                <h4 className="text-lg md:text-xl font-bold leading-tight mb-8 group-hover:text-orange-400 transition-colors line-clamp-2 min-h-[3.5rem]"
+-                    dangerouslySetInnerHTML={{ __html: activity.title }}
+-                />
++                <h4 className="text-lg md:text-xl font-bold leading-tight mb-8 group-hover:text-orange-400 transition-colors line-clamp-2 min-h-[3.5rem]">
++                    {activity.title}
++                </h4>
+ 
+                 <a
+                     href={activity.url}
+
+commit ba480f01c99ee2b2fb19304c1e6aa0dc46557324
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Sun Feb 1 04:54:53 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index d9c7d4c..9bb3275 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -10,9 +10,11 @@ import {
+     AlertCircle,
+     Zap,
+     TrendingUp,
+-    Youtube
++    Youtube,
++    RefreshCw
+ } from "lucide-react";
+ import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
++import PremiumPlayer from "./PremiumPlayer";
+ 
+ /**
+  * ClientPulsePage Component
+@@ -27,11 +29,25 @@ const ClientPulsePage = () => {
+     const [lastSync, setLastSync] = useState(Date.now());
+     const [error, setError] = useState(null);
+     const [quotaExceeded, setQuotaExceeded] = useState(false);
++    const [isRefreshing, setIsRefreshing] = useState(false);
++    const [lastChecked, setLastChecked] = useState(Date.now());
++    const [isAdmin, setIsAdmin] = useState(false);
++
++    // Check for admin role
++    useEffect(() => {
++        const checkAdmin = () => {
++            const role = localStorage.getItem("role") || "";
++            setIsAdmin(role.toLowerCase().includes("admin"));
++        };
++        checkAdmin();
++        window.addEventListener("auth:changed", checkAdmin);
++        return () => window.removeEventListener("auth:changed", checkAdmin);
++    }, []);
+ 
+     // Filter relevant activities (Strict 24 hours)
+     const activeFeeds = useMemo(() => {
+         const now = Date.now();
+-        const windowSize = 48 * 60 * 60 * 1000; // Relaxed 48 hours
++        const windowSize = 24 * 60 * 60 * 1000; // Strict 24 hours
+         return activities
+             .filter(a => (now - Number(a.timestamp || 0)) < windowSize)
+             .sort((a, b) => {
+@@ -42,8 +58,10 @@ const ClientPulsePage = () => {
+             });
+     }, [activities]);
+ 
+-    const fetchPulse = useCallback(async () => {
+-        setLoading(true);
++    const fetchPulse = useCallback(async (isBackground = false) => {
++        if (isBackground) setIsRefreshing(true);
++        else setLoading(true);
++
+         setError(null);
+ 
+         try {
+@@ -57,12 +75,15 @@ const ClientPulsePage = () => {
+             setChannelMeta(data.meta || {});
+             setLastSync(data.ts || Date.now());
+             setQuotaExceeded(!!data.quotaExceeded);
++            setLastChecked(Date.now());
+ 
+-            // Also load reg for stats if needed
+-            const cRes = await fetch(`${AUTH_BASE}/clients`);
+-            if (cRes.ok) {
+-                const cData = await cRes.json();
+-                setClients(cData.clients || []);
++            // Also load reg for stats if needed ONLY on full load
++            if (!isBackground) {
++                const cRes = await fetch(`${AUTH_BASE}/clients`);
++                if (cRes.ok) {
++                    const cData = await cRes.json();
++                    setClients(cData.clients || []);
++                }
+             }
+ 
+         } catch (err) {
+@@ -70,15 +91,24 @@ const ClientPulsePage = () => {
+             console.error("Pulse fetch failed:", err);
+         } finally {
+             setLoading(false);
++            setIsRefreshing(false);
+         }
+     }, []);
+ 
+     useEffect(() => {
+         fetchPulse();
+ 
+-        // ≡ƒÆí 30 MINUTE BACKGROUND POLLING
+-        const interval = setInterval(fetchPulse, 30 * 60 * 1000);
+-        return () => clearInterval(interval);
++        // ≡ƒÆí 30 MINUTE BACKGROUND POLLING with recursive timeout for robustness
++        let timer;
++        const poll = () => {
++            timer = setTimeout(async () => {
++                await fetchPulse(true);
++                poll();
++            }, 30 * 60 * 1000);
++        };
++
++        poll();
++        return () => clearTimeout(timer);
+     }, [fetchPulse]);
+ 
+     return (
+@@ -130,72 +160,111 @@ const ClientPulsePage = () => {
+                         <Zap size={16} className="text-orange-500 fill-orange-500" />
+                         Activity Feed
+                     </h2>
+-                    <div className="text-[10px] font-bold text-[var(--text-muted)]/60 uppercase">
+-                        Refreshed: {new Date(lastSync).toLocaleTimeString()}
++                    <div className="flex items-center gap-6">
++                        {isRefreshing && (
++                            <div className="flex items-center gap-2 text-[10px] font-black text-orange-500 uppercase tracking-widest animate-pulse">
++                                <Zap size={12} className="fill-orange-500" />
++                                Refreshing...
++                            </div>
++                        )}
++                        <div className="flex items-center gap-4">
++                            <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase flex flex-col items-end gap-1">
++                                <span className="opacity-60">Synced: {new Date(lastSync).toLocaleTimeString()}</span>
++                                <span>Checked: {new Date(lastChecked).toLocaleTimeString()}</span>
++                            </div>
++                        </div>
++                        {isAdmin && (
++                            <button
++                                onClick={() => fetchPulse(true)}
++                                disabled={isRefreshing || loading}
++                                className="p-2 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] hover:text-orange-500 hover:border-orange-500/50 transition-all disabled:opacity-50"
++                                title="Check for updates (Admin Only)"
++                            >
++                                <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
++                            </button>
++                        )}
+                     </div>
+                 </div>
+ 
+-                {quotaExceeded && (
+-                    <div className="mb-10 p-6 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center gap-4">
+-                        <Zap size={24} className="animate-pulse" />
+-                        <div>
+-                            <div className="font-bold">YouTube API Quota Exceeded</div>
+-                            <div className="text-xs opacity-80">The studio has reached its daily sync limit. Feed may be stale until reset (UTC midnight).</div>
++                {
++                    quotaExceeded && (
++                        <div className="mb-10 p-6 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center gap-4">
++                            <Zap size={24} className="animate-pulse" />
++                            <div>
++                                <div className="font-bold">YouTube API Quota Exceeded</div>
++                                <div className="text-xs opacity-80">The studio has reached its daily sync limit. Feed may be stale until reset (UTC midnight).</div>
++                            </div>
+                         </div>
+-                    </div>
+-                )}
++                    )
++                }
+ 
+-                {error && (
+-                    <div className="mb-10 p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-4">
+-                        <AlertCircle size={24} />
+-                        <span className="font-bold">{error}</span>
+-                    </div>
+-                )}
+-
+-                {activeFeeds.length > 0 ? (
+-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+-                        <AnimatePresence mode="popLayout">
+-                            {activeFeeds.map((activity, idx) => (
+-                                <ActivityCard
+-                                    key={activity.id}
+-                                    activity={activity}
+-                                    index={idx}
+-                                    meta={channelMeta[activity.channelId]}
+-                                />
+-                            ))}
+-                        </AnimatePresence>
+-                    </div>
+-                ) : !loading && clients.length === 0 ? (
+-                    <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
+-                        <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
+-                        <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Registry is empty</h3>
+-                        <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto mb-8">You haven't added any client channels to the registry yet.</p>
+-                        <Link to="/admin/clients" className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-orange-500/50 text-orange-500 font-bold uppercase text-[10px] hover:bg-orange-500 hover:text-white transition-all">
+-                            Add Clients via Dashboard
+-                        </Link>
+-                    </div>
+-                ) : !loading && (
+-                    <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
+-                        <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
+-                        <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
+-                        <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24-48 hours for {clients.length} registered channels.</p>
+-                    </div>
+-                )}
++                {
++                    error && (
++                        <div className="mb-10 p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-4">
++                            <AlertCircle size={24} />
++                            <span className="font-bold">{error}</span>
++                        </div>
++                    )
++                }
+ 
+-                {loading && activeFeeds.length === 0 && (
+-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+-                        {[1, 2, 3].map(i => (
+-                            <div key={i} className="aspect-video rounded-[32px] bg-[var(--surface-alt)] animate-pulse" />
+-                        ))}
+-                    </div>
+-                )}
+-            </main>
+-        </div>
++                {
++                    activeFeeds.length > 0 ? (
++                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
++                            <AnimatePresence mode="popLayout">
++                                {activeFeeds.map((activity, idx) => (
++                                    <ActivityCard
++                                        key={activity.id}
++                                        activity={activity}
++                                        index={idx}
++                                        meta={channelMeta[activity.channelId]}
++                                    />
++                                ))}
++                            </AnimatePresence>
++                        </div>
++                    ) : !loading && clients.length === 0 ? (
++                        <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
++                            <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
++                            <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Registry is empty</h3>
++                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto mb-8">You haven't added any client channels to the registry yet.</p>
++                            <Link to="/admin/clients" className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-orange-500/50 text-orange-500 font-bold uppercase text-[10px] hover:bg-orange-500 hover:text-white transition-all">
++                                Add Clients via Dashboard
++                            </Link>
++                        </div>
++                    ) : !loading && (
++                        <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
++                            <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
++                            <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
++                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {clients.length} registered channels.</p>
++                        </div>
++                    )
++                }
++
++                {
++                    loading && activeFeeds.length === 0 && (
++                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
++                            {[1, 2, 3].map(i => (
++                                <div key={i} className="aspect-video rounded-[32px] bg-[var(--surface-alt)] animate-pulse" />
++                            ))}
++                        </div>
++                    )
++                }
++            </main >
++        </div >
+     );
+ };
+ 
+ const ActivityCard = ({ activity, index, meta }) => {
+     const isLive = activity.isLive;
++    const [isHovered, setIsHovered] = useState(false);
++    const videoId = useMemo(() => {
++        if (!activity.url) return null;
++        try {
++            const url = new URL(activity.url);
++            if (url.hostname.includes("youtube.com")) return url.searchParams.get("v");
++            if (url.hostname === "youtu.be") return url.pathname.substring(1);
++        } catch (e) { return null; }
++        return null;
++    }, [activity.url]);
+ 
+     return (
+         <motion.div
+@@ -203,20 +272,44 @@ const ActivityCard = ({ activity, index, meta }) => {
+             initial={{ opacity: 0, scale: 0.98, y: 20 }}
+             animate={{ opacity: 1, scale: 1, y: 0 }}
+             transition={{ duration: 0.6, delay: index * 0.05, ease: [0.23, 1, 0.32, 1] }}
++            onMouseEnter={() => setIsHovered(true)}
++            onMouseLeave={() => setIsHovered(false)}
+             className={`relative group rounded-[32px] overflow-hidden bg-[var(--surface-alt)]/50 border transition-all duration-700 hover:bg-[var(--surface-alt)] ${isLive ? "border-red-600/50 shadow-[0_0_40px_rgba(220,38,38,0.15)]" : "border-[var(--border)]"
+                 }`}
+         >
+-            {/* THUMBNAIL */}
++            {/* THUMBNAIL / PREVIEW */}
+             <div className="aspect-video relative overflow-hidden bg-[var(--surface-alt)]">
+-                <img
+-                    src={activity.thumbnail}
+-                    alt={activity.title}
+-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+-                    loading="lazy"
+-                />
++                <AnimatePresence>
++                    {!isHovered || !videoId ? (
++                        <motion.img
++                            key="thumb"
++                            initial={{ opacity: 1 }}
++                            exit={{ opacity: 0 }}
++                            src={activity.thumbnail}
++                            alt={activity.title}
++                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
++                            loading="lazy"
++                        />
++                    ) : (
++                        <motion.div
++                            key="preview"
++                            initial={{ opacity: 0 }}
++                            animate={{ opacity: 1 }}
++                            exit={{ opacity: 0 }}
++                            className="absolute inset-0 z-0 overflow-hidden"
++                        >
++                            <PremiumPlayer
++                                videoId={videoId}
++                                thumbnail={activity.thumbnail}
++                                autoplay={true}
++                                className="w-full h-full"
++                            />
++                        </motion.div>
++                    )}
++                </AnimatePresence>
+ 
+                 {/* Overlay Badges */}
+-                <div className="absolute top-4 left-4 flex gap-2">
++                <div className="absolute top-4 left-4 flex gap-2 z-10">
+                     {isLive && (
+                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest animate-pulse shadow-2xl">
+                             <span className="w-1.5 h-1.5 rounded-full bg-white" />
+@@ -229,6 +322,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                         {activity.type}
+                     </div>
+                 </div>
++
+             </div>
+ 
+             {/* CONTENT */}
+@@ -259,7 +353,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                     )}
+                 </div>
+ 
+-                <h4 className="text-xl font-bold leading-tight mb-6 group-hover:text-orange-400 transition-colors line-clamp-2"
++                <h4 className="text-lg md:text-xl font-bold leading-tight mb-8 group-hover:text-orange-400 transition-colors line-clamp-2 min-h-[3.5rem]"
+                     dangerouslySetInnerHTML={{ __html: activity.title }}
+                 />
+ 
+@@ -267,9 +361,9 @@ const ActivityCard = ({ activity, index, meta }) => {
+                     href={activity.url}
+                     target="_blank"
+                     rel="noreferrer"
+-                    className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:shadow-[0_10px_25px_rgba(232,80,2,0.3)] transition-all duration-500 text-[10px] font-black uppercase tracking-[0.2em]"
++                    className="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:shadow-[0_10px_25px_rgba(232,80,2,0.3)] transition-all duration-500 text-[10px] font-black uppercase tracking-[0.2em]"
+                 >
+-                    Open on YouTube
++                    Watch on YouTube
+                     <ExternalLink size={14} />
+                 </a>
+             </div>
+
+commit 623d33c0e412b04fb211fc076a63cf9df8b75553
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Fri Jan 30 23:03:32 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 1df12e3..d9c7d4c 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -1,6 +1,7 @@
+ import React, { useEffect, useState, useMemo, useCallback } from "react";
+ import { Link } from "react-router-dom";
+ import { motion, AnimatePresence } from "framer-motion";
++import MetaTags from "./MetaTags";
+ import {
+     Radio,
+     Play,
+@@ -30,9 +31,9 @@ const ClientPulsePage = () => {
+     // Filter relevant activities (Strict 24 hours)
+     const activeFeeds = useMemo(() => {
+         const now = Date.now();
+-        const windowSize = 24 * 60 * 60 * 1000; // 24 hours only
++        const windowSize = 48 * 60 * 60 * 1000; // Relaxed 48 hours
+         return activities
+-            .filter(a => (now - a.timestamp) < windowSize)
++            .filter(a => (now - Number(a.timestamp || 0)) < windowSize)
+             .sort((a, b) => {
+                 // Priority: LIVE > Newest
+                 if (a.isLive && !b.isLive) return -1;
+@@ -222,7 +223,8 @@ const ActivityCard = ({ activity, index, meta }) => {
+                             Live Now
+                         </div>
+                     )}
+-                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]">
++                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]"
++                        style={{ WebkitBackdropFilter: "blur(32px)" }}>
+                         {activity.type === 'VIDEO' ? <Play size={10} fill="currentColor" /> : <Radio size={10} />}
+                         {activity.type}
+                     </div>
+
+commit 779b91e37e0e6795dc5aa7d28fda03fb86ff8603
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Fri Jan 30 09:53:08 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 614afd4..1df12e3 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -11,11 +11,7 @@ import {
+     TrendingUp,
+     Youtube
+ } from "lucide-react";
+-import { CLIENT_PULSE_CONFIG } from "../config/constants";
+-import MetaTags from "./MetaTags";
+-
+-// API Configuration
+-const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
++import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
+ 
+ /**
+  * ClientPulsePage Component
+
+commit b57e91bc294800e550394884628f4ed36df087ee
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Fri Jan 30 08:57:12 2026 +0530
+
+    fix: frontend crash, CSP, and missing worker endpoints
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 7befa22..614afd4 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -1,4 +1,5 @@
+ import React, { useEffect, useState, useMemo, useCallback } from "react";
++import { Link } from "react-router-dom";
+ import { motion, AnimatePresence } from "framer-motion";
+ import {
+     Radio,
+
+commit 128bbbf92559714f112a4d3a8b4ccec2e4ea7a17
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Tue Jan 27 18:27:20 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index 62f9770..7befa22 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -84,7 +84,7 @@ const ClientPulsePage = () => {
+     }, [fetchPulse]);
+ 
+     return (
+-        <div className="min-h-screen bg-black text-white selection:bg-orange-500/30">
++        <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30">
+             <MetaTags
+                 title="Client Pulse | Shinel Studios Live"
+                 description="Real-time YouTube activity feed for our partner creators. New uploads and live streams from the last 24h."
+@@ -112,11 +112,11 @@ const ClientPulsePage = () => {
+                         <span className="text-orange-500 italic">PULSE.</span>
+                     </h1>
+ 
+-                    <p className="text-gray-400 max-w-xl mx-auto text-lg mb-8 leading-relaxed">
++                    <p className="text-[var(--text-muted)] max-w-xl mx-auto text-lg mb-8 leading-relaxed">
+                         The heartbeat of our partner creators. Live streams and fresh uploads from across our client network, synced every 30 minutes.
+                     </p>
+ 
+-                    <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
++                    <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em]">
+                         <div className="flex items-center gap-2">
+                             <Clock size={12} />
+                             24H Activity Window
+@@ -127,12 +127,12 @@ const ClientPulsePage = () => {
+ 
+             {/* --- FEED --- */}
+             <main className="container mx-auto px-6 pb-32">
+-                <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
+-                    <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
++                <div className="flex items-center justify-between mb-8 border-b border-[var(--border)] pb-4">
++                    <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--text-muted)] flex items-center gap-2">
+                         <Zap size={16} className="text-orange-500 fill-orange-500" />
+                         Activity Feed
+                     </h2>
+-                    <div className="text-[10px] font-bold text-gray-600 uppercase">
++                    <div className="text-[10px] font-bold text-[var(--text-muted)]/60 uppercase">
+                         Refreshed: {new Date(lastSync).toLocaleTimeString()}
+                     </div>
+                 </div>
+@@ -168,26 +168,26 @@ const ClientPulsePage = () => {
+                         </AnimatePresence>
+                     </div>
+                 ) : !loading && clients.length === 0 ? (
+-                    <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px]">
+-                        <Youtube size={64} className="mx-auto text-gray-800 mb-6" />
+-                        <h3 className="text-2xl font-bold text-gray-500 mb-2">Registry is empty</h3>
+-                        <p className="text-gray-600 max-w-xs mx-auto mb-8">You haven't added any client channels to the registry yet.</p>
++                    <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
++                        <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
++                        <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Registry is empty</h3>
++                        <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto mb-8">You haven't added any client channels to the registry yet.</p>
+                         <Link to="/admin/clients" className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-orange-500/50 text-orange-500 font-bold uppercase text-[10px] hover:bg-orange-500 hover:text-white transition-all">
+                             Add Clients via Dashboard
+                         </Link>
+                     </div>
+                 ) : !loading && (
+-                    <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px]">
+-                        <Youtube size={64} className="mx-auto text-gray-800 mb-6" />
+-                        <h3 className="text-2xl font-bold text-gray-500 mb-2">Silence in the pulse</h3>
+-                        <p className="text-gray-600 max-w-xs mx-auto">No client uploads or live streams detected in the last 24-48 hours for {clients.length} registered channels.</p>
++                    <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
++                        <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
++                        <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
++                        <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24-48 hours for {clients.length} registered channels.</p>
+                     </div>
+                 )}
+ 
+                 {loading && activeFeeds.length === 0 && (
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                         {[1, 2, 3].map(i => (
+-                            <div key={i} className="aspect-video rounded-[32px] bg-white/[0.03] animate-pulse" />
++                            <div key={i} className="aspect-video rounded-[32px] bg-[var(--surface-alt)] animate-pulse" />
+                         ))}
+                     </div>
+                 )}
+@@ -205,11 +205,11 @@ const ActivityCard = ({ activity, index, meta }) => {
+             initial={{ opacity: 0, scale: 0.98, y: 20 }}
+             animate={{ opacity: 1, scale: 1, y: 0 }}
+             transition={{ duration: 0.6, delay: index * 0.05, ease: [0.23, 1, 0.32, 1] }}
+-            className={`relative group rounded-[32px] overflow-hidden bg-white/[0.02] border transition-all duration-700 hover:bg-white/[0.05] ${isLive ? "border-red-600/50 shadow-[0_0_40px_rgba(220,38,38,0.15)]" : "border-white/5"
++            className={`relative group rounded-[32px] overflow-hidden bg-[var(--surface-alt)]/50 border transition-all duration-700 hover:bg-[var(--surface-alt)] ${isLive ? "border-red-600/50 shadow-[0_0_40px_rgba(220,38,38,0.15)]" : "border-[var(--border)]"
+                 }`}
+         >
+             {/* THUMBNAIL */}
+-            <div className="aspect-video relative overflow-hidden bg-white/[0.02]">
++            <div className="aspect-video relative overflow-hidden bg-[var(--surface-alt)]">
+                 <img
+                     src={activity.thumbnail}
+                     alt={activity.title}
+@@ -225,7 +225,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                             Live Now
+                         </div>
+                     )}
+-                    <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10">
++                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]">
+                         {activity.type === 'VIDEO' ? <Play size={10} fill="currentColor" /> : <Radio size={10} />}
+                         {activity.type}
+                     </div>
+@@ -236,7 +236,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+             <div className="p-7">
+                 <div className="flex items-center gap-3 mb-5">
+                     {/* Channel Logo */}
+-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
++                    <div className="w-8 h-8 rounded-full overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] flex-shrink-0">
+                         {meta?.logo ? (
+                             <img src={meta.logo} alt={activity.clientName} className="w-full h-full object-cover" />
+                         ) : (
+@@ -249,7 +249,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                         <div className="text-[10px] font-black uppercase tracking-widest text-orange-500">
+                             {activity.clientName}
+                         </div>
+-                        <div className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">
++                        <div className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-tighter">
+                             {new Date(activity.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                         </div>
+                     </div>
+@@ -268,7 +268,7 @@ const ActivityCard = ({ activity, index, meta }) => {
+                     href={activity.url}
+                     target="_blank"
+                     rel="noreferrer"
+-                    className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-orange-500 hover:text-white hover:border-orange-500 hover:shadow-[0_10px_25px_rgba(232,80,2,0.3)] transition-all duration-500 text-[10px] font-black uppercase tracking-[0.2em]"
++                    className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] hover:bg-[var(--orange)] hover:text-white hover:border-[var(--orange)] hover:shadow-[0_10px_25px_rgba(232,80,2,0.3)] transition-all duration-500 text-[10px] font-black uppercase tracking-[0.2em]"
+                 >
+                     Open on YouTube
+                     <ExternalLink size={14} />
+
+commit f17f378fffaebfe8fd1312711a828e507b19e596
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Mon Jan 26 14:07:43 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+index f905f90..62f9770 100644
+--- a/frontend/src/components/ClientPulsePage.jsx
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -6,7 +6,6 @@ import {
+     Clock,
+     ExternalLink,
+     AlertCircle,
+-    RefreshCw,
+     Zap,
+     TrendingUp,
+     Youtube
+@@ -122,15 +121,6 @@ const ClientPulsePage = () => {
+                             <Clock size={12} />
+                             24H Activity Window
+                         </div>
+-                        <div className="w-1 h-1 rounded-full bg-white/20" />
+-                        <button
+-                            onClick={fetchPulse}
+-                            disabled={loading}
+-                            className="flex items-center gap-2 hover:text-orange-500 transition-colors uppercase"
+-                        >
+-                            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+-                            {loading ? "Syncing..." : "Sync Now"}
+-                        </button>
+                     </div>
+                 </div>
+             </section>
+
+commit 4f6aed147228755db397df63d7d7c9615ac78a03
+Author: shinelstudios <shinelstudioofficial@gmail.com>
+Date:   Mon Jan 26 09:41:07 2026 +0530
+
+    updated
+
+diff --git a/frontend/src/components/ClientPulsePage.jsx b/frontend/src/components/ClientPulsePage.jsx
+new file mode 100644
+index 0000000..f905f90
+--- /dev/null
++++ b/frontend/src/components/ClientPulsePage.jsx
+@@ -0,0 +1,291 @@
++import React, { useEffect, useState, useMemo, useCallback } from "react";
++import { motion, AnimatePresence } from "framer-motion";
++import {
++    Radio,
++    Play,
++    Clock,
++    ExternalLink,
++    AlertCircle,
++    RefreshCw,
++    Zap,
++    TrendingUp,
++    Youtube
++} from "lucide-react";
++import { CLIENT_PULSE_CONFIG } from "../config/constants";
++import MetaTags from "./MetaTags";
++
++// API Configuration
++const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || "";
++
++/**
++ * ClientPulsePage Component
++ * A real-time activity feed showcasing client live streams and new uploads (YouTube Only).
++ * Now uses the dynamic registry from the Shinel API.
++ */
++const ClientPulsePage = () => {
++    const [activities, setActivities] = useState([]);
++    const [channelMeta, setChannelMeta] = useState({}); // id -> { title, logo }
++    const [clients, setClients] = useState([]);
++    const [loading, setLoading] = useState(true);
++    const [lastSync, setLastSync] = useState(Date.now());
++    const [error, setError] = useState(null);
++    const [quotaExceeded, setQuotaExceeded] = useState(false);
++
++    // Filter relevant activities (Strict 24 hours)
++    const activeFeeds = useMemo(() => {
++        const now = Date.now();
++        const windowSize = 24 * 60 * 60 * 1000; // 24 hours only
++        return activities
++            .filter(a => (now - a.timestamp) < windowSize)
++            .sort((a, b) => {
++                // Priority: LIVE > Newest
++                if (a.isLive && !b.isLive) return -1;
++                if (!a.isLive && b.isLive) return 1;
++                return b.timestamp - a.timestamp;
++            });
++    }, [activities]);
++
++    const fetchPulse = useCallback(async () => {
++        setLoading(true);
++        setError(null);
++
++        try {
++            // Fetch Pulse Feed from Backend (Quota Protected)
++            const res = await fetch(`${AUTH_BASE}/clients/pulse`);
++            if (!res.ok) throw new Error("Backend synchronization failure");
++
++            const data = await res.json();
++
++            setActivities(data.activities || []);
++            setChannelMeta(data.meta || {});
++            setLastSync(data.ts || Date.now());
++            setQuotaExceeded(!!data.quotaExceeded);
++
++            // Also load reg for stats if needed
++            const cRes = await fetch(`${AUTH_BASE}/clients`);
++            if (cRes.ok) {
++                const cData = await cRes.json();
++                setClients(cData.clients || []);
++            }
++
++        } catch (err) {
++            setError("Pulse sync failed. Backend may be unavailable.");
++            console.error("Pulse fetch failed:", err);
++        } finally {
++            setLoading(false);
++        }
++    }, []);
++
++    useEffect(() => {
++        fetchPulse();
++
++        // ≡ƒÆí 30 MINUTE BACKGROUND POLLING
++        const interval = setInterval(fetchPulse, 30 * 60 * 1000);
++        return () => clearInterval(interval);
++    }, [fetchPulse]);
++
++    return (
++        <div className="min-h-screen bg-black text-white selection:bg-orange-500/30">
++            <MetaTags
++                title="Client Pulse | Shinel Studios Live"
++                description="Real-time YouTube activity feed for our partner creators. New uploads and live streams from the last 24h."
++            />
++
++            {/* --- HERO --- */}
++            <section className="relative pt-32 pb-16 overflow-hidden">
++                <div className="absolute inset-0 z-0">
++                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-600/10 rounded-full blur-[120px]" />
++                    <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px]" />
++                </div>
++
++                <div className="container mx-auto px-6 relative z-10 text-center">
++                    <motion.div
++                        initial={{ opacity: 0, y: 20 }}
++                        animate={{ opacity: 1, y: 0 }}
++                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-black uppercase tracking-widest text-orange-500 mb-6"
++                    >
++                        <Radio size={14} className="animate-pulse" />
++                        Live Pulse Monitor
++                    </motion.div>
++
++                    <h1 className="text-5xl md:text-7xl font-black mb-4 tracking-tighter leading-[0.9]">
++                        REAL-TIME <br />
++                        <span className="text-orange-500 italic">PULSE.</span>
++                    </h1>
++
++                    <p className="text-gray-400 max-w-xl mx-auto text-lg mb-8 leading-relaxed">
++                        The heartbeat of our partner creators. Live streams and fresh uploads from across our client network, synced every 30 minutes.
++                    </p>
++
++                    <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
++                        <div className="flex items-center gap-2">
++                            <Clock size={12} />
++                            24H Activity Window
++                        </div>
++                        <div className="w-1 h-1 rounded-full bg-white/20" />
++                        <button
++                            onClick={fetchPulse}
++                            disabled={loading}
++                            className="flex items-center gap-2 hover:text-orange-500 transition-colors uppercase"
++                        >
++                            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
++                            {loading ? "Syncing..." : "Sync Now"}
++                        </button>
++                    </div>
++                </div>
++            </section>
++
++            {/* --- FEED --- */}
++            <main className="container mx-auto px-6 pb-32">
++                <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
++                    <h2 className="text-sm font-black uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
++                        <Zap size={16} className="text-orange-500 fill-orange-500" />
++                        Activity Feed
++                    </h2>
++                    <div className="text-[10px] font-bold text-gray-600 uppercase">
++                        Refreshed: {new Date(lastSync).toLocaleTimeString()}
++                    </div>
++                </div>
++
++                {quotaExceeded && (
++                    <div className="mb-10 p-6 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center gap-4">
++                        <Zap size={24} className="animate-pulse" />
++                        <div>
++                            <div className="font-bold">YouTube API Quota Exceeded</div>
++                            <div className="text-xs opacity-80">The studio has reached its daily sync limit. Feed may be stale until reset (UTC midnight).</div>
++                        </div>
++                    </div>
++                )}
++
++                {error && (
++                    <div className="mb-10 p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-4">
++                        <AlertCircle size={24} />
++                        <span className="font-bold">{error}</span>
++                    </div>
++                )}
++
++                {activeFeeds.length > 0 ? (
++                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
++                        <AnimatePresence mode="popLayout">
++                            {activeFeeds.map((activity, idx) => (
++                                <ActivityCard
++                                    key={activity.id}
++                                    activity={activity}
++                                    index={idx}
++                                    meta={channelMeta[activity.channelId]}
++                                />
++                            ))}
++                        </AnimatePresence>
++                    </div>
++                ) : !loading && clients.length === 0 ? (
++                    <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px]">
++                        <Youtube size={64} className="mx-auto text-gray-800 mb-6" />
++                        <h3 className="text-2xl font-bold text-gray-500 mb-2">Registry is empty</h3>
++                        <p className="text-gray-600 max-w-xs mx-auto mb-8">You haven't added any client channels to the registry yet.</p>
++                        <Link to="/admin/clients" className="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-orange-500/50 text-orange-500 font-bold uppercase text-[10px] hover:bg-orange-500 hover:text-white transition-all">
++                            Add Clients via Dashboard
++                        </Link>
++                    </div>
++                ) : !loading && (
++                    <div className="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px]">
++                        <Youtube size={64} className="mx-auto text-gray-800 mb-6" />
++                        <h3 className="text-2xl font-bold text-gray-500 mb-2">Silence in the pulse</h3>
++                        <p className="text-gray-600 max-w-xs mx-auto">No client uploads or live streams detected in the last 24-48 hours for {clients.length} registered channels.</p>
++                    </div>
++                )}
++
++                {loading && activeFeeds.length === 0 && (
++                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
++                        {[1, 2, 3].map(i => (
++                            <div key={i} className="aspect-video rounded-[32px] bg-white/[0.03] animate-pulse" />
++                        ))}
++                    </div>
++                )}
++            </main>
++        </div>
++    );
++};
++
++const ActivityCard = ({ activity, index, meta }) => {
++    const isLive = activity.isLive;
++
++    return (
++        <motion.div
++            layout
++            initial={{ opacity: 0, scale: 0.98, y: 20 }}
++            animate={{ opacity: 1, scale: 1, y: 0 }}
++            transition={{ duration: 0.6, delay: index * 0.05, ease: [0.23, 1, 0.32, 1] }}
++            className={`relative group rounded-[32px] overflow-hidden bg-white/[0.02] border transition-all duration-700 hover:bg-white/[0.05] ${isLive ? "border-red-600/50 shadow-[0_0_40px_rgba(220,38,38,0.15)]" : "border-white/5"
++                }`}
++        >
++            {/* THUMBNAIL */}
++            <div className="aspect-video relative overflow-hidden bg-white/[0.02]">
++                <img
++                    src={activity.thumbnail}
++                    alt={activity.title}
++                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
++                    loading="lazy"
++                />
++
++                {/* Overlay Badges */}
++                <div className="absolute top-4 left-4 flex gap-2">
++                    {isLive && (
++                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest animate-pulse shadow-2xl">
++                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
++                            Live Now
++                        </div>
++                    )}
++                    <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10">
++                        {activity.type === 'VIDEO' ? <Play size={10} fill="currentColor" /> : <Radio size={10} />}
++                        {activity.type}
++                    </div>
++                </div>
++            </div>
++
++            {/* CONTENT */}
++            <div className="p-7">
++                <div className="flex items-center gap-3 mb-5">
++                    {/* Channel Logo */}
++                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/5 flex-shrink-0">
++                        {meta?.logo ? (
++                            <img src={meta.logo} alt={activity.clientName} className="w-full h-full object-cover" />
++                        ) : (
++                            <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-orange-500 uppercase">
++                                {activity.clientName.charAt(0)}
++                            </div>
++                        )}
++                    </div>
++                    <div className="flex flex-col">
++                        <div className="text-[10px] font-black uppercase tracking-widest text-orange-500">
++                            {activity.clientName}
++                        </div>
++                        <div className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">
++                            {new Date(activity.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
++                        </div>
++                    </div>
++                    {isLive && (
++                        <div className="ml-auto">
++                            <TrendingUp size={14} className="text-red-500" />
++                        </div>
++                    )}
++                </div>
++
++                <h4 className="text-xl font-bold leading-tight mb-6 group-hover:text-orange-400 transition-colors line-clamp-2"
++                    dangerouslySetInnerHTML={{ __html: activity.title }}
++                />
++
++                <a
++                    href={activity.url}
++                    target="_blank"
++                    rel="noreferrer"
++                    className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-orange-500 hover:text-white hover:border-orange-500 hover:shadow-[0_10px_25px_rgba(232,80,2,0.3)] transition-all duration-500 text-[10px] font-black uppercase tracking-[0.2em]"
++                >
++                    Open on YouTube
++                    <ExternalLink size={14} />
++                </a>
++            </div>
++        </motion.div>
++    );
++};
++
++export default ClientPulsePage;

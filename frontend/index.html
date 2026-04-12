@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en-IN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="format-detection" content="telephone=no,address=no,email=no" />
+  <meta http-equiv="x-dns-prefetch-control" content="on" />
+
+  <!-- Relaxed CSP for Integrations (Calendly, Google, Stripe, Segment, Pendo) -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://assets.calendly.com https://calendly.com https://apis.google.com https://accounts.google.com https://www.google-analytics.com https://www.googletagmanager.com https://js.stripe.com https://connect.facebook.net https://cdn.segment.io https://cdn.pendo.io https://data.pendo.io https://js.appboycdn.com https://cdn.sprig.com https://cdn.cookielaw.org https://challenges.cloudflare.com https://static.cloudflareinsights.com https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com;
+    font-src 'self' data: https://fonts.gstatic.com;
+    img-src 'self' data: https: blob:;
+    frame-src 'self' https://calendly.com https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com;
+    connect-src 'self' https: wss:;
+    worker-src 'self' blob:;
+  ">
+
+  <!-- DNS Prefetch (pairs with preconnects) -->
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="dns-prefetch" href="https://calendly.com">
+  <link rel="dns-prefetch" href="https://www.youtube.com">
+  <link rel="dns-prefetch" href="https://i.ytimg.com">
+
+  <!-- Preconnects (perf) -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
+
+  <!-- Fonts (async loading with display=swap for better performance) -->
+  <!-- Note: Removed specific font file preloads to avoid "unused preload" warnings -->
+  <!-- DNS prefetch + preconnect + async loading is sufficient for optimal performance -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet">
+  </noscript>
+
+  <!-- Favicons -->
+  <!-- 1) System-controlled (fallback when JS is disabled) -->
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-light-16x16.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
+
+  <!-- 2) JS-controlled (for live theme toggles) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-light-32x32.png" data-theme="light">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" data-theme="dark">
+
+  <!-- 3) Single tag we also update as a universal fallback -->
+  <link id="favicon" rel="icon" type="image/png" href="/favicon-light-32x32.png" />
+
+  <!-- Apple touch icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  <!-- Theme colors (system). JS also sets the plain theme-color at runtime. -->
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F0F0F" media="(prefers-color-scheme: dark)">
+
+  <!-- PWA niceties (optional) -->
+  <!-- <link rel="manifest" href="/site.webmanifest"> -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- SEO & Social (Managed by MetaTags.jsx) -->
+  <title>Shinel Studios</title>
+  <meta name="robots" content="index, follow">
+
+  <!-- Staging safety: uncomment to avoid indexing on previews -->
+  <!-- <meta name="robots" content="noindex,nofollow"> -->
+</head>
+
+<body>
+  <script>
+    // --- Prepaint theme bootstrap (no dependencies) ---
+    (function () {
+      try {
+        var isDark =
+          (localStorage.getItem('theme') === 'dark') ||
+          (!localStorage.getItem('theme') &&
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+        var root = document.documentElement;
+        root.classList.toggle('dark', !!isDark);
+
+        // Sync theme-color (the *plain* one without media attr)
+        var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
+        if (!metaTheme) {
+          metaTheme = document.createElement('meta');
+          metaTheme.setAttribute('name', 'theme-color');
+          document.head.appendChild(metaTheme);
+        }
+        metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
+
+        // Swap favicon immediately
+        // (1) toggle data-theme icons if present
+        var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
+        var darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
+        if (lightIcon && darkIcon) {
+          lightIcon.disabled = !!isDark;
+          darkIcon.disabled = !isDark;
+        }
+        // (2) always update the single fallback tag too
+        var favicon = document.getElementById('favicon');
+        if (favicon) {
+          favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
+        }
+      } catch (e) { /* no-op */ }
+    })();
+
+    // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
+    (function () {
+      try {
+        var setVH = function () {
+          var vh = window.innerHeight * 0.01;
+          document.documentElement.style.setProperty('--vh', vh + 'px');
+        };
+        setVH();
+        window.addEventListener('resize', setVH, { passive: true });
+      } catch (e) { /* no-op */ }
+    })();
+  </script>
+
+  <noscript>
+    <strong>Shinel Studios</strong> requires JavaScript for the best experience.
+    Please enable it to view our work, pricing and booking.
+  </noscript>
+
+  <div id="root"></div>
+
+  <!-- Global subscriber counts used by CreatorsWorkedWith. -->
+  <script>
+    window.SS_SUBS = {
+      kamz: 1730000,
+      deadlox: 2100000,
+      manav: 151000,
+      gamermummy: 450000,
+      aish: 17100,
+      katka: 38600,
+      maggie: 21300
+    };
+  </script>
+
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
