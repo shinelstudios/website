@@ -400,6 +400,11 @@ export default function App() {
           <Route path="/services/graphic-design" element={<GraphicDesignPage />} />
           <Route path="/graphic-design" element={<GraphicDesignPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          {/* Legacy /profile and /settings links in SiteHeader user-menu
+              were never wired to real routes. Point them to the live
+              self-serve editor at /me so the menu items stop 404ing. */}
+          <Route path="/profile" element={<Navigate to="/me" replace />} />
+          <Route path="/settings" element={<Navigate to="/me" replace />} />
           <Route
             path="/me"
             element={
