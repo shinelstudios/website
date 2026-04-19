@@ -100,18 +100,10 @@ function normalizeWork(item, type) {
 }
 
 // ─── service navigation cards ─────────────────────────────────────────────────
+// Every card must route to a real, public, working page. No protected routes,
+// no dynamic category placeholders. The order is editorial, not alphabetical:
+// most-requested services first (Video + Thumbnails), then the rest.
 const SERVICE_CARDS = [
-  {
-    key: "thumbnails",
-    label: "Thumbnails",
-    icon: Image,
-    path: "/thumbnails",
-    color: "from-orange-500/20 to-orange-600/10",
-    border: "border-orange-500/30",
-    hover: "hover:border-orange-500/60",
-    badge: "GFX",
-    desc: "High-CTR thumbnail designs",
-  },
   {
     key: "video-editing",
     label: "Video Editing",
@@ -122,6 +114,17 @@ const SERVICE_CARDS = [
     hover: "hover:border-blue-500/60",
     badge: "LONG-FORM",
     desc: "Retention-focused long-form edits",
+  },
+  {
+    key: "thumbnails",
+    label: "Thumbnails",
+    icon: Image,
+    path: "/thumbnails",
+    color: "from-orange-500/20 to-orange-600/10",
+    border: "border-orange-500/30",
+    hover: "hover:border-orange-500/60",
+    badge: "GFX",
+    desc: "High-CTR thumbnail designs",
   },
   {
     key: "shorts",
@@ -146,26 +149,26 @@ const SERVICE_CARDS = [
     desc: "Channel identity & brand kits",
   },
   {
-    key: "growth",
-    label: "Growth & SEO",
+    key: "graphic-design",
+    label: "Graphic Design",
+    icon: Sparkles,
+    path: "/graphic-design",
+    color: "from-yellow-500/20 to-yellow-600/10",
+    border: "border-yellow-500/30",
+    hover: "hover:border-yellow-500/60",
+    badge: "PRINT + SOCIAL",
+    desc: "Logos, posts, banners, flex, cards",
+  },
+  {
+    key: "seo",
+    label: "SEO Tool",
     icon: BarChart3,
-    path: "/services/growth/seo",
+    path: "/tools/seo",
     color: "from-green-500/20 to-green-600/10",
     border: "border-green-500/30",
     hover: "hover:border-green-500/60",
     badge: "STRATEGY",
-    desc: "Data-driven YouTube growth",
-  },
-  {
-    key: "ai",
-    label: "AI Automation",
-    icon: Zap,
-    path: "/ai-studio",
-    color: "from-yellow-500/20 to-yellow-600/10",
-    border: "border-yellow-500/30",
-    hover: "hover:border-yellow-500/60",
-    badge: "AI",
-    desc: "AI-enhanced production workflows",
+    desc: "Titles, description, tags generator",
   },
 ];
 
@@ -507,30 +510,33 @@ export default function WorkPage() {
         </div>
       </Section>
 
-      {/* ─── SERVICE NAVIGATION HUB ───────────────────────────────────── */}
-      <section className="py-16 bg-[var(--surface-alt)]">
-        <div className="container mx-auto px-6">
-          <motion.div
-            className="text-center mb-10"
-            {...mkViewFade(reduced)}
-          >
-            <h2 className="text-3xl sm:text-4xl font-black mb-2 text-[var(--text)]">
-              Browse by{" "}
-              <span className="text-[var(--orange)]">Service</span>
-            </h2>
-            <p className="text-sm text-[var(--text-muted)] max-w-lg mx-auto">
-              Tap any category to explore that specific portfolio — all work is
-              fetched live from our production database.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 max-w-6xl mx-auto items-stretch">
-            {SERVICE_CARDS.map((card, i) => (
-              <ServiceNavCard key={card.key} card={card} index={i} reduced={!!reduced} />
-            ))}
+      {/* ─── SERVICE NAVIGATION HUB (redesign v2) ─────────────────────── */}
+      <Section size="lg" tone="alt" hairlineTop>
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
+          <div>
+            <RevealOnScroll>
+              <Eyebrow className="mb-3">Explore by service</Eyebrow>
+            </RevealOnScroll>
+            <RevealOnScroll delay="80ms">
+              <Display size="md" className="mb-2">
+                Every service we ship — one click away.
+              </Display>
+            </RevealOnScroll>
+            <RevealOnScroll delay="160ms">
+              <p className="text-sm max-w-xl" style={{ color: "var(--text-muted)" }}>
+                Every tile below is a real public page with live portfolio work
+                and a direct quote/inquiry path. No dead links, no coming-soon.
+              </p>
+            </RevealOnScroll>
           </div>
         </div>
-      </section>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-stretch">
+          {SERVICE_CARDS.map((card, i) => (
+            <ServiceNavCard key={card.key} card={card} index={i} reduced={!!reduced} />
+          ))}
+        </div>
+      </Section>
 
       {/* ─── LIVE CASE STUDY ─────────────────────────────────────────────── */}
       <LiveStatsCaseStudy

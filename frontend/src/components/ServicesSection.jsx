@@ -72,7 +72,7 @@ const ServicesSection = () => {
       outcome: "Auto transcripts with clean, on-brand subtitles.",
       proof: "Faster edits • Better accessibility • Higher retention",
       gradient: "linear-gradient(135deg, #45b7d1, #3498db)",
-      path: "/services/growth/captions",
+      path: "/tools/srt",
       features: [
         "99% accuracy AI",
         "Multi-language support",
@@ -86,7 +86,7 @@ const ServicesSection = () => {
       outcome: "AI outlines + beat sheets → human punch-up.",
       proof: "Hook retention +18% in A/B tests (first 8s)",
       gradient: "linear-gradient(135deg, #5f27cd, #341f97)",
-      path: "/services/growth/seo",
+      path: "/tools/seo",
       features: [
         "Research assistance",
         "Hook templates",
@@ -100,7 +100,7 @@ const ServicesSection = () => {
       outcome: "Consent-first face replacement & object removal.",
       proof: "Creator-approved only • Review-gated workflow",
       gradient: "linear-gradient(135deg, #ff9ff3, #f368e0)",
-      path: "/services/editing/long",
+      path: "/video-editing",
       features: [
         "Consent verification",
         "Review workflow",
@@ -114,7 +114,7 @@ const ServicesSection = () => {
       outcome: "Natural voice pickups, noise cleanup, alt takes.",
       proof: "Consent-first cloning • Platform-policy compliant",
       gradient: "linear-gradient(135deg, #ee5a6f, #c44569)",
-      path: "/services/editing/long",
+      path: "/video-editing",
       features: [
         "Voice cloning (consent)",
         "Noise reduction",
@@ -128,7 +128,7 @@ const ServicesSection = () => {
       outcome: "Auto-posting, asset handoff, titles, tags, descriptions.",
       proof: "+27% browse/search traffic after metadata revamp",
       gradient: "linear-gradient(135deg, #48dbfb, #0abde3)",
-      path: "/services/growth/seo",
+      path: "/tools/seo",
       features: [
         "Auto-scheduling",
         "Metadata optimization",
