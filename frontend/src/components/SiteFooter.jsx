@@ -360,7 +360,7 @@ const SiteFooter = ({
                   { t: "Our Work", href: "/work", icon: TrendingUp },
                   { t: "Graphic Design", href: "/graphic-design", icon: Sparkles },
                   { t: "FAQ", href: "/faq", icon: HelpCircle },
-                  { t: "Contact", href: "/#contact", icon: Mail },
+                  { t: "Contact", href: "/contact", icon: Mail },
                   { t: "Tools & Resources", href: "/tools" },
                 ].map((l) => (
                   <li key={l.t}>

@@ -97,6 +97,7 @@ const PortfolioPage = React.lazy(() => import("./components/PortfolioPage.jsx"))
 const TeamIndex = React.lazy(() => import("./components/TeamIndex.jsx"));
 const MyProfilePage = React.lazy(() => import("./components/MyProfilePage.jsx"));
 const GraphicDesignPage = React.lazy(() => import("./components/GraphicDesignPage.jsx"));
+const ContactPage = React.lazy(() => import("./components/ContactPage.jsx"));
 const ManagementHub = React.lazy(() => import("./components/ManagementHub.jsx"));
 const AdminStats = React.lazy(() => import("./components/AdminStats.jsx"));
 const LiveTemplates = React.lazy(() => import("./components/LiveTemplates.jsx"));
@@ -398,6 +399,7 @@ export default function App() {
           <Route path="/team/:slug" element={<PortfolioPage />} />
           <Route path="/services/graphic-design" element={<GraphicDesignPage />} />
           <Route path="/graphic-design" element={<GraphicDesignPage />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route
             path="/me"
             element={
