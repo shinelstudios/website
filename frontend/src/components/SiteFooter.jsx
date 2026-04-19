@@ -175,10 +175,12 @@ const SiteFooter = ({
   /* right column shown in compact (balances the grid on home) */
   const CompactRight = () => (
     <aside className={isVisible ? "fade-in-delay-1" : ""}>
-      <h3 className="text-xl font-bold mb-4 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
-        <ArrowUpRight size={18} style={{ color: "var(--orange)" }} />
+      <div
+        className="text-kicker mb-4"
+        style={{ color: "var(--orange)" }}
+      >
         Reach Us
-      </h3>
+      </div>
       <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
         <a
           href={`mailto:${CONTACT.email}`}
@@ -350,9 +352,12 @@ const SiteFooter = ({
           {/* QUICK LINKS */}
           {!compact && (
             <nav aria-label="Footer navigation" className={isVisible ? "fade-in-delay-1" : ""}>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
-                <ArrowUpRight size={20} style={{ color: "var(--orange)" }} /> Quick Links
-              </h3>
+              <div
+                className="text-kicker mb-6"
+                style={{ color: "var(--orange)" }}
+              >
+                Quick Links
+              </div>
               <ul className="space-y-2 mb-8">
                 {[
                   { t: "Home", href: "/", icon: Sparkles },
@@ -377,9 +382,12 @@ const SiteFooter = ({
                 ))}
               </ul>
 
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
-                <Users size={20} style={{ color: "var(--orange)" }} /> Industries
-              </h3>
+              <div
+                className="text-kicker mb-6 flex items-center gap-2"
+                style={{ color: "var(--orange)" }}
+              >
+                <Users size={12} /> Industries
+              </div>
               <ul className="space-y-2">
                 {[
                   { t: "Real Estate Agents", href: "/industries/real-estate" },
@@ -405,11 +413,27 @@ const SiteFooter = ({
           {/* NEWSLETTER */}
           {!compact && (
             <div className={isVisible ? "fade-in-delay-2" : ""}>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: "var(--footer-text)" }}>
-                <Send size={20} style={{ color: "var(--orange)" }} /> Stay Updated
-              </h3>
-              <p className="mb-4" style={{ color: "var(--footer-muted)" }}>
-                Fresh ideas, thumbnail tests, tools & case studies. 1–2× / month.
+              <div
+                className="text-kicker mb-4 flex items-center gap-2"
+                style={{ color: "var(--orange)" }}
+              >
+                <Send size={12} /> Newsletter
+              </div>
+              <div
+                className="mb-3"
+                style={{
+                  color: "var(--footer-text)",
+                  fontFamily: "'Outfit Variable', 'Outfit', sans-serif",
+                  fontSize: "1.35rem",
+                  fontWeight: 600,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Field notes from the edit bay.
+              </div>
+              <p className="mb-4 text-sm" style={{ color: "var(--footer-muted)" }}>
+                Fresh ideas, thumbnail tests, tools & case studies. 1–2× / month. Unsubscribe anytime.
               </p>
 
               <form className="space-y-3" onSubmit={onSubscribe} noValidate>
