@@ -16,6 +16,7 @@ import {
 import { CLIENT_PULSE_CONFIG, AUTH_BASE } from "../config/constants";
 import PremiumPlayer from "./PremiumPlayer";
 import { useClientStats } from "../context/ClientStatsContext";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 /**
  * ClientPulsePage Component
@@ -131,37 +132,43 @@ const ClientPulsePage = () => {
                 description="Real-time YouTube activity feed for our partner creators. New uploads and live streams from the last 24h."
             />
 
-            {/* --- HERO --- */}
-            <section className="relative pt-32 pb-16 overflow-hidden">
-                <div className="absolute inset-0 z-0">
+            {/* --- HERO (editorial v2) --- */}
+            <section className="relative pt-24 md:pt-32 pb-14 overflow-hidden">
+                <div className="absolute inset-0 z-0 pointer-events-none opacity-60">
                     <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-600/10 rounded-full blur-[120px]" />
                     <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px]" />
                 </div>
 
-                <div className="container mx-auto px-6 relative z-10 text-center">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-black uppercase tracking-widest text-orange-500 mb-6"
-                    >
-                        <Radio size={14} className="animate-pulse" />
-                        Live Pulse Monitor
-                    </motion.div>
+                <div className="container mx-auto px-4 md:px-6 relative z-10">
+                    <div className="max-w-3xl">
+                        <RevealOnScroll>
+                            <div className="flex items-center gap-3 mb-5">
+                                <Kicker className="!m-0">Live Pulse</Kicker>
+                                <span className="inline-flex items-center gap-1.5 text-meta" style={{ color: "var(--orange)" }}>
+                                    <Radio size={10} className="animate-pulse" />
+                                    syncing every 30 min
+                                </span>
+                            </div>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="80ms">
+                            <Display as="h1" size="xl" className="mb-5">
+                                Real-time <span className="italic" style={{ color: "var(--orange)" }}>pulse.</span>
+                            </Display>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="160ms">
+                            <Lede>
+                                The heartbeat of our partner creators. Live streams and fresh uploads
+                                from across our client network, synced every 30 minutes.
+                            </Lede>
+                        </RevealOnScroll>
 
-                    <h1 className="text-5xl md:text-7xl font-black mb-4 tracking-tighter leading-[0.9]">
-                        REAL-TIME <br />
-                        <span className="text-orange-500 italic">PULSE.</span>
-                    </h1>
-
-                    <p className="text-[var(--text-muted)] max-w-xl mx-auto text-lg mb-8 leading-relaxed">
-                        The heartbeat of our partner creators. Live streams and fresh uploads from across our client network, synced every 30 minutes.
-                    </p>
-
-                    <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-[0.2em]">
-                        <div className="flex items-center gap-2">
-                            <Clock size={12} />
-                            24H Activity Window
-                        </div>
+                        <RevealOnScroll delay="240ms">
+                            <div className="mt-6 flex items-center gap-4 text-meta" style={{ color: "var(--text-muted)" }}>
+                                <span className="inline-flex items-center gap-1.5">
+                                    <Clock size={12} /> 24 h activity window
+                                </span>
+                            </div>
+                        </RevealOnScroll>
                     </div>
                 </div>
             </section>

@@ -1,86 +1,72 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Home, ArrowLeft, Search } from 'lucide-react';
 import MetaTags from './MetaTags';
+import { Kicker, Display, Lede, RevealOnScroll } from '../design';
 
+/**
+ * NotFound — 404 page.
+ * Route: catch-all /*
+ *
+ * Editorial treatment matching the rest of the site, with both a "home"
+ * and "back" CTA. Noindex so search engines don't catalog the page.
+ */
 const NotFound = () => {
-    return (
-        <div className="min-h-[70vh] flex items-center justify-center px-4 py-20 relative overflow-hidden bg-white dark:bg-black">
-            <MetaTags
-                title="Page Not Found"
-                description="The page you are looking for does not exist."
-                noIndex={true}
-            />
+  return (
+    <div className="min-h-svh flex items-center justify-center px-4 md:px-6 py-20 relative overflow-hidden bg-[var(--surface)]">
+      <MetaTags
+        title="Page Not Found"
+        description="The page you are looking for does not exist."
+        noIndex
+      />
 
-            {/* Background Decoration */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[var(--orange)] opacity-5 blur-[120px] rounded-full pointer-events-none" />
+      {/* Subtle orange glow — transform-only, GPU composited */}
+      <div
+        aria-hidden="true"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none rounded-full"
+        style={{ background: "var(--orange)", opacity: 0.05, filter: "blur(120px)" }}
+      />
 
-            <div className="max-w-md w-full text-center relative z-10">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="mb-8 flex justify-center"
-                >
-                    <div className="w-24 h-24 rounded-3xl bg-[rgba(232,80,2,0.1)] flex items-center justify-center text-[var(--orange)]">
-                        <Search size={48} strokeWidth={1.5} />
-                    </div>
-                </motion.div>
-
-                <motion.h1
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="text-6xl font-bold font-['Poppins'] mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[var(--text)] to-[var(--text-muted)]"
-                >
-                    404
-                </motion.h1>
-
-                <motion.h2
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="text-xl font-semibold mb-3"
-                    style={{ color: 'var(--text)' }}
-                >
-                    Lost in the Studio?
-                </motion.h2>
-
-                <motion.p
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="mb-10"
-                    style={{ color: 'var(--text-muted)' }}
-                >
-                    The page you're looking for was moved, renamed, or perhaps never existed in the first place.
-                </motion.p>
-
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.4 }}
-                    className="flex flex-col sm:flex-row items-center justify-center gap-4"
-                >
-                    <Link
-                        to="/"
-                        className="btn-brand w-full sm:w-auto"
-                    >
-                        <Home size={18} />
-                        Back to Home
-                    </Link>
-                    <button
-                        onClick={() => window.history.back()}
-                        className="btn-ghost w-full sm:w-auto"
-                    >
-                        <ArrowLeft size={18} />
-                        Go Back
-                    </button>
-                </motion.div>
+      <div className="max-w-xl w-full relative z-10">
+        <RevealOnScroll>
+          <div className="mb-8 flex">
+            <div
+              className="w-16 h-16 rounded-2xl hairline grid place-items-center"
+              style={{ background: "var(--orange-soft)", color: "var(--orange)" }}
+            >
+              <Search size={28} strokeWidth={1.5} />
             </div>
-        </div>
-    );
+          </div>
+        </RevealOnScroll>
+
+        <RevealOnScroll delay="80ms">
+          <Kicker className="mb-5">404 · Page not found</Kicker>
+        </RevealOnScroll>
+        <RevealOnScroll delay="160ms">
+          <Display as="h1" size="xl" className="mb-5">
+            Lost in <span style={{ color: "var(--orange)" }}>the studio.</span>
+          </Display>
+        </RevealOnScroll>
+        <RevealOnScroll delay="240ms">
+          <Lede className="mb-10">
+            The page you're looking for was moved, renamed, or perhaps never existed
+            in the first place. Let's get you back to somewhere useful.
+          </Lede>
+        </RevealOnScroll>
+
+        <RevealOnScroll delay="320ms">
+          <div className="flex flex-col sm:flex-row items-start gap-3">
+            <Link to="/" className="btn-editorial">
+              <Home size={16} /> Back to home
+            </Link>
+            <Link to="/work" className="btn-editorial-ghost">
+              <ArrowLeft size={16} /> Explore the work
+            </Link>
+          </div>
+        </RevealOnScroll>
+      </div>
+    </div>
+  );
 };
 
 export default NotFound;
