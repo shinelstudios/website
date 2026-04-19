@@ -354,9 +354,12 @@ export default function App() {
           {/* Redirect aliases to canonical paths */}
           <Route path="/videos/long" element={<Navigate to="/video-editing" replace />} />
           <Route path="/videos/shorts" element={<Navigate to="/shorts" replace />} />
-          <Route path="/gfx" element={<Navigate to="/services/gfx" replace />} />
+          <Route path="/gfx" element={<Navigate to="/work" replace />} />
           <Route path="/gfx/branding" element={<Navigate to="/branding" replace />} />
           <Route path="/gfx/thumbnails" element={<Navigate to="/thumbnails" replace />} />
+          {/* No "/services" landing \u2014 Work page is the single browse surface.
+              Anyone who types /services (or an un-aliased /services/<something>) lands on /work. */}
+          <Route path="/services" element={<Navigate to="/work" replace />} />
 
           {/* Deep link redirects for SEO/Consistency */}
           <Route path="/services/gfx/thumbnails" element={<Navigate to="/thumbnails" replace />} />
