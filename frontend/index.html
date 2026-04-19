@@ -14,41 +14,25 @@
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' https://assets.calendly.com https://calendly.com https://apis.google.com https://accounts.google.com https://www.google-analytics.com https://www.googletagmanager.com https://js.stripe.com https://connect.facebook.net https://cdn.segment.io https://cdn.pendo.io https://data.pendo.io https://js.appboycdn.com https://cdn.sprig.com https://cdn.cookielaw.org https://challenges.cloudflare.com https://static.cloudflareinsights.com https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com;
-    font-src 'self' data: https://fonts.gstatic.com;
+    style-src 'self' 'unsafe-inline' https://assets.calendly.com;
+    font-src 'self' data:;
     img-src 'self' data: https: blob:;
     frame-src 'self' https://calendly.com https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com;
     connect-src 'self' https://shinel-auth.shinelstudioofficial.workers.dev https://www.youtube.com https://youtube.googleapis.com https://www.google-analytics.com https://api.ipify.org;
     worker-src 'self' blob:;
   ">
 
-  <!-- DNS Prefetch (pairs with preconnects) -->
-  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
-  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <!-- DNS Prefetch — only third-party origins we still depend on -->
   <link rel="dns-prefetch" href="https://calendly.com">
   <link rel="dns-prefetch" href="https://www.youtube.com">
   <link rel="dns-prefetch" href="https://i.ytimg.com">
 
   <!-- Preconnects (perf) -->
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://calendly.com"><!-- Calendly iframe -->
 
-  <!-- Fonts (async loading with display=swap for better performance) -->
-  <!-- Note: Removed specific font file preloads to avoid "unused preload" warnings -->
-  <!-- DNS prefetch + preconnect + async loading is sufficient for optimal performance -->
-  <!-- Fonts load normally (render-blocking for a few ms). The older `media="print"
-       + onload="this.media='all'"` trick is a CSP violation under the tightened
-       script-src (inline event handlers count as inline script). The preconnect
-       above + display=swap below keep this fast. -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-    rel="stylesheet">
-  <noscript>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet">
-  </noscript>
+  <!-- Fonts are self-hosted via @fontsource-variable (see src/main.jsx).
+       No Google Fonts DNS round-trip, no render-blocking stylesheet,
+       woff2 files are chunked + hashed by Vite and served from same origin. -->
 
   <!-- Favicons -->
   <!-- 1) System-controlled (fallback when JS is disabled) -->

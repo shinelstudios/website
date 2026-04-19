@@ -9,9 +9,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        heading: ['Outfit', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
-        accent: ['"Space Grotesk"', 'sans-serif'],
+        heading: ['"Outfit Variable"', 'Outfit', 'sans-serif'],
+        body: ['"Inter Variable"', 'Inter', 'sans-serif'],
+        accent: ['"Space Grotesk Variable"', '"Space Grotesk"', 'sans-serif'],
       },
       keyframes: {
         'marquee-rtl': {

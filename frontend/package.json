@@ -11,6 +11,9 @@
     "generate-sitemap": "node scripts/generate-sitemap.js"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
     "framer-motion": "^12.23.12",
     "gray-matter": "^4.0.3",
     "keen-slider": "^6.8.6",

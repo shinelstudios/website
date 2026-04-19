@@ -1,6 +1,12 @@
 /* ===================== Typography System ===================== */
-/* Three creative fonts with variations for the entire website */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+/* Self-hosted variable fonts via @fontsource-variable (loaded in main.jsx).
+ * Registers "Outfit Variable", "Inter Variable", "Space Grotesk Variable"
+ * as single-woff2 variable fonts covering weights 100–900.
+ *
+ * CSS below uses stacks like: 'Outfit Variable', 'Outfit', sans-serif
+ * so the Variable file (which we actually ship) is picked first, with a
+ * graceful fallback to a locally-installed 'Outfit' and finally sans-serif.
+ */
 
 @tailwind base;
 @tailwind components;
@@ -190,7 +196,7 @@
   body {
     background: var(--surface);
     color: var(--text);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
   /* Typography Hierarchy - Three Font System */
@@ -200,21 +206,21 @@
   h4,
   h5,
   h6 {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Outfit Variable', 'Outfit', sans-serif;
     font-weight: 700;
   }
 
   /* Font Family Utilities */
   .font-display {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Outfit Variable', 'Outfit', sans-serif;
   }
 
   .font-body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter Variable', 'Inter', sans-serif;
   }
 
   .font-accent {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   }
 
   /* Font Weight Utilities */
@@ -1629,7 +1635,7 @@ img {
 
 /* Editorial type scale (responsive, uses clamp) */
 .text-display-xl {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit Variable', 'Outfit', sans-serif;
   font-weight: 700;
   font-size: clamp(2.5rem, 7vw, 5.5rem);
   line-height: 0.95;
@@ -1637,7 +1643,7 @@ img {
 }
 
 .text-display-lg {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit Variable', 'Outfit', sans-serif;
   font-weight: 700;
   font-size: clamp(2rem, 5vw, 4rem);
   line-height: 1;
@@ -1645,7 +1651,7 @@ img {
 }
 
 .text-display-md {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit Variable', 'Outfit', sans-serif;
   font-weight: 700;
   font-size: clamp(1.75rem, 3.5vw, 2.75rem);
   line-height: 1.05;
@@ -1653,7 +1659,7 @@ img {
 }
 
 .text-display-sm {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit Variable', 'Outfit', sans-serif;
   font-weight: 600;
   font-size: clamp(1.25rem, 2.2vw, 1.75rem);
   line-height: 1.15;
@@ -1661,7 +1667,7 @@ img {
 }
 
 .text-kicker {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-weight: 500;
   font-size: 0.75rem;
   line-height: 1;
@@ -1670,7 +1676,7 @@ img {
 }
 
 .text-eyebrow {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-weight: 500;
   font-size: 0.6875rem;
   line-height: 1;
@@ -1680,7 +1686,7 @@ img {
 }
 
 .text-meta {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-weight: 400;
   font-size: 0.75rem;
   font-feature-settings: "tnum" 1, "lnum" 1;
@@ -1688,7 +1694,7 @@ img {
 }
 
 .text-mono-num {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-feature-settings: "tnum" 1, "lnum" 1;
   letter-spacing: -0.01em;
 }
@@ -1859,7 +1865,7 @@ img {
   padding: 0.875rem 1.5rem;
   background: var(--orange);
   color: #fff;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-weight: 500;
   font-size: 0.8125rem;
   letter-spacing: 0.12em;
@@ -1884,7 +1890,7 @@ img {
   padding: 0.875rem 1.5rem;
   background: transparent;
   color: var(--text);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
   font-weight: 500;
   font-size: 0.8125rem;
   letter-spacing: 0.12em;
