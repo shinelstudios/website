@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
 import { getAccessToken } from "../utils/tokenStore";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 /**
  * Public/Protected read:
@@ -305,20 +306,22 @@ export default function VideoEditing() {
           { name: 'Video Editing', url: '/video-editing' },
         ]}
       />
-      <header className="mb-6 sm:mb-8">
-        <h1
-          className="text-3xl sm:text-4xl font-extrabold tracking-tight"
-          style={{ color: "var(--text)" }}
-        >
-          Video Editing
-        </h1>
-        <p
-          className="mt-2 text-sm sm:text-base"
-          style={{ color: "var(--text-muted)" }}
-        >
-          Hand-picked edits crafted by our team. This list is sourced from the
-          Admin Videos panel.
-        </p>
+      <header className="mb-10 md:mb-14 pt-6 md:pt-10 max-w-3xl">
+        <RevealOnScroll>
+          <Kicker className="mb-5">Video Editing</Kicker>
+        </RevealOnScroll>
+        <RevealOnScroll delay="80ms">
+          <Display as="h1" size="lg" className="mb-4">
+            Long-form that <span style={{ color: "var(--orange)" }}>holds attention.</span>
+          </Display>
+        </RevealOnScroll>
+        <RevealOnScroll delay="160ms">
+          <Lede>
+            Cinematic cuts, retention-first pacing, and finish-grade audio for
+            vlogs, gaming, business, and documentary-style creators. Every edit
+            named and attributed to a maker you can see on their profile.
+          </Lede>
+        </RevealOnScroll>
       </header>
 
       {err && (

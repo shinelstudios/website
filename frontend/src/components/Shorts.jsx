@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
 import { getAccessToken } from "../utils/tokenStore";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 /**
  * Shorts & Reels page
@@ -505,21 +506,22 @@ export default function Shorts() {
           { name: 'Shorts & Reels', url: '/shorts' },
         ]}
       />
-      <header className="mb-6 sm:mb-8">
-        <h1
-          className="text-3xl sm:text-4xl font-extrabold tracking-tight"
-          style={{ color: "var(--text)" }}
-        >
-          Shorts &amp; Reels
-        </h1>
-        <p
-          className="mt-2 text-sm sm:text-base"
-          style={{ color: "var(--text-muted)" }}
-        >
-          Vertical clips curated from the Admin Videos panel. Only items with
-          kind ≠ LONG are displayed. Filters use the{" "}
-          <strong>Subcategory</strong> field.
-        </p>
+      <header className="mb-10 md:mb-14 pt-6 md:pt-10 max-w-3xl">
+        <RevealOnScroll>
+          <Kicker className="mb-5">Shorts &amp; Reels</Kicker>
+        </RevealOnScroll>
+        <RevealOnScroll delay="80ms">
+          <Display as="h1" size="lg" className="mb-4">
+            Fast cuts. <span style={{ color: "var(--orange)" }}>Hooks that hold.</span>
+          </Display>
+        </RevealOnScroll>
+        <RevealOnScroll delay="160ms">
+          <Lede>
+            Vertical edits tuned for YouTube Shorts, Instagram Reels, and TikTok.
+            Kinetic captions, retention-first pacing, and batch delivery so you
+            can post daily without burning out.
+          </Lede>
+        </RevealOnScroll>
       </header>
 
       {err && (

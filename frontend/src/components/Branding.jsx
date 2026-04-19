@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
+import { Kicker, Display, Lede, RevealOnScroll, GrainOverlay } from "../design";
 
 // Shared animation helpers (mirrors WorkPage.jsx for consistency)
 const mkFade = (reduced, delay = 0) => ({
@@ -348,28 +349,30 @@ export default function Branding() {
         ]}
       />
 
-      {/* Hero */}
-      <section className="pt-32 pb-12 relative text-center overflow-hidden" style={{ background: "var(--hero-bg)" }}>
-        <div className="container mx-auto px-4 relative z-10">
-          <motion.div {...mkFade(reduced)} className="inline-block px-3 py-1 rounded-full bg-[var(--orange)]/10 border border-[var(--orange)]/30 text-[var(--orange)] text-[10px] font-black uppercase tracking-widest mb-4">
-             Cohesive Visual Identity
-          </motion.div>
-          <motion.h1
-            {...mkFade(reduced, 0.1)}
-            className="text-4xl sm:text-6xl md:text-7xl font-black font-['Poppins'] tracking-tight"
-            style={{ color: "var(--text)" }}
-          >
-            Premium Brand <span className="text-white p-1 px-3 bg-[var(--orange)] rounded-xl">Kits</span>
-          </motion.h1>
-          <motion.p
-            {...mkFade(reduced, 0.2)}
-            className="mt-6 text-base sm:text-xl max-w-2xl mx-auto"
-            style={{ color: "var(--text-muted)" }}
-          >
-            We build high-impact brand identities for creators and businesses that scale from avatars to billboards.
-          </motion.p>
+      {/* Hero (editorial v2) */}
+      <section className="pt-24 md:pt-32 pb-12 relative overflow-hidden" style={{ background: "var(--hero-bg)" }}>
+        <GrainOverlay local />
+        <div className="container mx-auto px-4 md:px-6 relative z-10">
+          <div className="max-w-3xl">
+            <RevealOnScroll>
+              <Kicker className="mb-6">Branding</Kicker>
+            </RevealOnScroll>
+            <RevealOnScroll delay="80ms">
+              <Display as="h1" size="xl" className="mb-6">
+                Premium brand <span style={{ color: "var(--orange)" }}>kits.</span>
+              </Display>
+            </RevealOnScroll>
+            <RevealOnScroll delay="160ms">
+              <Lede className="mb-8">
+                We build high-impact brand identities for creators and businesses
+                that scale from a 48-pixel avatar to a 40-foot billboard. Logo
+                systems, channel banners, stream overlays, and end-screens \u2014
+                grid-locked, print-safe, ready to ship.
+              </Lede>
+            </RevealOnScroll>
+          </div>
 
-          <motion.div {...mkFade(reduced, 0.3)} className="mt-10 flex flex-wrap justify-center gap-3">
+          <motion.div {...mkFade(reduced, 0.3)} className="mt-8 flex flex-wrap gap-2">
             {categories.map((c) => (
               <FilterChip key={c} active={c === selected} onClick={() => setSelected(c)}>
                 {c}

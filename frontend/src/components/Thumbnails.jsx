@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { getAccessToken } from "../utils/tokenStore";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 /**
  * Public/Protected read:
@@ -1130,19 +1131,26 @@ export default function Thumbnails() {
           return false;
         }}
       >
-        {/* Hero */}
-        <section className="pt-28 pb-8 text-center bg-hero">
-          <div className="container mx-auto px-3 sm:px-4 md:px-6">
-            <h1
-              className="text-4xl sm:text-6xl font-extrabold text-[var(--text)] animate-in fade-in duration-600"
-            >
-              Thumbnail <span className="text-[var(--orange)]">Gallery</span>
-            </h1>
-            <p
-              className="mt-3 text-base sm:text-lg text-[var(--text-muted)] animate-in fade-in duration-600 delay-100"
-            >
-              Designed for clicks. Optimized for retention.
-            </p>
+        {/* Hero (editorial v2) */}
+        <section className="pt-24 md:pt-32 pb-8 bg-hero">
+          <div className="container mx-auto px-4 md:px-6">
+            <div className="max-w-3xl">
+              <RevealOnScroll>
+                <Kicker className="mb-5">Thumbnails</Kicker>
+              </RevealOnScroll>
+              <RevealOnScroll delay="80ms">
+                <Display as="h1" size="xl" className="mb-5">
+                  Thumbnails built for <span style={{ color: "var(--orange)" }}>the click.</span>
+                </Display>
+              </RevealOnScroll>
+              <RevealOnScroll delay="160ms">
+                <Lede>
+                  Scroll-stopping, data-backed designs sized for every YouTube
+                  placement \u2014 feed, sidebar, end-screen, mobile. Iterated until
+                  the CTR curve moves.
+                </Lede>
+              </RevealOnScroll>
+            </div>
 
             {/* Error banner */}
             {error && (
