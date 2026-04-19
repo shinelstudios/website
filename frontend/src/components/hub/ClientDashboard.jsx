@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
+import { getAccessToken } from "../../utils/tokenStore";
 import {
     LayoutDashboard,
     Folder,
@@ -197,7 +198,7 @@ export default function ClientDashboard() {
                                                     e.stopPropagation();
                                                     if (!confirm("Notify team about updates to this project?")) return;
                                                     try {
-                                                        const token = localStorage.getItem("token");
+                                                        const token = getAccessToken();
                                                         const res = await fetch(`${AUTH_BASE}/notify`, {
                                                             method: "POST",
                                                             headers: {

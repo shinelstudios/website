@@ -5,6 +5,7 @@ import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 import { saveClientConfig, getClientConfig } from "../data/clientRegistry";
 
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken, setAccessToken } from "../utils/tokenStore";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -57,7 +58,7 @@ export default function AdminUsersPage() {
   const [editingEmail, setEditingEmail] = useState(null);
 
   // --- token state that updates when auth changes ---
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => getAccessToken());
   const payload = useMemo(() => (token ? parseJwt(token) : null), [token]);
   const rawRole = (payload?.role || localStorage.getItem("role") || "").toLowerCase();
   const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
@@ -183,20 +184,18 @@ export default function AdminUsersPage() {
 
   async function refreshNow() {
     try {
-      const refresh = localStorage.getItem("refresh") || "";
-      if (!refresh) return alert("No refresh token available");
-
+      // The worker reads the refresh token from the httpOnly ss_refresh cookie —
+      // credentials:'include' sends it automatically. Access token comes back in the
+      // response body and lands in tokenStore (memory).
       const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
         method: "POST",
-        headers: { authorization: `Bearer ${refresh}` },
+        credentials: "include",
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Refresh failed");
 
-      // update storage
-      localStorage.setItem("token", data.token);
-      if (data.refresh) localStorage.setItem("refresh", data.refresh);
+      setAccessToken(data.token);
       if (data.role) localStorage.setItem("role", data.role);
       setToken(data.token);
 
@@ -213,7 +212,7 @@ export default function AdminUsersPage() {
 
     // when token changes externally
     const onAuthChanged = () => {
-      setToken(localStorage.getItem("token") || "");
+      setToken(getAccessToken());
       loadUsers();
     };
     window.addEventListener("auth:changed", onAuthChanged);

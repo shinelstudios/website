@@ -3,76 +3,55 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { AUTH_BASE } from "../config/constants";
+import { parseJwt } from "../utils/auth";
+import { getAccessToken, setAccessToken, clearAccessToken } from "../utils/tokenStore";
 const API_BASE = AUTH_BASE;
 
-// --- Safe JWT decode ---
-function parseJwt(token) {
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decodeURIComponent(escape(json)));
-  } catch {
-    return null;
-  }
-}
-
-// --- Refresh token logic (cookie-based) ---
+// Silent refresh via the httpOnly ss_refresh cookie. New token lands in tokenStore
+// (memory) — never persisted to localStorage.
 async function tryRefresh() {
   try {
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: "POST",
-      credentials: "include", // <-- send ss_refresh cookie
+      credentials: "include",
     });
-
     if (!res.ok) throw new Error("Refresh failed");
-
     const data = await res.json().catch(() => ({}));
     if (!data?.token) throw new Error("No token in response");
-
-    // Save new token and role
-    localStorage.setItem("token", data.token);
+    setAccessToken(data.token);
     if (data.role) localStorage.setItem("role", data.role);
-
-    window.dispatchEvent(new Event("auth:changed"));
     return data.token;
   } catch (err) {
     console.warn("Token refresh failed:", err);
-    ["token", "role"].forEach((k) => localStorage.removeItem(k));
-    window.dispatchEvent(new Event("auth:changed"));
+    clearAccessToken();
+    localStorage.removeItem("role");
     return null;
   }
 }
 
-// --- Protected Route Component ---
 export default function ProtectedRoute({ children, roles }) {
   const loc = useLocation();
-  const [status, setStatus] = React.useState("checking"); // checking | ok | redirect
+  const [status, setStatus] = React.useState("checking");
 
   React.useEffect(() => {
     let cancelled = false;
 
     async function checkAuth() {
-      const token = localStorage.getItem("token");
+      let token = getAccessToken();
       const payload = token ? parseJwt(token) : null;
       const now = Math.floor(Date.now() / 1000);
       const expired = !payload || (payload.exp && payload.exp <= now);
 
-      let t = token;
-
-      // Refresh if expired
       if (expired) {
-        t = await tryRefresh();
+        token = await tryRefresh();
       }
 
-      // If no valid token after refresh → redirect
-      if (!t) {
+      if (!token) {
         if (!cancelled) setStatus("redirect");
         return;
       }
 
-      // --- Role-based access check ---
-      const rawRole = (parseJwt(t)?.role || localStorage.getItem("role") || "").toLowerCase();
+      const rawRole = (parseJwt(token)?.role || localStorage.getItem("role") || "").toLowerCase();
       const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
 
       if (

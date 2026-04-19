@@ -25,7 +25,7 @@ import VideoForm from "./VideoForm";
 import VideoFilters from "./VideoFilters";
 
 import { AUTH_BASE } from "../config/constants";
-const LS_TOKEN_KEY = "token";
+import { getAccessToken } from "../utils/tokenStore";
 
 const DEFAULT_FORM = {
   title: "",
@@ -41,7 +41,7 @@ const DEFAULT_FORM = {
   attributedTo: "",
 };
 
-const store = createVideoStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));
+const store = createVideoStorage(AUTH_BASE, () => getAccessToken());
 
 function toast(type, message) {
   window.dispatchEvent(
@@ -62,7 +62,7 @@ export default function AdminVideosPage() {
   const [flashKey, setFlashKey] = useState("");
 
   // Auth & Roles
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => getAccessToken());
   const payload = useMemo(() => {
     try {
       const parts = token.split(".");
@@ -110,7 +110,7 @@ export default function AdminVideosPage() {
 
   useEffect(() => {
     const update = () => {
-      const newToken = localStorage.getItem("token") || "";
+      const newToken = getAccessToken();
       if (newToken !== token) setToken(newToken);
     };
     window.addEventListener("auth:changed", update);

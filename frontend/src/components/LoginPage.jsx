@@ -18,6 +18,7 @@ import {
 import CpuBackground from "./CpuBackground";
 
 import { AUTH_BASE } from "../config/constants";
+import { setAccessToken } from "../utils/tokenStore";
 
 const API_BASE = AUTH_BASE.replace(/\/+$/, "");
 
@@ -98,8 +99,10 @@ export default function LoginPage() {
 
       try {
         localStorage.setItem("rememberMe", remember ? "1" : "0");
-        localStorage.setItem("token", data.token);
-        
+        // Access token is kept in memory (tokenStore), NOT localStorage — prevents
+        // XSS exfiltration. Profile fields below are safe to persist.
+        setAccessToken(data.token);
+
         const finalEmail = String(data.email || payload.email || email || "").trim();
         const finalRole = String(data.role || payload.role || "").trim();
         const firstName = String(data.firstName || payload.firstName || "").trim();

@@ -8,15 +8,17 @@
   <meta name="format-detection" content="telephone=no,address=no,email=no" />
   <meta http-equiv="x-dns-prefetch-control" content="on" />
 
-  <!-- Relaxed CSP for Integrations (Calendly, Google, Stripe, Segment, Pendo) -->
+  <!-- Tightened CSP: 'unsafe-inline' removed from script-src (theme bootstrap is now
+       in /theme-bootstrap.js). style-src keeps 'unsafe-inline' for Tailwind/framer-motion
+       inline styles; revisit when moving to a nonce/hash setup. -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'unsafe-inline' https://assets.calendly.com https://calendly.com https://apis.google.com https://accounts.google.com https://www.google-analytics.com https://www.googletagmanager.com https://js.stripe.com https://connect.facebook.net https://cdn.segment.io https://cdn.pendo.io https://data.pendo.io https://js.appboycdn.com https://cdn.sprig.com https://cdn.cookielaw.org https://challenges.cloudflare.com https://static.cloudflareinsights.com https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com;
+    script-src 'self' https://assets.calendly.com https://calendly.com https://apis.google.com https://accounts.google.com https://www.google-analytics.com https://www.googletagmanager.com https://js.stripe.com https://connect.facebook.net https://cdn.segment.io https://cdn.pendo.io https://data.pendo.io https://js.appboycdn.com https://cdn.sprig.com https://cdn.cookielaw.org https://challenges.cloudflare.com https://static.cloudflareinsights.com https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com;
     font-src 'self' data: https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
     frame-src 'self' https://calendly.com https://js.stripe.com https://hooks.stripe.com https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com;
-    connect-src 'self' https: wss:;
+    connect-src 'self' https://shinel-auth.shinelstudioofficial.workers.dev https://www.youtube.com https://youtube.googleapis.com https://www.google-analytics.com https://api.ipify.org;
     worker-src 'self' blob:;
   ">
 
@@ -35,9 +37,13 @@
   <!-- Fonts (async loading with display=swap for better performance) -->
   <!-- Note: Removed specific font file preloads to avoid "unused preload" warnings -->
   <!-- DNS prefetch + preconnect + async loading is sufficient for optimal performance -->
+  <!-- Fonts load normally (render-blocking for a few ms). The older `media="print"
+       + onload="this.media='all'"` trick is a CSP violation under the tightened
+       script-src (inline event handlers count as inline script). The preconnect
+       above + display=swap below keep this fast. -->
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-    rel="stylesheet" media="print" onload="this.media='all'">
+    rel="stylesheet">
   <noscript>
     <link
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
@@ -79,55 +85,8 @@
 </head>
 
 <body>
-  <script>
-    // --- Prepaint theme bootstrap (no dependencies) ---
-    (function () {
-      try {
-        var isDark =
-          (localStorage.getItem('theme') === 'dark') ||
-          (!localStorage.getItem('theme') &&
-            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-        var root = document.documentElement;
-        root.classList.toggle('dark', !!isDark);
-
-        // Sync theme-color (the *plain* one without media attr)
-        var metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
-        if (!metaTheme) {
-          metaTheme = document.createElement('meta');
-          metaTheme.setAttribute('name', 'theme-color');
-          document.head.appendChild(metaTheme);
-        }
-        metaTheme.setAttribute('content', isDark ? '#0F0F0F' : '#ffffff');
-
-        // Swap favicon immediately
-        // (1) toggle data-theme icons if present
-        var lightIcon = document.querySelector('link[rel="icon"][data-theme="light"]');
-        var darkIcon = document.querySelector('link[rel="icon"][data-theme="dark"]');
-        if (lightIcon && darkIcon) {
-          lightIcon.disabled = !!isDark;
-          darkIcon.disabled = !isDark;
-        }
-        // (2) always update the single fallback tag too
-        var favicon = document.getElementById('favicon');
-        if (favicon) {
-          favicon.href = isDark ? '/favicon-dark-32x32.png' : '/favicon-light-32x32.png';
-        }
-      } catch (e) { /* no-op */ }
-    })();
-
-    // --- Stabilize mobile viewport units (avoid address-bar jumps) ---
-    (function () {
-      try {
-        var setVH = function () {
-          var vh = window.innerHeight * 0.01;
-          document.documentElement.style.setProperty('--vh', vh + 'px');
-        };
-        setVH();
-        window.addEventListener('resize', setVH, { passive: true });
-      } catch (e) { /* no-op */ }
-    })();
-  </script>
+  <!-- Pre-paint theme bootstrap. Externalized so CSP can drop 'unsafe-inline'. -->
+  <script src="/theme-bootstrap.js"></script>
 
   <noscript>
     <strong>Shinel Studios</strong> requires JavaScript for the best experience.
@@ -136,18 +95,8 @@
 
   <div id="root"></div>
 
-  <!-- Global subscriber counts used by CreatorsWorkedWith. -->
-  <script>
-    window.SS_SUBS = {
-      kamz: 1730000,
-      deadlox: 2100000,
-      manav: 151000,
-      gamermummy: 450000,
-      aish: 17100,
-      katka: 38600,
-      maggie: 21300
-    };
-  </script>
+  <!-- Subscriber counts are rendered from useClientStats() (live worker data). The old
+       window.SS_SUBS inline block was removed as part of the CSP hardening. -->
 
   <script type="module" src="/src/main.jsx"></script>
 </body>

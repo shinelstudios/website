@@ -26,6 +26,7 @@ import { Input, SelectWithPresets, LoadingOverlay } from "./AdminUIComponents";
 import Skeleton from "./Skeleton";
 import Sparkline from "./Sparkline";
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken } from "../utils/tokenStore";
 
 export default function AdminClientsPage() {
     const { refreshStats, refreshSync, getProxiedImage } = useClientStats();
@@ -63,7 +64,7 @@ export default function AdminClientsPage() {
         instagramLogo: ""
     });
 
-    const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+    const [token, setToken] = useState(() => getAccessToken());
     const payload = useMemo(() => {
         try {
             const parts = token.split(".");
@@ -85,7 +86,7 @@ export default function AdminClientsPage() {
 
     useEffect(() => {
         const onAuth = () => {
-            const newToken = localStorage.getItem("token") || "";
+            const newToken = getAccessToken();
             if (newToken !== token) setToken(newToken);
         };
         window.addEventListener("auth:changed", onAuth);

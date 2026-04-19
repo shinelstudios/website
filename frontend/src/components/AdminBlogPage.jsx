@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Edit2, Trash2, FileText, Eye, CheckCircle, XCircle } from "lucide-react";
 import { AUTH_BASE } from "../config/constants"; // Ensure this exists, or use absolute URL
+import { getAccessToken } from "../utils/tokenStore";
 import { LoadingOverlay } from "./AdminUIComponents";
 
 function toast(type, msg) {
@@ -13,7 +14,7 @@ export default function AdminBlogPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const token = localStorage.getItem("token") || "";
+    const token = getAccessToken();
 
     const fetchPosts = async () => {
         setLoading(true);

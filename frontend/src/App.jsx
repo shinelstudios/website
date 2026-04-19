@@ -18,6 +18,8 @@ const AdminSettingsPage = React.lazy(() => import("./components/AdminSettingsPag
 import Toaster from "./components/ui/Toaster.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 import CommandPalette from "./components/ui/CommandPalette.jsx";
+import { getAccessToken, setAccessToken, clearAccessToken } from "./utils/tokenStore";
+import { AUTH_BASE } from "./config/constants";
 
 import {
   startHashActionRouter,
@@ -232,7 +234,7 @@ function Layout() {
 function RedirectIfAuthed({ children }) {
   const isAuthed = React.useMemo(() => {
     try {
-      return Boolean(localStorage.getItem("token"));
+      return Boolean(getAccessToken());
     } catch {
       return false;
     }
@@ -240,34 +242,29 @@ function RedirectIfAuthed({ children }) {
   return isAuthed ? <Navigate to="/studio" replace /> : children;
 }
 
+// Run logout side-effects synchronously (not inside useEffect) so that listeners
+// receive `auth:changed` BEFORE the Navigate unmounts this component. Previously
+// the effect fired after the redirect, which let subscribers miss the event.
+function performLogout() {
+  try {
+    clearAccessToken();
+    const legacy = [
+      "token", "refresh", "refreshToken",
+      "userEmail", "role", "firstName", "lastName", "rememberMe",
+      "userRole", "userFirst", "userLast", "userFirstName", "userLastName", "userEmailAddress",
+    ];
+    for (const k of legacy) {
+      try { localStorage.removeItem(k); } catch { /* */ }
+    }
+    // Best-effort server-side revocation via httpOnly cookie — don't block UX on it.
+    fetch(`${AUTH_BASE}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+  } catch { /* */ }
+  try { window.dispatchEvent(new Event("auth:changed")); } catch { /* */ }
+}
+
 function Logout() {
-  React.useEffect(() => {
-    try {
-      // ✅ Canonical keys
-      [
-        "token",
-        "refresh",
-        "userEmail",
-        "role",
-        "firstName",
-        "lastName",
-        "rememberMe",
-      ].forEach((k) => localStorage.removeItem(k));
-
-      // ✅ Back-compat keys (safe to remove too)
-      [
-        "userRole",
-        "userFirst",
-        "userLast",
-        "userFirstName",
-        "userLastName",
-        "userEmailAddress",
-      ].forEach((k) => localStorage.removeItem(k));
-    } catch { }
-
-    window.dispatchEvent(new Event("auth:changed"));
-  }, []);
-
+  // Synchronous on render; useMemo runs before the returned <Navigate> takes effect.
+  React.useMemo(() => { performLogout(); }, []);
   return <Navigate to="/" replace />;
 }
 
@@ -277,6 +274,25 @@ function Logout() {
 
 export default function App() {
   const location = useLocation();
+
+  // Silent refresh on mount. The access token lives only in memory (tokenStore) — so
+  // on every page load we try to redeem the httpOnly ss_refresh cookie for a fresh
+  // access token. A 401 simply means "stay logged out" (e.g. anonymous visitor).
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (cancelled || !res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (data && data.token) setAccessToken(data.token);
+      } catch { /* offline / anonymous — no-op */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     startHashActionRouter();

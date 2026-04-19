@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { getAccessToken } from '../utils/tokenStore';
 import {
     FileText,
     Calendar,
@@ -18,7 +19,7 @@ const WeeklyAuditLog = () => {
     const fetchAudits = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
+            const token = getAccessToken();
             const res = await fetch('https://shinel-auth.shinelstudioofficial.workers.dev/audits/weekly', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

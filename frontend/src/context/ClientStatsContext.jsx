@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { AUTH_BASE, CLIENT_REGISTRY } from "../config/constants";
+import { getAccessToken } from "../utils/tokenStore";
 
 const ClientStatsContext = createContext(null);
 
@@ -74,20 +75,32 @@ export const ClientStatsProvider = ({ children }) => {
 
     // Hardcoded fallbacks for production resilience (if stats API defaults)
     const HARDCODED_FALLBACKS = {
-        'UC_N0eSX2RI_ah-6MjJIAyzA': { title: 'Kamz Inkzone', subscribers: 173445, logo: 'https://yt3.ggpht.com/zImn10b3yqjY1uQQkvXa1AKA3My4lIa8MEDbvCyp4S9ycDApOkRN2A8BhvkWKTgECr5NQYDRPQ=s88-c-k-c0x00ffffff-no-rj' },
-        'UCbnkpVSNsBwET7mt1tgqEPQ': { title: 'Deadlox Gaming', subscribers: 2115670, viewCount: 456789123, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
-        'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }
+        'UC_N0eSX2RI_ah-6MjJIAyzA': { title: 'Kamz Inkzone', subscribers: 1530000, logo: 'https://yt3.ggpht.com/zImn10b3yqjY1uQQkvXa1AKA3My4lIa8MEDbvCyp4S9ycDApOkRN2A8BhvkWKTgECr5NQYDRPQ=s88-c-k-c0x00ffffff-no-rj' },
+        'UCi88JinGRWdVWQPFscNUgOw': { title: 'Deadlox Gaming', subscribers: 2110000, viewCount: 456789123, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
+        'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }
     };
 
     const [history, setHistory] = useState({});
 
-    const fetchStats = async () => {
+    // Abort-aware fetchStats. useCallback captures the real dependencies so that
+    // the setInterval below always calls the up-to-date closure. We also pass an
+    // AbortSignal into the three concurrent fetches so rapid tab-switches /
+    // unmounts cancel in-flight work instead of calling setState on a dead tree.
+    const abortRef = useRef(null);
+    const statsLenRef = useRef(stats.length);
+    useEffect(() => { statsLenRef.current = stats.length; }, [stats.length]);
+    const fetchStats = useCallback(async () => {
+        // Cancel any prior in-flight poll before starting a new one.
+        if (abortRef.current) abortRef.current.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const { signal } = controller;
         try {
             // Fetch registry, stats, and history concurrently
             const [regRes, statsRes, histRes] = await Promise.allSettled([
-                fetch(`${AUTH_BASE}/clients`),
-                fetch(`${AUTH_BASE}/clients/stats`),
-                fetch(`${AUTH_BASE}/clients/history`)
+                fetch(`${AUTH_BASE}/clients`, { signal }),
+                fetch(`${AUTH_BASE}/clients/stats`, { signal }),
+                fetch(`${AUTH_BASE}/clients/history`, { signal })
             ]);
 
             let remoteRegistry = [];
@@ -141,6 +154,11 @@ export const ClientStatsProvider = ({ children }) => {
                 } else if (apiSub === 0) {
                     subscribers = regSub;
                 }
+                
+                // FINAL PROTECTION: If registry is much larger than fallback (likely stale fallback)
+                if (regSub > subscribers * 1.5) {
+                    subscribers = regSub;
+                }
 
                 const manualIGFollowers = Number(client.instagramFollowers || client.instagram_followers || 0);
                 const instagramFollowers = manualIGFollowers > 0 ? manualIGFollowers : Number(s.instagramFollowers || 0);
@@ -159,6 +177,9 @@ export const ClientStatsProvider = ({ children }) => {
                 };
             });
 
+            // Skip state writes if this poll was superseded by another before we finished.
+            if (signal.aborted) return;
+
             // Update state
             setStats(processedClients);
             setHistory(historyData);
@@ -172,21 +193,25 @@ export const ClientStatsProvider = ({ children }) => {
             setLoading(false);
             setError(null);
         } catch (err) {
+            if (err && err.name === "AbortError") return;
             console.error("ClientStats Error:", err);
-            // STALE-WHILE-REVALIDATE: If we hit a network error but have cached stats, 
-            // DON'T throw them away. Just log the error and clear the loading state.
-            if (stats.length === 0) {
+            // STALE-WHILE-REVALIDATE: keep old stats on network errors. Use a ref so
+            // the closure reads the current length, not a stale initial value.
+            if (statsLenRef.current === 0) {
                 setError(err.message);
             }
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchStats();
         const interval = setInterval(fetchStats, activeInterval);
-        return () => clearInterval(interval);
-    }, [activeInterval]);
+        return () => {
+            clearInterval(interval);
+            if (abortRef.current) abortRef.current.abort();
+        };
+    }, [activeInterval, fetchStats]);
 
     // Derived Metrics
     const totalSubscribers = useMemo(() => {
@@ -254,7 +279,7 @@ export const ClientStatsProvider = ({ children }) => {
         refreshStats: fetchStats,
         refreshSync: async (force = false) => {
             try {
-                const token = localStorage.getItem("token");
+                const token = getAccessToken();
                 const url = `${AUTH_BASE}/clients/sync${force ? '?force=1' : ''}`;
                 const res = await fetch(url, {
                     method: "POST",

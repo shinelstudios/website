@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
+import { getAccessToken } from "../utils/tokenStore";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
@@ -247,7 +248,7 @@ export default function Shorts() {
   const navigate = useNavigate();
 
   const readToken = useMemo(
-    () => PUBLIC_READ_TOKEN || localStorage.getItem("token") || "",
+    () => PUBLIC_READ_TOKEN || getAccessToken(),
     []
   );
 

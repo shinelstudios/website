@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken, clearAccessToken } from "../utils/tokenStore";
 
 const GlobalConfigContext = createContext(null);
 
@@ -20,26 +21,27 @@ export const GlobalConfigProvider = ({ children }) => {
     const fetchConfig = useCallback(async () => {
         try {
             const res = await fetch(`${AUTH_BASE}/config`);
-            const data = await res.json();
             if (res.ok) {
+                const data = await res.json();
                 setConfig(data.config || {});
                 localStorage.setItem(LS_KEY, JSON.stringify(data.config || {}));
-            } else {
-                // If it's a 500 or auth error related to token expiration
-                if (data.error?.includes("exp") || data.error?.includes("token")) {
-                    console.warn("Session expired or invalid token during fetch");
-                }
+            } else if (res.status === 401 || res.status === 403) {
+                // Silently ignore auth errors on the global config in case it's still protected
+                // but let the admin pages handle it if needed.
             }
             setLoading(false);
         } catch (err) {
-            console.error("GlobalConfig fetch error:", err);
+            // Only log errors if we're on an admin path or it's a critical failure
+            if (window.location.pathname.startsWith('/admin')) {
+                console.error("GlobalConfig fetch error:", err);
+            }
             setError(err.message);
             setLoading(false);
         }
     }, []);
 
     const updateConfig = async (updates) => {
-        const token = localStorage.getItem("token");
+        const token = getAccessToken();
         try {
             const res = await fetch(`${AUTH_BASE}/config`, {
                 method: "PUT",
@@ -57,7 +59,7 @@ export const GlobalConfigProvider = ({ children }) => {
             } else {
                 // Handle session expiration
                 if (data.error?.includes("exp") || res.status === 401) {
-                    localStorage.removeItem("token");
+                    clearAccessToken();
                     localStorage.removeItem("role");
                     window.location.href = "/login?expired=true";
                     return { success: false, error: "Session expired. Please login again." };

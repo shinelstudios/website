@@ -26,7 +26,7 @@ import ThumbnailForm from "./ThumbnailForm";
 import ThumbnailFilters from "./ThumbnailFilters";
 
 import { AUTH_BASE } from "../config/constants";
-const LS_TOKEN_KEY = "token";
+import { getAccessToken } from "../utils/tokenStore";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
 const LS_PRESETS_KEY = "thumbs-presets";
 const LS_IMPORT_CHECKPOINT = "thumbs-import-checkpoint";
@@ -43,7 +43,7 @@ const DEFAULT_FORM = {
   attributedTo: "",
 };
 
-const store = createThumbnailStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));
+const store = createThumbnailStorage(AUTH_BASE, () => getAccessToken());
 
 function toast(type, message) {
   window.dispatchEvent(
@@ -66,7 +66,7 @@ export default function AdminThumbnailsPage() {
   const [isPending, startTransition] = useTransition();
 
   // Auth & Roles
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => getAccessToken());
   const payload = useMemo(() => {
     try {
       const parts = token.split(".");
@@ -134,7 +134,7 @@ export default function AdminThumbnailsPage() {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem(LS_TOKEN_KEY);
+    const token = getAccessToken();
     if (!token) {
       surfaceError("Unauthorized. Please login again.");
       return;
@@ -145,7 +145,7 @@ export default function AdminThumbnailsPage() {
 
   useEffect(() => {
     const update = () => {
-      const newToken = localStorage.getItem(LS_TOKEN_KEY) || "";
+      const newToken = getAccessToken() || "";
       if (newToken !== token) setToken(newToken);
     };
     window.addEventListener("auth:changed", update);
@@ -308,7 +308,7 @@ export default function AdminThumbnailsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem(LS_TOKEN_KEY)}`
+          "Authorization": `Bearer ${getAccessToken()}`
         },
         body: JSON.stringify({ url })
       });

@@ -20,6 +20,7 @@ import { Link } from "react-router-dom";
 import { useClientStats } from "../context/ClientStatsContext";
 
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken } from "../utils/tokenStore";
 
 export default function AdminStats() {
     const [stats, setStats] = useState({
@@ -61,7 +62,7 @@ export default function AdminStats() {
     }, [allClients, getGrowth]);
 
     // Auth token for admin requests
-    const token = localStorage.getItem("token");
+    const token = getAccessToken();
 
     async function loadStats() {
         try {

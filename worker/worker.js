@@ -136,15 +136,18 @@ function delCookie(name, opts = {}) {
   return setCookie(name, "", { ...opts, expires: new Date(0), maxAge: 0 });
 }
 
+// Attach a jti so individual tokens can be revoked in KV.
 async function signAccess(payload, secret, minutes = 30) {
-  return new SignJWT(payload)
+  const withJti = { ...payload, jti: payload.jti || crypto.randomUUID() };
+  return new SignJWT(withJti)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${minutes}m`)
     .sign(secret);
 }
 async function signRefresh(payload, secret, days = 7) {
-  return new SignJWT(payload)
+  const withJti = { ...payload, jti: payload.jti || crypto.randomUUID() };
+  return new SignJWT(withJti)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${days}d`)
@@ -160,6 +163,21 @@ async function verifyJWT(token, secret, opts = {}) {
   return payload;
 }
 
+// KV-backed JWT revocation list. Call isJtiRevoked(env, jti) on every auth-gated request;
+// revokeJti(env, jti, ttl) on logout and refresh-token rotation. Bypass entirely when the
+// JWT_REVOCATION_ENABLED env flag is absent/false for a cheap kill-switch during rollout.
+async function isJtiRevoked(env, jti) {
+  if (!jti || !env.SHINEL_AUDIT) return false;
+  if (env.JWT_REVOCATION_ENABLED !== "1" && env.JWT_REVOCATION_ENABLED !== true) return false;
+  const v = await env.SHINEL_AUDIT.get(`jwt:revoked:${jti}`);
+  return !!v;
+}
+async function revokeJti(env, jti, ttlSeconds) {
+  if (!jti || !env.SHINEL_AUDIT) return;
+  const opts = ttlSeconds && ttlSeconds > 0 ? { expirationTtl: Math.min(Math.max(60, ttlSeconds), 30 * 24 * 3600) } : undefined;
+  await env.SHINEL_AUDIT.put(`jwt:revoked:${jti}`, "1", opts);
+}
+
 async function sha256Hex(input) {
   const enc = new TextEncoder();
   const buf = await crypto.subtle.digest("SHA-256", enc.encode(input));
@@ -169,13 +187,58 @@ async function sha256Hex(input) {
 }
 
 /* ====================== Rate limit (KV) + Audit (KV) ====================== */
-async function isRateLimited(env, ip, windowSec = 600, max = 5) {
+async function isRateLimited(env, ip, windowSec = 600, max = 5, bucket = "login") {
   if (!ip) return false;
-  const key = `rl:login:${ip}`;
+  const key = `rl:${bucket}:${ip}`;
   const curr = Number((await env.SHINEL_AUDIT.get(key)) || "0");
   if (curr >= max) return true;
   await env.SHINEL_AUDIT.put(key, String(curr + 1), { expirationTtl: windowSec });
   return false;
+}
+
+// Simple RFC-5322-ish email regex (mirrors frontend/QuickLeadForm.jsx:52).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Clamp a string to a max length; returns "" on nullish input.
+function clampStr(v, max) {
+  return String(v == null ? "" : v).slice(0, max);
+}
+
+// Accepts only legitimate YouTube watch/shorts URLs. Rejects anything with credentials,
+// non-standard ports, or shell-metacharacter smuggling in path/query (belt + suspenders
+// for the mirror-service which previously shelled out with the raw URL).
+function isSafeYouTubeUrl(input) {
+  if (typeof input !== "string" || input.length === 0 || input.length > 500) return false;
+  if (/[;$`\n\r|&<>]/.test(input)) return false;
+  let u;
+  try { u = new URL(input); } catch { return false; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  if (u.username || u.password || u.port) return false;
+  const ALLOWED_HOSTS = new Set([
+    "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "music.youtube.com",
+  ]);
+  return ALLOWED_HOSTS.has(u.hostname.toLowerCase());
+}
+
+// HMAC-SHA-256 over `data` keyed by `secret`, returned as lowercase hex.
+async function hmacHex(secret, data) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+// Constant-time compare for hex strings (case-insensitive).
+function timingSafeEqualHex(a, b) {
+  const aa = String(a || "").toLowerCase();
+  const bb = String(b || "").toLowerCase();
+  if (aa.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa.charCodeAt(i) ^ bb.charCodeAt(i);
+  return diff === 0;
 }
 
 async function audit(env, kind, { email, success, ip, reason }) {
@@ -240,68 +303,134 @@ async function getClients(env) {
   return await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
 }
 
+// Strip sensitive/internal fields before returning clients to anonymous callers.
+// Internal UIs should hit /clients/internal for the full shape.
+function sanitizeClientForPublic(c) {
+  if (!c || typeof c !== "object") return c;
+  return {
+    id: c.id,
+    name: c.name,
+    displayHandle: c.displayHandle || c.handle || c.instagram_handle || "",
+    youtubeId: c.youtubeId || c.youtube_id || "",
+    youtubeUrl: c.youtubeUrl || (c.youtube_id ? `https://www.youtube.com/channel/${c.youtube_id}` : ""),
+    instagramUrl: c.instagramUrl || (c.instagram_handle ? `https://instagram.com/${String(c.instagram_handle).replace(/^@/, "")}` : ""),
+    subscribers: Number(c.subscribers || 0),
+    publicSocials: c.publicSocials || null,
+    avatarUrl: c.avatarUrl || c.avatar_url || "",
+  };
+}
+
+// Public-safe keys for /config GET. Any other key written to app:config:global stays admin-only.
+const PUBLIC_CONFIG_KEYS = new Set([
+  "siteBrand",
+  "announcement",
+  "socials",
+  "features",
+  "branding",
+  "homepage",
+  "marquee",
+]);
+function sanitizeConfigForPublic(cfg) {
+  if (!cfg || typeof cfg !== "object") return {};
+  const out = {};
+  for (const k of Object.keys(cfg)) {
+    if (PUBLIC_CONFIG_KEYS.has(k)) out[k] = cfg[k];
+  }
+  return out;
+}
 
 
-// 👇 ETag must reflect changes to views/lastViewUpdate as well as lastUpdated & hype.
+
+// ETag now hashes the serialized array with FNV-1a 32-bit — cheap, non-crypto, but
+// collision-resistant enough for conditional GET (fixes prior numeric-sum collision bug).
+function fnv1a32Hex(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
 function weakEtagFor(arr) {
-  const base = JSON.stringify({
-    n: arr.length,
-    t: arr.reduce(
-      (a, x) =>
-        a +
-        Number(x.lastUpdated || 0) +
-        Number(x.lastViewUpdate || 0) +
-        Number(x.youtubeViews || 0) +
-        Number(x.hype || 0),
-      0
-    ),
-  });
-  return `"W/${base.length.toString(16)}-${arr.length}"`;
+  try {
+    return `W/"${fnv1a32Hex(JSON.stringify(arr))}-${arr.length}"`;
+  } catch {
+    return `W/"0-${(arr && arr.length) || 0}"`;
+  }
 }
 
 function readBearerToken(request) {
   const auth = request.headers.get("authorization") || "";
   return auth.startsWith("Bearer ") ? auth.slice(7) : "";
 }
-async function requireTeamOrThrow(request, secret) {
+async function requireTeamOrThrow(request, secret, env) {
   const token = readBearerToken(request);
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
   const payload = await verifyJWT(token, secret);
+  if (env && await isJtiRevoked(env, payload.jti)) {
+    throw Object.assign(new Error("Token revoked"), { status: 401 });
+  }
   const role = String(payload.role || "").toLowerCase();
-  const allowed = role === "team" || role === "admin";
+  const allowed = role === "team" || role === "admin" || role.split(",").map(s => s.trim()).includes("admin") || role.split(",").map(s => s.trim()).includes("team");
   if (!allowed) throw Object.assign(new Error("Forbidden"), { status: 403 });
   return payload;
 }
 
-async function requireAdminOrThrow(request, secret) {
+async function requireAdminOrThrow(request, secret, env) {
   const token = readBearerToken(request);
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
   const payload = await verifyJWT(token, secret);
+  if (env && await isJtiRevoked(env, payload.jti)) {
+    throw Object.assign(new Error("Token revoked"), { status: 401 });
+  }
   const role = String(payload.role || "").toLowerCase();
-  if (role !== "admin") throw Object.assign(new Error("Admin access required"), { status: 403 });
+  const hasAdmin = role === "admin" || role.split(",").map(s => s.trim()).includes("admin");
+  if (!hasAdmin) throw Object.assign(new Error("Admin access required"), { status: 403 });
   return payload;
+}
+
+// Allowed user roles (server-side whitelist for /admin/users mutations).
+const ALLOWED_ROLES = ["admin", "team", "editor", "artist", "client"];
+// Accepts single role string or comma-separated multi-role. Returns sanitized comma-separated list,
+// or null if nothing valid remains. Caller must check for "admin" presence separately.
+function sanitizeRoleField(value) {
+  if (value == null) return null;
+  const parts = String(value)
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .filter(s => ALLOWED_ROLES.includes(s));
+  if (parts.length === 0) return null;
+  return Array.from(new Set(parts)).join(",");
+}
+function roleIncludesAdmin(roleStr) {
+  if (!roleStr) return false;
+  return String(roleStr).split(",").map(s => s.trim().toLowerCase()).includes("admin");
 }
 
 /* ============================= YouTube helpers ============================= */
 async function fetchWithRetry(url, options = {}, maxRetries = 3) {
   let attempt = 0;
+  let lastErr = null;
   while (attempt < maxRetries) {
     try {
       const resp = await fetch(url, options);
       if (resp.ok) return resp;
       if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
-        // If it's a 4xx error (other than 429 Too Many Requests), it's likely a auth/quota error.
-        // Don't retry API quota errors redundantly.
+        // Non-retriable 4xx (auth/quota). Return response to caller.
         return resp;
       }
-      throw new Error(`HTTP ${resp.status}`);
+      lastErr = new Error(`HTTP ${resp.status}`);
+      throw lastErr;
     } catch (err) {
+      lastErr = err;
       attempt++;
-      if (attempt >= maxRetries) throw err;
+      if (attempt >= maxRetries) break;
       // Exponential backoff: 500ms, 1000ms, 2000ms
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
   }
+  // Ensure callers always see an error object; never undefined (old bug).
+  throw lastErr || new Error(`fetchWithRetry exhausted for ${url}`);
 }
 
 const ytIdFrom = (url) => {
@@ -639,6 +768,7 @@ function computeHype(views = 0, lastViewUpdate = null, dateAdded = null, now = D
  */
 async function performClientSync(env, isForced = false, debug = false) {
   const lastSyncKey = "app:clients:last_sync_ts";
+  const syncStateKey = "app:clients:sync_state";
   const lastSyncTs = Number(await env.SHINEL_AUDIT.get(lastSyncKey) || "0");
   const now = Date.now();
   const cooldown = 15 * 60 * 1000; // 15 mins
@@ -649,6 +779,20 @@ async function performClientSync(env, isForced = false, debug = false) {
     err.status = 429;
     throw err;
   }
+
+  // Best-effort in-progress lock. KV is eventually consistent so this isn't a strict
+  // mutex, but it catches the common cron+manual collision. Clear on finally.
+  const existingLock = await env.SHINEL_AUDIT.get(syncStateKey, "json");
+  if (existingLock && existingLock.status === "in_progress" && (now - Number(existingLock.startedAt || 0) < 10 * 60 * 1000)) {
+    const err = new Error("Another sync is already in progress");
+    err.status = 429;
+    throw err;
+  }
+  await env.SHINEL_AUDIT.put(
+    syncStateKey,
+    JSON.stringify({ status: "in_progress", startedAt: now }),
+    { expirationTtl: 15 * 60 }
+  );
 
   const clients = await getClients(env);
   const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
@@ -872,6 +1016,8 @@ async function performClientSync(env, isForced = false, debug = false) {
   }));
   await env.SHINEL_AUDIT.put("app:clients:sync_errors", JSON.stringify({ errors, ts: now }));
   await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
+  // Clear the in-progress lock established at the top of this function.
+  await env.SHINEL_AUDIT.put(syncStateKey, JSON.stringify({ status: "idle", finishedAt: now }), { expirationTtl: 24 * 3600 });
 
   // --- ADDITIONAL SNAPSHOTS & AUDITS ---
   const dateStr = new Date(now).toISOString().split('T')[0];
@@ -990,10 +1136,21 @@ export default {
           return json({ error: "Backend Captions API URL not configured in Worker secrets (CAPTIONS_API_URL)" }, 501, cors);
         }
 
+        // Modest payload cap (captions requests are tiny JSON).
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
+
         const body = await request.clone().json();
+        const headers = { "Content-Type": "application/json" };
+        // Prove the request is from the Worker to the backend. The backend compares with
+        // crypto.timingSafeEqual; when the secret is unset in either place the call still
+        // works (rolling deploy safety) but will 401 once the backend enforces it.
+        if (env.CAPTIONS_SHARED_SECRET) {
+          headers["X-Shinel-Captions-Secret"] = env.CAPTIONS_SHARED_SECRET;
+        }
         const res = await fetch(`${backendUrl}/api/youtube-captions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(body),
         });
 
@@ -1098,6 +1255,14 @@ export default {
       try {
         const payload = await verifyJWT(refresh, secret);
         if (payload.kind !== "refresh") throw new Error("not refresh");
+        // Reject already-revoked refresh tokens.
+        if (await isJtiRevoked(env, payload.jti)) {
+          throw Object.assign(new Error("Refresh token revoked"), { status: 401 });
+        }
+        // Rotate: revoke the old refresh jti before issuing the new pair.
+        const oldExp = Number(payload.exp || 0);
+        const remaining = oldExp ? Math.max(60, oldExp - Math.floor(Date.now() / 1000)) : 7 * 24 * 3600;
+        if (payload.jti) await revokeJti(env, payload.jti, remaining);
 
         const newAccess = await signAccess(
           {
@@ -1151,6 +1316,29 @@ export default {
 
     /* ----------------------------- POST /auth/logout ----------------------------- */
     if (url.pathname === "/auth/logout" && request.method === "POST") {
+      // Best-effort server-side revocation of both the bearer access token (header)
+      // and the refresh token (cookie). Silently ignored if tokens are absent/invalid.
+      try {
+        const accessTok = readBearerToken(request);
+        if (accessTok) {
+          const ap = await verifyJWT(accessTok, secret).catch(() => null);
+          if (ap && ap.jti) {
+            const ttl = Number(ap.exp || 0) - Math.floor(Date.now() / 1000);
+            await revokeJti(env, ap.jti, Math.max(60, ttl || 30 * 60));
+          }
+        }
+        const cookies = request.headers.get("cookie") || "";
+        const rm = cookies.match(/(?:^|;\s*)ss_refresh=([^;]+)/);
+        if (rm) {
+          const rTok = decodeURIComponent(rm[1]);
+          const rp = await verifyJWT(rTok, secret).catch(() => null);
+          if (rp && rp.jti) {
+            const ttl = Number(rp.exp || 0) - Math.floor(Date.now() / 1000);
+            await revokeJti(env, rp.jti, Math.max(60, ttl || 7 * 24 * 3600));
+          }
+        }
+      } catch { /* best-effort: never fail logout */ }
+
       const clear = delCookie("ss_refresh", {
         httpOnly: true,
         secure: true,
@@ -1184,17 +1372,31 @@ export default {
     /* =============================== /config ============================== */
     if (url.pathname === "/config" && request.method === "GET") {
       try {
-        await requireTeamOrThrow(request, secret);
+        // Public-safe subset only (banners, branding, feature flags).
+        // Admin UIs must call /config/admin for the full object.
+        const config = await env.SHINEL_AUDIT.get("app:config:global", "json") || {};
+        return json({ config: sanitizeConfigForPublic(config) }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, 500, cors);
+      }
+    }
+
+    // GET /config/admin - Full config (admin-only)
+    if (url.pathname === "/config/admin" && request.method === "GET") {
+      try {
+        await requireAdminOrThrow(request, secret);
         const config = await env.SHINEL_AUDIT.get("app:config:global", "json") || {};
         return json({ config }, 200, cors);
       } catch (e) {
-        return json({ error: e.message || "Unauthorized" }, e.status || 401, cors);
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
       }
     }
 
     if (url.pathname === "/config" && request.method === "PUT") {
       try {
         await requireAdminOrThrow(request, secret);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 64 * 1024) return json({ error: "Payload too large" }, 413, cors);
         const updates = await request.json().catch(() => ({}));
         await env.SHINEL_AUDIT.put("app:config:global", JSON.stringify(updates));
         return json({ ok: true, config: updates }, 200, cors);
@@ -1204,12 +1406,22 @@ export default {
     }
 
     /* =============================== /clients ============================== */
-    // GET /clients - List all registered client channels
+    // GET /clients - Public-safe list (sanitized). Internal UIs must call /clients/internal.
     if (url.pathname === "/clients" && request.method === "GET") {
-      // In a real scenario, this would pull from SHINEL_AUDIT or SHINEL_USERS
-      // For now, return an empty list or mock data to avoid 404
       const list = await getClients(env);
-      return json({ clients: list }, 200, cors);
+      const publicList = Array.isArray(list) ? list.map(sanitizeClientForPublic) : [];
+      return json({ clients: publicList }, 200, cors);
+    }
+
+    // GET /clients/internal - Full client objects (team/admin only)
+    if (url.pathname === "/clients/internal" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const list = await getClients(env);
+        return json({ clients: list }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
+      }
     }
 
     // GET /clients/pulse - Activity feed
@@ -1546,7 +1758,10 @@ export default {
     // POST /admin/users - Create new user
     if (url.pathname === "/admin/users" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret);
+        const callerPayload = await requireTeamOrThrow(request, secret, env);
+        const callerIsAdmin = roleIncludesAdmin(callerPayload.role);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
         const body = await request.json().catch(() => ({}));
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
@@ -1555,12 +1770,18 @@ export default {
           return json({ error: "Email and password required" }, 400, cors);
         }
 
+        const requestedRole = sanitizeRoleField(body.role) || "client";
+        // Only admins can mint another admin.
+        if (roleIncludesAdmin(requestedRole) && !callerIsAdmin) {
+          return json({ error: "Only admins can assign the admin role" }, 403, cors);
+        }
+
         // Standard bcrypt hash (10 rounds)
         const passwordHash = await bcrypt.hash(password, 10);
         const userData = {
           email,
           passwordHash,
-          role: String(body.role || "client"),
+          role: requestedRole,
           firstName: String(body.firstName || ""),
           lastName: String(body.lastName || ""),
           bio: String(body.bio || ""),
@@ -1582,7 +1803,10 @@ export default {
     // PUT /admin/users/:email - Update user
     if (url.pathname.startsWith("/admin/users/") && request.method === "PUT") {
       try {
-        await requireTeamOrThrow(request, secret);
+        const callerPayload = await requireTeamOrThrow(request, secret, env);
+        const callerIsAdmin = roleIncludesAdmin(callerPayload.role);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
         const email = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
         const updates = await request.json().catch(() => ({}));
 
@@ -1604,7 +1828,19 @@ export default {
         }
 
         merged.email = email; // Ensure email doesn't change
-        if (updates.role) merged.role = String(updates.role);
+
+        // Role mutations: only admins may change role. Non-admins get role updates dropped
+        // silently (defense-in-depth: UI should also hide the field). Admin role escalation
+        // requires the caller to already be admin.
+        if (updates.role !== undefined) {
+          if (!callerIsAdmin) {
+            merged.role = user.role; // keep existing role untouched
+          } else {
+            const nextRole = sanitizeRoleField(updates.role);
+            if (nextRole) merged.role = nextRole;
+            else delete merged.role;
+          }
+        }
 
         await env.SHINEL_USERS.put(`user:${email}`, JSON.stringify(merged));
         return json({ ok: true }, 200, cors);
@@ -1686,8 +1922,29 @@ export default {
     if (url.pathname === "/videos" && request.method === "GET") {
       try {
         if (!env.DB) return json({ error: "DB missing" }, 501, cors);
-        const { results: list } = await env.DB.prepare("SELECT * FROM inventory_videos ORDER BY last_updated DESC").all();
-        
+
+        // Optional pagination (?limit=&cursor=). Backwards-compatible: default returns
+        // the full list so existing clients keep working until they opt in.
+        const limitParam = Number(url.searchParams.get("limit") || 0);
+        const cursor = url.searchParams.get("cursor") || "";
+        const paginated = limitParam > 0;
+        const limit = Math.max(1, Math.min(paginated ? limitParam : 10000, 500));
+
+        let list;
+        if (paginated && cursor) {
+          const res = await env.DB
+            .prepare("SELECT * FROM inventory_videos WHERE last_updated < ? ORDER BY last_updated DESC LIMIT ?")
+            .bind(cursor, limit)
+            .all();
+          list = res.results;
+        } else {
+          const res = await env.DB
+            .prepare("SELECT * FROM inventory_videos ORDER BY last_updated DESC LIMIT ?")
+            .bind(limit)
+            .all();
+          list = res.results;
+        }
+
         // Map snake_case DB columns → camelCase for frontend
         const videos = list.map(v => ({
           id: v.id,
@@ -1714,29 +1971,33 @@ export default {
         if (request.headers.get("if-none-match") === etag) {
           return new Response(null, { status: 304, headers: { ...cors, ETag: etag } });
         }
-        return json({ videos }, 200, { ...cors, ETag: etag });
+        const nextCursor = paginated && videos.length === limit ? videos[videos.length - 1].updated : null;
+        return json({ videos, nextCursor }, 200, { ...cors, ETag: etag });
       } catch (e) { return json({ error: e.message }, 500, cors); }
     }
 
     if (url.pathname === "/videos" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 32 * 1024) return json({ error: "Payload too large" }, 413, cors);
+
         const body = await request.json().catch(() => ({}));
-        const now = new Date().toISOString();
         const id = `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
         const videoId = ytIdFrom(body.primaryUrl || "");
-        
+
         await env.DB.prepare(
           "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
-          id, body.title, body.category || "GAMING", body.subcategory || "", body.kind || "LONG", 
-          body.tags || "", body.primaryUrl, body.creatorUrl, body.mirrorUrl || "", videoId, 
+          id, body.title, body.category || "GAMING", body.subcategory || "", body.kind || "LONG",
+          body.tags || "", body.primaryUrl, body.creatorUrl, body.mirrorUrl || "", videoId,
           Number(body.youtubeViews || 0), body.viewStatus || "unknown", body.attributedTo || "", body.isShinel ? 1 : 0
         ).run();
 
         return json({ ok: true, id }, 200, cors);
-      } catch (e) { return json({ error: e.message }, 500, cors); }
+      } catch (e) { return json({ error: e.message }, e.status || 500, cors); }
     }
 
     if (url.pathname === "/api/media/migrate-kv-to-d1" && request.method === "POST") {
@@ -1865,21 +2126,56 @@ export default {
       }
     }
 
-    // POST /leads - Create new lead (Public)
+    // POST /leads - Create new lead (Public, rate-limited, size-capped)
     if (url.pathname === "/leads" && request.method === "POST") {
       try {
+        // 1. Size gate before parsing.
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 16 * 1024) {
+          return json({ error: "Payload too large" }, 413, cors);
+        }
+        // 2. Rate limit: 10 submissions / hour / IP.
+        if (await isRateLimited(env, ip, 3600, 10, "leads")) {
+          return json({ error: "Too many submissions, please try again later" }, 429, cors);
+        }
+        // 3. Honeypot rejection (matches QuickLeadForm's hidden "website" field).
         const body = await request.json().catch(() => ({}));
+        if (body && typeof body.website === "string" && body.website.trim()) {
+          // Silent success to confuse bots.
+          return json({ ok: true, id: "lead-hp" }, 200, cors);
+        }
+        // 4. Validation.
+        const emailRaw = String(body.email || "").trim();
+        if (!EMAIL_RE.test(emailRaw) || emailRaw.length > 254) {
+          return json({ error: "Invalid email" }, 400, cors);
+        }
+        const nameRaw = String(body.name || "").trim();
+        if (nameRaw.length < 2) {
+          return json({ error: "Name required" }, 400, cors);
+        }
+        const interests = Array.isArray(body.interests)
+          ? body.interests.slice(0, 20).map(v => clampStr(v, 80))
+          : [];
+        // Cap quizData to 4 KB of JSON.
+        let quizData = null;
+        if (body.quizData != null) {
+          try {
+            const s = JSON.stringify(body.quizData);
+            if (s.length <= 4096) quizData = JSON.parse(s);
+          } catch { /* drop silently */ }
+        }
+
         const now = Date.now();
         const id = `lead-${now}-${Math.random().toString(36).slice(2)}`;
 
         const lead = {
           id,
-          name: String(body.name || "Unknown"),
-          email: String(body.email || ""),
-          handle: String(body.handle || ""),
-          source: String(body.source || "wizard"),
-          interests: Array.isArray(body.interests) ? body.interests : [],
-          quizData: body.quizData || null,
+          name: clampStr(nameRaw, 120),
+          email: clampStr(emailRaw.toLowerCase(), 254),
+          handle: clampStr(body.handle, 80),
+          source: clampStr(body.source || "wizard", 40),
+          interests,
+          quizData,
           status: "new",
           createdAt: now,
           lastUpdated: now
@@ -2280,32 +2576,47 @@ export default {
     }
 
     /* ------------------------------- blog ------------------------------- */
-    // GET /blog/posts - Public list
+    // GET /blog/posts - Public list (drafts hidden unless authenticated team)
+    // NOTE: Blog markdown is rendered client-side via react-markdown WITHOUT rehype-raw,
+    // so HTML in `content` is sanitized by default. Any PR adding rehype-raw MUST add
+    // explicit HTML sanitization (e.g. rehype-sanitize) first.
     if (url.pathname === "/blog/posts" && request.method === "GET") {
       const posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
-      // Filter drafts if not admin? For now public sees published.
-      // If admin param ?admin=1, show all.
-      // Simplest: Public gets everything marked 'published'.
-      const isPublic = !url.searchParams.has("admin");
-      const result = isPublic ? posts.filter(p => p.status === 'published') : posts;
-      // Sort by date desc
+      let isAuthedTeam = false;
+      if (url.searchParams.has("admin")) {
+        try {
+          await requireTeamOrThrow(request, secret, env);
+          isAuthedTeam = true;
+        } catch { /* fall through to public */ }
+      }
+      const result = isAuthedTeam ? posts : posts.filter(p => p.status === 'published');
       result.sort((a, b) => new Date(b.date) - new Date(a.date));
       return json({ posts: result }, 200, cors);
     }
 
-    // GET /blog/posts/:slug - Single post
+    // GET /blog/posts/:slug - Single post (drafts hidden from public)
     if (url.pathname.match(/^\/blog\/posts\/([^/]+)$/) && request.method === "GET") {
       const slug = url.pathname.split("/").pop();
       const posts = await env.SHINEL_AUDIT.get("app:blog:posts", "json") || [];
       const post = posts.find(p => p.slug === slug);
       if (!post) return json({ error: "Post not found" }, 404, cors);
+      // Drafts are only visible to authenticated team members.
+      if (post.status !== "published") {
+        try {
+          await requireTeamOrThrow(request, secret, env);
+        } catch {
+          return json({ error: "Post not found" }, 404, cors);
+        }
+      }
       return json({ post }, 200, cors);
     }
 
     // POST /blog/posts (Admin) - Create/Update
     if (url.pathname === "/blog/posts" && request.method === "POST") {
       try {
-        await requireAdminOrThrow(request, secret);
+        await requireAdminOrThrow(request, secret, env);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 512 * 1024) return json({ error: "Payload too large" }, 413, cors);
         const body = await request.json();
         const { slug, title, content, excerpt, coverImage, author, status, date } = body;
 
@@ -2387,18 +2698,43 @@ export default {
     /* -------------------------- Image Proxy -------------------------- */
     if (url.pathname === "/api/proxy-image" && request.method === "GET") {
       try {
+        // Per-IP burst cap: 120 req/min to prevent bandwidth abuse.
+        if (await isRateLimited(env, ip, 60, 120, "proxyimg")) {
+          return json({ error: "Too many requests" }, 429, cors);
+        }
         const imageUrl = url.searchParams.get("url");
         if (!imageUrl) return json({ error: "No URL provided" }, 400, cors);
 
         const decodedUrl = imageUrl;
         const imgUrlObj = new URL(decodedUrl);
 
-        // Security check: Only proxy safe domains
-        const safeDomains = ["fbcdn.net", "instagram.com", "cdninstagram.com", "ggpht.com", "googleusercontent.com", "ytimg.com"];
+        // Stricter allowlist: only subdomains actually used. googleusercontent.com
+        // broadly would cover arbitrary user uploads (Drive/Photos); scope it down.
+        const exactOrSuffixHosts = [
+          "fbcdn.net", "instagram.com", "cdninstagram.com", "ggpht.com", "ytimg.com",
+        ];
+        const exactHosts = [
+          "lh3.googleusercontent.com", "lh4.googleusercontent.com",
+          "lh5.googleusercontent.com", "lh6.googleusercontent.com",
+          "yt3.googleusercontent.com", "yt4.googleusercontent.com",
+        ];
         const hostname = imgUrlObj.hostname.toLowerCase();
-        const isSafe = safeDomains.some(d => hostname === d || hostname.endsWith("." + d));
+        const isSafe =
+          exactHosts.includes(hostname) ||
+          exactOrSuffixHosts.some(d => hostname === d || hostname.endsWith("." + d));
         if (!isSafe) {
           return json({ error: "Domain not allowed" }, 403, cors);
+        }
+
+        // Optional HMAC signature to prevent open-proxy abuse. Enabled when PROXY_SECRET is set.
+        // Clients must pass ?sig=<hmac-sha256(url, PROXY_SECRET)>. Legacy callers (no secret
+        // configured) continue working unchanged.
+        if (env.PROXY_SECRET) {
+          const sig = url.searchParams.get("sig") || "";
+          const expected = await hmacHex(env.PROXY_SECRET, decodedUrl);
+          if (!sig || !timingSafeEqualHex(sig, expected)) {
+            return json({ error: "Invalid signature" }, 403, cors);
+          }
         }
 
         const imgRes = await fetch(decodedUrl, {
@@ -2417,6 +2753,11 @@ export default {
         const contentType = headers.get("content-type") || "";
         if (!contentType.startsWith("image/")) {
           return json({ error: "Not an image response" }, 400, cors);
+        }
+        // Cap response size at 10 MB to bound bandwidth per request.
+        const upstreamLen = Number(headers.get("content-length") || 0);
+        if (upstreamLen && upstreamLen > 10 * 1024 * 1024) {
+          return json({ error: "Image too large" }, 413, cors);
         }
 
         // Security & Bypass: Use validated origin for CORS
@@ -2442,28 +2783,65 @@ export default {
     /* -------------------------- Media Hub (R2 Storage) -------------------------- */
     if (url.pathname === "/api/media/upload" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
+
+        // Hard cap on upload size (10 MB) before parsing multipart.
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 10 * 1024 * 1024) {
+          return json({ error: "File too large (max 10 MB)" }, 413, cors);
+        }
 
         const formData = await request.formData();
         const file = formData.get("file");
         if (!file) return json({ error: "No file uploaded" }, 400, cors);
 
+        // Magic-byte sniff: don't trust client-provided file.type.
+        const headBuf = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+        const headHex = Array.from(headBuf).map(b => b.toString(16).padStart(2, "0")).join("");
+        const magic = [
+          { pfx: "ffd8ff",   mime: "image/jpeg", ext: "jpg", kind: "image" },
+          { pfx: "89504e47", mime: "image/png",  ext: "png", kind: "image" },
+          { pfx: "47494638", mime: "image/gif",  ext: "gif", kind: "image" },
+          { pfx: "52494646", mime: "image/webp", ext: "webp", kind: "image" }, // RIFF container; good enough
+          { pfx: "25504446", mime: "application/pdf", ext: "pdf", kind: "other" },
+          { pfx: "00000018", mime: "video/mp4",  ext: "mp4", kind: "video" },
+          { pfx: "00000020", mime: "video/mp4",  ext: "mp4", kind: "video" },
+          { pfx: "1a45dfa3", mime: "video/webm", ext: "webm", kind: "video" },
+        ];
+        const match = magic.find(m => headHex.startsWith(m.pfx));
+        if (!match) {
+          return json({ error: "Unsupported file type" }, 415, cors);
+        }
+
         const id = crypto.randomUUID();
-        const extension = file.name.split('.').pop() || "bin";
+        const extension = match.ext;
         const fileName = `${id}.${extension}`;
         const key = `media/${fileName}`;
+
+        // Sanitize provided title/filename for DB storage.
+        const safeTitle = String(file.name || "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .slice(-120) || fileName;
+
+        if (env.MEDIA_STORAGE) {
+          try {
+            await env.MEDIA_STORAGE.put(key, file.stream(), {
+              httpMetadata: { contentType: match.mime },
+            });
+          } catch (e) { console.error("R2 Upload Error:", e.message); }
+        }
 
         if (env.DB) {
           try {
             await env.DB.prepare(
               "INSERT INTO media_library (id, r2_key, title, type, category, status) VALUES (?, ?, ?, ?, ?, ?)"
-            ).bind(id, key, file.name, file.type.startsWith('image') ? 'image' : 'video', 'UPLOAD', 'pending_mirror').run();
+            ).bind(id, key, safeTitle, match.kind, 'UPLOAD', 'pending_mirror').run();
           } catch (e) { console.error("D1 Media Insert Error:", e.message); }
         }
 
         return json({ ok: true, id, url: `/api/media/view/${fileName}`, key, status: "pending_mirror" }, 200, cors);
       } catch (e) {
-        return json({ error: e.message }, 500, cors);
+        return json({ error: e.message }, e.status || 500, cors);
       }
     }
 
@@ -2509,30 +2887,37 @@ export default {
     // Mirror external media to R2
     if (url.pathname === "/api/media/archive-external" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
         const { url: targetUrl, category } = await request.json();
+
+        // Strict URL validation: only accept YouTube hosts, no shell-metacharacter smuggling.
+        // Defense-in-depth — the mirror-service also validates, but rejecting here means a
+        // bad URL never hits the D1 pending_mirror queue in the first place.
+        if (!isSafeYouTubeUrl(targetUrl)) {
+          return json({ error: "Only YouTube URLs are accepted" }, 400, cors);
+        }
         const vId = ytIdFrom(targetUrl);
         if (!vId) return json({ error: "Invalid YouTube URL" }, 400, cors);
 
         // Fetch details from YouTube
         const details = await fetchYouTubeVideoDetails(env, vId);
         const id = crypto.randomUUID();
-        
+
         await env.DB.prepare(
           "INSERT INTO media_library (id, source_url, title, type, category, status, channel_title, thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
-          id, targetUrl, details.title || `Archive: ${vId}`, 'video', category || 'UNCATEGORIZED', 'pending_mirror', 
+          id, targetUrl, details.title || `Archive: ${vId}`, 'video', category || 'UNCATEGORIZED', 'pending_mirror',
           details.channelTitle || '', details.thumbnails?.high?.url || ''
         ).run();
 
-        return json({ 
-          ok: true, 
-          id, 
+        return json({
+          ok: true,
+          id,
           status: "pending_mirror",
           title: details.title,
-          thumbnailUrl: details.thumbnails?.high?.url 
+          thumbnailUrl: details.thumbnails?.high?.url
         }, 200, cors);
-      } catch (e) { return json({ error: e.message }, 500, cors); }
+      } catch (e) { return json({ error: e.message }, e.status || 500, cors); }
     }
 
     // GET /api/media/library - List entries

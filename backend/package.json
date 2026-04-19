@@ -7,10 +7,12 @@
     "mirror": "node mirror-service.js"
   },
   "dependencies": {
+    "axios": "^1.6.8",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "googleapis": "^134.0.0",
     "dotenv": "^16.4.5",
-    "axios": "^1.6.8"
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "googleapis": "^134.0.0",
+    "helmet": "^7.1.0"
   }
 }

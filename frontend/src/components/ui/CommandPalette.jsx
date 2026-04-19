@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAccessToken } from "../../utils/tokenStore";
 import {
     Search,
     Home,
@@ -41,7 +42,7 @@ export default function CommandPalette() {
 
     useEffect(() => {
         if (isOpen && (isAdmin || isEditor)) {
-            const store = createVideoStorage(AUTH_BASE, () => localStorage.getItem("token"));
+            const store = createVideoStorage(AUTH_BASE, () => getAccessToken());
             store.getAll().then(setVideos).catch(console.error);
         }
     }, [isOpen, isAdmin, isEditor]);

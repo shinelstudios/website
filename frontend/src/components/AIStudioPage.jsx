@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { LogOut, ChevronDown, ChevronUp, RefreshCcw, Timer } from "lucide-react";
 
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken } from "../utils/tokenStore";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -23,7 +24,7 @@ const daysLeftFromExp = (payload) => {
 };
 
 export default function AIStudioPage() {
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
+  const [token, setToken] = useState(() => getAccessToken());
   const [payload, setPayload] = useState(() => (token ? parseJwt(token) : null));
   const [showDebug, setShowDebug] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,7 +39,7 @@ export default function AIStudioPage() {
   // Sync local state with global auth changes
   useEffect(() => {
     const onAuth = () => {
-      const t = localStorage.getItem("token") || "";
+      const t = getAccessToken();
       setToken(t);
       setPayload(t ? parseJwt(t) : null);
     };

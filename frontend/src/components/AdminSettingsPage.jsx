@@ -33,6 +33,7 @@ import {
 import { motion } from "framer-motion";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken } from "../utils/tokenStore";
 
 // Platform icon mapping
 const PLATFORM_ICONS = {
@@ -72,7 +73,7 @@ export default function AdminSettingsPage() {
     const [msg, setMsg] = useState({ type: "", text: "" });
 
     // Role detection
-    const token = localStorage.getItem("token") || "";
+    const token = getAccessToken();
     const payload = parseJwt(token);
     const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
     const userRoles = rawRole.split(",").map(r => r.trim()).filter(Boolean);
@@ -85,7 +86,7 @@ export default function AdminSettingsPage() {
     const fetchYtHealth = async () => {
         setYtLoading(true);
         try {
-            const token = localStorage.getItem("token");
+            const token = getAccessToken();
             const res = await fetch(`${AUTH_BASE}/admin/yt-quota`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });

@@ -50,23 +50,9 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash][extname]',
       },
     },
-    // Use terser for better minification
+    // esbuild minifier is faster than terser; drop console/debugger via its own options.
+    // The prior `terserOptions` block was dead code (terser only runs when minify:"terser").
     minify: "esbuild",
-    terserOptions: {
-      compress: {
-        drop_console: true, // Remove console.log in production
-        drop_debugger: true, // Remove debugger statements
-        pure_funcs: ['console.log', 'console.info', 'console.debug'], // Remove specific console methods
-        passes: 2, // Multiple passes for better compression
-      },
-      mangle: {
-        safari10: true, // Fix Safari 10 issues
-      },
-      format: {
-        comments: false, // Remove all comments
-      },
-    },
-    // Generate sourcemaps only for errors (not full maps)
     sourcemap: false,
     // Optimize chunk size warnings
     chunkSizeWarningLimit: 600, // Warn if chunk > 600KB
@@ -90,6 +76,11 @@ export default defineConfig({
         rewrite: (p) => p,
       },
     },
+  },
+  // esbuild options: strip console/debugger from production bundle.
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
   },
   // Optimize dependencies
   optimizeDeps: {

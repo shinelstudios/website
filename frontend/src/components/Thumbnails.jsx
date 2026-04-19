@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
+import { getAccessToken } from "../utils/tokenStore";
 
 /**
  * Public/Protected read:
@@ -932,7 +933,7 @@ export default function Thumbnails() {
       try {
         setLoading((prev) => (items.length ? false : true));
 
-        const runtimeToken = localStorage.getItem("token") || "";
+        const runtimeToken = getAccessToken();
         const authToken = runtimeToken || PUBLIC_READ_TOKEN || "";
 
         const { status, etag: newEtag, data } = await fetchJSONWithETag(

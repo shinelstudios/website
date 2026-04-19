@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
+import { getAccessToken } from "../utils/tokenStore";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 
 /**
@@ -129,7 +130,7 @@ export default function VideoEditing() {
 
   // Optional auth for reads (mirrors Thumbnails.jsx)
   const readToken = useMemo(() => {
-    return PUBLIC_READ_TOKEN || localStorage.getItem("token") || "";
+    return PUBLIC_READ_TOKEN || getAccessToken();
   }, []);
 
   const loadVideos = useCallback(async () => {

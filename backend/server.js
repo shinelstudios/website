@@ -9,11 +9,50 @@ import cors from "cors";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import crypto from "crypto";
 import { spawn } from "child_process";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+
+// CORS: lock to the Cloudflare Worker origin when configured. Fallback to no-origin
+// CORS (disallow cross-site browsers) if unset — server-to-server calls still work.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "";
+app.use(cors({
+  origin: ALLOWED_ORIGIN ? ALLOWED_ORIGIN : false,
+  credentials: false,
+}));
+
+app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
+app.use(express.json({ limit: "32kb" }));
+
+// Shared-secret auth: the Worker attaches X-Shinel-Captions-Secret on every proxied
+// call. Constant-time compare; reject when the env var is set but header mismatches.
+// If CAPTIONS_SHARED_SECRET is unset we fail-open for local dev/legacy deploys, but
+// we log a loud warning so it's noticed.
+const SHARED_SECRET = process.env.CAPTIONS_SHARED_SECRET || "";
+if (!SHARED_SECRET) {
+  console.warn("[SECURITY] CAPTIONS_SHARED_SECRET is unset — backend is unauthenticated!");
+}
+function requireSharedSecret(req, res, next) {
+  if (!SHARED_SECRET) return next();
+  const got = Buffer.from(req.get("x-shinel-captions-secret") || "", "utf8");
+  const want = Buffer.from(SHARED_SECRET, "utf8");
+  if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return next();
+}
+
+// Per-IP rate limit: 20 req/min. Captions extraction is CPU-expensive (yt-dlp spawn).
+const captionsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests" },
+});
 
 /**
  * REQUIREMENTS:
@@ -518,7 +557,7 @@ async function ytDlpFetchCaptions(url, lang = "en") {
    API route
 ----------------------------*/
 
-app.post("/api/youtube-captions", async (req, res) => {
+app.post("/api/youtube-captions", captionsLimiter, requireSharedSecret, async (req, res) => {
   try {
     const { url, lang = "en", hl = "en", gl = "IN" } = req.body || {};
     const videoId = extractVideoId(url);

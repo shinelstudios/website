@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAccessToken } from "../utils/tokenStore";
 import {
   Sun,
   Moon,
@@ -80,9 +81,7 @@ function parseJwt(token) {
 
 function getAuthState() {
   try {
-    const token =
-      (typeof localStorage !== "undefined" && localStorage.getItem("token")) ||
-      null;
+    const token = getAccessToken() || null;
 
     const payload = token ? parseJwt(token) : null;
     const now = Math.floor(Date.now() / 1000);

@@ -1,19 +1,26 @@
 import { AUTH_BASE } from "../config/constants";
+import { getAccessToken, setAccessToken, clearAccessToken } from "./tokenStore";
 
+export { getAccessToken, setAccessToken, clearAccessToken };
+
+// TextDecoder-based base64url → string (replaces deprecated escape/unescape).
 export function parseJwt(token) {
   try {
-    const [, payload] = token.split(".");
+    const [, payload] = (token || "").split(".");
     if (!payload) return null;
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decodeURIComponent(escape(json)));
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+    const bin = atob(b64 + pad);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder("utf-8").decode(bytes));
   } catch {
     return null;
   }
 }
 
 export function getAuth() {
-  const token = localStorage.getItem("token") || "";
-  const refresh = localStorage.getItem("refreshToken") || "";
+  const token = getAccessToken();
   const payload = token ? parseJwt(token) : null;
 
   const expSec = payload?.exp || null;
@@ -22,14 +29,13 @@ export function getAuth() {
   const daysLeft = secsLeft != null ? Math.floor(secsLeft / 86400) : null;
 
   const email = payload?.email || localStorage.getItem("userEmail") || null;
-  const role = payload?.role || null;
-  const firstName = payload?.firstName || null;
-  const lastName = payload?.lastName || null;
+  const role = payload?.role || localStorage.getItem("role") || null;
+  const firstName = payload?.firstName || localStorage.getItem("firstName") || null;
+  const lastName = payload?.lastName || localStorage.getItem("lastName") || null;
 
   return {
     isAuthed: Boolean(token && payload && (!payload.exp || payload.exp > nowSec)),
     token,
-    refresh,
     email,
     role,
     firstName,
@@ -39,31 +45,42 @@ export function getAuth() {
   };
 }
 
-export function setAuth({ token, refresh, email }) {
-  if (token) localStorage.setItem("token", token);
-  if (refresh) localStorage.setItem("refreshToken", refresh);
+export function setAuth({ token, email, role, firstName, lastName }) {
+  if (token) setAccessToken(token);
+  // Profile display fields only — NOT the token. Keeps SiteHeader/avatars working
+  // on initial load before silent refresh completes.
   if (email) localStorage.setItem("userEmail", email);
-  window.dispatchEvent(new Event("auth:changed"));
+  if (role) localStorage.setItem("role", role);
+  if (firstName) localStorage.setItem("firstName", firstName);
+  if (lastName) localStorage.setItem("lastName", lastName);
+  try { window.dispatchEvent(new Event("auth:changed")); } catch { /* */ }
 }
 
 export function clearAuth() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("userEmail");
-  window.dispatchEvent(new Event("auth:changed"));
+  clearAccessToken();
+  // Legacy + canonical keys.
+  const keys = [
+    "token", "refreshToken", "refresh",
+    "userEmail", "role", "firstName", "lastName", "rememberMe",
+    "userRole", "userFirst", "userLast", "userFirstName", "userLastName", "userEmailAddress",
+  ];
+  for (const k of keys) {
+    try { localStorage.removeItem(k); } catch { /* */ }
+  }
+  try { window.dispatchEvent(new Event("auth:changed")); } catch { /* */ }
 }
 
+// Silent refresh using the httpOnly ss_refresh cookie. Safe to call on mount even
+// when logged out: a 401 simply means "stay logged out".
 export async function refreshSession() {
   try {
-    const refresh = localStorage.getItem("refreshToken");
-    if (!refresh) throw new Error("No refresh token");
     const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
       method: "POST",
-      headers: { authorization: `Bearer ${refresh}` },
+      credentials: "include",
     });
-    if (!res.ok) throw new Error("Refresh failed");
+    if (!res.ok) return { ok: false, status: res.status };
     const data = await res.json();
-    setAuth({ token: data.token, refresh: data.refresh });
+    if (data && data.token) setAccessToken(data.token);
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: e?.message || "Refresh failed" };

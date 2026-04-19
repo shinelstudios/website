@@ -41,3 +41,27 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+
+# Local debug dumps / test outputs (should never be tracked)
+*_test.json
+*_test.txt
+build_*.log
+build_*.txt
+build_debug.txt
+build_error.log
+build_error.txt
+build_utf8.log
+deploy_*.log
+gitlog*.txt
+audit-report.json
+verification_results.txt
+check-syntax.js
+old_pulse.txt
+test_pulse.js
+write_test.js
+clients_full*.json
+thumb_test.json
+video_test.json
+videos_test_output.json
+worker/output.json
+worker/stats.json

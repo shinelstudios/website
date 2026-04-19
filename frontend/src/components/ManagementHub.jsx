@@ -1,5 +1,6 @@
 // src/components/ManagementHub.jsx
 import React, { useState, useMemo, useEffect } from "react";
+import { getAccessToken } from "../utils/tokenStore";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -48,7 +49,7 @@ export default function ManagementHub() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Auth & Role
-    const token = localStorage.getItem("token") || "";
+    const token = getAccessToken();
     const payload = useMemo(() => parseJwt(token), [token]);
     const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
     const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);

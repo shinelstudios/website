@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Save, Eye, ArrowLeft, Image as ImageIcon, Calendar, FileText, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { AUTH_BASE } from "../config/constants"; // Ensure correct import path
+import { getAccessToken } from "../utils/tokenStore";
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 
 function toast(type, msg) {
@@ -18,7 +19,7 @@ export default function AdminBlogEditor() {
     const [loading, setLoading] = useState(!isNew);
     const [busy, setBusy] = useState(false);
     const [activeTab, setActiveTab] = useState("edit"); // edit | preview
-    const [token] = useState(localStorage.getItem("token") || "");
+    const [token] = useState(getAccessToken());
 
     const [form, setForm] = useState({
         title: "",

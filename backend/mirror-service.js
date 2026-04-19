@@ -1,9 +1,25 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+
+// Defense-in-depth URL validation. The Worker already rejects non-YouTube URLs before
+// inserting into media_library, but if anything bypasses that path we refuse to shell
+// out to yt-dlp with untrusted input.
+function isSafeYouTubeUrl(input) {
+  if (typeof input !== 'string' || input.length === 0 || input.length > 500) return false;
+  if (/[;$`\n\r|&<>]/.test(input)) return false;
+  let u;
+  try { u = new URL(input); } catch { return false; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  if (u.username || u.password || u.port) return false;
+  const ALLOWED_HOSTS = new Set([
+    'youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com',
+  ]);
+  return ALLOWED_HOSTS.has(u.hostname.toLowerCase());
+}
 
 /**
  * YouTube Mirror Service
@@ -59,15 +75,34 @@ async function processPendingMirrors() {
 }
 
 async function mirrorVideo(item) {
+  // Reject anything that isn't a clean YouTube URL before spawning a child process.
+  if (!isSafeYouTubeUrl(item.source_url)) {
+    console.error(`[${item.id}] Refusing unsafe source_url; marking as failed.`);
+    await queryD1("UPDATE media_library SET status = 'failed' WHERE id = ?", [item.id]);
+    return;
+  }
   const videoId = item.source_url.split('v=')[1]?.split('&')[0];
   if (!videoId) return;
 
   const tempFile = path.join(process.cwd(), `temp_${item.id}.mp4`);
-  
+
   try {
     console.log(`[${item.id}] Downloading: ${item.source_url}`);
-    // Using yt-dlp to download the video
-    execSync(`yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --output "${tempFile}" "${item.source_url}"`);
+    // Array-form spawnSync with shell:false — source_url is never interpreted by a shell,
+    // so metacharacters like `;`, `$(...)`, and backticks cannot inject commands.
+    const result = spawnSync('yt-dlp', [
+      '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+      '--output', tempFile,
+      '--no-playlist',
+      item.source_url,
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      timeout: 10 * 60 * 1000, // 10 minutes
+    });
+    if (result.status !== 0) {
+      throw new Error(`yt-dlp exited ${result.status}: ${result.stderr?.toString?.().slice(0, 500) || ''}`);
+    }
 
     console.log(`[${item.id}] Uploading to YouTube Mirror Channel...`);
     const res = await youtube.videos.insert({
