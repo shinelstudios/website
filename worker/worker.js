@@ -363,10 +363,21 @@ function readBearerToken(request) {
   const auth = request.headers.get("authorization") || "";
   return auth.startsWith("Bearer ") ? auth.slice(7) : "";
 }
+// Thin wrapper around jose's jwtVerify that turns any verification failure
+// (expired / malformed / bad signature) into a 401 instead of an opaque 500.
+async function verifyJwtOr401(token, secret) {
+  try {
+    return await verifyJWT(token, secret);
+  } catch (e) {
+    const msg = String(e?.code || e?.message || "Invalid token");
+    throw Object.assign(new Error(msg.includes("exp") ? "Token expired" : "Invalid token"), { status: 401 });
+  }
+}
+
 async function requireTeamOrThrow(request, secret, env) {
   const token = readBearerToken(request);
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
-  const payload = await verifyJWT(token, secret);
+  const payload = await verifyJwtOr401(token, secret);
   if (env && await isJtiRevoked(env, payload.jti)) {
     throw Object.assign(new Error("Token revoked"), { status: 401 });
   }
@@ -379,7 +390,7 @@ async function requireTeamOrThrow(request, secret, env) {
 async function requireAdminOrThrow(request, secret, env) {
   const token = readBearerToken(request);
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
-  const payload = await verifyJWT(token, secret);
+  const payload = await verifyJwtOr401(token, secret);
   if (env && await isJtiRevoked(env, payload.jti)) {
     throw Object.assign(new Error("Token revoked"), { status: 401 });
   }

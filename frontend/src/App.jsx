@@ -49,7 +49,7 @@ const AdminUsersPage = React.lazy(() =>
 const ToolsIndex = React.lazy(() =>
   import("./components/tools/ToolsIndex.jsx")
 );
-// const SrtTool = React.lazy(() => import("./components/tools/SrtTool.jsx"));
+// SrtTool is imported by SrtToolPage directly — no need to lazy-load it here.
 const SeoTool = React.lazy(() => import("./components/tools/SeoTool.jsx"));
 const ThumbnailIdeation = React.lazy(() =>
   import("./components/tools/ThumbnailIdeation.jsx")
@@ -63,13 +63,13 @@ const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 // Public SEO Tool Pages
 const RoiCalculatorPage = React.lazy(() => import("./components/pages/RoiCalculatorPage.jsx"));
 const ThumbnailPreviewerPage = React.lazy(() => import("./components/pages/ThumbnailPreviewerPage.jsx"));
-// const SrtToolPage = React.lazy(() => import("./components/pages/SrtToolPage.jsx"));
+const SrtToolPage = React.lazy(() => import("./components/pages/SrtToolPage.jsx"));
 const ThumbnailTesterPage = React.lazy(() => import("./components/pages/ThumbnailTesterPage.jsx")); // HMR Force
 const EditorLeaderboardPage = React.lazy(() => import("./components/pages/EditorLeaderboardPage.jsx"));
 const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
 const ComparisonToolPage = React.lazy(() => import("./components/pages/ComparisonToolPage.jsx"));
 const ThumbnailIdeationPage = React.lazy(() => import("./components/pages/ThumbnailIdeationPage.jsx"));
-// const YoutubeCaptionsPage = React.lazy(() => import("./components/pages/YoutubeCaptionsPage.jsx"));
+const YoutubeCaptionsPage = React.lazy(() => import("./components/pages/YoutubeCaptionsPage.jsx"));
 const CustomAIsPage = React.lazy(() => import("./components/pages/CustomAIsPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
@@ -344,7 +344,7 @@ export default function App() {
           <Route path="/roi-calculator" element={<RoiCalculatorPage />} />
           <Route path="/tools/thumbnail-previewer" element={<ThumbnailPreviewerPage />} />
           <Route path="/tools/thumbnail-tester" element={<ThumbnailTesterPage />} />
-          {/* <Route path="/tools/srt" element={<SrtToolPage />} /> */}
+          <Route path="/tools/srt" element={<SrtToolPage />} />
           <Route path="/tools/seo" element={<SeoToolPage />} />
           <Route path="/tools/comparison" element={<ComparisonToolPage />} />
 
@@ -402,10 +402,10 @@ export default function App() {
           />
 
 
-          {/* <Route
+          <Route
             path="/tools/youtube-captions"
             element={<YoutubeCaptionsPage />}
-          /> */}
+          />
 
 
           <Route
