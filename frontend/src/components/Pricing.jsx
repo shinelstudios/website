@@ -10,6 +10,15 @@ import {
   Settings as SettingsIcon, Monitor, Activity, Cpu, Layers, BarChart, HardDrive, TrendingUp, Users, Award
 } from "lucide-react";
 import FloatingOrbs from "./animations/FloatingOrbs";
+import {
+  Kicker,
+  Eyebrow,
+  Display,
+  Lede,
+  RevealOnScroll,
+  GrainOverlay,
+  HairlineCard,
+} from "../design";
 
 /**
  * Pricing - Enhanced with Psychological Pricing & Better Animations
@@ -362,62 +371,52 @@ const Pricing = ({ onOpenCalendly }) => {
         speed="medium"
       />
 
+      <GrainOverlay />
+
       <div className="container mx-auto px-6 max-w-7xl relative z-10">
-        {/* Header Section */}
-        <div className="flex flex-col items-center text-center mb-24 lg:mb-32">
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="flex items-center gap-3 px-5 py-3 rounded-full border border-[var(--border)] bg-[var(--surface-alt)] mb-8"
-          >
-            <div className="w-2 h-2 rounded-full bg-[var(--orange)] animate-pulse" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Production Standards v4.2</span>
-          </motion.div>
+        {/* Editorial header — redesign v2 */}
+        <div className="grid md:grid-cols-[1.4fr_1fr] gap-10 md:gap-16 items-end mb-20 md:mb-28">
+          <div>
+            <RevealOnScroll>
+              <Kicker className="mb-6">Pricing</Kicker>
+            </RevealOnScroll>
+            <RevealOnScroll delay="80ms">
+              <Display as="h1" size="xl" className="mb-6">
+                Elite <span className="italic" style={{ color: "var(--orange)" }}>value.</span>
+              </Display>
+            </RevealOnScroll>
+            <RevealOnScroll delay="160ms">
+              <Lede>
+                Tiered output pipelines for high-performance channels. Every plan
+                includes a named editor, 2 revision rounds per deliverable, and
+                source-file ownership on ship.
+              </Lede>
+            </RevealOnScroll>
+          </div>
 
-          <motion.h1
-            style={{ fontFamily: TYPOGRAPHY.display }}
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="text-5xl md:text-8xl lg:text-9xl text-[var(--text)] mb-6 tracking-tight leading-none font-black"
-          >
-            Elite <span className="italic text-[var(--orange)]">Value.</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, scale: 0.98 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className="text-[var(--text-muted)] text-base md:text-lg max-w-2xl font-medium"
-            style={{ fontFamily: TYPOGRAPHY.body }}
-          >
-            Tiered output pipelines for high-performance channels.
-          </motion.p>
-
-          {/* Trust Signals */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
-            className="mt-10 flex flex-wrap items-center justify-center gap-8 text-sm text-[var(--text-muted)]"
-            style={{ fontFamily: TYPOGRAPHY.body }}
-          >
-            <div className="flex items-center gap-2">
-              <Users size={18} className="text-[var(--orange)]" />
-              <span className="font-semibold">Join <AnimatedCounter value="500" />+ Creators</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Shield size={18} className="text-[var(--orange)]" />
-              <span className="font-semibold">100% Satisfaction Guarantee</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Award size={18} className="text-[var(--orange)]" />
-              <span className="font-semibold">Cancel Anytime</span>
-            </div>
-          </motion.div>
+          <RevealOnScroll delay="240ms">
+            <HairlineCard className="p-6 md:p-7">
+              <Eyebrow className="mb-4">What you get</Eyebrow>
+              <ul className="space-y-3">
+                <li className="flex items-center gap-3 text-sm">
+                  <Users size={16} style={{ color: "var(--orange)" }} />
+                  <span>Join <AnimatedCounter value="500" />+ creators</span>
+                </li>
+                <li className="flex items-center gap-3 text-sm">
+                  <Shield size={16} style={{ color: "var(--orange)" }} />
+                  <span>100% satisfaction guarantee</span>
+                </li>
+                <li className="flex items-center gap-3 text-sm">
+                  <Award size={16} style={{ color: "var(--orange)" }} />
+                  <span>Cancel anytime, no lock-in</span>
+                </li>
+                <li className="flex items-center gap-3 text-sm">
+                  <Clock size={16} style={{ color: "var(--orange)" }} />
+                  <span>Reply within 24 h on every thread</span>
+                </li>
+              </ul>
+            </HairlineCard>
+          </RevealOnScroll>
         </div>
 
         {/* Global Offer Alert - Enhanced Contrast */}
