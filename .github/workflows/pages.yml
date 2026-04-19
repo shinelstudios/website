@@ -1,0 +1,70 @@
+# Builds the Vite frontend on every push to `main` and publishes it via
+# GitHub Pages. No Cloudflare Pages involvement — GitHub is both the source
+# of truth AND the host.
+#
+# One-time setup (you do this in the GitHub UI after this workflow lands):
+#   Repo → Settings → Pages → Build and deployment → Source = "GitHub Actions"
+#
+# Custom domain (optional):
+#   Repo → Settings → Pages → Custom domain = shinelstudios.in
+#   Then point your DNS A/AAAA records for shinelstudios.in to GitHub's Pages IPs
+#   (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153).
+#   The CNAME file in frontend/public survives every deploy so the domain sticks.
+
+name: Build & deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # Only one deploy at a time; queue new pushes behind the current run.
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        env:
+          # Forwarded to Vite at build time. If you later deploy to a subpath
+          # (e.g. shinelstudios.github.io/website) set this to "/website/".
+          # With a custom domain (CNAME file below), keep "/".
+          VITE_BASE: "/"
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
