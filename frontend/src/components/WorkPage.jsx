@@ -36,6 +36,17 @@ import LiveStatsCaseStudy from "./LiveStatsCaseStudy";
 import WorkSection from "./WorkSection";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
+import {
+  Section,
+  Kicker,
+  Eyebrow,
+  Display,
+  Lede,
+  RevealOnScroll,
+  HairlineCard,
+  NumberTickIn,
+  GrainOverlay,
+} from "../design";
 
 const ProofSection = React.lazy(() => import("./ProofSection"));
 const CaseStudies = React.lazy(() => import("./CaseStudies"));
@@ -409,8 +420,14 @@ export default function WorkPage() {
     };
   }, [projects, config]);
 
+  // For the compact views stat: prefer raw views if config says so, else millions-rounded.
+  const viewsValue = config?.workPageStats?.useCalculated === false
+    ? stats.views
+    : Math.round((stats.views / 1_000_000) * 10) / 10;
+  const viewsSuffix = config?.workPageStats?.useCalculated === false ? "+" : "M+";
+
   return (
-    <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30">
+    <div className="min-h-svh bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30 relative">
       <MetaTags
         title="Our Work – Creative Portfolio | Shinel Studios"
         description="Explore high-CTR thumbnails, retention-focused video edits, viral shorts, and growth-optimised content. 500+ projects for top creators."
@@ -423,106 +440,72 @@ export default function WorkPage() {
         ]}
       />
 
-      {/* ─── HERO ──────────────────────────────────────────────────────── */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
-        <GradientWaves
-          colors={["#E85002", "#FF6B35", "#000000"]}
-          opacity={0.3}
-          speed="medium"
-        />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none opacity-20">
-          <div className="absolute top-40 left-0 w-96 h-96 bg-[var(--orange)]/20 rounded-full blur-[120px]" />
-          <div className="absolute top-20 right-0 w-80 h-80 bg-[var(--orange)]/10 rounded-full blur-[120px]" />
+      <GrainOverlay />
+
+      {/* ─── HERO (editorial v2) ──────────────────────────────────────── */}
+      <Section size="lg" className="pt-24 md:pt-32 overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none opacity-25">
+          <GradientWaves colors={["#E85002", "#FF6B35", "#000000"]} opacity={0.3} speed="medium" />
         </div>
 
-        <div className="container mx-auto px-6 relative z-10 text-center">
-          <motion.div
-            {...mkFade(reduced, 0)}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--surface-alt)] border border-[var(--border)] text-[10px] font-black tracking-widest uppercase text-[var(--orange)] mb-6"
-          >
-            <Sparkles size={13} className={reduced ? "" : "animate-pulse"} />
-            Our Creative Portfolio
-          </motion.div>
+        <div className="relative z-10 grid md:grid-cols-[1.4fr_1fr] gap-10 md:gap-16 items-end">
+          <div>
+            <RevealOnScroll>
+              <Kicker className="mb-6">The Work</Kicker>
+            </RevealOnScroll>
+            <RevealOnScroll delay="80ms">
+              <Display as="h1" size="xl" className="mb-6">
+                Creative excellence, <span style={{ color: "var(--orange)" }}>at scale.</span>
+              </Display>
+            </RevealOnScroll>
+            <RevealOnScroll delay="160ms">
+              <Lede className="mb-8">
+                High-CTR thumbnails, retention-focused long-form, viral shorts, and
+                full brand systems. Every piece below is real client work, fetched
+                live from our production inventory — no stock, no mock-ups.
+              </Lede>
+            </RevealOnScroll>
+            <RevealOnScroll delay="240ms">
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={wa("I'm impressed with your portfolio! Let's talk about my project.")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-editorial"
+                >
+                  Start a project <ChevronRight size={14} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => portfolioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="btn-editorial-ghost"
+                >
+                  Explore below <span aria-hidden>↓</span>
+                </button>
+              </div>
+            </RevealOnScroll>
+          </div>
 
-          <motion.h1
-            {...mkFade(reduced, 0.1)}
-            className="text-5xl sm:text-7xl lg:text-8xl font-black mb-5 tracking-tighter leading-[0.88] text-[var(--text)]"
-          >
-            CREATIVE{" "}
-            <span className="text-[var(--orange)]">EXCELLENCE</span>
-            <br />
-            AT SCALE.
-          </motion.h1>
-
-          <motion.p
-            {...mkFade(reduced, 0.2)}
-            className="text-lg sm:text-xl max-w-2xl mx-auto mb-10 text-[var(--text-muted)] font-medium"
-          >
-            We don't just edit videos — we build visual engines that drive
-            growth, authority, and engagement for top-tier creators.
-          </motion.p>
-
-          {/* Stats */}
-          <motion.div
-            {...mkFade(reduced, 0.3)}
-            className="grid grid-cols-3 gap-6 max-w-lg mx-auto mb-10"
-          >
-            <StatsCounter
-              end={stats.projects}
-              suffix="+"
-              label="Projects"
-              duration={2000}
-            />
-            <StatsCounter
-              end={stats.clients}
-              suffix="+"
-              label="Clients"
-              duration={2000}
-            />
-            <StatsCounter
-              end={
-                config?.workPageStats?.useCalculated === false
-                  ? stats.views
-                  : stats.views / 1_000_000
-              }
-              decimals={1}
-              suffix="M+"
-              label="Views"
-              duration={2500}
-            />
-          </motion.div>
-
-          {/* Hero CTAs */}
-          <motion.div
-            {...mkFade(reduced, 0.4)}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3"
-          >
-            <a
-              href={wa("I'm impressed with your portfolio! Let's talk about my project.")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-2 px-7 py-3.5 rounded-2xl bg-[var(--orange)] text-white font-black hover:opacity-90 transition-all active:scale-95 text-sm w-full sm:w-auto justify-center"
-            >
-              START YOUR PROJECT
-              <ChevronRight
-                size={18}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </a>
-            <button
-              onClick={() =>
-                portfolioRef.current?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                })
-              }
-              className="px-7 py-3.5 rounded-2xl bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text)] font-black hover:bg-[var(--surface)] transition-all active:scale-95 text-sm w-full sm:w-auto"
-            >
-              EXPLORE PORTFOLIO ↓
-            </button>
-          </motion.div>
+          <RevealOnScroll delay="240ms">
+            <HairlineCard className="p-6 md:p-8">
+              <Eyebrow className="mb-4">In numbers</Eyebrow>
+              <div className="space-y-4">
+                <StatRow label="Projects" value={<NumberTickIn to={stats.projects} suffix="+" />} />
+                <StatRow label="Clients" value={<NumberTickIn to={stats.clients} suffix="+" />} />
+                <StatRow
+                  label="Views delivered"
+                  value={
+                    <span className="text-mono-num">
+                      <NumberTickIn to={viewsValue} suffix={viewsSuffix} />
+                    </span>
+                  }
+                />
+                <StatRow label="Reply time" value="under 24 h" />
+              </div>
+            </HairlineCard>
+          </RevealOnScroll>
         </div>
-      </section>
+      </Section>
 
       {/* ─── SERVICE NAVIGATION HUB ───────────────────────────────────── */}
       <section className="py-16 bg-[var(--surface-alt)]">
@@ -767,6 +750,15 @@ export default function WorkPage() {
           </motion.div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function StatRow({ label, value }) {
+  return (
+    <div className="flex items-baseline justify-between hairline-b pb-3 last:border-b-0 last:pb-0">
+      <span className="text-eyebrow">{label}</span>
+      <span className="text-display-sm">{value}</span>
     </div>
   );
 }
