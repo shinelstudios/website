@@ -67,6 +67,8 @@ import {
 import ServiceLens from './ServiceLens';
 import StrategyWizard from './StrategyWizard';
 import { ScrollAurora, GrainOverlay } from "../design";
+import EditorialServicesMarquee from "./home/EditorialServicesMarquee";
+import EditorialProcess from "./home/EditorialProcess";
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -983,6 +985,11 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
+          {/* 3.5) Editorial services kinetic marquee — redesign v2 */}
+          <ErrorBoundary>
+            <EditorialServicesMarquee />
+          </ErrorBoundary>
+
           {/* 4) Services (clear value props) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={4} />}>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
@@ -990,6 +997,10 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
+          {/* 4.5) Editorial six-step process strip — redesign v2 */}
+          <ErrorBoundary>
+            <EditorialProcess />
+          </ErrorBoundary>
 
           {/* 5.5) The Shinel Touch (Interactive Lens) */}
           <section id="touch" className="py-24 bg-black overflow-hidden">
