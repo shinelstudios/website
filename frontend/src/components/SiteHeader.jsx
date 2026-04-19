@@ -869,15 +869,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                             <span>Profile</span>
                           </Link>
 
-                          {userRoles.some(r => ['editor', 'artist'].includes(r)) && (
-                            <Link
-                              to={`/portfolio/${auth.email}`}
-                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
-                              style={{ color: "var(--text)" }}
-                            >
-                              <User size={18} style={{ color: "var(--orange)" }} />
-                              <span>Public Portfolio</span>
-                            </Link>
+                          {userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
+                            <>
+                              <Link
+                                to="/me"
+                                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                                style={{ color: "var(--text)" }}
+                              >
+                                <User size={18} style={{ color: "var(--orange)" }} />
+                                <span>My public profile</span>
+                              </Link>
+                              <Link
+                                to={`/team/${(auth.email || "").split("@")[0]}`}
+                                className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                                style={{ color: "var(--text)" }}
+                              >
+                                <ExternalLink size={18} style={{ color: "var(--orange)" }} />
+                                <span>View public page</span>
+                              </Link>
+                            </>
                           )}
 
                           <Link

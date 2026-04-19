@@ -19,11 +19,17 @@ import {
     Twitter,
     Globe,
     Star,
-    Briefcase
+    Briefcase,
+    Instagram,
+    Youtube,
+    PlayCircle,
+    Pencil
 } from "lucide-react";
 import PortfolioItem from "./PortfolioItem";
 import MetaTags from "./MetaTags";
 import { AUTH_BASE } from "../config/constants";
+import { getAuth } from "../utils/auth";
+import { Img, GrainOverlay } from "../design";
 
 function extractYouTubeId(url = "") {
     if (!url) return null;
@@ -157,79 +163,153 @@ export default function PortfolioPage() {
         );
     }
 
+    // Normalize socials — API now returns nested profile.socials{...}; older payloads
+    // had flat keys. Read both so this page works against the new endpoint and
+    // any legacy data still in KV.
+    const s = profile.socials || {};
+    const socials = {
+      instagram: s.instagram || profile.instagram || "",
+      youtube: s.youtube || profile.youtube || "",
+      linkedin: s.linkedin || profile.linkedin || "",
+      twitter: s.twitter || profile.twitter || "",
+      behance: s.behance || "",
+      dribbble: s.dribbble || "",
+      website: s.website || profile.website || "",
+    };
+
+    // Is the viewer this same user? Show "Edit my page" button if so.
+    const viewerAuth = getAuth();
+    const viewerEmail = String(viewerAuth.email || "").toLowerCase();
+    const profileEmail = String(profile.email || "").toLowerCase();
+    const isSelfView = viewerAuth.isAuthed && viewerEmail === profileEmail;
+
     return (
-        <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30">
+        <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30 relative">
             <MetaTags
                 title={`${profile.firstName} ${profile.lastName} | Creative Portfolio · Shinel Studios`}
-                description={`Showcasing the creative impact of ${profile.firstName} at Shinel Studios. Explore high-end video edits and thumbnail designs.`}
+                description={profile.headline || `Showcasing the creative impact of ${profile.firstName} at Shinel Studios. Explore high-end video edits and thumbnail designs.`}
             />
 
+            <GrainOverlay />
+
             {/* --- HERO / PROFILE --- */}
-            <section className="relative pt-32 pb-20 overflow-hidden border-b border-[var(--border)]">
-                <div className="absolute inset-0 z-0 opacity-20">
+            <section className="relative pt-32 pb-20 overflow-hidden hairline-b">
+                <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
                     <div className="absolute top-0 left-1/4 w-96 h-96 bg-[var(--orange)]/10 rounded-full blur-[120px]" />
                     <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]" />
                 </div>
 
                 <div className="container mx-auto px-6 relative z-10">
-                    <Link to="/work" className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors mb-12 text-xs font-black uppercase tracking-widest">
-                        <ArrowLeft size={14} /> Back to Main Work
-                    </Link>
+                    <div className="flex items-center justify-between mb-12 flex-wrap gap-3">
+                        <Link to="/team" className="inline-flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text)] transition-colors text-kicker">
+                            <ArrowLeft size={14} /> Back to team
+                        </Link>
+                        {isSelfView && (
+                            <Link to="/me" className="btn-editorial-ghost">
+                                <Pencil size={14} /> Edit my page
+                            </Link>
+                        )}
+                    </div>
 
                     <div className="flex flex-col md:flex-row items-end gap-8 mb-12">
-                        <div className="w-32 h-32 md:w-48 md:h-48 rounded-[40px] bg-[var(--surface-alt)] border border-[var(--border)] flex items-center justify-center text-[var(--orange)] relative group overflow-hidden">
-                            <User size={64} className="group-hover:scale-110 transition-transform duration-500" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[var(--orange)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="w-32 h-32 md:w-48 md:h-48 rounded-[40px] bg-[var(--surface-alt)] hairline flex items-center justify-center text-[var(--orange)] relative group overflow-hidden">
+                            {profile.avatarUrl ? (
+                                <Img
+                                    src={profile.avatarUrl}
+                                    alt={`${profile.firstName} ${profile.lastName}`}
+                                    width={192}
+                                    height={192}
+                                    aspect="1/1"
+                                    eager
+                                    className="w-full h-full object-cover ken-burns"
+                                    style={{ objectFit: "cover" }}
+                                />
+                            ) : (
+                                <>
+                                    <User size={64} className="group-hover:scale-110 transition-transform duration-500" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--orange)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </>
+                            )}
                         </div>
 
                         <div className="flex-grow">
                             <div className="flex items-center gap-3 mb-4">
-                                <span className="px-3 py-1 rounded-full bg-[var(--orange)]/10 border border-[var(--orange)]/20 text-[var(--orange)] text-[10px] font-black uppercase tracking-widest">
-                                    {profile.role || "Creator"}
+                                <span className="text-kicker px-3 py-1 rounded-full" style={{ background: "var(--orange-soft)", color: "var(--orange)" }}>
+                                    {(profile.role || "Creator").split(",")[0]}
                                 </span>
                                 {profile.isTeam && (
-                                    <span className="flex items-center gap-1.5 text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-widest">
+                                    <span className="flex items-center gap-1.5 text-[var(--text-muted)] text-kicker">
                                         <Shield size={12} className="text-[var(--orange)]" />
-                                        Verified Member
+                                        Verified member
                                     </span>
                                 )}
                             </div>
-                            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-none mb-4 text-[var(--text)]">
+                            <h1 className="text-display-xl tracking-tighter mb-4 text-[var(--text)]">
                                 {profile.firstName} <span className="text-[var(--orange)] italic">{profile.lastName}.</span>
                             </h1>
-                            <p className="text-[var(--text-muted)] text-lg md:text-xl max-w-xl font-medium leading-relaxed mb-6">
-                                {profile.bio || `Professional ${profile.role || 'Creative'} focused on high-retention viral storytelling and visual brand dominance at Shinel Studios.`}
+                            {profile.headline && (
+                                <p className="text-[var(--text)] text-lg md:text-xl max-w-xl font-medium leading-relaxed mb-4">
+                                    {profile.headline}
+                                </p>
+                            )}
+                            <p className="text-[var(--text-muted)] text-base md:text-lg max-w-xl leading-relaxed mb-6">
+                                {profile.bio || `Professional ${(profile.role || "Creative").split(",")[0]} focused on high-retention viral storytelling and visual brand dominance at Shinel Studios.`}
                             </p>
 
                             {profile.skills && (
-                                <div className="flex flex-wrap gap-2 mb-8">
-                                    {profile.skills.split(",").map(s => (
-                                        <span key={s} className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                            {s.trim()}
+                                <div className="flex flex-wrap gap-2 mb-6">
+                                    {profile.skills.split(",").map(sk => sk.trim()).filter(Boolean).map(sk => (
+                                        <span key={sk} className="text-meta px-3 py-1 rounded-full hairline" style={{ color: "var(--text-muted)" }}>
+                                            {sk}
                                         </span>
                                     ))}
                                 </div>
                             )}
 
-                            {profile.experience && (
-                                <div className="flex items-start gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/5 max-w-xl mb-8">
-                                    <Briefcase size={18} className="text-orange-500 shrink-0 mt-1" />
-                                    <div>
-                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Professional Background</h4>
-                                        <p className="text-sm font-medium text-gray-300 leading-relaxed italic">{profile.experience}</p>
+                            {Array.isArray(profile.services) && profile.services.length > 0 && (
+                                <div className="mb-6">
+                                    <div className="text-eyebrow mb-2">Services offered</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {profile.services.map(sv => (
+                                            <span key={sv} className="text-sm px-3 py-1.5 rounded-full" style={{ background: "var(--orange-soft)", color: "var(--orange)", border: "1px solid color-mix(in oklab, var(--orange) 25%, transparent)" }}>
+                                                {sv}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
                             )}
 
-                            {impactStats.projectCount > 0 && (
-                                <div className="flex gap-8 mt-8 border-t border-[var(--border)] pt-8">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--orange)] mb-1">Total Reach</span>
-                                        <span className="text-3xl font-black text-[var(--text)]">{impactStats.totalReach}</span>
+                            {profile.experience && (
+                                <div className="flex items-start gap-3 p-4 rounded-2xl surface-card max-w-xl mb-8">
+                                    <Briefcase size={18} className="text-[var(--orange)] shrink-0 mt-1" />
+                                    <div>
+                                        <h4 className="text-eyebrow mb-1">Professional background</h4>
+                                        <p className="text-sm font-medium leading-relaxed italic" style={{ color: "var(--text-muted)" }}>{profile.experience}</p>
                                     </div>
-                                    <div className="flex flex-col border-l border-[var(--border)] pl-8">
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] mb-1">Avg per Project</span>
-                                        <span className="text-3xl font-black text-[var(--text)]">{impactStats.avgReach}</span>
+                                </div>
+                            )}
+
+                            {profile.showreelUrl && (
+                                <a
+                                    href={profile.showreelUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 text-kicker mb-6 hover:gap-3 transition-all"
+                                    style={{ color: "var(--orange)" }}
+                                >
+                                    <PlayCircle size={16} /> Watch showreel <ExternalLink size={12} />
+                                </a>
+                            )}
+
+                            {impactStats.projectCount > 0 && (
+                                <div className="flex gap-8 mt-8 hairline-t pt-8">
+                                    <div className="flex flex-col">
+                                        <span className="text-eyebrow mb-1" style={{ color: "var(--orange)" }}>Total reach</span>
+                                        <span className="text-display-md text-mono-num">{impactStats.totalReach}</span>
+                                    </div>
+                                    <div className="flex flex-col border-l border-[var(--hairline)] pl-8">
+                                        <span className="text-eyebrow mb-1">Avg per project</span>
+                                        <span className="text-display-md text-mono-num">{impactStats.avgReach}</span>
                                     </div>
                                 </div>
                             )}
@@ -238,15 +318,22 @@ export default function PortfolioPage() {
                         <div className="flex flex-col gap-3 min-w-[200px]">
                             <SocialButton
                                 icon={<Zap size={16} />}
-                                label="Commission via Shinel"
-                                href={`https://wa.me/918968141585?text=Hi, I'm interested in working with ${profile.firstName} for a project.`}
+                                label={`Hire ${profile.firstName || "them"}`}
+                                href={
+                                    profile.calendlyUrl ||
+                                    `https://wa.me/${(profile.whatsappNumber || "918968141585").replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${profile.firstName || ""}, I'm interested in working with you on a project via Shinel Studios.`)}`
+                                }
                                 primary
                             />
                             <div className="grid grid-cols-2 gap-3">
-                                {profile.linkedin && <SocialButton icon={<Linkedin size={16} />} label="LinkedIn" href={profile.linkedin} />}
-                                {profile.twitter && <SocialButton icon={<Twitter size={16} />} label="X" href={profile.twitter} />}
-                                {profile.website && <SocialButton icon={<Globe size={16} />} label="Web" href={profile.website} />}
-                                <SocialButton icon={<MessageSquare size={16} />} label="Inquiry" href="https://wa.me/918968141585" />
+                                {socials.instagram && <SocialButton icon={<Instagram size={16} />} label="Instagram" href={socials.instagram} />}
+                                {socials.youtube && <SocialButton icon={<Youtube size={16} />} label="YouTube" href={socials.youtube} />}
+                                {socials.linkedin && <SocialButton icon={<Linkedin size={16} />} label="LinkedIn" href={socials.linkedin} />}
+                                {socials.twitter && <SocialButton icon={<Twitter size={16} />} label="X" href={socials.twitter} />}
+                                {socials.behance && <SocialButton icon={<Globe size={16} />} label="Behance" href={socials.behance} />}
+                                {socials.dribbble && <SocialButton icon={<Globe size={16} />} label="Dribbble" href={socials.dribbble} />}
+                                {socials.website && <SocialButton icon={<Globe size={16} />} label="Website" href={socials.website} />}
+                                <SocialButton icon={<MessageSquare size={16} />} label="Inquiry" href={`https://wa.me/${(profile.whatsappNumber || "918968141585").replace(/\D/g, "")}`} />
                             </div>
                         </div>
                     </div>
