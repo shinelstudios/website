@@ -5,6 +5,7 @@ import { getAllPosts } from '../../lib/blog';
 import BlogCard from './BlogCard';
 import MetaTags from '../MetaTags';
 import ScanLines from '../animations/ScanLines';
+import { Kicker, Display, Lede, RevealOnScroll } from '../../design';
 
 const BlogIndex = () => {
     const [posts, setPosts] = useState([]);
@@ -64,36 +65,22 @@ const BlogIndex = () => {
                 description="Expert guides on YouTube growth, video editing, retention strategies, and thumbnail design."
             />
 
-            <div className="container mx-auto px-4 max-w-7xl relative z-10">
-                {/* Header */}
-                <div className="text-center max-w-3xl mx-auto mb-16">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-6"
-                        style={{ background: "rgba(232,80,2,0.1)", color: "var(--orange)", border: "1px solid rgba(232,80,2,0.2)" }}
-                    >
-                        <Hash size={12} />
-                        Creator Strategies
-                    </motion.div>
-
-                    <motion.h1
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-4xl md:text-6xl font-black font-heading mb-6 tracking-tight"
-                    >
-                        The <span className="text-[var(--orange)]">Growth</span> Lab
-                    </motion.h1>
-
-                    <motion.p
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-lg md:text-xl text-[var(--text-muted)] leading-relaxed"
-                    >
-                        Deep dives into the psychology of retention, algorithmic patterns, and the art of modern video production.
-                    </motion.p>
+            <div className="container mx-auto px-4 md:px-6 max-w-7xl relative z-10">
+                {/* Editorial hero */}
+                <div className="max-w-3xl mb-12 md:mb-16">
+                    <RevealOnScroll>
+                        <Kicker className="mb-5">The Growth Lab</Kicker>
+                    </RevealOnScroll>
+                    <RevealOnScroll delay="80ms">
+                        <Display as="h1" size="xl" className="mb-5">
+                            Field notes from <span style={{ color: "var(--orange)" }}>the edit bay.</span>
+                        </Display>
+                    </RevealOnScroll>
+                    <RevealOnScroll delay="160ms">
+                        <Lede>
+                            Deep dives into retention psychology, YouTube algorithm patterns, thumbnail decisions, and the craft of post-production. Written by the people who actually cut the videos.
+                        </Lede>
+                    </RevealOnScroll>
                 </div>
 
                 {/* Filters & Search */}
