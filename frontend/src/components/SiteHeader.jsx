@@ -942,24 +942,17 @@ const SiteHeader = ({ isDark, setIsDark }) => {
               <>
                 <Link
                   to="/login"
-                  className="md:hidden inline-flex items-center rounded-full px-3 py-2 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-transform duration-150 active:scale-95"
-                  style={{
-                    background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                  }}
+                  className="md:hidden btn-editorial"
+                  style={{ padding: "0.5rem 1rem", fontSize: "0.75rem" }}
                 >
                   Login
                 </Link>
-                <div className="hidden md:inline-flex gap-2">
-                  <Link
-                    to="/login"
-                    className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] transition-transform duration-150 hover:scale-[1.02]"
-                    style={{
-                      background: "linear-gradient(90deg, var(--orange), #ff9357)",
-                    }}
-                  >
-                    Login
-                  </Link>
-                </div>
+                <Link
+                  to="/login"
+                  className="hidden md:inline-flex btn-editorial"
+                >
+                  Login
+                </Link>
               </>
             )}
 

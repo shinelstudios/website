@@ -6,8 +6,9 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube, ArrowUpRight } from "lucide-react";
 import GridMatrix from "../animations/GridMatrix";
+import { Kicker, Eyebrow, Display, Lede, RevealOnScroll, HairlineCard } from "../../design";
 
 
 const tiles = [
@@ -90,45 +91,72 @@ export default function ToolsIndex() {
   return (
     <section style={{ background: "var(--surface)", position: "relative", overflow: "hidden", minHeight: "100vh" }}>
       {/* Grid Matrix Background Animation */}
-      <GridMatrix
-        color="#E85002"
-        opacity={0.15}
-        gridSize={50}
-        nodeCount={15}
-      />
+      <GridMatrix color="#E85002" opacity={0.15} gridSize={50} nodeCount={15} />
 
-      <div className="container mx-auto px-4 py-12 relative z-10">
-        <h1 className="text-3xl md:text-4xl font-bold font-['Poppins']" style={{ color: "var(--text)" }}>
-          AI Tools
-        </h1>
-        <p className="mt-2 text-sm md:text-base" style={{ color: "var(--text-muted)" }}>
-          Curated utilities to speed up editing, packaging and iteration.
-        </p>
+      <div className="container mx-auto px-4 md:px-6 pt-24 md:pt-32 pb-16 relative z-10">
+        {/* Editorial hero */}
+        <div className="max-w-3xl mb-10 md:mb-14">
+          <RevealOnScroll>
+            <Kicker className="mb-5">Free Tools</Kicker>
+          </RevealOnScroll>
+          <RevealOnScroll delay="80ms">
+            <Display as="h1" size="xl" className="mb-5">
+              Creator utilities <span style={{ color: "var(--orange)" }}>on the house.</span>
+            </Display>
+          </RevealOnScroll>
+          <RevealOnScroll delay="160ms">
+            <Lede>
+              SEO titles, thumbnail A/B previews, ROI math, SRT captions, and
+              more \u2014 built by the Shinel team, free for every creator. No signup,
+              no rate caps, no email harvest.
+            </Lede>
+          </RevealOnScroll>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
-          {allowed.map(({ to, title, desc, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className="rounded-2xl p-5 border hover:-translate-y-0.5 transition"
-              style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text)" }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl grid place-items-center"
-                  style={{ background: "rgba(232,80,2,0.10)", border: "1px solid var(--border)" }}>
-                  <Icon size={18} style={{ color: "var(--orange)" }} />
+        <div className="flex items-end justify-between gap-3 mb-6">
+          <Eyebrow>All tools</Eyebrow>
+          <span className="text-meta" style={{ color: "var(--text-muted)" }}>
+            {allowed.length} available
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {allowed.map(({ to, title, desc, icon: Icon }, i) => (
+            <RevealOnScroll key={to} delay={`${(i % 6) * 60}ms`}>
+              <HairlineCard
+                as={Link}
+                to={to}
+                interactive
+                className="block p-6 group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div
+                    className="w-11 h-11 rounded-xl grid place-items-center"
+                    style={{
+                      background: "var(--orange-soft)",
+                      border: "1px solid var(--hairline)",
+                    }}
+                  >
+                    <Icon size={18} style={{ color: "var(--orange)" }} />
+                  </div>
+                  <ArrowUpRight
+                    size={16}
+                    className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                    style={{ color: "var(--text-muted)" }}
+                  />
                 </div>
-                <div className="font-semibold">{title}</div>
-              </div>
-              <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{desc}</div>
-            </Link>
+                <div className="text-display-sm mb-2">{title}</div>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  {desc}
+                </p>
+              </HairlineCard>
+            </RevealOnScroll>
           ))}
         </div>
 
         {allowed.length === 0 && (
-          <div className="mt-6 rounded-xl p-4 border text-sm"
-            style={{ background: "var(--surface-alt)", borderColor: "var(--border)", color: "var(--text-muted)" }}>
-            Your role doesn’t have access to any tools yet.
+          <div className="mt-6 surface-card p-6 text-sm" style={{ color: "var(--text-muted)" }}>
+            Your role doesn\u2019t have access to any tools yet.
           </div>
         )}
       </div>
