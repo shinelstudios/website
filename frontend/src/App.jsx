@@ -361,6 +361,15 @@ export default function App() {
               Anyone who types /services (or an un-aliased /services/<something>) lands on /work. */}
           <Route path="/services" element={<Navigate to="/work" replace />} />
 
+          {/* Guard against service slugs colliding with /portfolio/:slug (team profile).
+              Someone typing /portfolio/graphic-design gets the service page, not a
+              "profile not found" screen. */}
+          <Route path="/portfolio/graphic-design" element={<Navigate to="/graphic-design" replace />} />
+          <Route path="/portfolio/video-editing" element={<Navigate to="/video-editing" replace />} />
+          <Route path="/portfolio/branding" element={<Navigate to="/branding" replace />} />
+          <Route path="/portfolio/thumbnails" element={<Navigate to="/thumbnails" replace />} />
+          <Route path="/portfolio/shorts" element={<Navigate to="/shorts" replace />} />
+
           {/* Deep link redirects for SEO/Consistency */}
           <Route path="/services/gfx/thumbnails" element={<Navigate to="/thumbnails" replace />} />
           <Route path="/services/gfx/branding" element={<Navigate to="/branding" replace />} />

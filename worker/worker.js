@@ -1440,12 +1440,25 @@ export default {
     if (url.pathname === "/team" && request.method === "GET") {
       try {
         const list = [];
-        let cursor = "";
-        while (true) {
-          const { keys, list_complete, cursor: nextCursor } = await env.SHINEL_USERS.list({ prefix: "user:", cursor });
+        let cursor = undefined;
+        for (let i = 0; i < 50; i++) {
+          let page;
+          try {
+            page = await env.SHINEL_USERS.list(cursor ? { prefix: "user:", cursor } : { prefix: "user:" });
+          } catch (listErr) {
+            console.error("GET /team SHINEL_USERS.list failed:", listErr?.message || listErr);
+            break;
+          }
+          const { keys = [], list_complete = true, cursor: nextCursor } = page || {};
           for (const k of keys) {
-            const u = await env.SHINEL_USERS.get(k.name, "json");
-            if (!u) continue;
+            let u;
+            try {
+              u = await env.SHINEL_USERS.get(k.name, "json");
+            } catch (getErr) {
+              console.warn(`GET /team skipping bad record ${k.name}:`, getErr?.message || getErr);
+              continue;
+            }
+            if (!u || typeof u !== "object") continue;
             if (u.profilePublic === false) continue;
 
             const role = String(u.role || "").toLowerCase();
@@ -1466,14 +1479,15 @@ export default {
               highlightVideoId: u.highlightVideoId || "",
             });
           }
-          if (list_complete) break;
+          if (list_complete || !nextCursor) break;
           cursor = nextCursor;
         }
         // Prioritize members that have a slug (complete profile) first.
         list.sort((a, b) => (b.slug ? 1 : 0) - (a.slug ? 1 : 0));
         return json({ team: list }, 200, cors);
       } catch (e) {
-        return json({ error: e.message || "Fetch failed" }, 500, cors);
+        console.error("GET /team failed:", e?.stack || e?.message || e);
+        return json({ team: [] }, 200, cors);
       }
     }
 
@@ -1484,22 +1498,39 @@ export default {
         const slug = decodeURIComponent(url.pathname.split("/")[2] || "").toLowerCase();
         if (!slug) return json({ error: "slug required" }, 400, cors);
 
-        // Find user by slug (scan KV — volume is small: <100 users)
+        // Find user by slug (scan KV — volume is small: <100 users).
+        // Bad records (malformed JSON, missing email) must not crash the scan;
+        // we just skip them and keep looking.
         let found = null;
-        let cursor = "";
-        while (true) {
-          const { keys, list_complete, cursor: nextCursor } = await env.SHINEL_USERS.list({ prefix: "user:", cursor });
+        let cursor = undefined;
+        // Hard cap iterations defensively — prevents an infinite loop if the
+        // KV pager ever returns a truthy cursor with list_complete:true.
+        for (let i = 0; i < 50; i++) {
+          let page;
+          try {
+            page = await env.SHINEL_USERS.list(cursor ? { prefix: "user:", cursor } : { prefix: "user:" });
+          } catch (listErr) {
+            console.error("SHINEL_USERS.list failed:", listErr?.message || listErr);
+            break;
+          }
+          const { keys = [], list_complete = true, cursor: nextCursor } = page || {};
           for (const k of keys) {
-            const u = await env.SHINEL_USERS.get(k.name, "json");
-            if (!u) continue;
+            let u;
+            try {
+              u = await env.SHINEL_USERS.get(k.name, "json");
+            } catch (getErr) {
+              console.warn(`Skipping bad user record ${k.name}:`, getErr?.message || getErr);
+              continue;
+            }
+            if (!u || typeof u !== "object") continue;
             const uSlug = String(u.slug || "").toLowerCase();
             const uEmail = String(u.email || "").toLowerCase();
-            if (uSlug === slug || uEmail === slug || uEmail.split("@")[0] === slug) {
+            if (uSlug === slug || uEmail === slug || (uEmail && uEmail.split("@")[0] === slug)) {
               found = u;
               break;
             }
           }
-          if (found || list_complete) break;
+          if (found || list_complete || !nextCursor) break;
           cursor = nextCursor;
         }
 
@@ -1536,7 +1567,11 @@ export default {
 
         return json({ profile }, 200, cors);
       } catch (e) {
-        return json({ error: e.message || "Fetch failed" }, 500, cors);
+        console.error("GET /profiles/:slug failed:", e?.stack || e?.message || e);
+        // Treat any internal throw as "profile not found" to the client.
+        // A real error is logged; the user shouldn't get a scary 500 for this
+        // specific endpoint where 404 is the honest answer for most failures.
+        return json({ error: "Profile not found" }, 404, cors);
       }
     }
 
@@ -1846,18 +1881,24 @@ export default {
     }
 
 
-    // GET /clients/history - Activity history (30-day window)
+    // GET /clients/history - Activity history (30-day window).
+    // A single malformed record shouldn't 500 the whole endpoint; we skip
+    // bad entries and return whatever we can parse. Public endpoint.
     if (url.pathname === "/clients/history" && request.method === "GET") {
       try {
         const historyData = {};
-        const now = Date.now();
-        const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+        let listResult;
+        try {
+          listResult = await env.SHINEL_AUDIT.list({ prefix: "history:" });
+        } catch (listErr) {
+          console.error("GET /clients/history list failed:", listErr?.message || listErr);
+          return json({ ok: true, history: {} }, 200, cors);
+        }
+        const keys = listResult?.keys || [];
 
-        // List all history: keys
-        const { keys } = await env.SHINEL_AUDIT.list({ prefix: "history:" });
-
-        // Parallel fetch for all history keys
-        const results = await Promise.all(
+        // Parallel fetch with per-key safety — allSettled guarantees we return
+        // partial data even if one KV.get rejects or a value is bad JSON.
+        const settled = await Promise.allSettled(
           keys.map(async (k) => {
             const dateStr = k.name.split(":")[1];
             const data = await env.SHINEL_AUDIT.get(k.name, "json");
@@ -1865,13 +1906,18 @@ export default {
           })
         );
 
-        results.forEach(({ dateStr, data }) => {
-          if (data) historyData[dateStr] = data;
-        });
+        for (const s of settled) {
+          if (s.status === "fulfilled" && s.value?.data && s.value?.dateStr) {
+            historyData[s.value.dateStr] = s.value.data;
+          } else if (s.status === "rejected") {
+            console.warn("history record skipped:", s.reason?.message || s.reason);
+          }
+        }
 
         return json({ ok: true, history: historyData }, 200, cors);
       } catch (e) {
-        return json({ error: e.message || "Fetch failed" }, 500, cors);
+        console.error("GET /clients/history failed:", e?.stack || e?.message || e);
+        return json({ ok: true, history: {} }, 200, cors);
       }
     }
 
