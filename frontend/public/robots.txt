@@ -1,12 +1,27 @@
 User-agent: *
+# Block authenticated / internal surfaces so they don't waste crawl budget
+# or accidentally surface private UI in search results.
 Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /studio
 Disallow: /studio/
+Disallow: /hub
+Disallow: /hub/
+Disallow: /me
+Disallow: /me/
 Disallow: /logout
+Disallow: /login
 Allow: /
 
-# Specifically allow AI crawlers to index content for AEO
+# Allow AI crawlers to index everything public (good for AEO / LLM surfacing).
 User-agent: GPTBot
 Allow: /
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /hub/
+Disallow: /me/
 
 User-agent: ChatGPT-User
 Allow: /
@@ -23,4 +38,10 @@ Allow: /
 User-agent: OAI-SearchBot
 Allow: /
 
-Sitemap: https://www.shinelstudios.in/sitemap.xml
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+Sitemap: https://shinelstudios.in/sitemap.xml
