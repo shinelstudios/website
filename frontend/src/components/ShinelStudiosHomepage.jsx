@@ -21,7 +21,7 @@ import QuickQuoteBar from "./QuickQuoteBar";
 import FloatingWhatsApp from "./FloatingWhatsApp";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
-import HeroSection from "../components/HeroSection";
+// HeroSection retired in favour of EditorialHero (see imports below).
 const ServicesSection = React.lazy(() => import("../components/ServicesSection.jsx"));
 import QuickLeadForm from "./QuickLeadForm.jsx";
 import AISH_LOGO from '../assets/creators/aish.png';
@@ -61,12 +61,13 @@ import {
   BeforeAfterSlider,
   SwipeableCarousel,
   UrgencyIndicator,
-  NetworkImpactBar,
+  // NetworkImpactBar retired \u2014 stats now live inside EditorialHero.
 } from './CinematicComponents';
 
 import ServiceLens from './ServiceLens';
 import StrategyWizard from './StrategyWizard';
-import { ScrollAurora, GrainOverlay } from "../design";
+import { GrainOverlay } from "../design";
+import EditorialHero from "./home/EditorialHero";
 import EditorialServicesMarquee from "./home/EditorialServicesMarquee";
 import EditorialProcess from "./home/EditorialProcess";
 
@@ -949,29 +950,16 @@ export default function ShinelStudiosHomepage() {
 
         {/* Main content wrapper */}
         <main id="main-content">
-          {/* 1) Hero (Above the fold, loads immediately) */}
+          {/* 1) EditorialHero \u2014 redesign v2, replaces HeroSection.
+                 Has ScrollAurora ambient scoped inside; stats card on the right
+                 replaces the former NetworkImpactBar below it (deleted as
+                 redundant). onAudit keeps Calendly integration working. */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={1} />}>
-            <div className="relative">
-              {/* Signature ambient: scroll-driven aurora. Auto-downshifts on low-end / reduced-motion. */}
-              <ScrollAurora />
-              <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
-            </div>
+            <EditorialHero onAudit={handleOpenCalendly} />
           </ErrorBoundary>
 
           {/* Ambient grain — fixed SVG noise, GPU-composited, 3% opacity */}
           <GrainOverlay />
-
-          {/* 1.5) Network Impact (Social Proof) */}
-          <ErrorBoundary>
-            <NetworkImpactBar
-              stats={[
-                { value: 100, suffix: 'M+', label: 'Views Delivered' },
-                { value: 150, suffix: '+', label: 'Happy Creators' },
-                { value: 5000, suffix: '+', label: 'Videos Polished' },
-                { value: 24, suffix: '/7', label: 'Global Support' }
-              ]}
-            />
-          </ErrorBoundary>
 
           {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
           <ErrorBoundary>
