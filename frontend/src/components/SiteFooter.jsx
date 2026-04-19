@@ -357,7 +357,6 @@ const SiteFooter = ({
                 {[
                   { t: "Home", href: "/", icon: Sparkles },
                   { t: "About", href: "/about", icon: User },
-                  { t: "The Makers", href: "/team", icon: Users },
                   { t: "Services", href: "/#services", icon: Award },
                   { t: "Our Work", href: "/work", icon: TrendingUp },
                   { t: "Graphic Design", href: "/services/graphic-design", icon: Sparkles },
