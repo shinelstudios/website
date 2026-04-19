@@ -545,21 +545,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       <div className="relative">
         <Link
           to={to}
-          className="relative px-1 text-[15px] lg:text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded flex items-center gap-1.5 transition-all duration-200"
+          className="relative px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded flex items-center gap-1.5 transition-all duration-200"
           aria-current={isActive ? "page" : undefined}
           onMouseEnter={() => setHovered(label)}
           onMouseLeave={() => setHovered(null)}
           style={{
             color: isActive ? "var(--nav-hover)" : "var(--nav-link)",
+            fontFamily: "'Space Grotesk Variable', 'Space Grotesk', sans-serif",
+            fontSize: "13px",
+            fontWeight: 500,
+            letterSpacing: "0.02em",
             transform:
               hovered === label
                 ? "translateY(-1px)"
                 : "translateY(0)",
           }}
         >
-          {Icon && <Icon size={16} />}
+          {Icon && <Icon size={14} strokeWidth={2} />}
           <span
-            className="absolute left-0 -bottom-1 h-[2px] bg-[var(--orange)] transition-all duration-200 rounded-full"
+            className="absolute left-0 -bottom-1 h-[1.5px] bg-[var(--orange)] transition-all duration-200 rounded-full"
             style={{ width: isActive || hovered === label ? "100%" : "0%" }}
             aria-hidden="true"
           />
@@ -645,11 +649,12 @@ const SiteHeader = ({ isDark, setIsDark }) => {
         style={{
           background:
             "color-mix(in oklab, var(--header-bg) 88%, transparent) 0% / cover",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-          borderBottom: "0",
-          boxShadow: scrolled ? "0 10px 28px rgba(0,0,0,0.18)" : "none",
-          transition: "box-shadow .25s ease, background-color .25s ease",
+          backdropFilter: "saturate(140%) blur(12px)",
+          WebkitBackdropFilter: "saturate(140%) blur(12px)",
+          // Hairline bottom matches the redesign v2 token language.
+          borderBottom: "1px solid var(--hairline)",
+          boxShadow: scrolled ? "0 6px 20px rgba(0,0,0,0.12)" : "none",
+          transition: "box-shadow .25s ease, background-color .25s ease, border-color .25s ease",
           overflow: "visible",
         }}
       >
