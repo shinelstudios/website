@@ -2,10 +2,11 @@ import React from "react";
 import { motion } from "framer-motion";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { Shield, Lock, Eye, FileText } from "lucide-react";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 const PrivacyPage = () => {
     return (
-        <div className="min-h-screen bg-[var(--surface)]">
+        <div className="min-h-svh bg-[var(--surface)]">
             <MetaTags
                 title="Privacy Policy | Shinel Studios - Data Protection"
                 description="Learn how Shinel Studios protects your data and maintains your privacy. Our commitment to transparency and security."
@@ -17,24 +18,23 @@ const PrivacyPage = () => {
                 ]}
             />
 
-            <section className="pt-32 pb-20 px-4">
+            <section className="pt-24 md:pt-32 pb-20 px-4 md:px-6">
                 <div className="max-w-4xl mx-auto">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center mb-16"
-                    >
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--orange)]/10 border border-[var(--orange)]/20 text-[var(--orange)] text-xs font-bold uppercase tracking-widest mb-6">
-                            <Shield size={14} />
-                            Trust & Security
-                        </div>
-                        <h1 className="text-4xl sm:text-6xl font-black text-[var(--text)] mb-6 tracking-tighter">
-                            PRIVACY <span className="text-[var(--orange)]">POLICY</span>
-                        </h1>
-                        <p className="text-[var(--text-muted)] text-lg sm:text-xl max-w-2xl mx-auto">
-                            Last Updated: January 2026. Your privacy is paramount to us. This policy outlines how we handle your digital presence.
-                        </p>
-                    </motion.div>
+                    <div className="mb-14 md:mb-20 max-w-3xl">
+                        <RevealOnScroll>
+                            <Kicker className="mb-5">Privacy Policy</Kicker>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="80ms">
+                            <Display as="h1" size="xl" className="mb-5">
+                                Your data, <span style={{ color: "var(--orange)" }}>plainly handled.</span>
+                            </Display>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="160ms">
+                            <Lede>
+                                Last updated April 2026. This policy explains exactly what we collect, why, where it lives, and how to get it removed. Written in English, not legalese.
+                            </Lede>
+                        </RevealOnScroll>
+                    </div>
 
                     <motion.div
                         initial={{ opacity: 0 }}

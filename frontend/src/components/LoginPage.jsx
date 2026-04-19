@@ -16,6 +16,7 @@ import {
     Activity
 } from "lucide-react";
 import CpuBackground from "./CpuBackground";
+import { SpotlightSweep } from "../design";
 
 import { AUTH_BASE } from "../config/constants";
 import { setAccessToken } from "../utils/tokenStore";
@@ -132,7 +133,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-6 bg-[#030303] overflow-hidden selection:bg-orange-500/30 selection:text-orange-200 font-inter">
+    <div className="relative min-h-svh flex items-center justify-center p-6 bg-[#030303] overflow-hidden selection:bg-orange-500/30 selection:text-orange-200 font-inter">
+      {/* Signature ambient: cursor-following spotlight (desktop only; disabled on touch / reduced-motion / low-power) */}
+      <SpotlightSweep color="rgba(232, 80, 2, 0.18)" />
+
       {/* Dynamic Background Elements */}
       <div className="absolute inset-0 z-0">
           <CpuBackground />

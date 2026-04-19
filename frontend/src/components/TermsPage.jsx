@@ -2,10 +2,11 @@ import React from "react";
 import { motion } from "framer-motion";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { FileText, Scale, Zap, AlertCircle } from "lucide-react";
+import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
 const TermsPage = () => {
     return (
-        <div className="min-h-screen bg-[var(--surface)]">
+        <div className="min-h-svh bg-[var(--surface)]">
             <MetaTags
                 title="Terms of Service | Shinel Studios - Business Guidelines"
                 description="Standard terms and conditions for partnering with Shinel Studios. Learn about our service agreements, revisions, and ownership."
@@ -17,24 +18,23 @@ const TermsPage = () => {
                 ]}
             />
 
-            <section className="pt-32 pb-20 px-4">
+            <section className="pt-24 md:pt-32 pb-20 px-4 md:px-6">
                 <div className="max-w-4xl mx-auto">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center mb-16"
-                    >
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--orange)]/10 border border-[var(--orange)]/20 text-[var(--orange)] text-xs font-bold uppercase tracking-widest mb-6">
-                            <Scale size={14} />
-                            Fair Partnering
-                        </div>
-                        <h1 className="text-4xl sm:text-6xl font-black text-[var(--text)] mb-6 tracking-tighter">
-                            TERMS OF <span className="text-[var(--orange)]">SERVICE</span>
-                        </h1>
-                        <p className="text-[var(--text-muted)] text-lg sm:text-xl max-w-2xl mx-auto">
-                            Effective Date: January 2026. By partnering with Shinel Studios, you agree to these standard business terms.
-                        </p>
-                    </motion.div>
+                    <div className="mb-14 md:mb-20 max-w-3xl">
+                        <RevealOnScroll>
+                            <Kicker className="mb-5">Terms of Service</Kicker>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="80ms">
+                            <Display as="h1" size="xl" className="mb-5">
+                                Fair, readable, <span style={{ color: "var(--orange)" }}>boring.</span>
+                            </Display>
+                        </RevealOnScroll>
+                        <RevealOnScroll delay="160ms">
+                            <Lede>
+                                Effective April 2026. Standard business terms for partnering with Shinel Studios: scope, revisions, ownership, refunds. No surprise clauses, no rights-grabs.
+                            </Lede>
+                        </RevealOnScroll>
+                    </div>
 
                     <motion.div
                         initial={{ opacity: 0 }}
