@@ -1,0 +1,61 @@
+# Runs the video mirror service on a 5-minute schedule. Replaces the old always-on
+# Node daemon — each run spins up a fresh Ubuntu runner, processes up to 5 pending
+# items from D1 (media_library WHERE status='pending_mirror'), uploads to YouTube,
+# updates D1, and exits. Free on GitHub's hosted runners; no card required.
+#
+# Secrets (set under: Repo → Settings → Secrets and variables → Actions):
+#   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN
+#   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, D1_DATABASE_ID
+
+name: Mirror pending videos to YouTube
+
+on:
+  schedule:
+    # GitHub cron uses UTC. Every 5 minutes; GitHub may skip runs under load — fine,
+    # the next run catches whatever's still pending.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}   # lets you trigger manually from the Actions tab
+
+concurrency:
+  # Never overlap runs. If one is still going when the next cron fires, the new
+  # one is dropped instead of racing over D1.
+  group: mirror-service
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install yt-dlp + ffmpeg
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod +x /usr/local/bin/yt-dlp
+          yt-dlp --version
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci --omit=dev
+
+      - name: Process one batch
+        working-directory: backend
+        run: node mirror-service.js --once
+        env:
+          YT_CLIENT_ID:          ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET:      ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REDIRECT_URI:       http://localhost:3000
+          YT_REFRESH_TOKEN:      ${{ secrets.YT_REFRESH_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID:        ${{ secrets.D1_DATABASE_ID }}

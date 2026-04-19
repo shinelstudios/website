@@ -143,6 +143,18 @@ async function mirrorVideo(item) {
   }
 }
 
-// Run loop
-setInterval(processPendingMirrors, 60000); // Check every minute
-processPendingMirrors();
+// Run mode:
+//   - Long-running daemon (default): polls every 60s forever. Use for local dev.
+//   - One-shot (`--once` or GITHUB_ACTIONS=true): process one batch and exit.
+//     This is how the GitHub Actions cron invokes us — a new runner spins up every
+//     5 minutes, processes whatever's pending, exits. No persistent host needed.
+const runOnce = process.argv.includes("--once") || process.env.GITHUB_ACTIONS === "true";
+
+if (runOnce) {
+  processPendingMirrors()
+    .then(() => { console.log("--- One-shot run complete ---"); process.exit(0); })
+    .catch((e) => { console.error("One-shot run failed:", e); process.exit(1); });
+} else {
+  setInterval(processPendingMirrors, 60000);
+  processPendingMirrors();
+}

@@ -18,12 +18,8 @@ const AdminSettingsPage = React.lazy(() => import("./components/AdminSettingsPag
 import Toaster from "./components/ui/Toaster.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 import CommandPalette from "./components/ui/CommandPalette.jsx";
-import { getAccessToken, setAccessToken, clearAccessToken } from "./utils/tokenStore";
+import { getAccessToken, setAccessToken, clearAccessToken, refreshOnce } from "./utils/tokenStore";
 import { AUTH_BASE } from "./config/constants";
-
-// Module-level singleton: ensures the silent /auth/refresh at mount fires exactly
-// once per page load, even under React.StrictMode's double-invoke behavior.
-let silentRefreshOnce = false;
 
 import {
   startHashActionRouter,
@@ -281,27 +277,9 @@ export default function App() {
 
   // Silent refresh on mount. Access token lives only in memory (tokenStore) — so on
   // every page load we redeem the httpOnly ss_refresh cookie for a fresh access
-  // token. A 401 simply means "stay logged out".
-  //
-  // The `silentRefreshOnce` module flag is critical: refresh-token rotation
-  // revokes the old jti on success, so React.StrictMode's dev-only double-invoke
-  // would race two /auth/refresh calls and the second would 401. Same guard
-  // prevents a duplicate hit when React re-runs the effect on HMR.
-  React.useEffect(() => {
-    if (silentRefreshOnce) return;
-    silentRefreshOnce = true;
-    (async () => {
-      try {
-        const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (!res.ok) return;
-        const data = await res.json().catch(() => ({}));
-        if (data && data.token) setAccessToken(data.token);
-      } catch { /* offline / anonymous — no-op */ }
-    })();
-  }, []);
+  // token. A 401 simply means "stay logged out". refreshOnce() dedupes concurrent
+  // callers (App.jsx + ProtectedRoute) so only one network call is made per page.
+  React.useEffect(() => { refreshOnce(AUTH_BASE); }, []);
 
   React.useEffect(() => {
     startHashActionRouter();
