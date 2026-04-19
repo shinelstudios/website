@@ -1433,6 +1433,218 @@ export default {
       }
     }
 
+    /* =============================== /team + /profiles (team portfolio redesign) =============================== */
+
+    // GET /team - Public directory of team members (editors/artists/team roles).
+    // Only returns members with profilePublic !== false. Never leaks email/password.
+    if (url.pathname === "/team" && request.method === "GET") {
+      try {
+        const list = [];
+        let cursor = "";
+        while (true) {
+          const { keys, list_complete, cursor: nextCursor } = await env.SHINEL_USERS.list({ prefix: "user:", cursor });
+          for (const k of keys) {
+            const u = await env.SHINEL_USERS.get(k.name, "json");
+            if (!u) continue;
+            if (u.profilePublic === false) continue;
+
+            const role = String(u.role || "").toLowerCase();
+            const roles = role.split(",").map(s => s.trim());
+            // Show members on the team page (editors, artists, team, admin). Skip pure client accounts.
+            const isTeam = roles.some(r => ["editor", "artist", "team", "admin"].includes(r));
+            if (!isTeam) continue;
+
+            list.push({
+              slug: u.slug || "",
+              email: u.email,
+              firstName: u.firstName || "",
+              lastName: u.lastName || "",
+              headline: u.headline || "",
+              avatarUrl: u.avatarUrl || "",
+              skills: u.skills || "",
+              role: u.role || "team",
+              highlightVideoId: u.highlightVideoId || "",
+            });
+          }
+          if (list_complete) break;
+          cursor = nextCursor;
+        }
+        // Prioritize members that have a slug (complete profile) first.
+        list.sort((a, b) => (b.slug ? 1 : 0) - (a.slug ? 1 : 0));
+        return json({ team: list }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, 500, cors);
+      }
+    }
+
+    // GET /profiles/:slug - Public profile + attributed work.
+    // Looks up by slug first, falls back to matching by email (pre-slug legacy users).
+    if (url.pathname.startsWith("/profiles/") && request.method === "GET" && !url.pathname.startsWith("/profiles/me")) {
+      try {
+        const slug = decodeURIComponent(url.pathname.split("/")[2] || "").toLowerCase();
+        if (!slug) return json({ error: "slug required" }, 400, cors);
+
+        // Find user by slug (scan KV — volume is small: <100 users)
+        let found = null;
+        let cursor = "";
+        while (true) {
+          const { keys, list_complete, cursor: nextCursor } = await env.SHINEL_USERS.list({ prefix: "user:", cursor });
+          for (const k of keys) {
+            const u = await env.SHINEL_USERS.get(k.name, "json");
+            if (!u) continue;
+            const uSlug = String(u.slug || "").toLowerCase();
+            const uEmail = String(u.email || "").toLowerCase();
+            if (uSlug === slug || uEmail === slug || uEmail.split("@")[0] === slug) {
+              found = u;
+              break;
+            }
+          }
+          if (found || list_complete) break;
+          cursor = nextCursor;
+        }
+
+        if (!found) return json({ error: "Profile not found" }, 404, cors);
+        if (found.profilePublic === false) return json({ error: "Profile not found" }, 404, cors);
+
+        // Sanitize — never expose password hash, revocation flags, etc.
+        const profile = {
+          slug: found.slug || "",
+          email: found.email,
+          firstName: found.firstName || "",
+          lastName: found.lastName || "",
+          headline: found.headline || "",
+          bio: found.bio || "",
+          avatarUrl: found.avatarUrl || "",
+          showreelUrl: found.showreelUrl || "",
+          skills: found.skills || "",
+          experience: found.experience || "",
+          role: found.role || "team",
+          services: Array.isArray(found.services) ? found.services : [],
+          calendlyUrl: found.calendlyUrl || "",
+          whatsappNumber: found.whatsappNumber || "",
+          highlightVideoId: found.highlightVideoId || "",
+          socials: {
+            instagram: found.socials?.instagram || found.instagram || "",
+            youtube: found.socials?.youtube || found.youtube || "",
+            linkedin: found.socials?.linkedin || found.linkedin || "",
+            twitter: found.socials?.twitter || found.twitter || "",
+            behance: found.socials?.behance || "",
+            dribbble: found.socials?.dribbble || "",
+            website: found.socials?.website || found.website || "",
+          },
+        };
+
+        return json({ profile }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Fetch failed" }, 500, cors);
+      }
+    }
+
+    // PUT /profiles/me - Authenticated self-edit.
+    // Allowlist of editable fields prevents privilege escalation.
+    if (url.pathname === "/profiles/me" && request.method === "PUT") {
+      try {
+        const payload = await verifyJwtOr401(readBearerToken(request), secret);
+        if (env && await isJtiRevoked(env, payload.jti)) {
+          throw Object.assign(new Error("Token revoked"), { status: 401 });
+        }
+        const email = String(payload.email || "").trim().toLowerCase();
+        if (!email) throw Object.assign(new Error("No email in token"), { status: 401 });
+
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 16 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        const body = await request.json().catch(() => ({}));
+
+        // Strict allowlist — never accept role, email, passwordHash, slug from self-edit.
+        const allowed = [
+          "firstName", "lastName", "headline", "bio", "avatarUrl",
+          "showreelUrl", "skills", "experience", "services",
+          "calendlyUrl", "whatsappNumber", "profilePublic",
+          "highlightVideoId", "socials",
+        ];
+
+        const key = `user:${email}`;
+        const raw = await env.SHINEL_USERS.get(key);
+        if (!raw) return json({ error: "User not found" }, 404, cors);
+        const user = JSON.parse(raw);
+
+        const merged = { ...user };
+        for (const k of allowed) {
+          if (!(k in body)) continue;
+          let v = body[k];
+          if (typeof v === "string") v = v.slice(0, 4000);
+          if (k === "services" && !Array.isArray(v)) continue;
+          if (k === "socials") {
+            if (v && typeof v === "object") {
+              const socKeys = ["instagram", "youtube", "linkedin", "twitter", "behance", "dribbble", "website"];
+              const clean = {};
+              for (const sk of socKeys) {
+                if (typeof v[sk] === "string") clean[sk] = v[sk].slice(0, 300);
+              }
+              merged.socials = clean;
+            }
+            continue;
+          }
+          if (k === "profilePublic") { merged[k] = !!v; continue; }
+          merged[k] = v;
+        }
+
+        await env.SHINEL_USERS.put(key, JSON.stringify(merged));
+
+        // Audit log the self-write — admin can see who edited when
+        try {
+          const auditKey = `audit:profile:${new Date().toISOString()}:${email}`;
+          await env.SHINEL_AUDIT.put(auditKey, JSON.stringify({ email, ts: Date.now(), ip: request.headers.get("cf-connecting-ip") || "" }), { expirationTtl: 60 * 60 * 24 * 30 });
+        } catch { /* best-effort */ }
+
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+
+    // PUT /profiles/me/work-visibility - Flip isVisibleOnPersonal on a work row.
+    // Only flips rows attributed to the caller (slug OR email match). Never touches rows attributed to others.
+    if (url.pathname === "/profiles/me/work-visibility" && request.method === "PUT") {
+      try {
+        const payload = await verifyJwtOr401(readBearerToken(request), secret);
+        if (env && await isJtiRevoked(env, payload.jti)) {
+          throw Object.assign(new Error("Token revoked"), { status: 401 });
+        }
+        const email = String(payload.email || "").trim().toLowerCase();
+        if (!email) throw Object.assign(new Error("No email in token"), { status: 401 });
+
+        const body = await request.json().catch(() => ({}));
+        const type = String(body.type || "").toLowerCase();
+        const id = String(body.id || "").trim();
+        const visible = !!body.visible;
+
+        if (!["video", "thumbnail"].includes(type)) return json({ error: "type must be video|thumbnail" }, 400, cors);
+        if (!id) return json({ error: "id required" }, 400, cors);
+        if (!env.DB) return json({ error: "DB unavailable" }, 503, cors);
+
+        // Resolve caller's slug for dual-match
+        const userRaw = await env.SHINEL_USERS.get(`user:${email}`);
+        const user = userRaw ? JSON.parse(userRaw) : null;
+        const slug = String(user?.slug || "").toLowerCase();
+
+        const table = type === "video" ? "inventory_videos" : "inventory_thumbnails";
+
+        // Verify attribution before flipping (defense-in-depth vs forged body)
+        const row = await env.DB.prepare(`SELECT attributed_to FROM ${table} WHERE id = ?`).bind(id).first();
+        if (!row) return json({ error: "Work not found" }, 404, cors);
+        const attrib = String(row.attributed_to || "").toLowerCase();
+        if (attrib !== email && (!slug || attrib !== slug)) {
+          return json({ error: "You can only toggle visibility on your own work" }, 403, cors);
+        }
+
+        await env.DB.prepare(`UPDATE ${table} SET is_visible_on_personal = ? WHERE id = ?`).bind(visible ? 1 : 0, id).run();
+        return json({ ok: true, id, visible }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Update failed" }, e.status || 500, cors);
+      }
+    }
+
     // GET /clients/pulse - Activity feed
     if (url.pathname === "/clients/pulse" && request.method === "GET") {
       let feed = { activities: [], meta: {}, ts: Date.now() };
@@ -1971,6 +2183,7 @@ export default {
           lastViewUpdate: v.last_view_update,
           attributedTo: v.attributed_to,
           isShinel: v.is_shinel === 1 || v.is_shinel === true,
+          isVisibleOnPersonal: v.is_visible_on_personal === null || v.is_visible_on_personal === undefined ? true : (v.is_visible_on_personal === 1 || v.is_visible_on_personal === true),
           platform: v.platform || 'YOUTUBE',
           dateAdded: v.date_added,
           updated: v.last_updated,
@@ -2446,6 +2659,7 @@ export default {
           lastViewUpdate: t.last_view_update,
           attributedTo: t.attributed_to,
           isShinel: t.is_shinel === 1 || t.is_shinel === true,
+          isVisibleOnPersonal: t.is_visible_on_personal === null || t.is_visible_on_personal === undefined ? true : (t.is_visible_on_personal === 1 || t.is_visible_on_personal === true),
           dateAdded: t.date_added,
           updated: t.last_updated,
         }));
@@ -2481,9 +2695,9 @@ export default {
 
     /* ======================= /thumbnails (admin CRUD) ======================= */
     const THUMB_FIELDS = new Set([
-      "filename", "youtubeUrl", "category", "subcategory", "variant", 
-      "imageUrl", "videoId", "youtubeViews", "viewStatus", 
-      "lastViewUpdate", "attributedTo", "isShinel"
+      "filename", "youtubeUrl", "category", "subcategory", "variant",
+      "imageUrl", "videoId", "youtubeViews", "viewStatus",
+      "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal"
     ]);
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {

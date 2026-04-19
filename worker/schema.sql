@@ -140,3 +140,10 @@ CREATE TABLE IF NOT EXISTS media_collection_items (
     PRIMARY KEY (collection_id, media_id),
     FOREIGN KEY (collection_id) REFERENCES media_collections(id) ON DELETE CASCADE
 );
+
+-- === Redesign v2: per-member "show on my public portfolio" toggle ===
+-- Run with: wrangler d1 execute shinel-db --remote --command "ALTER TABLE inventory_videos ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1"
+-- and the same for inventory_thumbnails. Running twice will error ("duplicate column"); the worker
+-- endpoints catch that gracefully and keep working.
+ALTER TABLE inventory_videos ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;
+ALTER TABLE inventory_thumbnails ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;

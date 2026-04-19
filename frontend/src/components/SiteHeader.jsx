@@ -41,6 +41,7 @@ import {
   Youtube,
   Instagram,
   HelpCircle,
+  Users,
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
@@ -719,6 +720,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           <div className="hidden md:flex items-center gap-8 relative">
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
+            <DesktopNavLink label="Team" to="/team" icon={Users} />
             <DesktopNavLink label="About" to="/about" icon={User} />
             <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
             <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
@@ -1045,16 +1047,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <MobileCardLink
+                      to="/team"
+                      icon={Users}
+                      title="Team"
+                      subtitle="Meet the makers"
+                    />
+                    <MobileCardLink
                       to="/live"
                       icon={Radio}
                       title="Pulse"
                       subtitle="Live metrics"
                     />
-                    <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
+                    <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                   </div>
 
@@ -1063,6 +1074,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
                       <SectionHeader icon={User} title="Account" subtitle={`${auth.firstName || "User"}`} right={null} />
                       <div className="grid grid-cols-1 gap-2">
+                        {(['admin', 'team', 'editor', 'artist'].some(r => (role || "").includes(r))) && (
+                          <MobileCardLink to="/me" icon={User} title="My public profile" subtitle="Edit bio, work & socials" />
+                        )}
                         <MobileCardLink to="/profile" icon={User} title="Profile" subtitle="Personal details" />
                         <MobileCardLink to="/settings" icon={Settings} title="Settings" subtitle="Preferences" />
                         {['admin', 'editor', 'artist'].includes(role) && (
