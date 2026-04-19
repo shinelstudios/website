@@ -5,10 +5,6 @@ import path from "path";
 import compression from "vite-plugin-compression";
 
 export default defineConfig({
-  // Honour VITE_BASE at build time. In CI (GitHub Pages workflow) we set it to
-  // "/" for a custom-domain setup or "/website/" for the default github.io subpath.
-  // Locally (`npm run dev` / `npm run build`) it defaults to "/" so nothing breaks.
-  base: process.env.VITE_BASE || "/",
   plugins: [
     react(),
     // Brotli compression (better than gzip, ~20% smaller)
