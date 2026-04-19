@@ -698,5 +698,9 @@ app.post("/api/youtube-captions", captionsLimiter, requireSharedSecret, async (r
   }
 });
 
+// Fly.io health check hits GET / — return a tiny 200 so the VM isn't marked unhealthy.
+// Not a real info endpoint on purpose (don't leak version info to unauth callers).
+app.get("/", (_req, res) => res.type("text/plain").send("ok"));
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Captions API running on http://localhost:${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`✅ Captions API running on http://0.0.0.0:${PORT}`));

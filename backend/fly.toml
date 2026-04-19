@@ -1,0 +1,51 @@
+# Fly.io app config for shinel-backend.
+# Two processes share one Docker image:
+#   - `web`    → server.js (captions API on :5000, proxied by the Worker)
+#   - `mirror` → mirror-service.js (daemon polling D1 for pending mirrors)
+
+app = "shinel-backend"
+primary_region = "bom"   # Mumbai — closest to shinelstudios.in users. Change if needed.
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  web    = "node server.js"
+  mirror = "node mirror-service.js"
+
+# HTTP service is attached to the `web` process only (mirror has no ports).
+[[services]]
+  processes        = ["web"]
+  internal_port    = 5000
+  protocol         = "tcp"
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.http_checks]]
+    interval       = "30s"
+    timeout        = "5s"
+    grace_period   = "10s"
+    method         = "get"
+    path           = "/"
+    protocol       = "http"
+
+# Small shared VM for each process — fits Fly's free allowance.
+[[vm]]
+  processes = ["web"]
+  size      = "shared-cpu-1x"
+  memory    = "256mb"
+
+[[vm]]
+  processes = ["mirror"]
+  size      = "shared-cpu-1x"
+  memory    = "512mb"   # yt-dlp + ffmpeg muxing uses a bit more; bump if OOMs occur
