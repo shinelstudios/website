@@ -66,6 +66,7 @@ import {
 
 import ServiceLens from './ServiceLens';
 import StrategyWizard from './StrategyWizard';
+import { ScrollAurora, GrainOverlay } from "../design";
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -948,8 +949,15 @@ export default function ShinelStudiosHomepage() {
         <main id="main-content">
           {/* 1) Hero (Above the fold, loads immediately) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={1} />}>
-            <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
+            <div className="relative">
+              {/* Signature ambient: scroll-driven aurora. Auto-downshifts on low-end / reduced-motion. */}
+              <ScrollAurora />
+              <HeroSection isDark={isDark} onAudit={() => handleOpenCalendly("hero")} />
+            </div>
           </ErrorBoundary>
+
+          {/* Ambient grain — fixed SVG noise, GPU-composited, 3% opacity */}
+          <GrainOverlay />
 
           {/* 1.5) Network Impact (Social Proof) */}
           <ErrorBoundary>
