@@ -754,218 +754,6 @@ function isStale(ts, now = Date.now()) {
   return now - Number(ts) > 7 * 24 * 60 * 60 * 1000; // 7 days
 }
 
-/* ============================== Captions helpers ============================== */
-// Native port of the former backend/server.js captions logic (WITHOUT the yt-dlp
-// fallback). Works entirely over HTTP so it runs inside the Worker — no subprocess,
-// no Node backend required. On rare timedtext empty-body responses the endpoint
-// returns a clean "captions unavailable" error.
-
-function captionsExtractVideoId(input) {
-  if (!input) return null;
-  const s = String(input).trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  try {
-    const u = new URL(s);
-    if (u.hostname.includes("youtu.be")) {
-      const id = u.pathname.split("/").filter(Boolean)[0];
-      return id && id.length === 11 ? id : null;
-    }
-    const v = u.searchParams.get("v");
-    if (v && v.length === 11) return v;
-    const parts = u.pathname.split("/").filter(Boolean);
-    const shortsIdx = parts.indexOf("shorts");
-    if (shortsIdx !== -1 && parts[shortsIdx + 1]?.length === 11) return parts[shortsIdx + 1];
-    const embedIdx = parts.indexOf("embed");
-    if (embedIdx !== -1 && parts[embedIdx + 1]?.length === 11) return parts[embedIdx + 1];
-    return null;
-  } catch { return null; }
-}
-
-// Brace-matching JSON extractor for "VAR_NAME = {...};" style blobs in watch HTML.
-function captionsExtractJsonByBrace(html, marker) {
-  const idx = html.indexOf(marker);
-  if (idx === -1) return null;
-  const start = html.indexOf("{", idx);
-  if (start === -1) return null;
-  let depth = 0, inStr = false, esc = false;
-  for (let i = start; i < html.length; i++) {
-    const ch = html[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === "\\") esc = true;
-      else if (ch === '"') inStr = false;
-      continue;
-    }
-    if (ch === '"') inStr = true;
-    else if (ch === "{") depth++;
-    else if (ch === "}") { depth--; if (depth === 0) { try { return JSON.parse(html.slice(start, i + 1)); } catch { return null; } } }
-  }
-  return null;
-}
-
-function captionsDecodeEntities(s) {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function captionsVttToPlain(vtt) {
-  const out = [];
-  for (const b of vtt.split(/\n\n+/)) {
-    const parts = b.split("\n").filter(Boolean);
-    if (!parts.length) continue;
-    const tIdx = parts.findIndex(l => l.includes("-->"));
-    if (tIdx === -1) continue;
-    const text = parts.slice(tIdx + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    if (text) out.push(text);
-  }
-  return out.join("\n");
-}
-
-function captionsJson3ToPlain(j) {
-  const evs = j?.events || [];
-  const out = [];
-  for (const ev of evs) {
-    if (!ev?.segs) continue;
-    const t = ev.segs.map(s => s.utf8 || "").join("").replace(/\s+/g, " ").trim();
-    if (t) out.push(t);
-  }
-  return out.join("\n");
-}
-
-function captionsSrv3ToPlain(xml) {
-  const out = [];
-  const re = /<p\b[^>]*>([\s\S]*?)<\/p>/g;
-  let m;
-  while ((m = re.exec(xml))) {
-    const raw = m[1].replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ");
-    const clean = captionsDecodeEntities(raw).replace(/\s+/g, " ").trim();
-    if (clean) out.push(clean);
-  }
-  return out.join("\n");
-}
-
-function captionsWithFmt(base, fmt) {
-  try { const u = new URL(base); u.searchParams.set("fmt", fmt); return u.toString(); }
-  catch { return `${base}${base.includes("?") ? "&" : "?"}fmt=${encodeURIComponent(fmt)}`; }
-}
-
-async function captionsFetchBytes(url, headers) {
-  const r = await fetch(url, { headers });
-  const ab = await r.arrayBuffer();
-  const bytes = ab?.byteLength || 0;
-  const body = bytes > 0 ? new TextDecoder("utf-8", { fatal: false }).decode(ab) : "";
-  return { r, bytes, body };
-}
-
-async function captionsFetchWithVariants(url, headerVariants) {
-  for (const headers of headerVariants) {
-    try {
-      const { r, bytes, body } = await captionsFetchBytes(url, headers);
-      if (r.ok && bytes > 0) return { ok: true, body };
-    } catch { /* try next variant */ }
-  }
-  return { ok: false, body: "" };
-}
-
-async function captionsFetchContent(trackBaseUrl, videoId, lang, isAuto, ytHeaders, ttHeaders) {
-  const variants = [
-    ytHeaders,
-    {
-      "User-Agent": ytHeaders["User-Agent"],
-      "Accept": "*/*",
-      "Accept-Encoding": "identity",
-      "Accept-Language": ytHeaders["Accept-Language"],
-      "Referer": ytHeaders["Referer"],
-      "Origin": ytHeaders["Origin"],
-    },
-    { "User-Agent": ytHeaders["User-Agent"], "Accept-Encoding": "identity" },
-  ];
-
-  // Try the track's own baseUrl first across json3 → srv3 → vtt.
-  for (const fmt of ["json3", "srv3", "vtt"]) {
-    const url = captionsWithFmt(trackBaseUrl, fmt);
-    const { ok, body } = await captionsFetchWithVariants(url, variants);
-    if (!ok) continue;
-    if (fmt === "json3" && body.trim().startsWith("{")) {
-      try { const t = captionsJson3ToPlain(JSON.parse(body)); if (t) return { format: "json3", text: t, download: url }; } catch { /* fall through */ }
-    }
-    if (fmt === "srv3" && body.includes("<transcript")) { const t = captionsSrv3ToPlain(body); if (t) return { format: "srv3", text: t, download: url }; }
-    if (fmt === "vtt" && body.includes("-->")) { const t = captionsVttToPlain(body); if (t) return { format: "vtt", text: t, download: url }; }
-  }
-
-  // Fall back to the classic timedtext endpoint.
-  const base = new URL("https://video.google.com/timedtext");
-  base.searchParams.set("v", videoId);
-  base.searchParams.set("lang", lang || "en");
-  if (isAuto) base.searchParams.set("kind", "asr");
-  const ttVariants = [ttHeaders, { "User-Agent": ttHeaders["User-Agent"], "Accept-Encoding": "identity" }];
-
-  for (const fmt of ["json3", "srv3", "vtt"]) {
-    const u = new URL(base.toString());
-    u.searchParams.set("fmt", fmt);
-    const { ok, body } = await captionsFetchWithVariants(u.toString(), ttVariants);
-    if (!ok) continue;
-    if (fmt === "json3" && body.trim().startsWith("{")) {
-      try { const t = captionsJson3ToPlain(JSON.parse(body)); if (t) return { format: "json3", text: t, download: u.toString() }; } catch { /* fall through */ }
-    }
-    if (fmt === "srv3" && body.includes("<transcript")) { const t = captionsSrv3ToPlain(body); if (t) return { format: "srv3", text: t, download: u.toString() }; }
-    if (fmt === "vtt" && body.includes("-->")) { const t = captionsVttToPlain(body); if (t) return { format: "vtt", text: t, download: u.toString() }; }
-  }
-
-  return { format: null, text: "", download: null };
-}
-
-// Fetches the WEB youtubei player JSON which includes the captionTracks list.
-async function captionsYoutubeiPlayer(videoId, hl, gl) {
-  const watchUrl = `https://www.youtube.com/watch?v=${videoId}&hl=${hl}&gl=${gl}`;
-  const r = await fetch(watchUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-  if (!r.ok) throw new Error(`watch ${r.status}`);
-  const html = await r.text();
-
-  const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
-  const versionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/);
-  const apiKey = keyMatch?.[1];
-  const clientVersion = versionMatch?.[1] || "2.20241219.01.00";
-  const context = captionsExtractJsonByBrace(html, "INNERTUBE_CONTEXT");
-  if (!apiKey || !context) throw new Error("innertube config not found");
-
-  const pr = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${apiKey}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": "Mozilla/5.0",
-      Origin: "https://www.youtube.com",
-      Referer: watchUrl,
-      "x-youtube-client-name": "1",
-      "x-youtube-client-version": clientVersion,
-    },
-    body: JSON.stringify({ context, videoId }),
-  });
-  if (!pr.ok) throw new Error(`player ${pr.status}`);
-  const j = await pr.json();
-  return { json: j, meta: { watchUrl, clientVersion } };
-}
-
-async function captionsGetPlayerWithRegionRetry(videoId, hl, glPreferred) {
-  const regions = [glPreferred, "IN", "US", "GB", "CA", "AU", "SG", "AE"].filter((v, i, a) => v && a.indexOf(v) === i);
-  let last = null;
-  for (const gl of regions) {
-    try {
-      const resp = await captionsYoutubeiPlayer(videoId, hl, gl);
-      const status = resp.json?.playabilityStatus?.status;
-      const tracks = resp.json?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-      if (status !== "UNPLAYABLE" || tracks.length > 0) return { ...resp, gl };
-      last = { ...resp, gl };
-    } catch (e) { last = { error: e?.message || String(e) }; }
-  }
-  if (last?.json) return last;
-  throw new Error(last?.error || "player lookup failed");
-}
-
 /* ============================== Hype helpers ============================== */
 /**
  * computeHype
@@ -1351,104 +1139,34 @@ export default {
       }
     }
 
-    /* -------------------------- YouTube Captions (native) -------------------------- */
-    // Handles caption extraction directly in the Worker — no Node backend, no yt-dlp.
-    // Ports the pure-HTTP path from the former backend/server.js. Response shape is
-    // kept compatible with the existing frontend SRT tool consumer.
+    /* -------------------------- YouTube Captions (proxy) -------------------------- */
+    // YouTube's 2025–2026 anti-bot makes the pure-HTTP path unreliable from CF
+    // Worker IPs (WEB/WEB_EMBEDDED return UNPLAYABLE; IOS requires PoToken). The
+    // yt-dlp fallback in backend/server.js is the only reliable extractor, so we
+    // proxy to whatever host CAPTIONS_API_URL points at (Koyeb in this setup).
     if (url.pathname === "/api/youtube-captions" && request.method === "POST") {
       try {
+        const backendUrl = env.CAPTIONS_API_URL;
+        if (!backendUrl) {
+          return json({ error: "Captions backend not configured (CAPTIONS_API_URL)" }, 501, cors);
+        }
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
 
-        const body = await request.json().catch(() => ({}));
-        const urlIn = body.url;
-        const lang = String(body.lang || "en");
-        const hl = String(body.hl || "en");
-        const gl = String(body.gl || "IN");
-
-        const videoId = captionsExtractVideoId(urlIn);
-        if (!videoId) return json({ error: "Invalid YouTube URL or video id" }, 400, cors);
-
-        let playerResp;
-        try { playerResp = await captionsGetPlayerWithRegionRetry(videoId, hl, gl); }
-        catch (e) { return json({ error: "Could not load video player: " + e.message }, 502, cors); }
-        const player = playerResp.json || {};
-        const playability = player.playabilityStatus || {};
-        const captionTracks = player.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-
-        const manual = captionTracks.filter(t => t && t.kind !== "asr");
-        const auto = captionTracks.filter(t => t && t.kind === "asr");
-        const byLang = (arr) => arr.find(t => (t.languageCode || "").toLowerCase() === lang.toLowerCase());
-        const manualBest = byLang(manual) || manual[0] || null;
-        const autoBest = byLang(auto) || auto[0] || null;
-
-        const watchUrl = playerResp.meta?.watchUrl || `https://www.youtube.com/watch?v=${videoId}&hl=${hl}&gl=${playerResp.gl || gl}`;
-        const ytHeaders = {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "*/*",
-          "Accept-Encoding": "identity",
-          "Accept-Language": `${hl}-${playerResp.gl || gl},${hl};q=0.9,en;q=0.8`,
-          "Referer": watchUrl,
-          "Origin": "https://www.youtube.com",
-        };
-        const ttHeaders = {
-          "User-Agent": "Mozilla/5.0",
-          "Accept": "*/*",
-          "Accept-Encoding": "identity",
-          "Accept-Language": `${hl}-${playerResp.gl || gl},${hl};q=0.9,en;q=0.8`,
-        };
-
-        const [manualData, autoData] = await Promise.all([
-          manualBest ? captionsFetchContent(manualBest.baseUrl, videoId, manualBest.languageCode, false, ytHeaders, ttHeaders) : Promise.resolve({ format: null, text: "", download: null }),
-          autoBest ? captionsFetchContent(autoBest.baseUrl, videoId, autoBest.languageCode, true, ytHeaders, ttHeaders) : Promise.resolve({ format: null, text: "", download: null }),
-        ]);
-
-        const finalManual = manualBest ? {
-          languageCode: manualBest.languageCode,
-          name: manualBest.name?.simpleText || "Manual",
-          format: manualData.format || null,
-          text: manualData.text || "",
-          download: manualData.download || null,
-        } : null;
-        const finalAuto = autoBest ? {
-          languageCode: autoBest.languageCode,
-          name: autoBest.name?.simpleText || "Auto",
-          format: autoData.format || null,
-          text: autoData.text || "",
-          download: autoData.download || null,
-        } : null;
-
-        const manualOk = !!finalManual?.text;
-        const autoOk = !!finalAuto?.text;
-
-        let message = "No captions found for this video.";
-        if (manualOk || autoOk) message = "Captions fetched successfully.";
-        else if (manualBest || autoBest) message = "Captions found but download was blocked by YouTube.";
-
-        return json({
-          videoId,
-          requestedLang: lang,
-          trackSource: "youtubei",
-          tracks: { manualCount: manual.length, autoCount: auto.length },
-          manual: finalManual,
-          auto: finalAuto,
-          meta: {
-            noCaptions: !(manualBest || autoBest),
-            playabilityStatus: playability.status || null,
-            playabilityReason: playability.reason || null,
-            hl, glRequested: gl,
-            usedClient: "WEB",
-            usedGl: playerResp.gl || null,
-            watchUrl,
-            clientVersion: playerResp.meta?.clientVersion || null,
-            // yt-dlp fallback is no longer available — flagged so frontend can
-            // mention it if the user complains about a specific failing video.
-            ytdlpUsed: false, ytdlpMode: null,
-          },
-          message,
-        }, 200, cors);
+        const body = await request.clone().json();
+        const headers = { "Content-Type": "application/json" };
+        if (env.CAPTIONS_SHARED_SECRET) {
+          headers["X-Shinel-Captions-Secret"] = env.CAPTIONS_SHARED_SECRET;
+        }
+        const res = await fetch(`${backendUrl.replace(/\/+$/, "")}/api/youtube-captions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({ error: "Backend returned non-JSON" }));
+        return json(data, res.status, cors);
       } catch (e) {
-        return json({ error: "Captions fetch failed: " + e.message }, 500, cors);
+        return json({ error: "Captions proxy failed: " + e.message }, 502, cors);
       }
     }
 
