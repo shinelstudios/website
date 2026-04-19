@@ -69,7 +69,7 @@ const EditorLeaderboardPage = React.lazy(() => import("./components/pages/Editor
 const SeoToolPage = React.lazy(() => import("./components/pages/SeoToolPage.jsx"));
 const ComparisonToolPage = React.lazy(() => import("./components/pages/ComparisonToolPage.jsx"));
 const ThumbnailIdeationPage = React.lazy(() => import("./components/pages/ThumbnailIdeationPage.jsx"));
-const YoutubeCaptionsPage = React.lazy(() => import("./components/pages/YoutubeCaptionsPage.jsx"));
+// const YoutubeCaptionsPage = React.lazy(() => import("./components/pages/YoutubeCaptionsPage.jsx"));
 const CustomAIsPage = React.lazy(() => import("./components/pages/CustomAIsPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
@@ -402,10 +402,12 @@ export default function App() {
           />
 
 
-          <Route
+          {/* YouTube Captions page hidden — requires a yt-dlp backend at
+              CAPTIONS_API_URL. Unhide when a host is available. */}
+          {/* <Route
             path="/tools/youtube-captions"
             element={<YoutubeCaptionsPage />}
-          />
+          /> */}
 
 
           <Route

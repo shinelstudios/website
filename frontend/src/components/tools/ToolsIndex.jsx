@@ -67,13 +67,18 @@ const tiles = [
     icon: TrendingUp,
     roles: ["admin", "editor", "client", "public"],
   },
-  {
+  // YouTube Automated Captions — hidden. Requires a yt-dlp-capable backend at
+  // CAPTIONS_API_URL; YouTube's 2025–2026 anti-bot blocks the pure-HTTP path
+  // from Cloudflare Worker IPs. Re-enable by (a) pointing CAPTIONS_API_URL at a
+  // running backend/server.js and (b) uncommenting this entry + the route in
+  // App.jsx. Full context in the plan file / commit 00952c4.
+  /* {
     to: "/tools/youtube-captions",
     title: "YouTube Automated Captions",
     desc: "Extract manual & auto-generated captions directly from any YouTube URL.",
     icon: Youtube,
     roles: ["admin", "editor", "client", "public"],
-  },
+  }, */
 ];
 
 
