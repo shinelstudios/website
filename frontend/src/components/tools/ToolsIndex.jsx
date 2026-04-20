@@ -11,6 +11,17 @@ import GridMatrix from "../animations/GridMatrix";
 import { Kicker, Eyebrow, Display, Lede, RevealOnScroll, HairlineCard } from "../../design";
 
 
+// PHASE 2 · TODO — add three new tools per CLAUDE.md "Phase 2 roadmap" #3:
+//   1. "Is my thumbnail clickable?"  → face-api.js + contrast + text-area
+//      heuristics, render upload in 4 YouTube contexts. New tile + route
+//      /tools/thumbnail-score.
+//   2. "Channel audit in 60s"         → paste YT channel URL, worker calls
+//      the existing fetchYouTubeChannelInfo(), analyse last 20 videos,
+//      return scored report + 3 fixes. New tile + route /tools/channel-audit.
+//   3. "Content calendar starter"      → niche input, 30-day posting plan
+//      with title/thumbnail concept pairs. LLM-free, template-driven.
+//      New tile + route /tools/content-calendar.
+// Add tiles to this array AND import the corresponding icon from lucide-react.
 const tiles = [
   {
     to: "/roi-calculator",

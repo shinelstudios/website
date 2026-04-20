@@ -49,6 +49,13 @@ import {
 } from "../design";
 
 const ProofSection = React.lazy(() => import("./ProofSection"));
+// PHASE 2 · TODO — replace this static CaseStudies component with a dynamic
+// /case-studies system backed by D1. New table case_studies (slug PK, cover,
+// brief, role_list, tools, metrics_json, gallery_json, body_md, published,
+// attributed_slugs_json). Admin editor mirrors AdminBlogEditor.jsx; new public
+// routes /case-studies and /case-studies/:slug. Each team/:slug profile
+// should surface the case studies they contributed to.
+// See CLAUDE.md "Phase 2 roadmap" #2.
 const CaseStudies = React.lazy(() => import("./CaseStudies"));
 
 // ─── helpers ───────────────────────────────────────────────────────────────────

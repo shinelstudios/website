@@ -4,6 +4,15 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import compression from "vite-plugin-compression";
 
+// PHASE 2 · TODO — add build-time OG image generator + pre-rendering.
+//   OG: add `@vercel/og` or `satori` here; emit 1200x630 PNG per route to
+//       public/og/<slug>.png. Reference via MetaTags.jsx ogImage prop.
+//   Prerender: add `vite-plugin-prerender` for /, /work, /team, /team/:slug,
+//       /pricing, /services/*, /blog, /case-studies. Dynamic slugs come
+//       from a live fetch of /team and /blog.json at build time (mirror
+//       the pattern already used in scripts/generate-sitemap.js).
+// See CLAUDE.md "Phase 2 roadmap" #4 and #5.
+
 export default defineConfig({
   plugins: [
     react(),

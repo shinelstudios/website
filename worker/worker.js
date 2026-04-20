@@ -1680,6 +1680,15 @@ export default {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // PHASE 2 · TODO — endpoints to land in Phase 2 of the redesign:
+    //   GET/POST/PUT/DELETE /testimonials       — KV app:testimonials:list
+    //   GET/POST/PUT/DELETE /case-studies       — D1 case_studies table
+    //   POST /api/metrics/pageview              — KV counter metrics:pv:<d>:<p>
+    //   POST /tools/channel-audit               — scored channel analysis
+    // See CLAUDE.md "Phase 2 roadmap" for scope and column definitions.
+    // ─────────────────────────────────────────────────────────────────
+
     // GET /clients/pulse - Activity feed
     if (url.pathname === "/clients/pulse" && request.method === "GET") {
       let feed = { activities: [], meta: {}, ts: Date.now() };

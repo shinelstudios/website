@@ -43,6 +43,17 @@ function parseJwt(token) {
     } catch { return null; }
 }
 
+// PHASE 2 · TODO — admin dashboard refresh (Phase 3 of original plan):
+//   - Replace the current sidebar with a collapsed/expanded left rail + cmdk
+//     command palette (tiny dep, ⌘K to jump between admin surfaces).
+//   - Add widgets to the overview: leads funnel (open → contacted → won/lost
+//     with conversion rate), team-member activity heatmap (videos attributed
+//     + leads assigned per member per week), most-viewed public pages.
+//   - Most-viewed needs a new worker endpoint: POST /api/metrics/pageview
+//     that writes to KV counter metrics:pv:<date>:<path>. Frontend hook
+//     useEffect(posts beacon on route change) in App.jsx.
+//   - Audit log view: add filters + CSV export (existing KV writer).
+// See CLAUDE.md "Phase 2 roadmap" #6.
 export default function ManagementHub() {
     const location = useLocation();
     const navigate = useNavigate();
