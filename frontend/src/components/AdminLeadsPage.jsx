@@ -23,9 +23,13 @@ import {
 import { createLeadStorage } from "./cloudflare-lead-storage";
 import { LoadingOverlay } from "./AdminUIComponents";
 import { AUTH_BASE } from "../config/constants";
-const LS_TOKEN_KEY = "token";
+import { getAccessToken } from "../utils/tokenStore";
 
-const store = createLeadStorage(AUTH_BASE, () => localStorage.getItem(LS_TOKEN_KEY));
+// Lead storage reads the live access token via getAccessToken() per-request
+// so it always uses the freshest value (post-refresh, post-login). The old
+// `localStorage.getItem("token")` returned null after the tokenStore migration,
+// which made every /leads call 401.
+const store = createLeadStorage(AUTH_BASE, () => getAccessToken());
 
 function toast(type, message) {
     window.dispatchEvent(

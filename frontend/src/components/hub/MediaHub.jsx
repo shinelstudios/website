@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AUTH_BASE } from "../../config/constants";
+import { getAccessToken } from "../../utils/tokenStore";
 
 // Management Imports
 import { createVideoStorage } from "../cloudflare-video-storage";
@@ -40,8 +41,6 @@ import ThumbnailForm from "../ThumbnailForm";
 import ThumbnailFilters from "../ThumbnailFilters";
 import { useClientStats } from "../../context/ClientStatsContext";
 
-const LS_TOKEN_KEY = "token";
-
 const ytIdFrom = (url) => {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -49,21 +48,38 @@ const ytIdFrom = (url) => {
     return (match && match[2].length === 11) ? match[2] : null;
 };
 
+// Decode the active access token each time (cheap — parses the JWT body only).
+// Token lives in tokenStore (memory) after the migration; localStorage.getItem("token")
+// is always null post-migration, which is what was making every admin request
+// send `Bearer null` and 401.
+function parseAccessToken() {
+    const t = getAccessToken();
+    if (!t) return null;
+    try {
+        const parts = t.split(".");
+        if (parts.length < 2) return null;
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[1].length + 3) % 4);
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return JSON.parse(new TextDecoder("utf-8").decode(bytes));
+    } catch { return null; }
+}
+
 export default function MediaHub() {
     const { getProxiedImage } = useClientStats();
     // Current Active Tab
     const [activeTab, setActiveTab] = useState("overview"); // "overview" | "direct" | "videos" | "thumbnails" | "collections"
-    
-    // Auth
-    const token = localStorage.getItem(LS_TOKEN_KEY);
-    const [payload] = useState(() => {
-        try {
-            const parts = token.split(".");
-            if (parts.length < 2) return null;
-            const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/") + "===".slice((parts[1].length + 3) % 4);
-            return JSON.parse(decodeURIComponent(escape(atob(b64))));
-        } catch { return null; }
-    });
+
+    // Auth — always read the live access token so a post-mount refresh
+    // (e.g. the user logged in after landing on this page, or the silent
+    // refresh rotated the token) is reflected in every outbound request.
+    const [payload, setPayload] = useState(() => parseAccessToken());
+    useEffect(() => {
+        const sync = () => setPayload(parseAccessToken());
+        window.addEventListener("auth:changed", sync);
+        return () => window.removeEventListener("auth:changed", sync);
+    }, []);
     const isAdmin = payload?.role?.toLowerCase().includes("admin");
     const userEmail = payload?.email || "";
 
@@ -90,7 +106,9 @@ export default function MediaHub() {
         subcategory: "", kind: "LONG", platform: "YOUTUBE", tags: "", 
         isShinel: true, attributedTo: ""
     });
-    const videoStore = useMemo(() => createVideoStorage(AUTH_BASE, () => token), [token]);
+    // Storage factories receive a getter so they always read the freshest token
+    // on each request, not a stale closure capture from mount.
+    const videoStore = useMemo(() => createVideoStorage(AUTH_BASE, () => getAccessToken()), []);
 
     // --- Tab 3: Thumbnails (Inventory) ---
     const [thumbnails, setThumbnails] = useState([]);
@@ -105,7 +123,7 @@ export default function MediaHub() {
         category: [], subcategory: [], variants: ["VIDEO", "LIVE"], filenameTemplates: []
     });
     const [imagePreview, setImagePreview] = useState("");
-    const thumbStore = useMemo(() => createThumbnailStorage(AUTH_BASE, () => token), [token]);
+    const thumbStore = useMemo(() => createThumbnailStorage(AUTH_BASE, () => getAccessToken()), []);
 
     const resetVideoForm = () => {
         setVideoForm({
@@ -196,7 +214,7 @@ export default function MediaHub() {
         setBusyLabel("Loading media library...");
         try {
             const res = await fetch(`${AUTH_BASE}/api/media/library?search=${encodeURIComponent(search)}`, {
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             const data = await res.json();
             setMediaItems(data.items || []);
@@ -207,7 +225,9 @@ export default function MediaHub() {
             setBusy(false);
             setBusyLabel("");
         }
-    }, [token, search]);
+    // Token isn't a dep anymore — getAccessToken() is called per-request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search]);
 
     const loadVideos = useCallback(async () => {
         setBusy(true);
@@ -234,7 +254,7 @@ export default function MediaHub() {
         setBusyLabel("Aggregating metrics...");
         try {
             const res = await fetch(`${AUTH_BASE}/stats`, {
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             const data = await res.json();
             if (data.ok) {
@@ -251,20 +271,20 @@ export default function MediaHub() {
             }
         } catch (e) { console.error(e); }
         finally { setBusy(false); setBusyLabel(""); }
-    }, [token]);
+    }, []);
 
     const fetchCollections = useCallback(async () => {
         setBusy(true);
         setBusyLabel("Loading collections...");
         try {
             const res = await fetch(`${AUTH_BASE}/api/collections`, {
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             const data = await res.json();
             setCollections(data.collections || []);
         } catch (e) { console.error(e); }
         finally { setBusy(false); setBusyLabel(""); }
-    }, [token]);
+    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -294,7 +314,7 @@ export default function MediaHub() {
         try {
             const res = await fetch(`${AUTH_BASE}/api/media/delete/${id}`, {
                 method: "DELETE",
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             const data = await res.json();
             if (data.ok) {
@@ -350,7 +370,7 @@ export default function MediaHub() {
             formData.append("file", file);
             const res = await fetch(`${AUTH_BASE}/api/media/upload`, {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${token}` },
+                headers: { "Authorization": `Bearer ${getAccessToken()}` },
                 body: formData
             });
             const data = await res.json();
@@ -372,7 +392,7 @@ export default function MediaHub() {
         try {
             const res = await fetch(`${AUTH_BASE}/api/media/refresh-metrics`, {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             const data = await res.json();
             if (data.ok) {
@@ -400,7 +420,7 @@ export default function MediaHub() {
                 // Batch mode
                 const res = await fetch(`${AUTH_BASE}/api/media/bulk-archive`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
                     body: JSON.stringify({ urls: lines, category: "BATCH" })
                 });
                 const data = await res.json();
@@ -414,7 +434,7 @@ export default function MediaHub() {
                 // Single mode
                 const res = await fetch(`${AUTH_BASE}/api/media/archive-external`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
                     body: JSON.stringify({ url: urlToArchive })
                 });
                 if ((await res.json()).ok) {
@@ -432,7 +452,7 @@ export default function MediaHub() {
         setBusyLabel("Generating backup...");
         try {
             const res = await fetch(`${AUTH_BASE}/admin/db-export`, {
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { "Authorization": `Bearer ${getAccessToken()}` }
             });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();
@@ -955,7 +975,7 @@ export default function MediaHub() {
                                     if (name) {
                                         fetch(`${AUTH_BASE}/api/collections`, {
                                             method: "POST",
-                                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
                                             body: JSON.stringify({ name })
                                         }).then(() => fetchCollections());
                                     }
