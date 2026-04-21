@@ -78,6 +78,7 @@ async function generate() {
     "/tools/thumbnail-previewer",
     "/tools/thumbnail-tester",
     "/tools/thumbnail-ideation",
+    "/tools/thumbnail-clickability",
     "/tools/custom-ais",
     "/roi-calculator",
 

@@ -58,6 +58,9 @@ const ThumbnailIdeation = React.lazy(() =>
 const ThumbnailPreviewer = React.lazy(() =>
   import("./components/tools/ThumbnailPreviewer.jsx")
 );
+const ThumbnailClickability = React.lazy(() =>
+  import("./components/tools/ThumbnailClickability.jsx")
+);
 
 const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 
@@ -448,6 +451,11 @@ export default function App() {
           <Route
             path="/tools/thumbnail-ideation"
             element={<ThumbnailIdeationPage />}
+          />
+
+          <Route
+            path="/tools/thumbnail-clickability"
+            element={<ThumbnailClickability />}
           />
 
 

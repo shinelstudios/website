@@ -6,15 +6,15 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube, ArrowUpRight } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube, ArrowUpRight, Sparkles } from "lucide-react";
 import GridMatrix from "../animations/GridMatrix";
 import { Kicker, Eyebrow, Display, Lede, RevealOnScroll, HairlineCard } from "../../design";
 
 
-// PHASE 2 · TODO — add three new tools per CLAUDE.md "Phase 2 roadmap" #3:
-//   1. "Is my thumbnail clickable?"  → face-api.js + contrast + text-area
-//      heuristics, render upload in 4 YouTube contexts. New tile + route
-//      /tools/thumbnail-score.
+// PHASE 2 · TODO — remaining tools per CLAUDE.md "Phase 2 roadmap" #3:
+//   1. [DONE — /tools/thumbnail-clickability] "Is my thumbnail clickable?"
+//      Client-side canvas analysis. No face-api.js (skipped the 1.5MB dep —
+//      skin-tone cluster heuristic is enough for a first pass).
 //   2. "Channel audit in 60s"         → paste YT channel URL, worker calls
 //      the existing fetchYouTubeChannelInfo(), analyse last 20 videos,
 //      return scored report + 3 fixes. New tile + route /tools/channel-audit.
@@ -63,6 +63,13 @@ const tiles = [
     title: "Thumbnail A/B Previewer",
     desc: "Test how your designs look in YouTube search & Home grid.",
     icon: ImageIcon,
+    roles: ["admin", "editor", "client", "public"],
+  },
+  {
+    to: "/tools/thumbnail-clickability",
+    title: "Is my thumbnail clickable?",
+    desc: "Upload, get a 0–100 score + 3 concrete fixes. Runs in your browser — nothing uploads.",
+    icon: Sparkles,
     roles: ["admin", "editor", "client", "public"],
   },
   {
