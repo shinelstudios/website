@@ -14,6 +14,7 @@ import { Kicker, Display, Lede, RevealOnScroll } from "../design";
  *   GET  /thumbnails   → { thumbnails: [...] } with ETag
  */
 import { AUTH_BASE } from "../config/constants";
+import { resolveMediaUrl } from "../utils/formatters";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Client cache keys ---------------- */
@@ -904,23 +905,31 @@ export default function Thumbnails() {
     };
 
     const normalize = (arr) =>
-      (arr.length ? arr : FALLBACK).map((t, i) => ({
-        id: t.id || t._id || `row-${i}`,
-        filename: t.filename,
-        category: t.category || "OTHER",
-        subcategory: t.subcategory || "",
-        variant: t.variant || "VIDEO",
-        youtubeUrl: t.youtube_url || t.youtubeUrl || t.primaryUrl,
-        youtubeTitle: t.youtubeTitle,
-        imageUrl: t.image_url || t.imageUrl || t.image || t.thumb, // normalize
-        image: t.image_url || t.imageUrl || t.image || t.thumb,
-        videoId: t.video_id || t.videoId || t.youtubeId,
-        views: Number(t.youtube_views ?? t.youtubeViews ?? t.views ?? 0),
-        viewStatus: t.viewStatus,
-        lastViewUpdate: t.lastViewUpdate || t.last_updated,
-        dateAdded: t.dateAdded,
-        lastUpdated: t.lastUpdated,
-      }));
+      (arr.length ? arr : FALLBACK).map((t, i) => {
+        const rawImg = t.image_url || t.imageUrl || t.image || t.thumb;
+        // Worker stores uploaded-thumbnail URLs as relative paths like
+        // "/api/media/view/<uuid>.webp". Those resolve against shinelstudios.in
+        // in the browser and 404 on Cloudflare Pages (the /api route only
+        // exists on the worker origin). resolveMediaUrl prepends AUTH_BASE.
+        const img = resolveMediaUrl(rawImg, AUTH_BASE);
+        return {
+          id: t.id || t._id || `row-${i}`,
+          filename: t.filename,
+          category: t.category || "OTHER",
+          subcategory: t.subcategory || "",
+          variant: t.variant || "VIDEO",
+          youtubeUrl: t.youtube_url || t.youtubeUrl || t.primaryUrl,
+          youtubeTitle: t.youtubeTitle,
+          imageUrl: img,
+          image: img,
+          videoId: t.video_id || t.videoId || t.youtubeId,
+          views: Number(t.youtube_views ?? t.youtubeViews ?? t.views ?? 0),
+          viewStatus: t.viewStatus,
+          lastViewUpdate: t.lastViewUpdate || t.last_updated,
+          dateAdded: t.dateAdded,
+          lastUpdated: t.lastUpdated,
+        };
+      });
 
     const revalidateThumbnails = async () => {
       setError("");

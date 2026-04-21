@@ -29,6 +29,7 @@ import PortfolioItem from "./PortfolioItem";
 import MetaTags from "./MetaTags";
 import { AUTH_BASE } from "../config/constants";
 import { getAuth } from "../utils/auth";
+import { resolveMediaUrl } from "../utils/formatters";
 import { Img, GrainOverlay } from "../design";
 
 function extractYouTubeId(url = "") {
@@ -59,7 +60,8 @@ function normalizeWork(item, type) {
         category: item.category || "OTHER",
         image: isVideo
             ? (ytId ? `https://img.youtube.com/vi/${ytId}/${useMq ? 'mqdefault' : 'maxresdefault'}.jpg` : "https://placehold.co/600x400/202020/white?text=No+Preview")
-            : item.imageUrl,
+            // Absolute-ify /api/media/view/* paths \u2014 see formatters.js:resolveMediaUrl.
+            : resolveMediaUrl(item.imageUrl || item.image_url || item.image || item.thumb, AUTH_BASE),
         link: isVideo ? "/video-editing" : "/thumbnails",
         kind: isVideo ? "video" : "gfx",
         isShinel: item.isShinel !== false,

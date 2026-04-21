@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getAccessToken } from '../utils/tokenStore';
+import { formatCompactNumber, formatPercent } from '../utils/formatters';
 import {
     FileText,
     Calendar,
@@ -103,7 +104,15 @@ const WeeklyAuditLog = () => {
 
                                 <div className="flex flex-wrap gap-4">
                                     <AuditStat label="Active Creators" value={audit.activeCreators} icon={Users} color="text-blue-500" />
-                                    <AuditStat label="Total Reach" value={((audit.totalReach || (audit.totalSubscribers + (audit.totalInstagramFollowers || 0))) / 1000000).toFixed(1) + 'M'} icon={TrendingUp} color="text-green-500" />
+                                    <AuditStat
+                                        label="Total Reach"
+                                        value={formatCompactNumber(
+                                            audit.totalReach ||
+                                            ((audit.totalSubscribers || 0) + (audit.totalInstagramFollowers || 0))
+                                        )}
+                                        icon={TrendingUp}
+                                        color="text-green-500"
+                                    />
                                     <AuditStat label="Sync Health" value={`${audit.syncErrors === 0 ? 'PERFECT' : audit.syncErrors + ' Errors'}`} icon={ShieldCheck} color={audit.syncErrors === 0 ? 'text-green-500' : 'text-red-500'} />
                                 </div>
                             </div>
@@ -111,11 +120,16 @@ const WeeklyAuditLog = () => {
                             <div className="mt-8 pt-8 border-t border-[var(--border)] grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
                                     <p className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Total Views</p>
-                                    <p className="text-xl font-black text-white">{(audit.totalViews / 1000000000).toFixed(2)}B</p>
+                                    <p className="text-xl font-black text-white">{formatCompactNumber(audit.totalViews)}</p>
                                 </div>
                                 <div>
                                     <p className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Growth Delta</p>
-                                    <p className="text-xl font-black text-green-500">+{(Math.random() * 2 + 1).toFixed(1)}%</p>
+                                    {/*
+                                      audit.growthDelta is the only honest source. If backend hasn't
+                                      computed it yet, show "—" instead of a fake Math.random() number.
+                                      This was displaying billions of invented growth on every render.
+                                    */}
+                                    <p className="text-xl font-black text-green-500">{formatPercent(audit.growthDelta)}</p>
                                 </div>
                                 <div className="col-span-2 text-right">
                                     <button className="px-6 py-2 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-[10px] font-black uppercase tracking-widest hover:text-orange-500 transition-colors">

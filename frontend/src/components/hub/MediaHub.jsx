@@ -583,7 +583,12 @@ export default function MediaHub() {
                     { id: "direct", label: "Library", icon: <Grid size={14} /> },
                     { id: "videos", label: "Videos", icon: <VideoIcon size={14} /> },
                     { id: "thumbnails", label: "Thumbnails", icon: <ImageIcon size={14} /> },
-                    { id: "collections", label: "Collections", icon: <Layers size={14} /> }
+                    // PHASE 2 · TODO — Collections tab hidden. Feature is half-built:
+                    // schema + /api/collections CRUD exist; UI only has a prompt()-based
+                    // "New Collection" and no detail view. Re-enable once Collections
+                    // gets a proper detail surface and drag-to-add UX. Tab content at
+                    // line ~943 below is kept; just not reachable via the tab bar.
+                    // { id: "collections", label: "Collections", icon: <Layers size={14} /> }
                 ].map((tab) => (
                     <button 
                         key={tab.id}

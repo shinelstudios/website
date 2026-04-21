@@ -151,11 +151,14 @@ export default function ClientDashboard() {
                 >
                     <TrendingUp size={16} /> YouTube Pulse
                 </button>
-                <button
-                    className="flex items-center gap-2 px-4 py-3 rounded-t-xl border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-alt)] transition-all font-medium text-sm"
-                >
-                    <MessageSquare size={16} /> Messages
-                </button>
+                {/*
+                  PHASE 2 · TODO — Messages tab hidden until real implementation.
+                  It was rendered but had no onClick, no matching activeTab case,
+                  and no content component. To implement: new D1 `messages`
+                  table (id, thread_id, from_user, to_user, body, read_at,
+                  created_at), worker GET/POST /messages, and a content block
+                  below with the same activeTab pattern. See CLAUDE.md Phase 2.
+                */}
             </div>
 
             {/* Content Area */}

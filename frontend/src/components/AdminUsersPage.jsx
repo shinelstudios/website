@@ -5,7 +5,7 @@ import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 import { saveClientConfig, getClientConfig } from "../data/clientRegistry";
 
 import { AUTH_BASE } from "../config/constants";
-import { getAccessToken, setAccessToken } from "../utils/tokenStore";
+import { getAccessToken, setAccessToken, refreshOnce } from "../utils/tokenStore";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -59,6 +59,9 @@ export default function AdminUsersPage() {
 
   // --- token state that updates when auth changes ---
   const [token, setToken] = useState(() => getAccessToken());
+  // Non-modal banner for the "Refresh session" button. Replaces the old
+  // window.alert() noise; null = hidden.
+  const [refreshStatus, setRefreshStatus] = useState(null);
   const payload = useMemo(() => (token ? parseJwt(token) : null), [token]);
   const rawRole = (payload?.role || localStorage.getItem("role") || "").toLowerCase();
   const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
@@ -183,26 +186,35 @@ export default function AdminUsersPage() {
   }
 
   async function refreshNow() {
+    // Route through the tokenStore singleton so concurrent calls (e.g. from
+    // App.jsx mount + ProtectedRoute + this button) dedupe to one network
+    // request. Avoids the refresh-token-rotation race and the 3x 401 logs.
+    setRefreshStatus({ kind: "loading", text: "Refreshing session…" });
     try {
-      // The worker reads the refresh token from the httpOnly ss_refresh cookie —
-      // credentials:'include' sends it automatically. Access token comes back in the
-      // response body and lands in tokenStore (memory).
-      const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
-        method: "POST",
-        credentials: "include",
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Refresh failed");
-
-      setAccessToken(data.token);
-      if (data.role) localStorage.setItem("role", data.role);
-      setToken(data.token);
-
-      window.dispatchEvent(new Event("auth:changed"));
-      alert("Session refreshed ✅");
+      const newToken = await refreshOnce(AUTH_BASE);
+      if (!newToken) {
+        // Cookie missing or expired — route to /login rather than alert.
+        setRefreshStatus({
+          kind: "error",
+          text: "Your session has ended. Redirecting to sign in…",
+        });
+        setTimeout(() => {
+          try {
+            const next = encodeURIComponent(window.location.pathname + window.location.search);
+            window.location.href = `/login?next=${next}`;
+          } catch { window.location.href = "/login"; }
+        }, 900);
+        return;
+      }
+      setToken(newToken);
+      setRefreshStatus({ kind: "success", text: "Session refreshed." });
+      // Reload the users list with the fresh token.
+      loadUsers();
+      // Auto-clear the banner after a moment.
+      setTimeout(() => setRefreshStatus(null), 2500);
     } catch (e) {
-      alert(e.message || "Refresh failed");
+      console.error("refreshNow failed:", e);
+      setRefreshStatus({ kind: "error", text: e?.message || "Refresh failed" });
     }
   }
 
@@ -244,11 +256,36 @@ export default function AdminUsersPage() {
               className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
               title="Refresh session now"
+              disabled={refreshStatus?.kind === "loading"}
             >
-              <RefreshCcw size={14} /> Refresh session
+              <RefreshCcw size={14} /> {refreshStatus?.kind === "loading" ? "Refreshing…" : "Refresh session"}
             </button>
           </div>
         </div>
+
+        {refreshStatus && (
+          <div
+            className="mb-5 rounded-xl p-3 text-sm flex items-center gap-2"
+            style={{
+              background:
+                refreshStatus.kind === "success"
+                  ? "rgba(16,185,129,0.08)"
+                  : refreshStatus.kind === "error"
+                  ? "rgba(220,38,38,0.08)"
+                  : "var(--surface-alt)",
+              border: "1px solid var(--border)",
+              color:
+                refreshStatus.kind === "success"
+                  ? "#059669"
+                  : refreshStatus.kind === "error"
+                  ? "#DC2626"
+                  : "var(--text)",
+            }}
+            role="status"
+          >
+            {refreshStatus.text}
+          </div>
+        )}
 
         {showExpiringBanner && (
           <div

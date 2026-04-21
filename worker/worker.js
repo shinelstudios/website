@@ -2382,11 +2382,31 @@ export default {
 
     if (url.pathname.startsWith("/videos/") && request.method === "DELETE") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+        if (!id) return json({ error: "Video id required" }, 400, cors);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
+        // Cascade: remove the video's join-table entries first so the main
+        // delete can't be blocked by FK enforcement. Best-effort — if the
+        // join-table delete itself errors (shouldn't, it's a simple WHERE),
+        // we log and keep going so the primary delete still attempts.
+        try {
+          await env.DB.prepare(
+            "DELETE FROM media_collection_items WHERE media_id = ? AND media_type = 'video'"
+          ).bind(id).run();
+        } catch (joinErr) {
+          console.warn("DELETE /videos: join-table cleanup failed (continuing):", joinErr?.message || joinErr);
+        }
+
         await env.DB.prepare("DELETE FROM inventory_videos WHERE id = ?").bind(id).run();
-        return json({ ok: true }, 200, cors);
-      } catch (e) { return json({ error: e.message }, 500, cors); }
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) {
+        // Respect thrown status (e.g. 401 from requireTeamOrThrow) so the
+        // client can prompt re-login instead of seeing a scary 500.
+        console.error("DELETE /videos failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Delete failed" }, e?.status || 500, cors);
+      }
     }
 
     /* =========================== /leads (leads crm) =========================== */
@@ -2787,11 +2807,25 @@ export default {
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "DELETE") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
+        if (!id) return json({ error: "Thumbnail id required" }, 400, cors);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
+        try {
+          await env.DB.prepare(
+            "DELETE FROM media_collection_items WHERE media_id = ? AND media_type = 'thumbnail'"
+          ).bind(id).run();
+        } catch (joinErr) {
+          console.warn("DELETE /thumbnails: join-table cleanup failed (continuing):", joinErr?.message || joinErr);
+        }
+
         await env.DB.prepare("DELETE FROM inventory_thumbnails WHERE id = ?").bind(id).run();
-        return json({ ok: true }, 200, cors);
-      } catch (e) { return json({ error: e.message }, 500, cors); }
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /thumbnails failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Delete failed" }, e?.status || 500, cors);
+      }
     }
 
     /* ------------------------------- config ------------------------------- */

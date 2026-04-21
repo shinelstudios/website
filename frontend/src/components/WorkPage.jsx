@@ -36,6 +36,7 @@ import LiveStatsCaseStudy from "./LiveStatsCaseStudy";
 import WorkSection from "./WorkSection";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
+import { resolveMediaUrl } from "../utils/formatters";
 import {
   Section,
   Kicker,
@@ -98,7 +99,8 @@ function normalizeWork(item, type) {
       ? ytId
         ? `https://img.youtube.com/vi/${ytId}/${useMq ? "mqdefault" : "hqdefault"}.jpg`
         : "https://placehold.co/600x400/202020/white?text=No+Preview"
-      : item.image_url || item.imageUrl || item.image || item.thumb,
+      // Absolute-ify /api/media/view/* paths so they hit the worker, not Pages.
+      : resolveMediaUrl(item.image_url || item.imageUrl || item.image || item.thumb, AUTH_BASE),
     link: isVideo ? "/video-editing" : "/thumbnails",
     kind: isVideo ? "video" : "gfx",
     isShinel: item.is_shinel !== 0 && item.isShinel !== false,

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { LogOut, ChevronDown, ChevronUp, RefreshCcw, Timer } from "lucide-react";
 
 import { AUTH_BASE } from "../config/constants";
-import { getAccessToken } from "../utils/tokenStore";
+import { getAccessToken, setAccessToken, refreshOnce } from "../utils/tokenStore";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -58,33 +58,30 @@ export default function AIStudioPage() {
     window.location.href = "/"; // go Home
   };
 
-  // Manual token refresh
+  // Manual token refresh.
+  // Reads the refresh token from the httpOnly ss_refresh cookie via the
+  // shared refreshOnce() singleton in tokenStore. The old implementation
+  // read from localStorage.getItem("refresh") which never had a value after
+  // we migrated refresh tokens to httpOnly cookies — so every click fired
+  // a "No refresh token available" alert. Silent non-modal banner now.
   async function refreshNow() {
+    setRefreshing(true);
     try {
-      setRefreshing(true);
-      const refresh = localStorage.getItem("refresh") || "";
-      if (!refresh) throw new Error("No refresh token available");
-
-      const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${refresh}` },
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Refresh failed");
-
-      localStorage.setItem("token", data.token);
-      if (data.refresh) localStorage.setItem("refresh", data.refresh);
-      if (data.role) localStorage.setItem("role", data.role);
-
-      // Update local state immediately
-      setToken(data.token);
-      setPayload(parseJwt(data.token));
-
+      const newToken = await refreshOnce(AUTH_BASE);
+      if (!newToken) {
+        // Cookie missing / expired — send them to /login.
+        try {
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/login?next=${next}`;
+        } catch { window.location.href = "/login"; }
+        return;
+      }
+      setAccessToken(newToken);
+      setToken(newToken);
+      setPayload(parseJwt(newToken));
       window.dispatchEvent(new Event("auth:changed"));
-      alert("Session refreshed ✅");
     } catch (e) {
-      alert(e.message || "Could not refresh");
+      console.error("AIStudioPage refreshNow failed:", e);
     } finally {
       setRefreshing(false);
     }
