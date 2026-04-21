@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AUTH_BASE } from "../../config/constants";
-import { getAccessToken } from "../../utils/tokenStore";
+import { getAccessToken, authedFetch } from "../../utils/tokenStore";
 
 // Management Imports
 import { createVideoStorage } from "../cloudflare-video-storage";
@@ -213,13 +213,12 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Loading media library...");
         try {
-            const res = await fetch(`${AUTH_BASE}/api/media/library?search=${encodeURIComponent(search)}`, {
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/api/media/library?search=${encodeURIComponent(search)}`);
+            if (!res.ok) throw new Error(`Media library (${res.status})`);
             const data = await res.json();
             setMediaItems(data.items || []);
-        } catch (e) { 
-            console.error(e); 
+        } catch (e) {
+            console.error(e);
             toast("error", "Failed to load media library");
         } finally {
             setBusy(false);
@@ -253,9 +252,8 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Aggregating metrics...");
         try {
-            const res = await fetch(`${AUTH_BASE}/stats`, {
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/stats`);
+            if (!res.ok) throw new Error(`Stats (${res.status})`);
             const data = await res.json();
             if (data.ok) {
                 setStats({
@@ -269,7 +267,7 @@ export default function MediaHub() {
                     recentGrowth: [] // Dashboard can expand this later
                 });
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); toast("error", "Failed to load stats"); }
         finally { setBusy(false); setBusyLabel(""); }
     }, []);
 
@@ -277,12 +275,11 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Loading collections...");
         try {
-            const res = await fetch(`${AUTH_BASE}/api/collections`, {
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/api/collections`);
+            if (!res.ok) throw new Error(`Collections (${res.status})`);
             const data = await res.json();
             setCollections(data.collections || []);
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); toast("error", "Failed to load collections"); }
         finally { setBusy(false); setBusyLabel(""); }
     }, []);
 
@@ -312,10 +309,8 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Deleting from R2...");
         try {
-            const res = await fetch(`${AUTH_BASE}/api/media/delete/${id}`, {
-                method: "DELETE",
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/api/media/delete/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error(`Delete failed (${res.status})`);
             const data = await res.json();
             if (data.ok) {
                 toast("success", "Item deleted");
@@ -368,11 +363,11 @@ export default function MediaHub() {
         try {
             const formData = new FormData();
             formData.append("file", file);
-            const res = await fetch(`${AUTH_BASE}/api/media/upload`, {
+            const res = await authedFetch(AUTH_BASE, `/api/media/upload`, {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${getAccessToken()}` },
                 body: formData
             });
+            if (!res.ok) throw new Error(`Upload failed (${res.status})`);
             const data = await res.json();
             if (data.ok) {
                 setThumbForm(f => ({ ...f, imageUrl: data.url }));
@@ -390,10 +385,8 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Refreshing all metrics...");
         try {
-            const res = await fetch(`${AUTH_BASE}/api/media/refresh-metrics`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/api/media/refresh-metrics`, { method: "POST" });
+            if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
             const data = await res.json();
             if (data.ok) {
                 toast("success", `Updated ${data.updated} records`);
@@ -418,11 +411,12 @@ export default function MediaHub() {
             const lines = urlToArchive.split("\n").map(l => l.trim()).filter(Boolean);
             if (lines.length > 1) {
                 // Batch mode
-                const res = await fetch(`${AUTH_BASE}/api/media/bulk-archive`, {
+                const res = await authedFetch(AUTH_BASE, `/api/media/bulk-archive`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ urls: lines, category: "BATCH" })
                 });
+                if (!res.ok) throw new Error(`Bulk archive failed (${res.status})`);
                 const data = await res.json();
                 if (data.ok) {
                     const success = data.results.filter(r => r.ok).length;
@@ -432,11 +426,12 @@ export default function MediaHub() {
                 }
             } else {
                 // Single mode
-                const res = await fetch(`${AUTH_BASE}/api/media/archive-external`, {
+                const res = await authedFetch(AUTH_BASE, `/api/media/archive-external`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getAccessToken()}` },
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: urlToArchive })
                 });
+                if (!res.ok) throw new Error(`Archive failed (${res.status})`);
                 if ((await res.json()).ok) {
                     setUrlToArchive("");
                     toast("success", "Media archived to R2 successfully!");
@@ -451,9 +446,7 @@ export default function MediaHub() {
         setBusy(true);
         setBusyLabel("Generating backup...");
         try {
-            const res = await fetch(`${AUTH_BASE}/admin/db-export`, {
-                headers: { "Authorization": `Bearer ${getAccessToken()}` }
-            });
+            const res = await authedFetch(AUTH_BASE, `/admin/db-export`);
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();
             const url = window.URL.createObjectURL(blob);

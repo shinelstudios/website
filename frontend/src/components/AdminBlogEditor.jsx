@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Save, Eye, ArrowLeft, Image as ImageIcon, Calendar, FileText, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { AUTH_BASE } from "../config/constants"; // Ensure correct import path
-import { getAccessToken } from "../utils/tokenStore";
+import { authedFetch } from "../utils/tokenStore";
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 
 function toast(type, msg) {
@@ -19,7 +19,6 @@ export default function AdminBlogEditor() {
     const [loading, setLoading] = useState(!isNew);
     const [busy, setBusy] = useState(false);
     const [activeTab, setActiveTab] = useState("edit"); // edit | preview
-    const [token] = useState(getAccessToken());
 
     const [form, setForm] = useState({
         title: "",
@@ -45,10 +44,8 @@ export default function AdminBlogEditor() {
     const loadPost = async () => {
         try {
             // Ensure we hit the API, not the hybrid lib (we want raw data)
-            const res = await fetch(`${AUTH_BASE}/blog/posts/${slug}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const res = await authedFetch(AUTH_BASE, `/blog/posts/${slug}`);
+            const data = await res.json().catch(() => ({}));
             if (res.ok && data.post) {
                 setForm({
                     ...data.post,
@@ -93,16 +90,13 @@ export default function AdminBlogEditor() {
                 tags: form.tags.split(",").map(t => t.trim()).filter(Boolean)
             };
 
-            const res = await fetch(`${AUTH_BASE}/blog/posts`, {
+            const res = await authedFetch(AUTH_BASE, `/blog/posts`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 toast("success", "Post saved successfully");
                 if (isNew) {

@@ -285,9 +285,32 @@ async function getJsonList(env, key) {
   return Array.isArray(raw) ? raw : [];
 }
 
+// Hard cap on a single KV value (KV limit is 25MB; we stay well under so a
+// single bad write can't wedge a hot key). If a caller accidentally blows this,
+// we refuse the write with a clear error rather than silently truncating.
+const KV_VALUE_SOFT_LIMIT_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// Guarded JSON put — use for any KV write where the payload grows over time
+// (client lists, stats arrays, pulse snapshots). Single bad write won't wedge
+// the hot key; instead we throw so the caller surfaces 507 to the client.
+async function putJsonGuarded(ns, key, value) {
+  const serialized = JSON.stringify(value);
+  if (serialized.length > KV_VALUE_SOFT_LIMIT_BYTES) {
+    console.error(
+      `KV write refused: ${key} serialized to ${serialized.length} bytes ` +
+      `(over ${KV_VALUE_SOFT_LIMIT_BYTES}). Size of value: ${Array.isArray(value) ? value.length + " items" : typeof value}.`
+    );
+    throw Object.assign(
+      new Error(`KV value too large for ${key} (${serialized.length} bytes). Cap entries or paginate.`),
+      { status: 507 }
+    );
+  }
+  await ns.put(key, serialized);
+}
+
 async function putJsonList(env, key, list) {
   const ns = resolveKV(env, key);
-  await ns.put(key, JSON.stringify(list));
+  await putJsonGuarded(ns, key, list);
 }
 
 // D1 Helper: Get all clients
@@ -1006,26 +1029,26 @@ async function performClientSync(env, isForced = false, debug = false) {
   }
 
   if (registryMutated) {
-    await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(clients));
+    await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:registry", clients);
   }
 
-  await env.SHINEL_AUDIT.put("app:clients:stats", JSON.stringify(allStats));
-  await env.SHINEL_AUDIT.put("app:clients:stats:backup", JSON.stringify(allStats));
+  await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:stats", allStats);
+  await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:stats:backup", allStats);
 
   const historicalRaw = await env.SHINEL_AUDIT.get("app:clients:stats:historical", "json") || {};
   const historical = (typeof historicalRaw === 'object' && historicalRaw !== null) ? historicalRaw : {};
   allStats.forEach(s => {
     if (s.internalId) historical[s.internalId] = { ...s, _last_seen: now };
   });
-  await env.SHINEL_AUDIT.put("app:clients:stats:historical", JSON.stringify(historical));
+  await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:stats:historical", historical);
 
-  await env.SHINEL_AUDIT.put("app:clients:pulse", JSON.stringify({
+  await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:pulse", {
     activities: pulseActivities,
     meta: channelMeta,
     ts: now,
     quotaExceeded: (await getYoutubeKey(env)) === null
-  }));
-  await env.SHINEL_AUDIT.put("app:clients:sync_errors", JSON.stringify({ errors, ts: now }));
+  });
+  await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:sync_errors", { errors, ts: now });
   await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
   // Clear the in-progress lock established at the top of this function.
   await env.SHINEL_AUDIT.put(syncStateKey, JSON.stringify({ status: "idle", finishedAt: now }), { expirationTtl: 24 * 3600 });
@@ -1153,7 +1176,21 @@ export default {
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
 
-        const body = await request.clone().json();
+        // Per-IP rate limit — creator tool is public-facing but we don't want
+        // the worker URL abused as an open proxy against the backend quota.
+        // 10 calls / 15 min is plenty for genuine tool use.
+        if (await isRateLimited(env, ip, 900, 10, "captions")) {
+          return json({ error: "Too many requests. Try again in a few minutes." }, 429, cors);
+        }
+
+        const body = await request.clone().json().catch((e) => {
+          console.warn("POST /api/youtube-captions: bad json body:", e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") {
+          return json({ error: "Invalid body" }, 400, cors);
+        }
+
         const headers = { "Content-Type": "application/json" };
         if (env.CAPTIONS_SHARED_SECRET) {
           headers["X-Shinel-Captions-Secret"] = env.CAPTIONS_SHARED_SECRET;
@@ -1183,7 +1220,7 @@ export default {
           return json({ error: "Too many attempts. Try again later." }, 429, cors);
         }
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
 
@@ -1411,7 +1448,7 @@ export default {
         await requireAdminOrThrow(request, secret);
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 64 * 1024) return json({ error: "Payload too large" }, 413, cors);
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         await env.SHINEL_AUDIT.put("app:config:global", JSON.stringify(updates));
         return json({ ok: true, config: updates }, 200, cors);
       } catch (e) {
@@ -1593,7 +1630,7 @@ export default {
 
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 16 * 1024) return json({ error: "Payload too large" }, 413, cors);
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
 
         // Strict allowlist — never accept role, email, passwordHash, slug from self-edit.
         const allowed = [
@@ -1654,7 +1691,7 @@ export default {
         const email = String(payload.email || "").trim().toLowerCase();
         if (!email) throw Object.assign(new Error("No email in token"), { status: 401 });
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const type = String(body.type || "").toLowerCase();
         const id = String(body.id || "").trim();
         const visible = !!body.visible;
@@ -1760,7 +1797,7 @@ export default {
     if (url.pathname === "/clients" && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const now = Date.now();
         const id = crypto.randomUUID();
         const list = await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
@@ -1781,7 +1818,7 @@ export default {
         };
 
         list.push(row);
-        await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:registry", list);
 
         // ALSO D1
         if (env.DB) {
@@ -1803,7 +1840,7 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
 
         const list = await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
         const idx = list.findIndex((c) => c.id === id);
@@ -1813,7 +1850,7 @@ export default {
         const merged = { ...list[idx], ...updates, lastUpdated: now };
         list[idx] = merged;
 
-        await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:registry", list);
 
         // ALSO D1
         if (env.DB) {
@@ -1840,7 +1877,7 @@ export default {
         const idx = list.findIndex((c) => c.id === id);
         if (idx >= 0) {
           list.splice(idx, 1);
-          await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+          await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:registry", list);
         }
 
         // ALSO D1 (Primary Registry)
@@ -1860,14 +1897,20 @@ export default {
     if (url.pathname === "/clients/bulk" && request.method === "DELETE") {
       try {
         await requireTeamOrThrow(request, secret);
-        const body = await request.json().catch(() => ({}));
-        const ids = Array.isArray(body.ids) ? body.ids : [];
+        const body = await request.json().catch((e) => {
+          console.warn("DELETE /clients/bulk: bad json body:", e?.message || e);
+          return {};
+        });
+        // Filter to non-empty strings and cap at 200 per call — rejects non-string
+        // ids that would otherwise bind as NULL and could collide across rows.
+        const rawIds = Array.isArray(body?.ids) ? body.ids : [];
+        const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
 
-        if (!ids.length) return json({ error: "No IDs provided" }, 400, cors);
+        if (!ids.length) return json({ error: "ids array required (non-empty strings)" }, 400, cors);
 
         let list = await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
         list = list.filter(c => !ids.includes(c.id));
-        await env.SHINEL_AUDIT.put("app:clients:registry", JSON.stringify(list));
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:clients:registry", list);
 
         // ALSO D1 (Primary Registry)
         if (env.DB && ids.length > 0) {
@@ -2043,7 +2086,7 @@ export default {
         const callerIsAdmin = roleIncludesAdmin(callerPayload.role);
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const email = String(body.email || "").trim().toLowerCase();
         const password = String(body.password || "");
 
@@ -2089,7 +2132,7 @@ export default {
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
         const email = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
 
         const raw = await env.SHINEL_USERS.get(`user:${email}`);
         let user = raw ? JSON.parse(raw) : null;
@@ -2265,7 +2308,7 @@ export default {
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 32 * 1024) return json({ error: "Payload too large" }, 413, cors);
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const id = `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
         const videoId = ytIdFrom(body.primaryUrl || "") || "";
@@ -2369,7 +2412,7 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         
         const fields = [];
         const params = [];
@@ -2412,7 +2455,7 @@ export default {
         await requireTeamOrThrow(request, secret, env);
         if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const rawIds = Array.isArray(body?.ids) ? body.ids : [];
         // Cap per call to stay inside worker CPU + D1 plan limits.
         const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
@@ -2496,7 +2539,7 @@ export default {
           return json({ error: "Too many submissions, please try again later" }, 429, cors);
         }
         // 3. Honeypot rejection (matches QuickLeadForm's hidden "website" field).
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         if (body && typeof body.website === "string" && body.website.trim()) {
           // Silent success to confuse bots.
           return json({ ok: true, id: "lead-hp" }, 200, cors);
@@ -2553,7 +2596,7 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
 
         const list = await getJsonList(env, KV_LEADS_KEY);
         const idx = list.findIndex((l) => l.id === id);
@@ -2574,9 +2617,13 @@ export default {
     if (url.pathname === "/leads/bulk" && request.method === "DELETE") {
       try {
         await requireTeamOrThrow(request, secret);
-        const body = await request.json().catch(() => ({}));
-        const ids = Array.isArray(body.ids) ? body.ids : [];
-        if (!ids.length) return json({ ok: true, deleted: 0 }, 200, cors);
+        const body = await request.json().catch((e) => {
+          console.warn("DELETE /leads/bulk: bad json body:", e?.message || e);
+          return {};
+        });
+        const rawIds = Array.isArray(body?.ids) ? body.ids : [];
+        const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
+        if (!ids.length) return json({ error: "ids array required (non-empty strings)" }, 400, cors);
 
         const list = await getJsonList(env, KV_LEADS_KEY);
         const initialLen = list.length;
@@ -2746,7 +2793,7 @@ export default {
         if (!token) return json({ error: "Missing token" }, 401, cors);
         const payload = await verifyJWT(token, secret); // Verify signature only
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const webhookUrl = env.DISCORD_WEBHOOK_URL || "";
 
         if (!webhookUrl) {
@@ -2796,7 +2843,7 @@ export default {
     if (url.pathname === "/thumbnails/fetch-youtube" && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const videoUrl = String(body.url || body.youtubeUrl || "").trim();
         if (!videoUrl) return json({ error: "Missing URL" }, 400, cors);
 
@@ -2854,7 +2901,7 @@ export default {
         await requireTeamOrThrow(request, secret, env);
         if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const id = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const videoId = ytIdFrom(body.youtubeUrl || "") || "";
 
@@ -2901,7 +2948,7 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
-        const updates = await request.json().catch(() => ({}));
+        const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
 
         const fields = [];
         const params = [];
@@ -2934,7 +2981,7 @@ export default {
         await requireTeamOrThrow(request, secret, env);
         if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
 
-        const body = await request.json().catch(() => ({}));
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const rawIds = Array.isArray(body?.ids) ? body.ids : [];
         const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
         if (ids.length === 0) return json({ error: "ids array required" }, 400, cors);
@@ -3569,7 +3616,7 @@ export default {
     if (url.pathname === "/api/collections" && request.method === "POST") {
       try {
         const user = await requireTeamOrThrow(request, secret);
-        const { name, description } = await request.json().catch(() => ({}));
+        const { name, description } = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         if (!name) return json({ error: "Name required" }, 400, cors);
 
         const id = crypto.randomUUID();
@@ -3585,7 +3632,7 @@ export default {
       try {
         await requireTeamOrThrow(request, secret);
         const collectionId = url.pathname.split("/")[3];
-        const { mediaId, mediaType } = await request.json().catch(() => ({}));
+        const { mediaId, mediaType } = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         if (!mediaId || !mediaType) return json({ error: "mediaId and mediaType required" }, 400, cors);
 
         await env.DB.prepare(

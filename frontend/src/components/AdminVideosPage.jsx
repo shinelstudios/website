@@ -25,7 +25,7 @@ import VideoForm from "./VideoForm";
 import VideoFilters from "./VideoFilters";
 
 import { AUTH_BASE } from "../config/constants";
-import { getAccessToken } from "../utils/tokenStore";
+import { getAccessToken, authedFetch } from "../utils/tokenStore";
 
 const DEFAULT_FORM = {
   title: "",
@@ -240,9 +240,7 @@ export default function AdminVideosPage() {
     setBusy(true);
     setBusyLabel("Generating backup...");
     try {
-      const res = await fetch(`${AUTH_BASE}/admin/db-export`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const res = await authedFetch(AUTH_BASE, `/admin/db-export`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);

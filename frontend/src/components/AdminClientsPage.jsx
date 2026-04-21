@@ -26,7 +26,7 @@ import { Input, SelectWithPresets, LoadingOverlay } from "./AdminUIComponents";
 import Skeleton from "./Skeleton";
 import Sparkline from "./Sparkline";
 import { AUTH_BASE } from "../config/constants";
-import { getAccessToken } from "../utils/tokenStore";
+import { getAccessToken, authedFetch } from "../utils/tokenStore";
 
 export default function AdminClientsPage() {
     const { refreshStats, refreshSync, getProxiedImage } = useClientStats();
@@ -74,15 +74,16 @@ export default function AdminClientsPage() {
         } catch { return null; }
     }, [token]);
 
-    const rawRole = (payload?.role || localStorage.getItem("role") || "client").toLowerCase();
+    // Role + firstName come from the JWT payload. Older builds fell back to
+    // localStorage; the access token is now the single source of truth.
+    const rawRole = (payload?.role || "client").toLowerCase();
     const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
     const isAdmin = userRoles.includes("admin");
-    const firstName = payload?.firstName || localStorage.getItem("firstName") || "Team";
+    const firstName = payload?.firstName || "Team";
 
-    const authHeaders = useMemo(() => ({
-        "Content-Type": "application/json",
-        authorization: `Bearer ${token}`
-    }), [token]);
+    // authedFetch attaches the current access token per-request and retries
+    // once on 401 via refreshOnce. No manual Bearer header anywhere below.
+    const jsonHeaders = useMemo(() => ({ "Content-Type": "application/json" }), []);
 
     useEffect(() => {
         const onAuth = () => {
@@ -99,10 +100,12 @@ export default function AdminClientsPage() {
         setBusy(true);
         setErr("");
         try {
-            const [clientData, errors] = await Promise.all([
-                fetch(`${AUTH_BASE}/clients`, { headers: authHeaders }).then(r => r.json()),
+            const [res, errors] = await Promise.all([
+                authedFetch(AUTH_BASE, `/clients`),
                 fetchSyncErrors()
             ]);
+            if (!res.ok) throw new Error(`Clients (${res.status})`);
+            const clientData = await res.json().catch(() => ({}));
             setClients(clientData.clients || []);
             setSyncErrors(errors || []);
         } catch (e) {
@@ -110,7 +113,7 @@ export default function AdminClientsPage() {
         } finally {
             setBusy(false);
         }
-    }, [authHeaders, fetchSyncErrors]);
+    }, [fetchSyncErrors]);
 
     useEffect(() => {
         loadClients();
@@ -134,12 +137,12 @@ export default function AdminClientsPage() {
         setBusy(true);
         setErr("");
         try {
-            const res = await fetch(`${AUTH_BASE}/clients`, {
+            const res = await authedFetch(AUTH_BASE, `/clients`, {
                 method: "POST",
-                headers: authHeaders,
+                headers: jsonHeaders,
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data?.error || "Failed to create client");
             await loadClients();
             await refreshSync(true); // Bypass cooldown for manual add
@@ -155,9 +158,8 @@ export default function AdminClientsPage() {
         if (!confirm(`Remove ${name} from Pulse?`)) return;
         setBusy(true);
         try {
-            const res = await fetch(`${AUTH_BASE}/clients/${encodeURIComponent(id)}`, {
-                method: "DELETE",
-                headers: authHeaders
+            const res = await authedFetch(AUTH_BASE, `/clients/${encodeURIComponent(id)}`, {
+                method: "DELETE"
             });
             if (!res.ok) throw new Error("Delete failed");
             await loadClients();
@@ -175,12 +177,12 @@ export default function AdminClientsPage() {
         if (!confirm(`Remove ${selectedIds.length} creators from Pulse?`)) return;
         setBusy(true);
         try {
-            const res = await fetch(`${AUTH_BASE}/clients/bulk`, {
+            const res = await authedFetch(AUTH_BASE, `/clients/bulk`, {
                 method: "DELETE",
-                headers: authHeaders,
+                headers: jsonHeaders,
                 body: JSON.stringify({ ids: selectedIds })
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data?.error || "Bulk delete failed");
             await loadClients();
             await refreshSync(true); // Bypass cooldown for manual bulk delete
@@ -292,12 +294,12 @@ export default function AdminClientsPage() {
         setBusy(true);
         setErr("");
         try {
-            const res = await fetch(`${AUTH_BASE}/clients/${encodeURIComponent(editingId)}`, {
+            const res = await authedFetch(AUTH_BASE, `/clients/${encodeURIComponent(editingId)}`, {
                 method: "PUT",
-                headers: authHeaders,
+                headers: jsonHeaders,
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data?.error || "Update failed");
             setEditingId(null);
             await loadClients();

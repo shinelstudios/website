@@ -33,7 +33,7 @@ import {
 import { motion } from "framer-motion";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
-import { getAccessToken } from "../utils/tokenStore";
+import { getAccessToken, authedFetch } from "../utils/tokenStore";
 
 // Platform icon mapping
 const PLATFORM_ICONS = {
@@ -86,12 +86,10 @@ export default function AdminSettingsPage() {
     const fetchYtHealth = async () => {
         setYtLoading(true);
         try {
-            const token = getAccessToken();
-            const res = await fetch(`${AUTH_BASE}/admin/yt-quota`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) setYtKeys(data.keys || []);
+            const res = await authedFetch(AUTH_BASE, `/admin/yt-quota`);
+            if (!res.ok) throw new Error(`YT health (${res.status})`);
+            const data = await res.json().catch(() => ({}));
+            setYtKeys(data.keys || []);
         } catch (err) {
             console.error("Failed to fetch YT health:", err);
         } finally {
