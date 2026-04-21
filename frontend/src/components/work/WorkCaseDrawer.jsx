@@ -20,20 +20,8 @@
  */
 import React, { useCallback, useEffect, useRef } from "react";
 import { X, Play, ExternalLink, UserCircle2, Eye } from "lucide-react";
-
-function extractYouTubeId(url = "") {
-  if (!url) return "";
-  try {
-    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const m = u.pathname.match(/\/(?:shorts|live|embed)\/([^/?]+)/);
-      if (m) return m[1];
-    }
-  } catch { /* ignore */ }
-  return "";
-}
+import { extractYouTubeId } from "../../utils/youtube";
+import { formatCompactNumber as formatViews } from "../../utils/formatters";
 
 export default function WorkCaseDrawer({ item, open, onClose }) {
   const closeBtnRef = useRef(null);
@@ -234,10 +222,4 @@ function StatTile({ icon: Icon, label, value }) {
   );
 }
 
-function formatViews(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v) || v <= 0) return "0";
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
-  return String(v);
-}
+// formatViews uses the shared formatCompactNumber (utils/formatters.js).

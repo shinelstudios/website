@@ -36,18 +36,7 @@ export const validateAttribution = (input = "") => {
     return "Must be a valid email (editor@shinel.in) or handle (@editor)";
 };
 
-// Helper to auto-preview YouTube
-export const extractYouTubeId = (url) => {
-    if (!url) return null;
-    try {
-        const u = new URL(url);
-        if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-        if (u.hostname.includes("youtube.com")) {
-            const v = u.searchParams.get("v");
-            if (v) return v;
-            const m = u.pathname.match(/\/shorts\/([^/]+)/);
-            if (m) return m[1];
-        }
-    } catch { }
-    return null;
-};
+// Canonical extractYouTubeId now lives in utils/youtube.js. Re-exported here
+// so existing `import { extractYouTubeId } from ".../constants"` keeps working.
+// Note: the new implementation returns "" instead of null when no id is found.
+export { extractYouTubeId } from "./youtube";

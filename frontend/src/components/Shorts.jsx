@@ -26,6 +26,8 @@ import { Kicker, Display, Lede, RevealOnScroll } from "../design";
  */
 
 import { AUTH_BASE } from "../config/constants";
+import { extractYouTubeId } from "../utils/youtube";
+import { formatViewsLocale as formatViews } from "../utils/formatters";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 // LocalStorage cache key for this page
@@ -33,10 +35,7 @@ const STORAGE_KEY = "shortsCacheV4";
 
 /* ---------------- Helpers ---------------- */
 
-function formatViews(count) {
-  if (!count || count === 0) return null;
-  return Number(count).toLocaleString();
-}
+// formatViews moved to utils/formatters.js as formatViewsLocale.
 
 async function fetchJSONWithETag(
   url,
@@ -110,19 +109,7 @@ const canAnimate =
   !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 
-function extractYouTubeId(url = "") {
-  if (!url) return null;
-  try {
-    const u = new URL(url.startsWith("http") ? url : `https:${url}`);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const m = u.pathname.match(/\/shorts\/([^/]+)/);
-      if (m) return m[1];
-    }
-  } catch { }
-  return null;
-}
+// Canonical extractYouTubeId lives in utils/youtube.js (imported above).
 
 const SkeletonCard = () => (
   <div className="rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--surface-alt)] animate-pulse">

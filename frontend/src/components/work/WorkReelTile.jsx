@@ -19,6 +19,7 @@
  */
 import React, { useState } from "react";
 import { Play, ArrowUpRight } from "lucide-react";
+import { formatCompactNumber as formatViews } from "../../utils/formatters";
 
 const PLACEHOLDER = "https://placehold.co/600x338/0A0A0A/E85002?text=Shinel+Studios";
 
@@ -126,10 +127,4 @@ export default function WorkReelTile({ item, onOpen, index = 0 }) {
   );
 }
 
-function formatViews(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v) || v <= 0) return "0";
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
-  return String(v);
-}
+// formatViews uses the shared formatCompactNumber (utils/formatters.js).

@@ -48,6 +48,16 @@ export function formatCompactNumber(value) {
 }
 
 /**
+ * formatViewsLocale — full view count with locale-aware separators.
+ * Returns null (not "0") when the count is falsy so callers can skip
+ * rendering the chip entirely. Use formatCompactNumber for "2.4M" style.
+ */
+export function formatViewsLocale(count) {
+  if (!count || Number(count) === 0) return null;
+  return Number(count).toLocaleString();
+}
+
+/**
  * formatPercent — safe percent display. null/NaN/undefined → "—" so the UI
  * never shows a garbage value. Rounded to 1 decimal.
  */

@@ -29,6 +29,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken, authedFetch } from "../../utils/tokenStore";
+import { extractYouTubeId } from "../../utils/youtube";
+import { formatCompactNumber } from "../../utils/formatters";
 
 // Management Imports
 import { createVideoStorage } from "../cloudflare-video-storage";
@@ -41,12 +43,10 @@ import ThumbnailForm from "../ThumbnailForm";
 import ThumbnailFilters from "../ThumbnailFilters";
 import { useClientStats } from "../../context/ClientStatsContext";
 
-const ytIdFrom = (url) => {
-    if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-};
+// ytIdFrom was a legacy local extractor; replaced by canonical extractYouTubeId
+// from utils/youtube.js. Keep this alias to minimise call-site churn — remove
+// on next refactor pass.
+const ytIdFrom = (url) => extractYouTubeId(url) || null;
 
 // Decode the active access token each time (cheap — parses the JWT body only).
 // Token lives in tokenStore (memory) after the migration; localStorage.getItem("token")
@@ -396,12 +396,10 @@ export default function MediaHub() {
         finally { setBusy(false); setBusyLabel(""); }
     };
 
-    const formatViews = (num) => {
-        if (!num) return "0";
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-        if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-        return num.toString();
-    };
+    // formatViews uses the shared formatCompactNumber (utils/formatters.js).
+    // Aliased here to keep call-site names unchanged while the inline duplicate
+    // is deleted.
+    const formatViews = formatCompactNumber;
 
     const handleArchive = async () => {
         if (!urlToArchive) return;

@@ -9,6 +9,8 @@ import React, {
 import { useLocation, useNavigate } from "react-router-dom";
 import { Eye } from "lucide-react";
 import { getAccessToken } from "../utils/tokenStore";
+import { extractYouTubeId } from "../utils/youtube";
+import { formatViewsLocale as formatViews } from "../utils/formatters";
 import MetaTags, { BreadcrumbSchema } from "./MetaTags";
 import { Kicker, Display, Lede, RevealOnScroll } from "../design";
 
@@ -38,10 +40,7 @@ const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 const STORAGE_KEY = "videosCacheV4";
 
 /* ---------------- Helpers (copied / extended) ---------------- */
-function formatViews(count) {
-  if (!count || count === 0) return null;
-  return Number(count).toLocaleString();
-}
+// formatViews moved to utils/formatters.js as formatViewsLocale.
 
 async function fetchJSONWithETag(
   url,
@@ -659,19 +658,7 @@ function VideoPlayerModal({ open, youtubeId, shinelUrl, title, onClose }) {
 }
 
 /* ---------------- Utilities ---------------- */
-function extractYouTubeId(url = "") {
-  if (!url) return null;
-  try {
-    const u = new URL(url.startsWith("http") ? url : `https:${url}`);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const m = u.pathname.match(/\/shorts\/([^/]+)/);
-      if (m) return m[1];
-    }
-  } catch { }
-  return null;
-}
+// Canonical extractYouTubeId lives in utils/youtube.js (imported above).
 
 
 /* ---------------- Protected Img ---------------- */

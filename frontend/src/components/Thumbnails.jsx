@@ -14,7 +14,7 @@ import { Kicker, Display, Lede, RevealOnScroll } from "../design";
  *   GET  /thumbnails   → { thumbnails: [...] } with ETag
  */
 import { AUTH_BASE } from "../config/constants";
-import { resolveMediaUrl, resolveThumbnailImage } from "../utils/formatters";
+import { resolveMediaUrl, resolveThumbnailImage, formatViewsLocale as formatViews } from "../utils/formatters";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Client cache keys ---------------- */
@@ -33,10 +33,7 @@ const FALLBACK = [
 ];
 
 /* ---------------- Helpers ---------------- */
-function formatViews(count) {
-  if (!count || count === 0) return null;
-  return Number(count).toLocaleString();
-}
+// formatViews moved to utils/formatters.js as formatViewsLocale.
 
 function getItemsPerPage(gridSize) {
   if (typeof window === "undefined") return 12;

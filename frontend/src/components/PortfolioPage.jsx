@@ -30,21 +30,8 @@ import MetaTags from "./MetaTags";
 import { AUTH_BASE } from "../config/constants";
 import { getAuth } from "../utils/auth";
 import { resolveMediaUrl } from "../utils/formatters";
+import { extractYouTubeId } from "../utils/youtube";
 import { Img, GrainOverlay } from "../design";
-
-function extractYouTubeId(url = "") {
-    if (!url) return null;
-    try {
-        const u = new URL(url.startsWith("http") ? url : `https://${url}`);
-        if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-        if (u.hostname.includes("youtube.com")) {
-            if (u.searchParams.get("v")) return u.searchParams.get("v");
-            const m = u.pathname.match(/\/shorts\/([^/]+)/);
-            if (m) return m[1];
-        }
-    } catch { }
-    return null;
-}
 
 function normalizeWork(item, type) {
     const isVideo = type === 'video';

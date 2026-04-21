@@ -37,6 +37,7 @@ import WorkSection from "./WorkSection";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
 import { AUTH_BASE } from "../config/constants";
 import { resolveMediaUrl } from "../utils/formatters";
+import { extractYouTubeId } from "../utils/youtube";
 import {
   Section,
   Kicker,
@@ -63,19 +64,7 @@ const ProofSection = React.lazy(() => import("./ProofSection"));
 const CaseStudies = React.lazy(() => import("./CaseStudies"));
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
-function extractYouTubeId(url = "") {
-  if (!url) return null;
-  try {
-    const u = new URL(url.startsWith("http") ? url : `https://${url}`);
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
-    if (u.hostname.includes("youtube.com")) {
-      if (u.searchParams.get("v")) return u.searchParams.get("v");
-      const m = u.pathname.match(/\/shorts\/([^/]+)/);
-      if (m) return m[1];
-    }
-  } catch {}
-  return null;
-}
+// Canonical extractYouTubeId lives in utils/youtube.js (imported above).
 
 function normalizeWork(item, type) {
   const isVideo = type === "video";
