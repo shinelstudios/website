@@ -2263,18 +2263,37 @@ export default {
         const body = await request.json().catch(() => ({}));
         const id = `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        const videoId = ytIdFrom(body.primaryUrl || "");
+        const videoId = ytIdFrom(body.primaryUrl || "") || "";
+
+        // Coerce every optional field to a real string; D1 rejects `undefined`
+        // binds with "Type 'undefined' not supported". Same guard as
+        // POST /thumbnails.
+        const s = (v) => (v == null ? "" : String(v));
 
         await env.DB.prepare(
           "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
-          id, body.title, body.category || "GAMING", body.subcategory || "", body.kind || "LONG",
-          body.tags || "", body.primaryUrl, body.creatorUrl, body.mirrorUrl || "", videoId,
-          Number(body.youtubeViews || 0), body.viewStatus || "unknown", body.attributedTo || "", body.isShinel ? 1 : 0
+          id,
+          s(body.title) || `video-${id}`,
+          s(body.category) || "GAMING",
+          s(body.subcategory),
+          s(body.kind) || "LONG",
+          s(body.tags),
+          s(body.primaryUrl),
+          s(body.creatorUrl),
+          s(body.mirrorUrl),
+          videoId,
+          Number(body.youtubeViews || 0),
+          s(body.viewStatus) || "unknown",
+          s(body.attributedTo),
+          body.isShinel === false ? 0 : 1
         ).run();
 
         return json({ ok: true, id }, 200, cors);
-      } catch (e) { return json({ error: e.message }, e.status || 500, cors); }
+      } catch (e) {
+        console.error("POST /videos failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Video create failed" }, e?.status || 500, cors);
+      }
     }
 
     if (url.pathname === "/api/media/migrate-kv-to-d1" && request.method === "POST") {
@@ -2751,21 +2770,43 @@ export default {
 
     if (url.pathname === "/thumbnails" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret);
+        await requireTeamOrThrow(request, secret, env);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
         const body = await request.json().catch(() => ({}));
         const id = `t-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const videoId = ytIdFrom(body.youtubeUrl || "");
+        const videoId = ytIdFrom(body.youtubeUrl || "") || "";
+
+        // D1 rejects `undefined` as a bind value ("Type 'undefined' not
+        // supported"). Coerce every optional field to a real string (empty
+        // is fine, columns are nullable TEXT) so a missing form field can't
+        // crash the insert. Previous code was erroring intermittently when
+        // admin uploaded a thumbnail without a filename.
+        const s = (v) => (v == null ? "" : String(v));
+        const filename = s(body.filename) || (videoId ? `${videoId}.jpg` : `thumb-${id}`);
 
         await env.DB.prepare(
           "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
-          id, body.filename, body.youtubeUrl, body.category || "GAMING", body.subcategory || "", 
-          body.variant || "VIDEO", body.imageUrl, videoId, Number(body.youtubeViews || 0), 
-          body.viewStatus || "unknown", body.attributedTo || "", body.isShinel ? 1 : 0
+          id,
+          filename,
+          s(body.youtubeUrl),
+          s(body.category) || "GAMING",
+          s(body.subcategory),
+          s(body.variant) || "VIDEO",
+          s(body.imageUrl),
+          videoId,
+          Number(body.youtubeViews || 0),
+          s(body.viewStatus) || "unknown",
+          s(body.attributedTo),
+          body.isShinel === false ? 0 : 1
         ).run();
 
         return json({ ok: true, id }, 200, cors);
-      } catch (e) { return json({ error: e.message }, 500, cors); }
+      } catch (e) {
+        console.error("POST /thumbnails failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Thumbnail create failed" }, e?.status || 500, cors);
+      }
     }
 
     /* ======================= /thumbnails (admin CRUD) ======================= */
