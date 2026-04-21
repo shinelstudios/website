@@ -1909,4 +1909,51 @@ img {
 .no-select {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* ===================== Redesign v2 — Cosmos backdrop =====================
+   Hero-level starfield for the home page. Every dot is a 2-4px absolutely-
+   positioned span with opacity-only twinkle. Shooting stars are thin lines
+   that transform-translate across the hero on a staggered loop. All
+   transform+opacity, GPU-composited, IntersectionObserver-gated by the
+   component. */
+
+.star-dot {
+  position: absolute;
+  display: block;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: opacity, transform;
+  animation: star-twinkle 4s ease-in-out infinite;
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.9); }
+  50%      { opacity: 1;   transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-dot { animation: none; opacity: 0.55; }
+}
+
+.shooting-star {
+  position: absolute;
+  display: block;
+  width: 110px;
+  height: 1.5px;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9), rgba(232,80,2,0.9), transparent);
+  opacity: 0;
+  transform-origin: left center;
+  /* A single streak cycle every 14s, diagonal, top-left -> bottom-right direction */
+  animation: shooting-streak 14s ease-in infinite;
+  will-change: transform, opacity;
+}
+@keyframes shooting-streak {
+  0%   { opacity: 0; transform: translate3d(-20vw, -6vh, 0) rotate(22deg); }
+  6%   { opacity: 0.9; }
+  14%  { opacity: 0; transform: translate3d(70vw, 40vh, 0) rotate(22deg); }
+  100% { opacity: 0; transform: translate3d(70vw, 40vh, 0) rotate(22deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shooting-star { display: none; }
 }

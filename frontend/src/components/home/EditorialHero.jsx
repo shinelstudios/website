@@ -1,80 +1,76 @@
 /**
- * EditorialHero — new homepage hero, redesign v2.
- * Replaces HeroSection.jsx at the top of the page.
+ * EditorialHero v2 — redesign v2 home hero.
  *
- * Design principles:
- *   - Full-viewport stage. Editorial left-aligned type. No centered shout.
- *   - Two clear CTAs: primary "Start a project" (opens Calendly via onAudit),
- *     secondary "See recent work" routes to /work.
- *   - Right rail: hairline stats card with NumberTickIn numbers sourced from
- *     GlobalConfig (falls back to sensible defaults).
- *   - ScrollAurora ambient is rendered *inside* the hero (scoped to this
- *     section) so it doesn't bleed over the whole page.
- *   - 100svh on mobile so iOS address bar doesn't cut the card off.
- *   - Motion contract: transform + opacity only; RevealOnScroll handles the
- *     entrance; no per-element JS animation.
+ * Two signature beats, both mobile-aware:
+ *   (A) Cosmos backdrop: aurora blob + sparse twinkling starfield + rare
+ *       diagonal shooting-star streaks (desktop only). Learned from the old
+ *       HeroSection's galaxy vibe, rebuilt on the new perf contract.
+ *   (B) Kinetic portfolio grid: a 3×2 bento of real thumbnails from the live
+ *       inventory. Every ~6 s a random tile "peeks" — title + category
+ *       crossfade in then fade back. Hover-peek on desktop.
  *
- * Props:
- *   onAudit — callback (source: string) that opens the Calendly iframe.
- *             Kept API-compatible with HeroSection so homepage wiring is
- *             a one-liner swap.
+ * Mobile:
+ *   - The bento grid stays visible but collapses from 3×2 to 2×2, below the
+ *     headline and CTAs. Good visual proof-of-work without dominating a
+ *     5 in phone screen.
+ *   - Shooting stars disabled; star density halved automatically via
+ *     useDeviceCapabilities.
+ *
+ * onAudit — called when the primary CTA fires. API-compatible with the old
+ * HeroSection so the homepage wiring didn't need to change.
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Play, Clock, Users, Film, Eye } from "lucide-react";
+import { ArrowUpRight, Play, Clock, Film, Eye } from "lucide-react";
 import {
   Kicker,
-  Eyebrow,
   Display,
   Lede,
-  HairlineCard,
   RevealOnScroll,
-  NumberTickIn,
-  ScrollAurora,
 } from "../../design";
-import { useGlobalConfig } from "../../context/GlobalConfigContext";
+import CosmosBackdrop from "./CosmosBackdrop";
+import KineticPortfolioGrid from "./KineticPortfolioGrid";
 
 export default function EditorialHero({ onAudit }) {
-  const { config } = useGlobalConfig();
-
-  // Live stats if config provides them, else sane editorial defaults.
-  const totalViewsMillions = Math.max(
-    100,
-    Math.round(((config?.stats?.totalReach || 100_000_000) / 1_000_000) * 10) / 10
-  );
-  const creatorsImpacted = config?.stats?.creatorsImpacted || 150;
-  const videosShipped = config?.stats?.videosShipped || 5000;
-
   const handleStart = () => {
     try { onAudit?.("hero"); } catch { /* harmless */ }
   };
 
   return (
     <section
-      className="relative overflow-hidden bg-[var(--surface)]"
-      style={{ minHeight: "92svh" }}
+      className="relative overflow-hidden"
+      style={{
+        // Deep ink backdrop so the starfield + aurora read even in light mode.
+        // Text stays white inside the hero regardless of site theme.
+        background: "#0A0A0A",
+        color: "#F5F5F5",
+        minHeight: "100svh",
+      }}
     >
-      {/* Ambient: scroll-driven aurora blob, orange glow. */}
-      <ScrollAurora intensity={0.9} />
+      {/* (A) Cosmos ambient backdrop — aurora + stars + shooting streaks. */}
+      <CosmosBackdrop />
 
       {/* Hero content */}
-      <div className="container mx-auto px-4 md:px-6 pt-28 md:pt-36 pb-20 md:pb-28 relative z-10">
-        <div className="grid md:grid-cols-[1.5fr_1fr] gap-10 md:gap-16 items-end">
+      <div className="container mx-auto px-4 md:px-6 pt-28 md:pt-36 pb-16 md:pb-24 relative z-10">
+        <div className="grid md:grid-cols-[1.3fr_1fr] gap-10 md:gap-12 items-center">
+          {/* ── Left column: typographic hero ── */}
           <div>
             <RevealOnScroll>
               <div className="flex items-center gap-3 mb-6 flex-wrap">
-                <Kicker className="!m-0">Post-production · India</Kicker>
+                <Kicker className="!m-0" style={{ color: "#F16001" }}>
+                  Post-production · India
+                </Kicker>
                 <span
                   className="inline-flex items-center gap-1.5 text-meta px-2.5 py-1 rounded-full"
                   style={{
-                    background: "var(--orange-soft)",
-                    color: "var(--orange)",
-                    border: "1px solid color-mix(in oklab, var(--orange) 25%, transparent)",
+                    background: "rgba(232,80,2,0.14)",
+                    color: "#ffb68a",
+                    border: "1px solid rgba(232,80,2,0.35)",
                   }}
                 >
                   <span
                     className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: "var(--orange)", animation: "pulse 2s ease-in-out infinite" }}
+                    style={{ background: "#E85002", animation: "pulse 2s ease-in-out infinite" }}
                     aria-hidden="true"
                   />
                   Reply inside 24 h
@@ -83,15 +79,31 @@ export default function EditorialHero({ onAudit }) {
             </RevealOnScroll>
 
             <RevealOnScroll delay="80ms">
-              <Display as="h1" size="xl" className="mb-6 md:mb-8" style={{ lineHeight: 0.95 }}>
+              <Display
+                as="h1"
+                size="xl"
+                className="mb-6 md:mb-8"
+                style={{ color: "#F5F5F5", lineHeight: 0.95 }}
+              >
                 We edit.<br />
                 We design.<br />
-                <span style={{ color: "var(--orange)" }} className="italic">Your channel grows.</span>
+                <span
+                  className="italic"
+                  style={{
+                    color: "#E85002",
+                    textShadow: "0 0 24px rgba(232,80,2,0.35)",
+                  }}
+                >
+                  Your channel grows.
+                </span>
               </Display>
             </RevealOnScroll>
 
             <RevealOnScroll delay="160ms">
-              <Lede className="mb-10 max-w-2xl">
+              <Lede
+                className="mb-8 md:mb-10 max-w-xl"
+                style={{ color: "rgba(245,245,245,0.75)" }}
+              >
                 Shinel Studios is a post-production house for creators and brands.
                 Long-form edits, scroll-stopping shorts, high-CTR thumbnails, and
                 brand systems — shipped by named makers, tuned for the numbers
@@ -101,21 +113,24 @@ export default function EditorialHero({ onAudit }) {
 
             <RevealOnScroll delay="240ms">
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleStart}
-                  className="btn-editorial"
-                >
+                <button type="button" onClick={handleStart} className="btn-editorial">
                   Start a project <ArrowUpRight size={14} />
                 </button>
-                <Link to="/work" className="btn-editorial-ghost">
+                <Link
+                  to="/work"
+                  className="btn-editorial-ghost"
+                  style={{ color: "#F5F5F5", borderColor: "rgba(255,255,255,0.28)" }}
+                >
                   <Play size={14} /> See recent work
                 </Link>
               </div>
             </RevealOnScroll>
 
             <RevealOnScroll delay="320ms">
-              <div className="mt-10 flex flex-wrap gap-6 text-meta" style={{ color: "var(--text-muted)" }}>
+              <div
+                className="mt-8 md:mt-10 flex flex-wrap gap-5 text-meta"
+                style={{ color: "rgba(245,245,245,0.55)" }}
+              >
                 <span className="inline-flex items-center gap-1.5">
                   <Clock size={12} /> Long-form in 5–10 days
                 </span>
@@ -129,68 +144,36 @@ export default function EditorialHero({ onAudit }) {
             </RevealOnScroll>
           </div>
 
-          <RevealOnScroll delay="240ms">
-            <HairlineCard className="p-6 md:p-8">
-              <Eyebrow className="mb-5">This year, in numbers</Eyebrow>
-              <div className="space-y-4">
-                <StatRow
-                  icon={Eye}
-                  label="Views delivered"
-                  value={
-                    <span className="text-mono-num">
-                      <NumberTickIn to={totalViewsMillions} suffix="M+" />
-                    </span>
-                  }
-                />
-                <StatRow
-                  icon={Users}
-                  label="Creators served"
-                  value={<NumberTickIn to={creatorsImpacted} suffix="+" />}
-                />
-                <StatRow
-                  icon={Film}
-                  label="Videos shipped"
-                  value={
-                    <span className="text-mono-num">
-                      <NumberTickIn to={videosShipped} suffix="+" formatter="compact" />
-                    </span>
-                  }
-                />
-                <StatRow icon={Clock} label="Reply time" value="< 24 h" />
+          {/* ── Right column: kinetic portfolio bento ── */}
+          <RevealOnScroll delay="160ms">
+            <div className="relative">
+              <KineticPortfolioGrid />
+              {/* Tiny caption under the bento, desktop only. Helps with WCAG
+                  context — the grid is a teaser link, not just decoration. */}
+              <div
+                className="hidden md:flex items-center justify-between mt-3 text-meta"
+                style={{ color: "rgba(245,245,245,0.5)" }}
+              >
+                <span>Live from /work</span>
+                <Link to="/work" className="inline-flex items-center gap-1 hover:text-white transition-colors">
+                  Browse all <ArrowUpRight size={12} />
+                </Link>
               </div>
-
-              <div className="hairline-t mt-6 pt-5">
-                <div className="text-meta mb-3" style={{ color: "var(--text-muted)" }}>
-                  Trusted by creators across
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {["Gaming", "Tech", "Vlog", "Podcast", "Finance"].map((cat) => (
-                    <span
-                      key={cat}
-                      className="text-meta px-2.5 py-1 rounded-full hairline"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {cat}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </HairlineCard>
+            </div>
           </RevealOnScroll>
         </div>
       </div>
-    </section>
-  );
-}
 
-function StatRow({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-baseline justify-between hairline-b pb-3 last:border-b-0 last:pb-0">
-      <span className="inline-flex items-center gap-2 text-eyebrow">
-        {Icon && <Icon size={11} style={{ color: "var(--orange)" }} />}
-        {label}
-      </span>
-      <span className="text-display-sm">{value}</span>
-    </div>
+      {/* Subtle bottom fade so the hero blends into the next section. */}
+      <div
+        aria-hidden="true"
+        className="absolute bottom-0 left-0 right-0 pointer-events-none"
+        style={{
+          height: "120px",
+          background: "linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--surface) 100%)",
+          zIndex: 2,
+        }}
+      />
+    </section>
   );
 }
