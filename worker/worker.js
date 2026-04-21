@@ -3135,21 +3135,32 @@ export default {
           .replace(/[^a-zA-Z0-9._-]/g, "_")
           .slice(-120) || fileName;
 
-        // Reject cleanly when R2 isn't bound — the old code silently skipped
-        // the R2 write, left an orphan media_library row, and the /api/media/view
-        // endpoint would then 404 forever. Worse than telling the user no.
-        if (!env.MEDIA_STORAGE) {
-          return json({
-            error: "Media storage is not configured. Ask the admin to enable R2 in the Cloudflare dashboard and bind MEDIA_STORAGE in wrangler.toml.",
-          }, 503, cors);
+        // Storage strategy: write the file bytes to the THUMBNAILS KV
+        // namespace (already bound + part of the free tier). Replaces R2
+        // — R2 wasn't activated on the account and the user chose not to
+        // enable it. KV value cap is 25MB; we already reject >10MB above,
+        // so fits comfortably. KV free tier: 1000 writes/day (= 1000 uploads/day)
+        // and 100k reads/day, well above this site's traffic.
+        //
+        // Key format:  media:<uuid>.<ext>    (media-prefixed so we can later
+        // list/GC without colliding with other THUMBNAILS entries).
+        if (!env.THUMBNAILS) {
+          return json({ error: "Storage namespace missing (THUMBNAILS KV unbound)" }, 503, cors);
         }
 
+        const kvKey = `media:${fileName}`;
         try {
-          await env.MEDIA_STORAGE.put(key, file.stream(), {
-            httpMetadata: { contentType: match.mime },
+          const bytes = await file.arrayBuffer();
+          await env.THUMBNAILS.put(kvKey, bytes, {
+            metadata: {
+              contentType: match.mime,
+              kind: match.kind,
+              originalName: safeTitle,
+              uploadedAt: Date.now(),
+            },
           });
-        } catch (r2Err) {
-          console.error("R2 upload failed:", r2Err?.stack || r2Err?.message || r2Err);
+        } catch (kvErr) {
+          console.error("KV upload failed:", kvErr?.stack || kvErr?.message || kvErr);
           return json({ error: "Storage write failed. Please try again." }, 502, cors);
         }
 
@@ -3157,11 +3168,11 @@ export default {
           try {
             await env.DB.prepare(
               "INSERT INTO media_library (id, r2_key, title, type, category, status) VALUES (?, ?, ?, ?, ?, ?)"
-            ).bind(id, key, safeTitle, match.kind, 'UPLOAD', 'pending_mirror').run();
+            ).bind(id, kvKey, safeTitle, match.kind, 'UPLOAD', 'available').run();
           } catch (e) { console.error("D1 Media Insert Error:", e.message); }
         }
 
-        return json({ ok: true, id, url: `/api/media/view/${fileName}`, key, status: "pending_mirror" }, 200, cors);
+        return json({ ok: true, id, url: `/api/media/view/${fileName}`, key: kvKey, status: "available" }, 200, cors);
       } catch (e) {
         return json({ error: e.message }, e.status || 500, cors);
       }
@@ -3170,39 +3181,34 @@ export default {
     if (url.pathname.startsWith("/api/media/view/") && request.method === "GET") {
       try {
         const fileName = url.pathname.replace("/api/media/view/", "");
-        const id = fileName.split(".")[0];
-        
-        // If it's a mirror-based archive, we might not have it in R2.
-        // The frontend should ideally use mirrorUrl directly, but we provide this for completeness
-        if (!env.MEDIA_STORAGE) {
-           console.log("R2 Storage binding 'MEDIA_STORAGE' is missing. Returning 404.");
-           return json({ error: "Storage bypass active. R2 is not bound to this worker." }, 404, cors);
+        if (!fileName || fileName.includes("/")) {
+          return json({ error: "Invalid filename" }, 400, cors);
         }
 
-        const key = `media/${fileName}`;
-        const object = await env.MEDIA_STORAGE.get(key);
-        if (!object) {
-          const archivedKey = `archived/${fileName}`;
-          const archivedObject = await env.MEDIA_STORAGE.get(archivedKey);
-          if (!archivedObject) return json({ error: "Object not found" }, 404, cors);
-          
-          const headers = new Headers(cors);
-          archivedObject.writeHttpMetadata(headers);
-          headers.set("etag", archivedObject.httpEtag);
-          headers.set("Cache-Control", "public, max-age=31536000, immutable");
-          headers.set("Access-Control-Allow-Origin", "*");
-          return new Response(archivedObject.body, { headers });
+        // KV-backed serving (see /api/media/upload). Key format media:<file>.
+        // Uses getWithMetadata so we recover the original Content-Type even
+        // though KV has no native http metadata layer like R2. Long browser
+        // cache headers keep KV read count low — CDN + browser caches absorb
+        // repeat loads.
+        if (!env.THUMBNAILS) {
+          return json({ error: "Storage namespace missing" }, 503, cors);
         }
 
+        const obj = await env.THUMBNAILS.getWithMetadata(`media:${fileName}`, "arrayBuffer");
+        if (!obj || !obj.value) {
+          return json({ error: "Object not found" }, 404, cors);
+        }
+
+        const contentType = obj.metadata?.contentType || "application/octet-stream";
         const headers = new Headers(cors);
-        object.writeHttpMetadata(headers);
-        headers.set("etag", object.httpEtag);
+        headers.set("Content-Type", contentType);
         headers.set("Cache-Control", "public, max-age=31536000, immutable");
         headers.set("Access-Control-Allow-Origin", "*");
 
-        return new Response(object.body, { headers });
+        return new Response(obj.value, { headers });
       } catch (e) {
-        return json({ error: e.message }, 500, cors);
+        console.error("GET /api/media/view failed:", e?.stack || e?.message || e);
+        return json({ error: "Fetch failed" }, 500, cors);
       }
     }
 
@@ -3332,22 +3338,33 @@ export default {
             const id = crypto.randomUUID();
             const extension = contentType?.split('/')?.pop()?.split(';')?.[0] || "bin";
             const fileName = `${id}.${extension}`;
-            const key = `archived/${fileName}`;
-            const blob = await res.blob();
+            const key = `media:${fileName}`;
 
-            await env.MEDIA_STORAGE.put(key, blob.stream(), {
-              httpMetadata: { contentType }
-            });
+            // KV-backed storage (same strategy as /api/media/upload). Skip storing
+            // if the value would exceed KV's 25MB cap — fall back to pointer-only
+            // mode where source_url stays the authoritative link.
+            const bytes = await res.arrayBuffer();
+            let stored = false;
+            if (bytes.byteLength <= 24 * 1024 * 1024 && env.THUMBNAILS) {
+              try {
+                await env.THUMBNAILS.put(key, bytes, {
+                  metadata: { contentType, kind: videoId ? 'video-thumb' : 'image', sourceUrl: targetUrl, uploadedAt: Date.now() },
+                });
+                stored = true;
+              } catch (kvErr) {
+                console.warn("bulk-archive KV write failed, storing pointer only:", kvErr?.message || kvErr);
+              }
+            }
 
             if (env.DB) {
               await env.DB.prepare(
                 "INSERT INTO media_library (id, source_url, r2_key, title, type, category, status, view_count, duration, channel_title, last_metric_update) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
               ).bind(
-                id, targetUrl, key, ytDetails.title || targetUrl.split('/').pop(), videoId ? 'video' : 'image', category || 'BULK', 'available',
+                id, targetUrl, stored ? key : null, ytDetails.title || targetUrl.split('/').pop(), videoId ? 'video' : 'image', category || 'BULK', 'available',
                 Number(ytDetails.views || 0), ytDetails.duration || null, ytDetails.channelTitle || null, videoId ? new Date().toISOString() : null
               ).run();
             }
-            results.push({ url: targetUrl, ok: true, id, archivedUrl: `/api/media/view/${fileName}` });
+            results.push({ url: targetUrl, ok: true, id, archivedUrl: stored ? `/api/media/view/${fileName}` : targetUrl });
           } catch (e) {
             results.push({ url: targetUrl, ok: false, error: e.message });
           }
@@ -3467,7 +3484,19 @@ export default {
           const { results } = await env.DB.prepare("SELECT r2_key FROM media_library WHERE id = ?").bind(id).all();
           if (results && results[0]) {
             const key = results[0].r2_key;
-            if (env.MEDIA_STORAGE) await env.MEDIA_STORAGE.delete(key);
+            // Key format: "media:<file>" (new KV strategy) or legacy "media/<file>"
+            // or "archived/<file>" from the old R2 writes. Delete from whichever
+            // store it lives in; best-effort so a missing file doesn't block the
+            // D1 row cleanup.
+            try {
+              if (key && key.startsWith("media:") && env.THUMBNAILS) {
+                await env.THUMBNAILS.delete(key);
+              } else if (env.MEDIA_STORAGE) {
+                await env.MEDIA_STORAGE.delete(key);
+              }
+            } catch (storeErr) {
+              console.warn("media delete: storage cleanup failed (continuing):", storeErr?.message || storeErr);
+            }
             await env.DB.prepare("DELETE FROM media_library WHERE id = ?").bind(id).run();
             return json({ ok: true }, 200, cors);
           }
