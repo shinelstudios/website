@@ -14,7 +14,7 @@ import { Kicker, Display, Lede, RevealOnScroll } from "../design";
  *   GET  /thumbnails   → { thumbnails: [...] } with ETag
  */
 import { AUTH_BASE } from "../config/constants";
-import { resolveMediaUrl } from "../utils/formatters";
+import { resolveMediaUrl, resolveThumbnailImage } from "../utils/formatters";
 const PUBLIC_READ_TOKEN = import.meta.env.VITE_PUBLIC_READ_TOKEN || "";
 
 /* ---------------- Client cache keys ---------------- */
@@ -906,12 +906,10 @@ export default function Thumbnails() {
 
     const normalize = (arr) =>
       (arr.length ? arr : FALLBACK).map((t, i) => {
-        const rawImg = t.image_url || t.imageUrl || t.image || t.thumb;
-        // Worker stores uploaded-thumbnail URLs as relative paths like
-        // "/api/media/view/<uuid>.webp". Those resolve against shinelstudios.in
-        // in the browser and 404 on Cloudflare Pages (the /api route only
-        // exists on the worker origin). resolveMediaUrl prepends AUTH_BASE.
-        const img = resolveMediaUrl(rawImg, AUTH_BASE);
+        // Prefer YouTube thumbnail (free, always available) when the row
+        // has a video_id; fall back to the R2-backed /api/media/view URL
+        // only when no video_id is set. resolveThumbnailImage handles both.
+        const img = resolveThumbnailImage(t, AUTH_BASE);
         return {
           id: t.id || t._id || `row-${i}`,
           filename: t.filename,

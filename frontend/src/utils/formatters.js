@@ -66,13 +66,38 @@ export function formatPercent(value) {
  * `shinelstudios.in`, a relative `/api/...` hits Cloudflare Pages (404),
  * not the worker. This helper prepends the worker origin when the URL is
  * a relative `/api/...` path. External URLs (YouTube, CDN) pass through.
- *
- * Callers: Thumbnails.jsx, WorkPage.jsx, PortfolioPage.jsx, MediaHub.jsx,
- * MyProfilePage.jsx — any surface rendering inventory_thumbnails.image_url
- * or media_library.r2_key-derived URLs.
  */
 export function resolveMediaUrl(raw, apiBase) {
   if (!raw || typeof raw !== "string") return raw;
   if (raw.startsWith("/api/") && apiBase) return `${apiBase}${raw}`;
   return raw;
+}
+
+/**
+ * resolveThumbnailImage — smart thumbnail URL picker for inventory rows.
+ *
+ * Prefers the YouTube thumbnail CDN when we have a video_id, because it's
+ * free, instant, and always available. Falls back to the R2-stored
+ * image_url only when there's no video_id (for pure graphic pieces without
+ * a companion video).
+ *
+ * This is a pragmatic workaround for the "R2 not bound" problem — the
+ * worker's /api/media/view/* endpoint 404s without the binding, so any
+ * row that relies on it appears broken. Rows with a video_id sidestep
+ * that path entirely.
+ *
+ * Known-bad YouTube ids that return placeholder thumbnails fall through
+ * to mqdefault (which is always available) instead of maxresdefault.
+ */
+const KNOWN_BAD_YT_IDS = new Set(["t-vPWTJUIO4", "R2jcaMDAvOU"]);
+
+export function resolveThumbnailImage(row, apiBase) {
+  if (!row) return "";
+  const videoId = row.video_id || row.videoId || row.youtubeId || "";
+  if (videoId && typeof videoId === "string") {
+    const quality = KNOWN_BAD_YT_IDS.has(videoId) ? "mqdefault" : "hqdefault";
+    return `https://img.youtube.com/vi/${encodeURIComponent(videoId)}/${quality}.jpg`;
+  }
+  const raw = row.image_url || row.imageUrl || row.image || row.thumb || "";
+  return resolveMediaUrl(raw, apiBase);
 }

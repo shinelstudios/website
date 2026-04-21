@@ -3135,12 +3135,22 @@ export default {
           .replace(/[^a-zA-Z0-9._-]/g, "_")
           .slice(-120) || fileName;
 
-        if (env.MEDIA_STORAGE) {
-          try {
-            await env.MEDIA_STORAGE.put(key, file.stream(), {
-              httpMetadata: { contentType: match.mime },
-            });
-          } catch (e) { console.error("R2 Upload Error:", e.message); }
+        // Reject cleanly when R2 isn't bound — the old code silently skipped
+        // the R2 write, left an orphan media_library row, and the /api/media/view
+        // endpoint would then 404 forever. Worse than telling the user no.
+        if (!env.MEDIA_STORAGE) {
+          return json({
+            error: "Media storage is not configured. Ask the admin to enable R2 in the Cloudflare dashboard and bind MEDIA_STORAGE in wrangler.toml.",
+          }, 503, cors);
+        }
+
+        try {
+          await env.MEDIA_STORAGE.put(key, file.stream(), {
+            httpMetadata: { contentType: match.mime },
+          });
+        } catch (r2Err) {
+          console.error("R2 upload failed:", r2Err?.stack || r2Err?.message || r2Err);
+          return json({ error: "Storage write failed. Please try again." }, 502, cors);
         }
 
         if (env.DB) {

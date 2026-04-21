@@ -26,8 +26,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
-import { resolveMediaUrl } from "../../utils/formatters";
-import { Img } from "../../design";
+import { resolveThumbnailImage } from "../../utils/formatters";
 
 // Bundled fallback thumbnails — real work samples already in the repo.
 import BGMI_1 from "../../assets/bgmi-thumbnail-creator1.jpg";
@@ -72,7 +71,7 @@ export default function KineticPortfolioGrid() {
           .filter((r) => (r.is_shinel ?? r.isShinel) !== false)
           .map((r) => ({
             id: r.id,
-            image: resolveMediaUrl(r.image_url || r.imageUrl, AUTH_BASE),
+            image: resolveThumbnailImage(r, AUTH_BASE),
             title: r.title || r.filename || "Shinel Studios",
             category: r.category || "WORK",
           }))
@@ -149,6 +148,13 @@ export default function KineticPortfolioGrid() {
 }
 
 function Tile({ item, peek, index }) {
+  // Swap to a bundled fallback on image error rather than showing "image
+  // unavailable". The hero grid should always look full and polished;
+  // a broken CDN or an R2-less worker shouldn't ruin the first impression.
+  const fallback = FALLBACKS[index % FALLBACKS.length].image;
+  const [src, setSrc] = useState(item.image);
+  useEffect(() => { setSrc(item.image); }, [item.image]);
+
   return (
     <Link
       to="/work"
@@ -160,12 +166,15 @@ function Tile({ item, peek, index }) {
       }}
       aria-label={item.title}
     >
-      <Img
-        src={item.image}
+      <img
+        src={src}
         alt={item.title}
-        aspect="1/1"
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+        onError={() => { if (src !== fallback) setSrc(fallback); }}
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={{ width: "100%", height: "100%", aspectRatio: "1 / 1", objectFit: "cover" }}
       />
 
       {/* Peek overlay — crossfades in when this tile is chosen by the timer,

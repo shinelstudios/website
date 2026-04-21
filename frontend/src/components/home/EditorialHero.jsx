@@ -50,8 +50,10 @@ export default function EditorialHero({ onAudit }) {
       {/* (A) Cosmos ambient backdrop — aurora + stars + shooting streaks. */}
       <CosmosBackdrop />
 
-      {/* Hero content */}
-      <div className="container mx-auto px-4 md:px-6 pt-28 md:pt-36 pb-16 md:pb-24 relative z-10">
+      {/* Hero content.
+          Top padding tuned to the header (72px fixed) + Trustbar strip.
+          Was pt-28/pt-36 which made the fold feel empty below the bar. */}
+      <div className="container mx-auto px-4 md:px-6 pt-20 md:pt-24 pb-16 md:pb-24 relative z-10">
         <div className="grid md:grid-cols-[1.3fr_1fr] gap-10 md:gap-12 items-center">
           {/* ── Left column: typographic hero ── */}
           <div>
