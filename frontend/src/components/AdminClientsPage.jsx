@@ -431,7 +431,7 @@ export default function AdminClientsPage() {
                                 placeholder="Search..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="pl-9 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-lg text-xs focus:border-orange-500/50 outline-none transition-all w-full md:w-56"
+                                className="pl-9 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-lg text-xs focus:border-orange-500/50 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all w-full md:w-56"
                             />
                         </div>
                         <button

@@ -12,7 +12,7 @@ export const Input = ({ label, value, onChange, placeholder, type = "text", erro
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border transition-all outline-none text-sm font-medium ${error ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-orange-500/50'
+            className={`w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border transition-all outline-none text-sm font-medium focus-visible:ring-2 focus-visible:ring-orange-500/60 ${error ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-orange-500/50'
                 }`}
             {...props}
         />
@@ -53,7 +53,7 @@ export const SelectWithPresets = ({ label, value, onChange, options = [], error,
             <select
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className={`w-full px-4 py-2.5 rounded-xl border transition-all outline-none text-sm font-medium appearance-none cursor-pointer pr-10 ${error
+                className={`w-full px-4 py-2.5 rounded-xl border transition-all outline-none text-sm font-medium appearance-none cursor-pointer pr-10 focus-visible:ring-2 focus-visible:ring-orange-500/60 ${error
                     ? 'border-red-500/50 focus:border-red-500'
                     : 'border-white/5 focus:border-orange-500/50'
                     }`}
@@ -89,7 +89,7 @@ export const TextArea = ({ label, value, onChange, placeholder, rows = 3, error,
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             rows={rows}
-            className={`w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border transition-all outline-none text-sm font-medium resize-none ${error ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-orange-500/50'
+            className={`w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border transition-all outline-none text-sm font-medium resize-none focus-visible:ring-2 focus-visible:ring-orange-500/60 ${error ? 'border-red-500/50 focus:border-red-500' : 'border-white/5 focus:border-orange-500/50'
                 }`}
             {...props}
         />

@@ -266,7 +266,7 @@ export default function AdminSettingsPage() {
                                                             updated[idx].platform = e.target.value;
                                                             setFormData({ ...formData, socialLinks: updated });
                                                         }}
-                                                        className="w-full px-4 py-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] focus:border-orange-500 outline-none transition-all appearance-none cursor-pointer"
+                                                        className="w-full px-4 py-3.5 bg-[var(--surface)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all appearance-none cursor-pointer"
                                                         style={{
                                                             position: 'relative',
                                                             zIndex: 50,
@@ -303,7 +303,7 @@ export default function AdminSettingsPage() {
                                                             updated[idx].label = e.target.value;
                                                             setFormData({ ...formData, socialLinks: updated });
                                                         }}
-                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all"
+                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all"
                                                     />
                                                 </div>
 
@@ -318,7 +318,7 @@ export default function AdminSettingsPage() {
                                                             updated[idx].url = e.target.value;
                                                             setFormData({ ...formData, socialLinks: updated });
                                                         }}
-                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all"
+                                                        className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all"
                                                     />
                                                 </div>
                                             </div>
@@ -551,7 +551,7 @@ export default function AdminSettingsPage() {
                                                 value={s.category}
                                                 placeholder="e.g. Gaming (BGMI - Rank Push)"
                                                 onChange={e => updateShowcase(idx, 'category', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
@@ -561,7 +561,7 @@ export default function AdminSettingsPage() {
                                                 value={s.beforeImage}
                                                 placeholder="Asset path or URL"
                                                 onChange={e => updateShowcase(idx, 'beforeImage', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
@@ -571,7 +571,7 @@ export default function AdminSettingsPage() {
                                                 value={s.afterImage}
                                                 placeholder="Asset path or URL"
                                                 onChange={e => updateShowcase(idx, 'afterImage', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="grid grid-cols-3 gap-3 md:col-span-2">
@@ -581,7 +581,7 @@ export default function AdminSettingsPage() {
                                                     type="number"
                                                     value={s.stats?.ctrIncrease}
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, ctrIncrease: Number(e.target.value) })}
-                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                             <div>
@@ -591,7 +591,7 @@ export default function AdminSettingsPage() {
                                                     value={s.stats?.viewsMultiplier}
                                                     placeholder="e.g. 3.1x"
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, viewsMultiplier: e.target.value })}
-                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                             <div>
@@ -601,7 +601,7 @@ export default function AdminSettingsPage() {
                                                     value={s.stats?.turnaroundDays}
                                                     placeholder="e.g. 2"
                                                     onChange={e => updateShowcase(idx, 'stats', { ...s.stats, turnaroundDays: e.target.value })}
-                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                    className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                                 />
                                             </div>
                                         </div>
@@ -654,7 +654,7 @@ export default function AdminSettingsPage() {
                                                 value={cs.title}
                                                 placeholder="e.g. Packaging revamp for Kamz Inkzone"
                                                 onChange={e => updateCaseStudy(idx, 'title', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="md:col-span-2">
@@ -662,7 +662,7 @@ export default function AdminSettingsPage() {
                                             <textarea
                                                 value={cs.description}
                                                 onChange={e => updateCaseStudy(idx, 'description', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1 min-h-[80px]"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1 min-h-[80px]"
                                             />
                                         </div>
                                         <div>
@@ -672,7 +672,7 @@ export default function AdminSettingsPage() {
                                                 value={cs.metric}
                                                 placeholder="+62% CTR"
                                                 onChange={e => updateCaseStudy(idx, 'metric', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
@@ -682,7 +682,7 @@ export default function AdminSettingsPage() {
                                                 value={cs.period}
                                                 placeholder="in 6 weeks"
                                                 onChange={e => updateCaseStudy(idx, 'period', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
@@ -692,7 +692,7 @@ export default function AdminSettingsPage() {
                                                 value={cs.keys?.thumb}
                                                 placeholder="e.g. creator3"
                                                 onChange={e => updateCaseStudy(idx, 'keys', { ...cs.keys, thumb: e.target.value })}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div>
@@ -702,7 +702,7 @@ export default function AdminSettingsPage() {
                                                 value={cs.category}
                                                 placeholder="Thumbnails"
                                                 onChange={e => updateCaseStudy(idx, 'category', e.target.value)}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                         <div className="md:col-span-2">
@@ -711,7 +711,7 @@ export default function AdminSettingsPage() {
                                                 type="text"
                                                 value={cs.highlights?.join(', ')}
                                                 onChange={e => updateCaseStudy(idx, 'highlights', e.target.value.split(',').map(h => h.trim()))}
-                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all mt-1"
+                                                className="w-full px-4 py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all mt-1"
                                             />
                                         </div>
                                     </div>
@@ -872,7 +872,7 @@ function StatInput({ label, value, onChange, icon: Icon, type = "number" }) {
                     type={type}
                     value={value || ""}
                     onChange={e => onChange(e.target.value)}
-                    className={`w-full ${Icon ? 'pl-10' : 'px-4'} py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 outline-none transition-all`}
+                    className={`w-full ${Icon ? 'pl-10' : 'px-4'} py-3.5 bg-[var(--input-bg)] border border-[var(--border)] rounded-2xl text-sm font-bold text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 outline-none transition-all`}
                 />
             </div>
         </div>

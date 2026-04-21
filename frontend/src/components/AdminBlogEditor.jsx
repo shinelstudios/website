@@ -245,7 +245,7 @@ export default function AdminBlogEditor() {
                             <select
                                 value={form.status}
                                 onChange={(e) => setForm({ ...form, status: e.target.value })}
-                                className="w-full px-4 py-3 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-sm font-bold text-[var(--text)] outline-none focus:border-orange-500"
+                                className="w-full px-4 py-3 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-sm font-bold text-[var(--text)] outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60"
                             >
                                 <option value="draft">Draft (Hidden)</option>
                                 <option value="published">Published (Live)</option>
@@ -270,7 +270,7 @@ export default function AdminBlogEditor() {
                                 <input
                                     value={form.coverImage}
                                     onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-                                    className="flex-grow px-3 py-2 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-sm outline-none focus:border-orange-500"
+                                    className="flex-grow px-3 py-2 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-sm outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60"
                                     placeholder="https://..."
                                 />
                             </div>
