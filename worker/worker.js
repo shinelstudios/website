@@ -1230,10 +1230,14 @@ export default {
         const access = await signAccess(payload, secret, 30); // 30m
         const refresh = await signRefresh({ ...payload, kind: "refresh" }, secret, 7); // 7d
 
+        // SameSite=None (+ Secure + HttpOnly) so the cookie rides cross-site
+        // POSTs from the frontend at shinelstudios.in to this worker at
+        // *.workers.dev. Lax silently blocked these requests; reload logged
+        // users out because /auth/refresh arrived with no cookie.
         const refreshCookie = setCookie("ss_refresh", refresh, {
           httpOnly: true,
           secure: true,
-          sameSite: "Lax",
+          sameSite: "None",
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
         });
@@ -1297,7 +1301,7 @@ export default {
         const cookie = setCookie("ss_refresh", newRefresh, {
           httpOnly: true,
           secure: true,
-          sameSite: "Lax",
+          sameSite: "None",
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
         });
@@ -1312,7 +1316,7 @@ export default {
         const clear = delCookie("ss_refresh", {
           httpOnly: true,
           secure: true,
-          sameSite: "Lax",
+          sameSite: "None",
           path: "/",
         });
         const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
@@ -1348,10 +1352,11 @@ export default {
         }
       } catch { /* best-effort: never fail logout */ }
 
+      // Must match the SameSite=None used on set for the clear to apply.
       const clear = delCookie("ss_refresh", {
         httpOnly: true,
         secure: true,
-        sameSite: "Lax",
+        sameSite: "None",
         path: "/",
       });
       const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
@@ -2399,6 +2404,42 @@ export default {
       }
     }
 
+    // DELETE /videos/bulk  — body: { ids: string[] }
+    // Must match BEFORE the single-row /videos/:id handler below (which uses
+    // `startsWith("/videos/")` and would otherwise swallow this path).
+    if (url.pathname === "/videos/bulk" && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
+        const body = await request.json().catch(() => ({}));
+        const rawIds = Array.isArray(body?.ids) ? body.ids : [];
+        // Cap per call to stay inside worker CPU + D1 plan limits.
+        const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
+        if (ids.length === 0) return json({ error: "ids array required" }, 400, cors);
+
+        const placeholders = ids.map(() => "?").join(",");
+
+        // Cascade — best-effort join-table cleanup before the main delete.
+        try {
+          await env.DB.prepare(
+            `DELETE FROM media_collection_items WHERE media_type = 'video' AND media_id IN (${placeholders})`
+          ).bind(...ids).run();
+        } catch (joinErr) {
+          console.warn("bulk video delete: join cleanup failed (continuing):", joinErr?.message || joinErr);
+        }
+
+        const res = await env.DB.prepare(
+          `DELETE FROM inventory_videos WHERE id IN (${placeholders})`
+        ).bind(...ids).run();
+
+        return json({ ok: true, deleted: res.meta?.changes ?? ids.length, ids }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /videos/bulk failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Bulk delete failed" }, e?.status || 500, cors);
+      }
+    }
+
     if (url.pathname.startsWith("/videos/") && request.method === "DELETE") {
       try {
         await requireTeamOrThrow(request, secret, env);
@@ -2569,18 +2610,55 @@ export default {
     }
 
     /* ====================== videos refresh endpoints ====================== */
-    // POST /videos/refresh/:videoId   (also aliased as /thumbnails/refresh/:videoId
-    // since the handler updates both inventory tables by video_id; frontend
-    // cloudflare-thumbnail-storage.refreshOne() hits the /thumbnails variant.)
+    // POST /videos/refresh/:id   (also /thumbnails/refresh/:id)
+    // :id accepts a YouTube 11-char video id OR an inventory row id; if it's a
+    // row id we resolve video_id from D1 before hitting YouTube. Frontend used
+    // to pass row ids here and the whole call silently fetched 0 views.
     if ((url.pathname.startsWith("/videos/refresh/") || url.pathname.startsWith("/thumbnails/refresh/")) && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
-        const videoId = decodeURIComponent(url.pathname.split("/")[3] || "");
-        if (!videoId) return json({ error: "Missing videoId" }, 400, cors);
+        const raw = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!raw) return json({ error: "Missing id" }, 400, cors);
+
+        // Standard YT video ids are exactly 11 chars, [A-Za-z0-9_-]. Anything
+        // else is probably our own row-prefixed id like "t-<ts>-<rand>" or
+        // "v-<ts>-<rand>" — resolve through D1 before calling YouTube.
+        const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+        let videoId = YT_ID_RE.test(raw) ? raw : "";
+
+        if (!videoId && env.DB) {
+          const isThumbRoute = url.pathname.startsWith("/thumbnails/");
+          const table = isThumbRoute ? "inventory_thumbnails" : "inventory_videos";
+          try {
+            const row = await env.DB.prepare(
+              `SELECT video_id FROM ${table} WHERE id = ?`
+            ).bind(raw).first();
+            videoId = row?.video_id || "";
+          } catch (lookupErr) {
+            console.warn("refresh: row-id lookup failed:", lookupErr?.message || lookupErr);
+          }
+          // Cross-check the other table if not found (frontend may call
+          // /thumbnails/refresh/<video-row-id> and vice versa).
+          if (!videoId) {
+            try {
+              const otherTable = isThumbRoute ? "inventory_videos" : "inventory_thumbnails";
+              const row = await env.DB.prepare(
+                `SELECT video_id FROM ${otherTable} WHERE id = ?`
+              ).bind(raw).first();
+              videoId = row?.video_id || "";
+            } catch { /* best-effort */ }
+          }
+        }
+
+        if (!videoId) {
+          return json({
+            error: "No YouTube video id on this row. Add a YouTube URL first.",
+          }, 400, cors);
+        }
 
         const now = new Date().toISOString();
         const views = await fetchYouTubeViews(env, videoId);
-        
+
         if (views == null) return json({ error: "Could not fetch views from YouTube" }, 502, cors);
 
         // Update in D1
@@ -2596,7 +2674,8 @@ export default {
 
         return json({ ok: true, views, videoId }, 200, cors);
       } catch (e) {
-        return json({ error: "Refresh failed: " + e.message }, 500, cors);
+        console.error("POST /*/refresh/:id failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Refresh failed" }, e?.status || 500, cors);
       }
     }
 
@@ -2845,6 +2924,39 @@ export default {
         return json({ ok: true }, 200, cors);
       } catch (e) { 
         return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors); 
+      }
+    }
+
+    // DELETE /thumbnails/bulk  — body: { ids: string[] }
+    // Matched BEFORE the single-row handler below (same prefix-routing concern).
+    if (url.pathname === "/thumbnails/bulk" && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
+        const body = await request.json().catch(() => ({}));
+        const rawIds = Array.isArray(body?.ids) ? body.ids : [];
+        const ids = [...new Set(rawIds.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 200);
+        if (ids.length === 0) return json({ error: "ids array required" }, 400, cors);
+
+        const placeholders = ids.map(() => "?").join(",");
+
+        try {
+          await env.DB.prepare(
+            `DELETE FROM media_collection_items WHERE media_type = 'thumbnail' AND media_id IN (${placeholders})`
+          ).bind(...ids).run();
+        } catch (joinErr) {
+          console.warn("bulk thumbnail delete: join cleanup failed (continuing):", joinErr?.message || joinErr);
+        }
+
+        const res = await env.DB.prepare(
+          `DELETE FROM inventory_thumbnails WHERE id IN (${placeholders})`
+        ).bind(...ids).run();
+
+        return json({ ok: true, deleted: res.meta?.changes ?? ids.length, ids }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /thumbnails/bulk failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Bulk delete failed" }, e?.status || 500, cors);
       }
     }
 

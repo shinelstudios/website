@@ -937,7 +937,9 @@ export default function MediaHub() {
                                         setEditingItem({ type: 'thumbnail', data: t });
                                     }}
                                     onDelete={() => thumbStore.delete(t.id).then(loadThumbnails)}
-                                    onRefresh={(url, id) => thumbStore.refreshOne(id).then(loadThumbnails)}
+                                    // ThumbnailCard now passes (videoId, rowId). refreshOne() hits
+                                    // /thumbnails/refresh/<videoId> which updates both inventory tables.
+                                    onRefresh={(videoId /* , rowId */) => thumbStore.refreshOne(videoId).then(loadThumbnails)}
                                     onDuplicate={(item) => thumbStore.add({ ...item, id: undefined, filename: `${item.filename} (Copy)` }).then(loadThumbnails)}
                                     onDownload={(url, filename) => {
                                         const a = document.createElement('a');

@@ -184,7 +184,22 @@ const ThumbnailCard = ({
                             {t.youtubeUrl && (
                                 <button
                                     disabled={refreshingId === t.id}
-                                    onClick={() => onRefresh(t.youtubeUrl, t.id)}
+                                    // Prefer the YouTube 11-char id so the worker doesn't need to
+                                    // reverse-lookup from the row id. If the row has neither
+                                    // videoId nor a parseable URL, block the call with a toast
+                                    // instead of sending a bogus id downstream.
+                                    onClick={() => {
+                                        const ytId = t.videoId || "";
+                                        if (!ytId) {
+                                            try {
+                                                window.dispatchEvent(new CustomEvent("notify", {
+                                                    detail: { type: "error", message: "This row has no YouTube video id yet." },
+                                                }));
+                                            } catch { /* best-effort */ }
+                                            return;
+                                        }
+                                        onRefresh(ytId, t.id);
+                                    }}
                                     className={`p-1 rounded-md hover:bg-white/5 transition-colors ${refreshingId === t.id ? 'animate-spin text-orange-500' : 'text-gray-600 hover:text-orange-500'}`}
                                 >
                                     <RefreshCw size={12} />

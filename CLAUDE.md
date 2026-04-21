@@ -198,6 +198,27 @@ cd worker && npx wrangler tail
 cd frontend && node scripts/generate-sitemap.js
 ```
 
+## Auth plumbing (read before touching any admin fetch)
+
+- **Access token** lives in memory only (`frontend/src/utils/tokenStore.js`).
+  Never write it to localStorage — XSS would exfiltrate it. Read it via
+  `getAccessToken()` per-request, not once on mount.
+- **Refresh token** lives in a cookie `ss_refresh` set by the worker with
+  `HttpOnly; Secure; SameSite=None; Path=/; Max-Age=7d`. `SameSite=None` is
+  **required** because the frontend (`shinelstudios.in`) and worker
+  (`*.workers.dev`) are cross-site. Do NOT change it back to `Lax` — that
+  silently logged users out on every reload until a fix in commit after
+  `f70024e`. All Set-Cookie and Clear-Cookie paths (login, refresh rotation,
+  refresh error, logout) must use `SameSite=None`.
+- **Admin fetches**: prefer `authedFetch(apiBase, path, init)` from
+  `tokenStore.js`. It attaches the Bearer token, retries once on 401 via the
+  `refreshOnce()` singleton, and returns the response for the caller to
+  handle. New admin code should default to this. Raw `fetch` with a stale
+  closure-captured token is how we kept ending up with "Bearer null" bugs.
+- **Bulk endpoints** take `{ ids: string[] }` in the body. Cap at 200 per
+  call on the worker side. Cascade through `media_collection_items` before
+  the main delete so orphan rows don't accumulate.
+
 ## Agent etiquette
 
 - **Never touch `/team` nav discoverability** without re-reading the

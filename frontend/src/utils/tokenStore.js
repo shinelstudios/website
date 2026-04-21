@@ -63,3 +63,44 @@ export function refreshOnce(apiBase) {
   })();
   return _pending;
 }
+
+/**
+ * authedFetch(apiBase, path, init) — authenticated fetch with one automatic
+ * refresh + retry on 401. Recommended for all admin surfaces that need a
+ * Bearer token.
+ *
+ *   const res = await authedFetch(AUTH_BASE, "/admin/users");
+ *   if (!res.ok) { ... }
+ *
+ * Behaviour:
+ *   - Attaches `Authorization: Bearer ${getAccessToken()}` to the request.
+ *   - If the response is 401, calls refreshOnce(apiBase). If refresh succeeds,
+ *     retries the request ONCE with the fresh token.
+ *   - If refresh fails (cookie missing / expired), returns the 401 so the
+ *     caller can redirect to /login or surface a banner.
+ *   - For non-401 responses (2xx, 4xx, 5xx), returns them unchanged — no magic.
+ *   - Merges headers carefully so callers can still set Content-Type, etc.
+ *
+ * New admin code should prefer this over raw fetch + manual token handling.
+ * Existing pages can migrate incrementally.
+ */
+export async function authedFetch(apiBase, path, init = {}) {
+  const url = path.startsWith("http") ? path : `${apiBase}${path}`;
+  const buildInit = () => {
+    const headers = new Headers(init.headers || {});
+    const t = getAccessToken();
+    if (t) headers.set("Authorization", `Bearer ${t}`);
+    return { ...init, headers };
+  };
+
+  let res = await fetch(url, buildInit());
+  if (res.status === 401) {
+    const fresh = await refreshOnce(apiBase);
+    if (fresh) {
+      res = await fetch(url, buildInit());
+    }
+    // If refresh returned null, fall through with the original 401 — caller
+    // decides whether to redirect or show a banner.
+  }
+  return res;
+}
