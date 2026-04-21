@@ -2569,8 +2569,10 @@ export default {
     }
 
     /* ====================== videos refresh endpoints ====================== */
-    // POST /videos/refresh/:videoId
-    if (url.pathname.startsWith("/videos/refresh/") && request.method === "POST") {
+    // POST /videos/refresh/:videoId   (also aliased as /thumbnails/refresh/:videoId
+    // since the handler updates both inventory tables by video_id; frontend
+    // cloudflare-thumbnail-storage.refreshOne() hits the /thumbnails variant.)
+    if ((url.pathname.startsWith("/videos/refresh/") || url.pathname.startsWith("/thumbnails/refresh/")) && request.method === "POST") {
       try {
         await requireTeamOrThrow(request, secret);
         const videoId = decodeURIComponent(url.pathname.split("/")[3] || "");

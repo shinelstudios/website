@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { formatBytes, timeAgo } from "../utils/helpers";
 import { AUTH_BASE } from "../config/constants";
+import { resolveThumbnailImage, resolveMediaUrl } from "../utils/formatters";
 
 const proxyImage = (src) => {
     if (!src) return null;
@@ -24,7 +25,10 @@ const proxyImage = (src) => {
     if (low.includes("ytimg.com") || low.includes("fbcdn.net") || low.includes("instagram.com") || low.includes("cdninstagram.com") || low.includes("ggpht.com") || low.includes("googleusercontent.com")) {
         return `${AUTH_BASE}/api/proxy-image?url=${encodeURIComponent(src)}`;
     }
-    return src;
+    // Absolute-ify worker-backed paths so the <img> hits the worker origin,
+    // not the Pages origin (which 404s). Matches the logic used by the
+    // public /thumbnails gallery + the hero KineticPortfolioGrid.
+    return resolveMediaUrl(src, AUTH_BASE);
 };
 
 const ThumbnailCard = ({
@@ -46,11 +50,13 @@ const ThumbnailCard = ({
 
     const isFlash = flashKey === String(t.id);
 
-    // Build proxied image URL — prioritize stored imageUrl, fallback to ytimg
-    let rawImageUrl = t.imageUrl;
-    if (!rawImageUrl && t.videoId) {
-        rawImageUrl = `https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`;
-    }
+    // Build image URL with a smart fallback chain:
+    //  1. resolveThumbnailImage prefers YouTube CDN (free, always up) when
+    //     the row has a video_id.
+    //  2. Otherwise it absolute-ifies /api/media/view/* worker paths.
+    //  3. proxyImage wraps YT/IG/FB CDNs through our own proxy to beat
+    //     hotlink protection; it's a no-op for already-absolute worker URLs.
+    const rawImageUrl = resolveThumbnailImage(t, AUTH_BASE);
     let processedImageUrl = proxyImage(rawImageUrl);
 
     // Proactive replacement for known bad IDs
