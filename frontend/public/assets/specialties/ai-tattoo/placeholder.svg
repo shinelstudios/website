@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="Tattoo content placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a0a"/>
+      <stop offset="1" stop-color="#1a0a00"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#f97316" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#f97316" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect width="1280" height="720" fill="url(#glow)"/>
+  <g transform="translate(640 330)" fill="none" stroke="#f97316" stroke-width="3" stroke-linecap="round">
+    <circle cx="0" cy="0" r="70" stroke-opacity="0.6"/>
+    <circle cx="0" cy="0" r="40" stroke-opacity="0.9"/>
+    <path d="M-160 30 C -120 -40, -50 -90, 0 -90 C 50 -90, 120 -40, 160 30" stroke-opacity="0.5"/>
+    <path d="M-130 80 C -80 40, -30 20, 30 30 C 90 40, 130 70, 160 100" stroke-opacity="0.45"/>
+  </g>
+  <text x="640" y="560" text-anchor="middle" fill="#f5f5f5" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="38" font-weight="900" letter-spacing="6">TATTOO CONTENT</text>
+  <text x="640" y="605" text-anchor="middle" fill="#f97316" font-family="system-ui, -apple-system, Segoe UI, Arial" font-size="18" font-weight="700" letter-spacing="8">COMING SOON</text>
+</svg>

@@ -83,6 +83,9 @@ const ThumbnailIdeationPage = React.lazy(() => import("./components/pages/Thumbn
 const CustomAIsPage = React.lazy(() => import("./components/pages/CustomAIsPage.jsx"));
 
 const WorkPage = React.lazy(() => import("./components/WorkPage.jsx"));
+const AiMusicPage = React.lazy(() => import("./components/work/AiMusicPage.jsx"));
+const AiTattooPage = React.lazy(() => import("./components/work/AiTattooPage.jsx"));
+const AiGfxPage = React.lazy(() => import("./components/work/AiGfxPage.jsx"));
 const Pricing = React.lazy(() => import("./components/Pricing.jsx"));
 const BudgetCalculatorPage = React.lazy(() => import("./components/pages/BudgetCalculatorPage.jsx"));
 const BlogIndex = React.lazy(() => import("./components/blog/BlogIndex.jsx"));
@@ -327,6 +330,9 @@ export default function App() {
           {/* ---------------------------- Public Pages ---------------------------- */}
           <Route index element={<ShinelStudiosHomepage />} />
           <Route path="/work" element={<WorkPage />} />
+          <Route path="/work/ai-music" element={<AiMusicPage />} />
+          <Route path="/work/ai-tattoo" element={<AiTattooPage />} />
+          <Route path="/work/ai-gfx" element={<AiGfxPage />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/pricing/calculator" element={<BudgetCalculatorPage />} />
           <Route path="/live" element={<ClientPulsePage />} />
