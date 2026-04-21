@@ -48,6 +48,9 @@ import {
   NumberTickIn,
   GrainOverlay,
 } from "../design";
+import WorkReelTile from "./work/WorkReelTile";
+import WorkCaseDrawer from "./work/WorkCaseDrawer";
+import WorkFilters from "./work/WorkFilters";
 
 const ProofSection = React.lazy(() => import("./ProofSection"));
 // PHASE 2 · TODO — replace this static CaseStudies component with a dynamic
@@ -333,6 +336,14 @@ export default function WorkPage() {
   const [loading, setLoading] = useState(true);
   const portfolioRef = useRef(null);
 
+  // Immersive work-reel state (redesign v2):
+  //   - kindFilter: ALL / VIDEO / GFX
+  //   - categoryFilter: ALL / <derived list from projects>
+  //   - selectedCase: item currently shown in the side-drawer, null = closed
+  const [kindFilter, setKindFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [selectedCase, setSelectedCase] = useState(null);
+
   const WHATSAPP_NUMBER = "918968141585";
   const wa = (msg) =>
     `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
@@ -408,6 +419,30 @@ export default function WorkPage() {
     }),
     [projects]
   );
+
+  // Reel derivations — unique categories, filtered list. kindFilter maps
+  // VIDEO\u2192kind:"video", GFX\u2192kind:"gfx".
+  const reelCategories = useMemo(() => {
+    const set = new Set();
+    projects.forEach((p) => {
+      const c = (p.category || "").trim().toUpperCase();
+      if (c && c !== "OTHER") set.add(c);
+    });
+    const top = [...set].slice(0, 8); // cap to keep the chip row manageable
+    return ["ALL", ...top, "OTHER"];
+  }, [projects]);
+
+  const reelItems = useMemo(() => {
+    return projects.filter((p) => {
+      const matchKind =
+        kindFilter === "ALL" ||
+        (kindFilter === "VIDEO" && p.kind === "video") ||
+        (kindFilter === "GFX" && p.kind === "gfx");
+      const cat = (p.category || "").toUpperCase() || "OTHER";
+      const matchCat = categoryFilter === "ALL" || cat === categoryFilter;
+      return matchKind && matchCat;
+    });
+  }, [projects, kindFilter, categoryFilter]);
 
   const stats = useMemo(() => {
     const workPageConfig = config?.workPageStats;
@@ -519,32 +554,80 @@ export default function WorkPage() {
         </div>
       </Section>
 
-      {/* ─── SERVICE NAVIGATION HUB (redesign v2) ─────────────────────── */}
-      <Section size="lg" tone="alt" hairlineTop>
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-10">
-          <div>
-            <RevealOnScroll>
-              <Eyebrow className="mb-3">Explore by service</Eyebrow>
-            </RevealOnScroll>
-            <RevealOnScroll delay="80ms">
-              <Display size="md" className="mb-2">
-                Every service we ship — one click away.
-              </Display>
-            </RevealOnScroll>
-            <RevealOnScroll delay="160ms">
-              <p className="text-sm max-w-xl" style={{ color: "var(--text-muted)" }}>
-                Every tile below is a real public page with live portfolio work
-                and a direct quote/inquiry path. No dead links, no coming-soon.
-              </p>
-            </RevealOnScroll>
-          </div>
+      {/* ─── IMMERSIVE WORK REEL (redesign v2) ────────────────────────────
+          Replaces the old Featured Portfolio Grid + service-nav hub as the
+          first-content section. Filter chips + masonry of real client work;
+          clicking a tile opens a side-drawer case study with the full
+          embedded video + metadata. Mobile = single column, still tappable. */}
+      <Section size="lg" tone="alt" hairlineTop id="reel">
+        <div ref={portfolioRef} className="mb-10">
+          <RevealOnScroll>
+            <Eyebrow className="mb-3">The Reel</Eyebrow>
+          </RevealOnScroll>
+          <RevealOnScroll delay="80ms">
+            <Display size="md" className="mb-2">
+              Cuts that moved <span style={{ color: "var(--orange)" }}>channels.</span>
+            </Display>
+          </RevealOnScroll>
+          <RevealOnScroll delay="160ms">
+            <p className="text-sm max-w-xl" style={{ color: "var(--text-muted)" }}>
+              Every tile is a real client piece. Tap one for the full embed,
+              the numbers, and the maker who shipped it.
+            </p>
+          </RevealOnScroll>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-stretch">
-          {SERVICE_CARDS.map((card, i) => (
-            <ServiceNavCard key={card.key} card={card} index={i} reduced={!!reduced} />
-          ))}
+        <div className="mb-8">
+          <WorkFilters
+            kind={kindFilter}
+            setKind={setKindFilter}
+            category={categoryFilter}
+            setCategory={setCategoryFilter}
+            categories={reelCategories}
+            total={reelItems.length}
+          />
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl animate-pulse"
+                style={{ aspectRatio: "16/9", background: "var(--surface)" }}
+              />
+            ))}
+          </div>
+        ) : reelItems.length === 0 ? (
+          <div
+            className="rounded-2xl p-10 text-center hairline"
+            style={{ background: "var(--surface)", color: "var(--text-muted)" }}
+          >
+            No pieces match that filter. Try ALL / ALL.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+            {reelItems.slice(0, 18).map((p, i) => (
+              <WorkReelTile
+                key={p.id || i}
+                item={p}
+                index={i}
+                onOpen={(it) => setSelectedCase(it)}
+              />
+            ))}
+          </div>
+        )}
+
+        {reelItems.length > 18 && (
+          <div className="mt-8 text-center">
+            <Link
+              to="/thumbnails"
+              className="btn-editorial-ghost inline-flex"
+            >
+              Browse all {reelItems.length} pieces <ArrowUpRight size={14} />
+            </Link>
+          </div>
+        )}
       </Section>
 
       {/* ─── LIVE CASE STUDY ─────────────────────────────────────────────── */}
@@ -567,117 +650,10 @@ export default function WorkPage() {
         <CaseStudies />
       </React.Suspense>
 
-      {/* ─── FEATURED PORTFOLIO GRID ─────────────────────────────────────── */}
-      <section
-        ref={portfolioRef}
-        id="portfolio-grid"
-        className="py-20 bg-[var(--surface-alt)]"
-      >
-        <div className="container mx-auto px-6">
-          <motion.div
-            className="text-center mb-10"
-            {...mkViewFade(reduced)}
-          >
-            <h2 className="text-4xl sm:text-5xl font-black mb-3 text-[var(--text)]">
-              Featured <span className="text-[var(--orange)]">Work</span>
-            </h2>
-            <p className="text-base text-[var(--text-muted)] max-w-xl mx-auto">
-              A curated snapshot across all our services. Use the filters or
-              visit a dedicated page for the full library.
-            </p>
-          </motion.div>
-
-          {/* Filters + Search */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-10 max-w-3xl mx-auto">
-            <div className="flex items-center gap-2">
-              {FILTERS.map((f) => (
-                <FilterPill
-                  key={f}
-                  label={f}
-                  active={activeFilter === f}
-                  onClick={() => setActiveFilter(f)}
-                />
-              ))}
-            </div>
-            <div className="relative w-full sm:w-56">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Search projects…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder:text-[var(--text-muted)] text-sm focus:outline-none focus:border-[var(--orange)] transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="aspect-video rounded-2xl bg-[var(--surface)] animate-pulse"
-                />
-              ))}
-            </div>
-          ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeFilter + searchQuery}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-              >
-                {filteredProjects.slice(0, 9).map((project, i) => (
-                  <ProjectCard key={project.id} project={project} index={i} reduced={!!reduced} />
-                ))}
-              </motion.div>
-            </AnimatePresence>
-          )}
-
-          {filteredProjects.length === 0 && !loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-20"
-            >
-              <p className="text-xl text-[var(--text-muted)]">
-                No projects found. Try adjusting your filters.
-              </p>
-            </motion.div>
-          )}
-
-          {/* View More row */}
-          {!loading && filteredProjects.length > 9 && (
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                to="/thumbnails"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[var(--orange)]/40 text-[var(--orange)] text-sm font-bold hover:bg-[var(--orange)]/10 transition-colors"
-              >
-                All Thumbnails <ExternalLink size={14} />
-              </Link>
-              <Link
-                to="/video-editing"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-blue-500/40 text-blue-400 text-sm font-bold hover:bg-blue-500/10 transition-colors"
-              >
-                All Videos <ExternalLink size={14} />
-              </Link>
-              <Link
-                to="/shorts"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-purple-500/40 text-purple-400 text-sm font-bold hover:bg-purple-500/10 transition-colors"
-              >
-                All Shorts <ExternalLink size={14} />
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
+      {/* The old "FEATURED PORTFOLIO GRID" block was replaced by the
+          IMMERSIVE WORK REEL above (same data + filters + masonry, plus the
+          case-study side-drawer). portfolioRef now lives on the reel wrapper
+          so the hero "Explore below" CTA still scrolls to the right place. */}
 
       {/* ─── GFX SECTION ─────────────────────────────────────────────────── */}
       <div
@@ -713,6 +689,25 @@ export default function WorkPage() {
           ]}
         />
       </div>
+
+      {/* ─── EXPLORE BY SERVICE (moved down from former position 2) ────── */}
+      <Section size="lg" tone="surface" hairlineTop>
+        <div className="mb-8">
+          <RevealOnScroll>
+            <Eyebrow className="mb-3">Explore by service</Eyebrow>
+          </RevealOnScroll>
+          <RevealOnScroll delay="80ms">
+            <Display size="md" className="mb-2">
+              Need a specific service? Jump straight in.
+            </Display>
+          </RevealOnScroll>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-stretch">
+          {SERVICE_CARDS.map((card, i) => (
+            <ServiceNavCard key={card.key} card={card} index={i} reduced={!!reduced} />
+          ))}
+        </div>
+      </Section>
 
       {/* ─── FINAL CTA ───────────────────────────────────────────────────── */}
       <section className="py-20 bg-[var(--surface)] relative overflow-hidden">
@@ -765,6 +760,15 @@ export default function WorkPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Case-study drawer — single instance, renders above everything when
+          a tile is clicked. Unmounts the YouTube iframe on close so no
+          background audio/CPU burn. */}
+      <WorkCaseDrawer
+        item={selectedCase}
+        open={!!selectedCase}
+        onClose={() => setSelectedCase(null)}
+      />
     </div>
   );
 }

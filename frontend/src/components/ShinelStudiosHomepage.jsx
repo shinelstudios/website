@@ -972,36 +972,53 @@ export default function ShinelStudiosHomepage() {
           {/* Ambient grain — fixed SVG noise, GPU-composited, 3% opacity */}
           <GrainOverlay />
 
-          {/* 2) Desktop sticky quick-quote bar with Calendly (non-intrusive) */}
+          {/* Sticky desktop quick-quote bar with Calendly (non-intrusive).
+              Ordering note: stays pinned; not part of the editorial narrative. */}
           <ErrorBoundary>
             <QuickQuoteBar onBook={() => setShowCalendly(true)} />
           </ErrorBoundary>
 
-          {/* 3) Social proof (logos) */}
-          <ErrorBoundary>
-            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
-              <CreatorsWorkedWithMarquee isDark={isDark} />
-            </React.Suspense>
-          </ErrorBoundary>
+          {/*
+            Section order reworked for "Sell the craft" flow
+            (user decision 2026-04-21). Prior order led with client logos
+            immediately after the hero; new order surfaces what we make and
+            how we make it first, and pushes social proof below the fold.
+              1. Hero                 (hero already has bento of real thumbnails)
+              2. EditorialServicesMarquee  (what we make \u2014 kinetic type)
+              3. ServicesSection          (what we make \u2014 detailed cards)
+              4. EditorialProcess         (how we work)
+            \u2500\u2500\u2500 fold on most laptops \u2500\u2500\u2500
+              5. CreatorsWorkedWithMarquee (who trusts us)
+              6. Shinel Touch             (quality proof, before/after)
+              7. TestimonialsSection       (human proof)
+              8. AI Tools CTA              (engagement handoff)
+          */}
 
-          {/* 3.5) Editorial services kinetic marquee — redesign v2 */}
+          {/* 2. Editorial services kinetic marquee */}
           <ErrorBoundary>
             <EditorialServicesMarquee />
           </ErrorBoundary>
 
-          {/* 4) Services (clear value props) */}
+          {/* 3. Services (detail cards) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={4} />}>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
               <ServicesSection />
             </React.Suspense>
           </ErrorBoundary>
 
-          {/* 4.5) Editorial six-step process strip — redesign v2 */}
+          {/* 4. Editorial six-step process strip */}
           <ErrorBoundary>
             <EditorialProcess />
           </ErrorBoundary>
 
-          {/* 5.5) The Shinel Touch (Interactive Lens) */}
+          {/* 5. Social proof (logos) \u2014 moved down from its former position 3. */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
+              <CreatorsWorkedWithMarquee isDark={isDark} />
+            </React.Suspense>
+          </ErrorBoundary>
+
+          {/* 6. The Shinel Touch (Interactive Lens) */}
           <section id="touch" className="py-24 bg-black overflow-hidden">
             <div className="container mx-auto px-4 max-w-5xl">
               <div className="text-center mb-12">
