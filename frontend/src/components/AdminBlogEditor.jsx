@@ -276,7 +276,7 @@ export default function AdminBlogEditor() {
                             </div>
                             {form.coverImage && (
                                 <div className="mt-2 rounded-lg overflow-hidden border border-[var(--border)] aspect-video">
-                                    <img src={form.coverImage} alt="Cover" className="w-full h-full object-cover" />
+                                    <img src={form.coverImage} alt="Cover" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                 </div>
                             )}
                         </div>

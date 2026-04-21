@@ -698,16 +698,24 @@ const FAQItem = ({ question, answer, device }) => {
           }}
         />
       </button>
+      {/*
+        Accordion animates via grid-template-rows 0fr → 1fr instead of
+        max-height. max-height forces a layout-recalc per frame; the grid
+        trick animates on the compositor and respects the *actual* content
+        height (no 600px ceiling).
+      */}
       <div
         style={{
-          maxHeight: isOpen ? "600px" : "0",
+          display: "grid",
+          gridTemplateRows: isOpen ? "1fr" : "0fr",
           opacity: isOpen ? 1 : 0,
-          overflow: "hidden",
-          transition: "max-height 300ms ease-out, opacity 250ms ease-out",
+          transition: "grid-template-rows 300ms ease-out, opacity 250ms ease-out",
           marginTop: isOpen ? "12px" : "0"
         }}
       >
-        <p style={{ fontSize: device.isMobile ? "13px" : "14px", color: "var(--text-muted)", lineHeight: 1.6 }}>{answer}</p>
+        <div style={{ overflow: "hidden", minHeight: 0 }}>
+          <p style={{ fontSize: device.isMobile ? "13px" : "14px", color: "var(--text-muted)", lineHeight: 1.6 }}>{answer}</p>
+        </div>
       </div>
     </div>
   );
