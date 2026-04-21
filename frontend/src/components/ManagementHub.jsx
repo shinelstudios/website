@@ -24,7 +24,8 @@ import {
     Settings as SettingsIcon,
     FileText,
     Archive,
-    BarChart3
+    BarChart3,
+    Quote
 } from "lucide-react";
 
 
@@ -117,6 +118,13 @@ export default function ManagementHub() {
             label: 'Blog Manager',
             path: '/dashboard/blog',
             icon: FileText,
+            roles: ['admin', 'editor']
+        },
+        {
+            id: 'testimonials',
+            label: 'Testimonials',
+            path: '/dashboard/testimonials',
+            icon: Quote,
             roles: ['admin', 'editor']
         },
         {

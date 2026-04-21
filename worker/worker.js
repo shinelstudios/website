@@ -3828,6 +3828,145 @@ export default {
       }
     }
 
+    /* ----------------------------- testimonials -----------------------------
+     * Simple KV-backed testimonial list, additive to the rich hardcoded
+     * carousel on the homepage. Admins can add quote-style testimonials
+     * (author, role, channel, quote, avatar) without touching code.
+     *
+     * Key: `app:testimonials:list`  →  { items: [...] }
+     *
+     * GET  /api/testimonials                    (public, all published)
+     * GET  /api/testimonials/all                (team, includes drafts)
+     * POST /api/testimonials                    (team, body={author,role,channel,quote,avatar,published})
+     * PUT  /api/testimonials/:id                (team)
+     * DELETE /api/testimonials/:id              (team)
+     * ---------------------------------------------------------------------- */
+    if (url.pathname === "/api/testimonials" && request.method === "GET") {
+      try {
+        const raw = await env.SHINEL_AUDIT.get("app:testimonials:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        // Public feed — only published ones, sorted newest-first.
+        const published = items.filter(t => t && t.published !== false).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        return json({ ok: true, testimonials: published }, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=300", // 5-minute edge cache
+        });
+      } catch (e) {
+        console.error("GET /api/testimonials:", e?.message || e);
+        return json({ ok: true, testimonials: [] }, 200, cors);
+      }
+    }
+
+    if (url.pathname === "/api/testimonials/all" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const raw = await env.SHINEL_AUDIT.get("app:testimonials:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        return json({ ok: true, testimonials: items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) }, 200, cors);
+      } catch (e) {
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/api/testimonials" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const author = s(body.author, 80);
+        const quote  = s(body.quote, 500);
+        if (!author) return json({ error: "author required" }, 400, cors);
+        if (!quote)  return json({ error: "quote required" }, 400, cors);
+
+        const raw = await env.SHINEL_AUDIT.get("app:testimonials:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        if (items.length >= 50) return json({ error: "Cap reached (50). Delete one first." }, 409, cors);
+
+        const now = Date.now();
+        const entry = {
+          id: `t_${now}_${Math.random().toString(36).slice(2, 8)}`,
+          author,
+          role: s(body.role, 80),
+          channel: s(body.channel, 80),
+          quote,
+          avatar: s(body.avatar, 500),
+          link: s(body.link, 500),
+          published: body.published !== false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        items.push(entry);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:testimonials:list", { items });
+        return json({ ok: true, testimonial: entry }, 201, cors);
+      } catch (e) {
+        console.error("POST /api/testimonials:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/testimonials/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const raw = await env.SHINEL_AUDIT.get("app:testimonials:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const idx = items.findIndex(t => t && t.id === id);
+        if (idx < 0) return json({ error: "not found" }, 404, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const now = Date.now();
+        const merged = {
+          ...items[idx],
+          author:  body.author !== undefined  ? s(body.author, 80)   : items[idx].author,
+          role:    body.role !== undefined    ? s(body.role, 80)     : items[idx].role,
+          channel: body.channel !== undefined ? s(body.channel, 80)  : items[idx].channel,
+          quote:   body.quote !== undefined   ? s(body.quote, 500)   : items[idx].quote,
+          avatar:  body.avatar !== undefined  ? s(body.avatar, 500)  : items[idx].avatar,
+          link:    body.link !== undefined    ? s(body.link, 500)    : items[idx].link,
+          published: body.published !== undefined ? body.published !== false : items[idx].published,
+          updatedAt: now,
+        };
+        if (!merged.author || !merged.quote) {
+          return json({ error: "author and quote are required" }, 400, cors);
+        }
+        items[idx] = merged;
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:testimonials:list", { items });
+        return json({ ok: true, testimonial: merged }, 200, cors);
+      } catch (e) {
+        console.error("PUT /api/testimonials/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/testimonials/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const raw = await env.SHINEL_AUDIT.get("app:testimonials:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const next = items.filter(t => t && t.id !== id);
+        if (next.length === items.length) return json({ error: "not found" }, 404, cors);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:testimonials:list", { items: next });
+        return json({ ok: true, deleted: id }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /api/testimonials/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
   },

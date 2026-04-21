@@ -67,6 +67,7 @@ import {
 import ServiceLens from './ServiceLens';
 import StrategyWizard from './StrategyWizard';
 import { GrainOverlay } from "../design";
+import { AUTH_BASE } from "../config/constants";
 import EditorialHero from "./home/EditorialHero";
 import EditorialServicesMarquee from "./home/EditorialServicesMarquee";
 import EditorialProcess from "./home/EditorialProcess";
@@ -272,6 +273,23 @@ const TestimonialsSection = ({ isDark }) => {
 
   const [openVideo, setOpenVideo] = useState(null);
   const [tab, setTab] = useState("all");
+
+  // Additional KV-backed testimonials (admin-editable, additive).
+  // Empty array is the safe default — rich carousel above is never blocked
+  // by this fetch.
+  const [kvTestimonials, setKvTestimonials] = useState([]);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch(`${AUTH_BASE}/api/testimonials`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.testimonials)) {
+          setKvTestimonials(data.testimonials);
+        }
+      })
+      .catch(() => { /* ignore — homepage still renders */ });
+    return () => ctrl.abort();
+  }, []);
 
   const items = useMemo(
     () => tab === "all" ? TESTIMONIALS : TESTIMONIALS.filter((t) => t.type === tab),
@@ -642,6 +660,78 @@ const TestimonialsSection = ({ isDark }) => {
             )
           )}
         </div>
+
+        {/* Praise wall — KV-backed quote testimonials added by admins
+            without a deploy. Rendered below the rich carousel so it
+            never competes for attention; only shows when non-empty. */}
+        {kvTestimonials.length > 0 && (
+          <div className="mt-16">
+            <div className="text-center mb-8">
+              <div
+                className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] font-bold"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <Quote size={12} />
+                More praise
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {kvTestimonials.map((t) => (
+                <motion.article
+                  key={t.id}
+                  initial={reduceMotion ? {} : { opacity: 0, y: 16 }}
+                  whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-10%" }}
+                  transition={{ duration: 0.4 }}
+                  className="p-5 rounded-2xl border"
+                  style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    {t.avatar ? (
+                      <img
+                        src={t.avatar}
+                        alt=""
+                        className="w-10 h-10 rounded-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-full grid place-items-center font-bold text-white"
+                        style={{ background: "var(--orange)" }}
+                        aria-hidden="true"
+                      >
+                        {(t.author || "?").slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate" style={{ color: "var(--text)" }}>
+                        {t.author}
+                      </div>
+                      <div className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                        {[t.role, t.channel].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm" style={{ color: "var(--text)" }}>
+                    “{t.quote}”
+                  </p>
+                  {t.link && (
+                    <a
+                      href={t.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold mt-3 inline-flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded"
+                      style={{ color: "var(--orange)" }}
+                    >
+                      Visit channel →
+                    </a>
+                  )}
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Player */}
