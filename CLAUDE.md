@@ -236,53 +236,64 @@ cd frontend && node scripts/generate-sitemap.js
 
 ---
 
-## Phase 2 roadmap (NOT YET STARTED)
+## Phase 2 roadmap
 
-Anchor: `// PHASE 2 · TODO` comments scattered through the codebase for
-findability. See also
-`~/.claude/plans/plan-for-all-fixes-twinkling-comet.md` for the full plan.
+Anchor: `// PHASE 2 · TODO` comments in code for findability. Audit +
+execution plan archived at
+`~/.claude/plans/plan-for-all-fixes-twinkling-comet.md`.
 
-### High-value, do first
-1. **Testimonials backing KV** — new KV key `app:testimonials:list`.
-   Admin CRUD UI + homepage testimonials carousel reads from here.
-   Currently hardcoded.
-2. **Case studies system** — new D1 table `case_studies` (slug PK, cover,
-   brief, role_list, tools, metrics_json, gallery_json, body_md, published,
-   attributed_slugs_json). New `/case-studies` + `/case-studies/:slug`
-   pages. Admin editor mirroring `AdminBlogEditor.jsx`. Each team
-   `/team/:slug` profile links out to the case studies they contributed to.
-3. **Three new tools** (from the plan's tools-to-add section):
-   - "Is my thumbnail clickable?" — face-api.js + contrast + text-area
-     heuristics on uploaded thumbnail, render in 4 YouTube contexts.
-   - "Channel audit in 60 s" — paste URL, worker calls
-     `fetchYouTubeChannelInfo` (already exists), analyse last 20 videos,
-     return scored report + 3 fixes.
-   - Content calendar starter — 30-day posting plan from a niche.
+### Shipped
 
-### Medium-value, do second
-4. **OG image generator** — Satori at build time, emit per-page 1200×630
-   PNG to `frontend/public/og/`, reference from MetaTags.
-5. **Pre-rendering** — vite-plugin-prerender for `/`, `/work`, `/team`,
-   `/team/:slug`, `/pricing`, `/services/*`, `/blog`, `/case-studies`.
-   Better SEO for crawlers that don't execute JS.
-6. **Admin dashboard refresh** (Phase 3 of original plan):
-   `ManagementHub` left-rail + command palette (`cmdk`), leads funnel
-   chart, team-member activity heatmap, page-view beacon endpoint
-   `POST /api/metrics/pageview`.
+1. ✅ **Testimonials KV** — `app:testimonials:list` + worker
+   GET/POST/PUT/DELETE `/api/testimonials` + `AdminTestimonialsPage`
+   at `/dashboard/testimonials` + homepage "More praise" strip below
+   the hardcoded rich carousel. Simple quote-style only; the rich
+   video/analytics carousel stays hardcoded (commit `ad44abb`).
+3a. ✅ **"Is my thumbnail clickable?"** — `/tools/thumbnail-clickability`.
+   Client-side canvas analysis (luminance std-dev, brightness band,
+   chroma, Sobel edge density, resolution, aspect ratio). Skipped
+   face-api.js — 1.5MB dep not worth the marginal signal (commit
+   `b808475`).
+3b. ✅ **"Channel audit in 60s"** — `/tools/channel-audit`. Worker
+   GET `/api/channel-audit?handle=…` pulls last 20 uploads (3 YT API
+   units, rate-limited 5/15min per IP). Frontend scores cadence +
+   title length + view consistency + thumbnail variety + engagement
+   locally. Accepts @handle / UC… / full youtube URL.
+3c. ✅ **"Content calendar starter"** — `/tools/content-calendar`.
+   Pure frontend, template-driven. 5 niches × 8 hook archetypes.
+   Copy-to-clipboard + CSV export.
+9. ✅ **Web Vitals beacon** — `utils/webVitals.js` lazy-loads
+   `web-vitals` v5, flushes single sendBeacon on visibilitychange/
+   pagehide. Worker POST `/api/metrics/pageview` + GET
+   `/api/metrics/summary`. Admin UI at `/dashboard/metrics` with
+   1/7/30-day window, Google-banded p75 cards, per-day bar chart,
+   per-path breakdown (commit `c1da404`).
+
+### Not started
+
+2. **Case studies system** — new D1 table `case_studies` (slug PK,
+   cover, brief, role_list, tools, metrics_json, gallery_json,
+   body_md, published, attributed_slugs_json). New `/case-studies` +
+   `/case-studies/:slug` pages. Admin editor mirroring
+   `AdminBlogEditor.jsx`. Each team `/team/:slug` profile links out
+   to the case studies they contributed to.
+4. **OG image generator** — Satori at build time, emit per-page
+   1200×630 PNG to `frontend/public/og/`, reference from MetaTags.
+5. **Pre-rendering (broader)** — vite-plugin-prerender already runs
+   on many routes; extend to `/tools/*`, `/case-studies/*`,
+   team pages.
+6. **Admin dashboard refresh** — command palette (`cmdk`), leads
+   funnel chart, team-member activity heatmap.
 7. **Image build step** — auto WebP conversion of portfolio JPGs at
    build (script → `frontend/scripts/images-to-webp.js`). Use `Img`
    primitive's `webp` prop.
-
-### Lower-priority polish
-8. **Playwright smoke suite** across Chromium + WebKit + Firefox, run in
+8. **Playwright smoke suite** — Chromium + WebKit + Firefox, run in
    GH Actions on every PR.
-9. **Web Vitals beacon** — `web-vitals` lib posts to
-   `POST /api/metrics/pageview` for real Core Web Vitals telemetry.
-10. **Full homepage section rewrites** — TestimonialsSection, ServicesSection
-    grid, "Shinel Touch" ServiceLens section, AI Tools CTA band. Each
-    currently works but uses pre-redesign type/spacing.
-11. **SiteHeader deep refactor** — the one large file still on legacy
-    architecture. 1200+ lines. Probably worth it but risky.
+10. **Full homepage section rewrites** — TestimonialsSection,
+    ServicesSection grid, ServiceLens, AI Tools CTA band. Each works
+    but uses pre-redesign type/spacing.
+11. **SiteHeader deep refactor** — 1200+ lines, legacy architecture.
+    Risky.
 12. **Retire `/live-templates`** OR refresh its 1808-line page.
 
 ### Out of scope (do NOT do without explicit ask)
@@ -311,4 +322,8 @@ findability. See also
 - `/services` root redirects to `/work` — per user policy, Work is the
   single browse surface; there is no "services" landing page.
 
-Last updated: commit `4f30330`, 2026-04-20.
+Last updated: 2026-04-22 — multi-commit Phase 2 delivery session
+(commits `2b3229b` robustness, `8cd034b` restructure, `e462b13` +
+`f35a3b2` polish/a11y, `c1da404` web vitals, `ad44abb` testimonials,
+`b808475` thumbnail clickability, then channel audit + content
+calendar).

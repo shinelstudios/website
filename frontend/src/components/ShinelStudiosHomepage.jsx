@@ -188,15 +188,12 @@ export const SAMPLE_AFTER = findAssetByBase("sample_after") || svgPlaceholder("A
 
 /* ===================== Enhanced Testimonials (Video + Analytics, AI-first) =====================
  *
- * PHASE 2 · TODO — wire this to a KV-backed admin CRUD surface.
- *   Target KV key:  app:testimonials:list   (array of { id, name, channel,
- *                   subs, quote, video, poster, verified })
- *   Admin UI:       new AdminTestimonialsPage.jsx mirroring AdminBlogPage.jsx
- *   Worker:         GET/POST/PUT/DELETE /testimonials  (mirror /blog/posts)
- *   Source of truth is currently the hardcoded array below. When the KV
- *   exists, fall back to the hardcoded list if the fetch returns empty so
- *   the home never shows a blank testimonial carousel.
- * See CLAUDE.md "Phase 2 roadmap" #1.
+ * The hardcoded TESTIMONIALS array below keeps the rich video/analytics/poster
+ * entries — admin CRUD isn't worth the upload UI surface for those.
+ *
+ * Simple quote-style testimonials ARE admin-editable: see /dashboard/testimonials
+ * (AdminTestimonialsPage). Those are fetched at mount and rendered in the
+ * "More praise" strip below this main grid.
  */
 const TestimonialsSection = ({ isDark }) => {
   const reduceMotion = false;
