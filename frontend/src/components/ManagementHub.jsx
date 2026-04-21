@@ -23,7 +23,8 @@ import {
     ExternalLink,
     Settings as SettingsIcon,
     FileText,
-    Archive
+    Archive,
+    BarChart3
 } from "lucide-react";
 
 
@@ -130,6 +131,13 @@ export default function ManagementHub() {
             label: 'Weekly Audits',
             path: '/dashboard/audits',
             icon: FileText,
+            roles: ['admin']
+        },
+        {
+            id: 'metrics',
+            label: 'Web Vitals',
+            path: '/dashboard/metrics',
+            icon: BarChart3,
             roles: ['admin']
         },
         {

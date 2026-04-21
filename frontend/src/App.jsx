@@ -19,6 +19,7 @@ import Toaster from "./components/ui/Toaster.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 import CommandPalette from "./components/ui/CommandPalette.jsx";
 import { getAccessToken, setAccessToken, clearAccessToken, refreshOnce } from "./utils/tokenStore";
+import { startWebVitals } from "./utils/webVitals";
 import { AUTH_BASE } from "./config/constants";
 
 import {
@@ -105,6 +106,7 @@ const AdminLeadsPage = React.lazy(() => import("./components/AdminLeadsPage.jsx"
 const WeeklyAuditLog = React.lazy(() => import("./components/WeeklyAuditLog.jsx"));
 const AdminBlogPage = React.lazy(() => import("./components/AdminBlogPage.jsx"));
 const AdminBlogEditor = React.lazy(() => import("./components/AdminBlogEditor.jsx"));
+const AdminMetricsPage = React.lazy(() => import("./components/AdminMetricsPage.jsx"));
 const MediaHub = React.lazy(() => import("./components/hub/MediaHub.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
@@ -284,6 +286,10 @@ export default function App() {
   // token. A 401 simply means "stay logged out". refreshOnce() dedupes concurrent
   // callers (App.jsx + ProtectedRoute) so only one network call is made per page.
   React.useEffect(() => { refreshOnce(AUTH_BASE); }, []);
+
+  // Core Web Vitals beacon. Anonymous, respects DNT, skipped on localhost.
+  // Single POST per pageview on visibility-hidden / pagehide.
+  React.useEffect(() => { startWebVitals(AUTH_BASE); }, []);
 
   React.useEffect(() => {
     startHashActionRouter();
@@ -489,6 +495,7 @@ export default function App() {
             <Route path="blog/:slug" element={<AdminBlogEditor />} />
             <Route path="media" element={<MediaHub />} />
             <Route path="audits" element={<WeeklyAuditLog />} />
+            <Route path="metrics" element={<AdminMetricsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 

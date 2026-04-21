@@ -3709,6 +3709,125 @@ export default {
       }
     }
 
+    /* --------------------------- web-vitals beacon ---------------------------
+     * POST /api/metrics/pageview  — public, rate-limited, append-only.
+     *   Body: { path, m: { lcp, cls, inp, fcp, ttfb }, conn, dpr }
+     *   Stores into KV key `metrics:YYYY-MM-DD` as a capped list (5000/day).
+     *   No cookies, no PII — just path + anonymous perf numbers.
+     *
+     * GET /api/metrics/summary?days=7  — team-gated aggregate.
+     *   Returns per-path pageview counts + p75 of each vital, plus overall.
+     * ---------------------------------------------------------------------- */
+    if (url.pathname === "/api/metrics/pageview" && request.method === "POST") {
+      try {
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 2 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        // 120 beacons / 10 min per IP — enough for a normal SPA session.
+        if (await isRateLimited(env, ip, 600, 120, "pv")) {
+          return json({ ok: false, throttled: true }, 202, cors);
+        }
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") {
+          return json({ error: "Invalid body" }, 400, cors);
+        }
+        const path = String(body.path || "/").slice(0, 128);
+        const m = (body.m && typeof body.m === "object") ? body.m : {};
+        const entry = {
+          ts: Date.now(),
+          path,
+          lcp: Number.isFinite(+m.lcp) ? Math.round(+m.lcp) : null,
+          cls: Number.isFinite(+m.cls) ? +(+m.cls).toFixed(4) : null,
+          inp: Number.isFinite(+m.inp) ? Math.round(+m.inp) : null,
+          fcp: Number.isFinite(+m.fcp) ? Math.round(+m.fcp) : null,
+          ttfb: Number.isFinite(+m.ttfb) ? Math.round(+m.ttfb) : null,
+          conn: String(body.conn || "").slice(0, 8),
+          dpr: Number.isFinite(+body.dpr) ? +(+body.dpr).toFixed(1) : null,
+        };
+        const dateKey = `metrics:${new Date(entry.ts).toISOString().slice(0, 10)}`;
+        const existing = await env.SHINEL_AUDIT.get(dateKey, "json") || { entries: [] };
+        const entries = Array.isArray(existing.entries) ? existing.entries : [];
+        entries.push(entry);
+        // Cap per-day list so a bad day can't blow past the KV size guard.
+        const capped = entries.length > 5000 ? entries.slice(-5000) : entries;
+        try {
+          await putJsonGuarded(env.SHINEL_AUDIT, dateKey, { entries: capped });
+        } catch (e) {
+          console.error("metrics put failed:", e?.message || e);
+          return json({ ok: false, error: "store failed" }, 507, cors);
+        }
+        return json({ ok: true }, 202, cors);
+      } catch (e) {
+        console.error("POST /api/metrics/pageview:", e?.stack || e?.message || e);
+        return json({ ok: false }, 500, cors);
+      }
+    }
+
+    if (url.pathname === "/api/metrics/summary" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const days = Math.min(Math.max(Number(url.searchParams.get("days") || 7), 1), 30);
+        const now = new Date();
+        const dayKeys = [];
+        for (let i = 0; i < days; i++) {
+          const d = new Date(now);
+          d.setUTCDate(d.getUTCDate() - i);
+          dayKeys.push(`metrics:${d.toISOString().slice(0, 10)}`);
+        }
+        const results = await Promise.all(
+          dayKeys.map((k) => env.SHINEL_AUDIT.get(k, "json").catch(() => null))
+        );
+        const all = [];
+        const perDay = {};
+        for (let i = 0; i < dayKeys.length; i++) {
+          const dateStr = dayKeys[i].slice("metrics:".length);
+          const row = results[i];
+          const entries = (row && Array.isArray(row.entries)) ? row.entries : [];
+          perDay[dateStr] = entries.length;
+          for (const e of entries) all.push(e);
+        }
+        // Group by path.
+        const byPath = {};
+        for (const e of all) {
+          const p = e.path || "/";
+          if (!byPath[p]) byPath[p] = { path: p, views: 0, lcp: [], cls: [], inp: [], fcp: [], ttfb: [] };
+          const b = byPath[p];
+          b.views++;
+          ["lcp", "cls", "inp", "fcp", "ttfb"].forEach((k) => {
+            if (Number.isFinite(e[k])) b[k].push(e[k]);
+          });
+        }
+        const p75 = (arr) => {
+          if (!arr || arr.length === 0) return null;
+          const sorted = [...arr].sort((a, b) => a - b);
+          return sorted[Math.floor(sorted.length * 0.75)];
+        };
+        const paths = Object.values(byPath).map((b) => ({
+          path: b.path,
+          views: b.views,
+          lcpP75: p75(b.lcp),
+          clsP75: p75(b.cls),
+          inpP75: p75(b.inp),
+          fcpP75: p75(b.fcp),
+          ttfbP75: p75(b.ttfb),
+        })).sort((a, b) => b.views - a.views);
+        const overall = {
+          totalViews: all.length,
+          lcpP75: p75(all.map(e => e.lcp).filter(Number.isFinite)),
+          clsP75: p75(all.map(e => e.cls).filter(Number.isFinite)),
+          inpP75: p75(all.map(e => e.inp).filter(Number.isFinite)),
+          fcpP75: p75(all.map(e => e.fcp).filter(Number.isFinite)),
+          ttfbP75: p75(all.map(e => e.ttfb).filter(Number.isFinite)),
+        };
+        return json({ ok: true, days, perDay, paths, overall }, 200, cors);
+      } catch (e) {
+        console.error("GET /api/metrics/summary:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
   },
