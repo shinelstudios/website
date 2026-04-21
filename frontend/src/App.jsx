@@ -61,6 +61,12 @@ const ThumbnailPreviewer = React.lazy(() =>
 const ThumbnailClickability = React.lazy(() =>
   import("./components/tools/ThumbnailClickability.jsx")
 );
+const ChannelAudit = React.lazy(() =>
+  import("./components/tools/ChannelAudit.jsx")
+);
+const ContentCalendar = React.lazy(() =>
+  import("./components/tools/ContentCalendar.jsx")
+);
 
 const CustomAIs = React.lazy(() => import("./components/tools/CustomAIs.jsx"));
 
@@ -457,6 +463,9 @@ export default function App() {
             path="/tools/thumbnail-clickability"
             element={<ThumbnailClickability />}
           />
+
+          <Route path="/tools/channel-audit" element={<ChannelAudit />} />
+          <Route path="/tools/content-calendar" element={<ContentCalendar />} />
 
 
           {/* YouTube Captions page hidden — requires a yt-dlp backend at

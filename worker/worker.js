@@ -3828,6 +3828,88 @@ export default {
       }
     }
 
+    /* ------------------------------ channel audit ------------------------------
+     * GET /api/channel-audit?handle=<@handle|UC…>
+     *
+     * Public-ish creator tool. Pulls channel snapshot + last 20 uploads and
+     * returns a structured report the frontend scores into a CTR/consistency
+     * scorecard + 3 fixes.
+     *
+     * Quota cost: 3 YouTube API units per audit (channels + playlistItems +
+     * videos). Rate-limited per-IP to 5/15min → ~60 audits/IP/day worst-case,
+     * well inside the 10K daily pool.
+     * -------------------------------------------------------------------- */
+    if (url.pathname === "/api/channel-audit" && request.method === "GET") {
+      try {
+        if (await isRateLimited(env, ip, 900, 5, "audit")) {
+          return json({ error: "Too many audits. Try again in a few minutes." }, 429, cors);
+        }
+        const handle = String(url.searchParams.get("handle") || "").trim();
+        if (!handle) return json({ error: "handle required" }, 400, cors);
+
+        const channel = await fetchYouTubeChannelInfo(env, handle);
+        if (channel.error) return json({ error: channel.error }, 502, cors);
+        if (!channel.uploadsPlaylistId) {
+          return json({ error: "Channel has no uploads playlist" }, 404, cors);
+        }
+
+        const apiKey = await getYoutubeKey(env);
+        if (!apiKey) return json({ error: "YouTube quota exhausted — try later" }, 503, cors);
+
+        // Last 20 uploads from the uploads playlist.
+        const plApi = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=20&playlistId=${encodeURIComponent(channel.uploadsPlaylistId)}&key=${encodeURIComponent(apiKey)}`;
+        const plResp = await fetchWithRetry(plApi, { headers: { accept: "application/json" } });
+        if (!plResp.ok) {
+          return json({ error: `playlist fetch ${plResp.status}` }, 502, cors);
+        }
+        const plJson = await plResp.json().catch(() => ({}));
+        const items = Array.isArray(plJson.items) ? plJson.items : [];
+        const videoIds = items
+          .map(i => i?.contentDetails?.videoId || i?.snippet?.resourceId?.videoId)
+          .filter(Boolean);
+
+        let videos = [];
+        if (videoIds.length) {
+          // Batch videos.list for stats + contentDetails (duration).
+          const vApi = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${encodeURIComponent(videoIds.join(","))}&key=${encodeURIComponent(apiKey)}`;
+          const vResp = await fetchWithRetry(vApi, { headers: { accept: "application/json" } });
+          if (vResp.ok) {
+            const vJson = await vResp.json().catch(() => ({}));
+            videos = (vJson.items || []).map((v) => ({
+              id: v.id,
+              title: v.snippet?.title || "",
+              thumbnail: v.snippet?.thumbnails?.high?.url || v.snippet?.thumbnails?.medium?.url || "",
+              publishedAt: v.snippet?.publishedAt || null,
+              views: Number(v.statistics?.viewCount || 0),
+              likes: Number(v.statistics?.likeCount || 0),
+              comments: Number(v.statistics?.commentCount || 0),
+              duration: v.contentDetails?.duration || "",
+            }));
+          }
+        }
+
+        // Sort newest-first (items arrive that way already, but be safe).
+        videos.sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+
+        return json({
+          ok: true,
+          channel: {
+            id: channel.id,
+            title: channel.title,
+            logo: channel.logo,
+            handle: channel.handle,
+            subscribers: channel.subscribers,
+            viewCount: channel.viewCount,
+            videoCount: channel.videoCount,
+          },
+          videos,
+        }, 200, cors);
+      } catch (e) {
+        console.error("GET /api/channel-audit:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Audit failed" }, e?.status || 500, cors);
+      }
+    }
+
     /* ----------------------------- testimonials -----------------------------
      * Simple KV-backed testimonial list, additive to the rich hardcoded
      * carousel on the homepage. Admins can add quote-style testimonials

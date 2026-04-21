@@ -6,22 +6,13 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube, ArrowUpRight, Sparkles } from "lucide-react";
+import { Wand2, Languages, Search, Lightbulb, Image as ImageIcon, TrendingUp, BarChart2, Youtube, ArrowUpRight, Sparkles, Calendar, Activity } from "lucide-react";
 import GridMatrix from "../animations/GridMatrix";
 import { Kicker, Eyebrow, Display, Lede, RevealOnScroll, HairlineCard } from "../../design";
 
 
-// PHASE 2 · TODO — remaining tools per CLAUDE.md "Phase 2 roadmap" #3:
-//   1. [DONE — /tools/thumbnail-clickability] "Is my thumbnail clickable?"
-//      Client-side canvas analysis. No face-api.js (skipped the 1.5MB dep —
-//      skin-tone cluster heuristic is enough for a first pass).
-//   2. "Channel audit in 60s"         → paste YT channel URL, worker calls
-//      the existing fetchYouTubeChannelInfo(), analyse last 20 videos,
-//      return scored report + 3 fixes. New tile + route /tools/channel-audit.
-//   3. "Content calendar starter"      → niche input, 30-day posting plan
-//      with title/thumbnail concept pairs. LLM-free, template-driven.
-//      New tile + route /tools/content-calendar.
-// Add tiles to this array AND import the corresponding icon from lucide-react.
+// Phase 2 roadmap #3 tools — all three shipped. Remaining ideas go in
+// CLAUDE.md under "Phase 3" when they're scoped.
 const tiles = [
   {
     to: "/roi-calculator",
@@ -70,6 +61,20 @@ const tiles = [
     title: "Is my thumbnail clickable?",
     desc: "Upload, get a 0–100 score + 3 concrete fixes. Runs in your browser — nothing uploads.",
     icon: Sparkles,
+    roles: ["admin", "editor", "client", "public"],
+  },
+  {
+    to: "/tools/channel-audit",
+    title: "Channel audit in 60 seconds",
+    desc: "Paste a YouTube channel. Cadence, titles, views, thumbs, engagement — scored + top 3 fixes.",
+    icon: Activity,
+    roles: ["admin", "editor", "client", "public"],
+  },
+  {
+    to: "/tools/content-calendar",
+    title: "30-day content calendar",
+    desc: "Pick a niche + cadence. Get 30 days of title + thumbnail concepts. Copy or export CSV.",
+    icon: Calendar,
     roles: ["admin", "editor", "client", "public"],
   },
   {
