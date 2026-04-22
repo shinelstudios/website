@@ -47,7 +47,7 @@ export const SPECIALTIES = [
       { title: "Generate + refine", body: "AI-assisted scene sketching, then frame-by-frame polish by our editors." },
       { title: "Master + ship", body: "Colour, captions, platform-native exports. Ready for YT Shorts, Reels, and long-form." },
     ],
-    pricingAnchor: "Projects start at ₹4,500 per short · custom quote on long-form",
+    pricingAnchor: "Every AI music project is custom-quoted — we scope to your track, platform, and cadence.",
     meta: {
       title: "AI Music Videos, Bhajans & Visualisers — Shinel Studios",
       description:
@@ -88,7 +88,7 @@ export const SPECIALTIES = [
       { title: "Edit for intent", body: "Shorts tuned for discovery, long-form for retention. Captions baked in." },
       { title: "Post + iterate", body: "Weekly cadence plan. We track which hooks convert to bookings and sharpen the next batch." },
     ],
-    pricingAnchor: "Retainers start at ₹18,000/month · one-off shorts from ₹2,500",
+    pricingAnchor: "Every AI tattoo project is custom-quoted — one-off reels or monthly retainers, scoped to your studio.",
     meta: {
       title: "Tattoo Shorts, Reels & Long-form Content — Shinel Studios",
       description:
@@ -129,7 +129,7 @@ export const SPECIALTIES = [
       { title: "AI drafts, we refine", body: "Midjourney / Flux for scaffolding; layout, typography, and exports by hand." },
       { title: "Deliver the set", body: "Full set: logo + post + thumbnails + covers + banner. Editable source files included." },
     ],
-    pricingAnchor: "Post sets start at ₹3,500 · thumbnail retainers from ₹12,000/month",
+    pricingAnchor: "Every AI graphics project is custom-quoted — one set or an ongoing system, priced to match.",
     meta: {
       title: "AI Graphics: Logos, Instagram Posts, Thumbnails — Shinel Studios",
       description:

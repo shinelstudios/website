@@ -412,7 +412,8 @@ export default function SpecialtyPageTemplate({ slug }) {
         </ol>
       </Section>
 
-      {/* PRICING ANCHOR */}
+      {/* HOW WE QUOTE — AI work is always custom. No anchor prices here;
+          the general /pricing page only lists non-AI production tiers. */}
       <Section size="sm">
         <RevealOnScroll>
           <div
@@ -431,10 +432,13 @@ export default function SpecialtyPageTemplate({ slug }) {
                 className="text-xs font-black uppercase tracking-[0.25em] mb-1"
                 style={{ color: "var(--text-muted)" }}
               >
-                Pricing
+                How we quote
               </div>
               <p className="text-base md:text-lg font-bold" style={{ color: "var(--text)" }}>
                 {pricingAnchor}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                For non-AI production tiers, see the <Link to="/pricing" className="underline" style={{ color: palette.accent }}>pricing page</Link>.
               </p>
             </div>
             <a

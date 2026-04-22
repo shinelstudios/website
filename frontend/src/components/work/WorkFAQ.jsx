@@ -14,7 +14,7 @@ const FAQS = [
   },
   {
     q: "What's a typical cost?",
-    a: "Shorts start at ₹2,500. Long-form edits start at ₹8,000. GFX post sets from ₹3,500. Retainers are where it gets cheaper — from ₹18,000/month for a full shorts rhythm.",
+    a: "Standard production tiers are listed on the pricing page — starter sprints, monthly shorts factories, long-form rhythms, full-studio retainers. Anything AI-assisted (music videos, tattoo content, AI graphics) is custom-quoted to scope since the work and turnaround vary wildly per brief.",
   },
   {
     q: "Do you handle uploads + scheduling?",
