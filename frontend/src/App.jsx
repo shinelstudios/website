@@ -132,26 +132,41 @@ const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
 /*                             Utility Components                             */
 /* -------------------------------------------------------------------------- */
 
+// Two jobs:
+//   - New route with no hash  → jump to top instantly (prevents the "opens
+//     mid-page" bug where the previous page's scroll position was kept).
+//   - Route with #hash         → smooth-scroll to the target, offset by header.
+// React Router's default PUSH navigation preserves scroll across routes, which
+// is almost never what visitors expect on a marketing site.
 function ScrollToHash() {
   const { pathname, hash } = useLocation();
 
   React.useEffect(() => {
-    if (!hash) return;
-    const id = hash.replace("#", "");
-    const el = document.getElementById(id);
-    if (!el) return;
+    if (hash) {
+      const id = hash.replace("#", "");
+      const el = document.getElementById(id);
+      if (!el) return;
 
-    const headerOffset = parseInt(
-      getComputedStyle(document.documentElement).getPropertyValue("--header-h") ||
-      76,
-      10
-    );
+      const headerOffset = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue("--header-h") ||
+        76,
+        10
+      );
 
-    const offset =
-      el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
+      const offset =
+        el.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
 
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: offset, behavior: "smooth" });
+      });
+      return;
+    }
+
+    // No hash → route change. Jump to top so the new page starts at its hero.
+    // Using "auto" not "smooth" because smooth-scrolling from mid-page to the
+    // top of a brand-new page feels like a glitch.
     requestAnimationFrame(() => {
-      window.scrollTo({ top: offset, behavior: "smooth" });
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     });
   }, [pathname, hash]);
 
