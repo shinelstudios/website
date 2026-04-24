@@ -291,9 +291,39 @@ export default function MyProfilePage() {
     );
   }
 
+  // ?seed=1 → user was bounced here from /portfolio/<them> because no
+  // profile record exists yet. Show a friendly banner explaining what's up.
+  const wasSeeded = typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("seed") === "1";
+
   return (
     <main className="min-h-svh bg-[var(--surface)] pb-24">
       <MetaTags title="My Profile — Shinel Studios" noindex />
+
+      {wasSeeded && (
+        <div
+          className="container mx-auto px-4 md:px-6 pt-6"
+          role="status"
+          aria-live="polite"
+        >
+          <div
+            className="rounded-2xl p-4 flex items-start gap-3 hairline"
+            style={{
+              background: "color-mix(in oklab, var(--orange) 8%, transparent)",
+              borderColor: "color-mix(in oklab, var(--orange) 30%, transparent)",
+            }}
+          >
+            <span className="text-xl" aria-hidden="true">👋</span>
+            <div className="text-sm" style={{ color: "var(--text)" }}>
+              <b>Set your portfolio up first.</b>{" "}
+              <span style={{ color: "var(--text-muted)" }}>
+                Add a name + bio + avatar, hit Save, and your public page at
+                {" "}<code>/team/&lt;you&gt;</code> goes live instantly.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky action bar */}
       <div

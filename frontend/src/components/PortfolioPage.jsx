@@ -1,6 +1,6 @@
 // src/components/PortfolioPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Sparkles,
@@ -139,14 +139,41 @@ export default function PortfolioPage() {
     }
 
     if (!profile && !loading) {
+        // If the viewer is logged in AND the slug they hit matches their own
+        // identity (slug, full email, or local-part), bounce them to /me to
+        // set up their portfolio first. This is the "Suyash hits My Public
+        // Portfolio before saving anything" path — a dead-end 404 was the
+        // wrong UX. The /me editor's first save creates the profile record;
+        // next visit to /portfolio/<them> works.
+        const viewer = getAuth();
+        const slugLc = String(slug || "").toLowerCase();
+        const viewerEmail = String(viewer?.email || "").toLowerCase();
+        const viewerLocal = viewerEmail.split("@")[0];
+        const isOwnSlug = !!viewer?.isAuthed && slugLc && (
+            slugLc === viewerEmail ||
+            slugLc === viewerLocal ||
+            slugLc === String(viewer?.slug || "").toLowerCase()
+        );
+        if (isOwnSlug) {
+            return <Navigate to="/me?seed=1" replace />;
+        }
         return (
             <div className="min-h-screen bg-[var(--surface)] flex items-center justify-center text-center p-6">
-                <div>
-                    <h2 className="text-4xl font-black mb-4 text-[var(--text)]">PROFILE NOT FOUND</h2>
-                    <p className="text-[var(--text-muted)] mb-8 max-w-sm mx-auto">This specific creative engine hasn't been registered in our registry yet.</p>
-                    <Link to="/work" className="inline-flex items-center gap-2 text-[var(--orange)] font-bold hover:gap-3 transition-all uppercase tracking-widest text-xs">
-                        <ArrowLeft size={16} /> Back to Studio Work
-                    </Link>
+                <div className="max-w-md">
+                    <h2 className="text-4xl font-black mb-4 text-[var(--text)]">Profile not published</h2>
+                    <p className="text-[var(--text-muted)] mb-8 mx-auto">
+                        This portfolio hasn't been set up yet — or it's private.
+                        Browse the rest of the team meanwhile.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                        <Link to="/team" className="inline-flex items-center gap-2 text-[var(--orange)] font-bold uppercase tracking-widest text-xs">
+                            <ArrowLeft size={16} /> See the team
+                        </Link>
+                        <span className="text-[var(--text-muted)]">·</span>
+                        <Link to="/work" className="inline-flex items-center gap-2 text-[var(--text-muted)] font-bold uppercase tracking-widest text-xs hover:text-[var(--text)]">
+                            Studio work
+                        </Link>
+                    </div>
                 </div>
             </div>
         );

@@ -415,7 +415,13 @@ export default function App() {
           <Route path="/services/editing/long" element={<Navigate to="/video-editing" replace />} />
 
           <Route path="/pulse" element={<Navigate to="/live" replace />} />
-          <Route path="/work/:slug" element={<Navigate to="/portfolio/:slug" replace />} />
+
+          {/* The old /work/:slug → /portfolio/:slug redirect was a no-op:
+              react-router's <Navigate to=> doesn't interpolate route params,
+              so any /work/<anything> not matching /work/ai-music|ai-tattoo|
+              ai-gfx above ended up on the literal /portfolio/:slug page and
+              produced a "Profile not found" dead-end. Deleted; the SPA's
+              NotFound catch-all handles unknown /work/* paths cleanly. */}
 
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
