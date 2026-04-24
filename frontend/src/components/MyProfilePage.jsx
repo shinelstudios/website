@@ -27,7 +27,8 @@ import {
   Upload,
 } from "lucide-react";
 import { AUTH_BASE } from "../config/constants";
-import { getAuth, getAccessToken } from "../utils/auth";
+import { getAuth } from "../utils/auth";
+import { authedFetch } from "../utils/tokenStore";
 import MetaTags from "./MetaTags";
 import {
   Section,
@@ -153,48 +154,49 @@ export default function MyProfilePage() {
   }, []);
 
   // --- Save profile ---
+  const persistProfile = useCallback(async (overrides) => {
+    const merged = overrides ? { ...profile, ...overrides } : profile;
+    const res = await authedFetch(AUTH_BASE, `/profiles/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: merged.firstName,
+        lastName: merged.lastName,
+        headline: merged.headline,
+        bio: merged.bio,
+        avatarUrl: merged.avatarUrl,
+        showreelUrl: merged.showreelUrl,
+        skills: merged.skills,
+        experience: merged.experience,
+        services: merged.services,
+        calendlyUrl: merged.calendlyUrl,
+        whatsappNumber: merged.whatsappNumber,
+        profilePublic: !!merged.profilePublic,
+        highlightVideoId: merged.highlightVideoId,
+        socials: merged.socials || {},
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
+    return data;
+  }, [profile]);
+
   const handleSave = useCallback(async () => {
     if (!profile) return;
     setSaving(true);
     setSaveMsg(null);
     try {
-      const token = getAccessToken();
-      const res = await fetch(`${AUTH_BASE}/profiles/me`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          headline: profile.headline,
-          bio: profile.bio,
-          avatarUrl: profile.avatarUrl,
-          showreelUrl: profile.showreelUrl,
-          skills: profile.skills,
-          experience: profile.experience,
-          services: profile.services,
-          calendlyUrl: profile.calendlyUrl,
-          whatsappNumber: profile.whatsappNumber,
-          profilePublic: !!profile.profilePublic,
-          highlightVideoId: profile.highlightVideoId,
-          socials: profile.socials || {},
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Save failed");
+      await persistProfile();
       setSaveMsg({ type: "success", text: "Profile saved." });
     } catch (e) {
       setSaveMsg({ type: "error", text: e.message || "Save failed" });
     } finally {
       setSaving(false);
     }
-  }, [profile]);
+  }, [profile, persistProfile]);
 
   // --- Toggle work visibility ---
   const toggleVisibility = useCallback(async (type, id, nextVisible) => {
-    const token = getAccessToken();
     // Optimistic update
     setWork((w) => ({
       videos: type === "video"
@@ -205,17 +207,14 @@ export default function MyProfilePage() {
         : w.thumbnails,
     }));
     try {
-      const res = await fetch(`${AUTH_BASE}/profiles/me/work-visibility`, {
+      const res = await authedFetch(AUTH_BASE, `/profiles/me/work-visibility`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, id, visible: nextVisible }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed");
+        throw new Error(data.error || `Failed (${res.status})`);
       }
     } catch (e) {
       // Rollback on failure
@@ -231,28 +230,44 @@ export default function MyProfilePage() {
     }
   }, []);
 
-  // --- Avatar upload (uses existing /api/media/upload R2 endpoint) ---
+  // --- Avatar upload + auto-persist ---
+  // The old flow asked the user to click "Save" after upload to persist
+  // the avatarUrl. People navigated away and lost it. Now: upload → set
+  // local state → immediately PUT /profiles/me with the new avatarUrl
+  // so the picture survives a page refresh without any extra click.
   const fileInputRef = useRef(null);
   const handleAvatarUpload = useCallback(async (file) => {
     if (!file) return;
     setSaveMsg({ type: "info", text: "Uploading avatar..." });
     try {
-      const token = getAccessToken();
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${AUTH_BASE}/api/media/upload`, {
+      const res = await authedFetch(AUTH_BASE, `/api/media/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Upload failed");
-      update({ avatarUrl: data.url || data.publicUrl || "" });
-      setSaveMsg({ type: "success", text: "Avatar uploaded. Hit Save to persist." });
+      if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+      const newUrl = data.url || data.publicUrl || "";
+      if (!newUrl) throw new Error("Upload succeeded but no URL returned");
+
+      update({ avatarUrl: newUrl });
+      // Auto-persist so the user doesn't have to click Save.
+      try {
+        await persistProfile({ avatarUrl: newUrl });
+        setSaveMsg({ type: "success", text: "Avatar saved." });
+      } catch (saveErr) {
+        // Upload worked but persist failed — keep the local preview, ask
+        // the user to retry Save manually.
+        setSaveMsg({
+          type: "error",
+          text: `Avatar uploaded but save failed: ${saveErr.message}. Hit Save to retry.`,
+        });
+      }
     } catch (e) {
       setSaveMsg({ type: "error", text: e.message || "Upload failed" });
     }
-  }, [update]);
+  }, [update, persistProfile]);
 
   if (!auth.isAuthed) {
     return (

@@ -482,11 +482,10 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
     try {
       window.dispatchEvent(new Event("auth:changed"));
-      window.dispatchEvent(
-        new CustomEvent("notify", {
-          detail: { message: "Successfully logged out", type: "success" },
-        })
-      );
+      // Logout is worth keeping in the activity log — fire both channels.
+      const detail = { message: "Successfully logged out", type: "success" };
+      window.dispatchEvent(new CustomEvent("notify", { detail }));
+      window.dispatchEvent(new CustomEvent("activity", { detail }));
     } catch { }
 
     closeAllMenus();

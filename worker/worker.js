@@ -410,6 +410,20 @@ async function requireTeamOrThrow(request, secret, env) {
   return payload;
 }
 
+// Like requireTeamOrThrow but with no role gating — verifies the JWT is
+// well-formed and the JTI hasn't been revoked. Use for endpoints that
+// any authenticated user (editor, artist, client) should be able to hit
+// (e.g. avatar upload on /me, profile self-service).
+async function requireAuthOrThrow(request, secret, env) {
+  const token = readBearerToken(request);
+  if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
+  const payload = await verifyJwtOr401(token, secret);
+  if (env && await isJtiRevoked(env, payload.jti)) {
+    throw Object.assign(new Error("Token revoked"), { status: 401 });
+  }
+  return payload;
+}
+
 async function requireAdminOrThrow(request, secret, env) {
   const token = readBearerToken(request);
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
@@ -3294,15 +3308,23 @@ export default {
       }
     }
 
-    /* -------------------------- Media Hub (R2 Storage) -------------------------- */
+    /* -------------------------- Media Hub (R2 Storage) --------------------------
+     * Auth: any authenticated user (team / admin / editor / artist / client).
+     * Editors and artists need this for their /me avatar upload; team gets the
+     * larger cap for editorial work. */
     if (url.pathname === "/api/media/upload" && request.method === "POST") {
       try {
-        await requireTeamOrThrow(request, secret, env);
+        const uploader = await requireAuthOrThrow(request, secret, env);
+        const role = String(uploader?.role || "").toLowerCase();
+        const isTeam = role === "team" || role === "admin" ||
+          role.split(",").map(s => s.trim()).some(r => r === "team" || r === "admin");
+        const maxBytes = isTeam ? 10 * 1024 * 1024 : 4 * 1024 * 1024;
+        const maxLabel = isTeam ? "10 MB" : "4 MB";
 
-        // Hard cap on upload size (10 MB) before parsing multipart.
+        // Hard cap on upload size before parsing multipart.
         const contentLen = Number(request.headers.get("content-length") || 0);
-        if (contentLen > 10 * 1024 * 1024) {
-          return json({ error: "File too large (max 10 MB)" }, 413, cors);
+        if (contentLen > maxBytes) {
+          return json({ error: `File too large (max ${maxLabel})` }, 413, cors);
         }
 
         const formData = await request.formData();

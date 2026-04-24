@@ -1,6 +1,6 @@
 // src/components/AdminUsersPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, ShieldCheck, RefreshCcw, AlertTriangle, Linkedin, Twitter, Globe, Star, Briefcase } from "lucide-react";
+import { Plus, Trash2, ShieldCheck, RefreshCcw, Linkedin, Twitter, Globe, Star, Briefcase } from "lucide-react";
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
 import { saveClientConfig, getClientConfig } from "../data/clientRegistry";
 
@@ -19,16 +19,12 @@ function parseJwt(token) {
   }
 }
 
-const daysLeftFromExp = (payload) => {
-  if (!payload?.exp) return null;
-  const ms = payload.exp * 1000 - Date.now();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
-};
-
-function toast(type, message) {
-  window.dispatchEvent(
-    new CustomEvent("notify", { detail: { type: type === "error" ? "error" : "success", message: String(message || "") } })
-  );
+// User CRUD events (create / update / delete) are worth keeping in the
+// activity log; transient loading toasts go to "notify" only.
+function toast(type, message, persist = false) {
+  const detail = { type: type === "error" ? "error" : "success", message: String(message || "") };
+  window.dispatchEvent(new CustomEvent("notify", { detail }));
+  if (persist) window.dispatchEvent(new CustomEvent("activity", { detail }));
 }
 
 export default function AdminUsersPage() {
@@ -67,10 +63,6 @@ export default function AdminUsersPage() {
   const userRoles = useMemo(() => rawRole.split(",").map(r => r.trim()).filter(Boolean), [rawRole]);
   const role = useMemo(() => userRoles[0] || "client", [userRoles]);
   const isAdmin = userRoles.includes("admin");
-  const daysLeft = daysLeftFromExp(payload);
-
-  // --- derived banner conditions ---
-  const showExpiringBanner = isAdmin && Number.isFinite(daysLeft) && daysLeft <= 14;
 
   // --- recompute headers whenever token changes ---
   const authHeaders = useMemo(() => ({ authorization: `Bearer ${token}` }), [token]);
@@ -156,7 +148,7 @@ export default function AdminUsersPage() {
       });
       setEditingEmail(null);
       await loadUsers();
-      toast("success", `User ${editingEmail ? 'updated' : 'created'} successfully`);
+      toast("success", `User ${editingEmail ? 'updated' : 'created'} successfully`, true);
     } catch (e) {
       setErr(e.message || "Error");
     } finally {
@@ -176,7 +168,7 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to delete");
       await loadUsers();
-      toast("success", "User deleted successfully");
+      toast("success", "User deleted successfully", true);
     } catch (e) {
       setErr(e.message || "Error");
       toast("error", e.message || "Delete failed");
@@ -246,14 +238,9 @@ export default function AdminUsersPage() {
           <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
             <ShieldCheck size={16} />
             <span>Role: {role || "unknown"}</span>
-            {Number.isFinite(daysLeft) && (
-              <span aria-label="days left">
-                • Session: {role === "admin" ? `${daysLeft} days (auto-refresh on)` : `${daysLeft} days`}
-              </span>
-            )}
             <button
               onClick={refreshNow}
-              className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded border text-xs"
+              className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded border text-xs focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
               style={{ borderColor: "var(--border)", color: "var(--text)" }}
               title="Refresh session now"
               disabled={refreshStatus?.kind === "loading"}
@@ -284,23 +271,6 @@ export default function AdminUsersPage() {
             role="status"
           >
             {refreshStatus.text}
-          </div>
-        )}
-
-        {showExpiringBanner && (
-          <div
-            className="mb-5 rounded-xl p-4 flex items-start gap-3"
-            style={{
-              background: "rgba(232,80,2,.1)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-            }}
-          >
-            <AlertTriangle size={18} style={{ color: "var(--orange)" }} />
-            <div className="text-sm">
-              <b>Heads up:</b> your admin session expires in <b>{daysLeft} days</b>. Auto-refresh is enabled, but if your
-              browser is closed for very long periods, you can tap <i>Refresh session</i> above to roll it forward.
-            </div>
           </div>
         )}
 
