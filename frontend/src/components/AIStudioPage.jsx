@@ -15,6 +15,7 @@ import { LogOut, RefreshCcw, ShieldCheck } from "lucide-react";
 
 import { AUTH_BASE } from "../config/constants";
 import { getAccessToken, setAccessToken, refreshOnce } from "../utils/tokenStore";
+import AdminSessions from "./AdminSessions";
 
 // ---- tiny JWT decoder (no verification) ----
 function parseJwt(token) {
@@ -132,6 +133,11 @@ export default function AIStudioPage() {
         Sessions stay active in the background — no need to log in again
         between visits.
       </p>
+
+      {/* Active sessions — per-device list with revoke buttons. */}
+      <div className="w-full max-w-3xl mt-6">
+        <AdminSessions />
+      </div>
     </div>
   );
 }

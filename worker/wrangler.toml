@@ -46,6 +46,13 @@ database_id = "907df36d-0254-4744-8473-bcfcc4aa8e0c"
 [triggers]
 crons = ["*/30 * * * *"] # Every 30 mins
 
+# --- Plain (non-secret) env vars ---
+[vars]
+# Toggles JWT JTI denylist checks on every auth-gated request. Required ON
+# for the per-device session "Sign out" button to evict in-flight tokens
+# immediately. Costs 1 KV read per gated request — fine within free tier.
+JWT_REVOCATION_ENABLED = "1"
+
 # Note: Secrets (JWT_SECRET, USERS_JSON, YOUTUBE_API_KEYS) are stored separately via:
 # wrangler secret put JWT_SECRET
 # wrangler secret put USERS_JSON

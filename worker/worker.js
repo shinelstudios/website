@@ -178,6 +178,96 @@ async function revokeJti(env, jti, ttlSeconds) {
   await env.SHINEL_AUDIT.put(`jwt:revoked:${jti}`, "1", opts);
 }
 
+/* ====================== Per-device session tracking ======================
+ * Each row in `sessions:<email>` corresponds to one logged-in device.
+ * The `jti` field tracks the CURRENT refresh-token JTI for that device —
+ * /auth/refresh rotates the JTI but updates the same row, so device
+ * continuity survives token rotation.
+ *
+ * Capped at MAX_SESSIONS_PER_USER (FIFO eviction). Oldest device gets
+ * silently evicted when the cap is hit. Revoking a session adds the
+ * current JTI to the global denylist so the device's bearer/refresh
+ * stop working immediately.
+ *
+ * UA → human label is a tiny inline parser (no `ua-parser-js` dep).
+ */
+const MAX_SESSIONS_PER_USER = 10;
+
+function parseUserAgent(ua = "") {
+  const s = String(ua || "");
+  let browser = "Browser", os = "Device";
+  if (/Edg\//.test(s)) browser = "Edge";
+  else if (/Chrome\//.test(s) && !/OPR\//.test(s)) browser = "Chrome";
+  else if (/Firefox\//.test(s)) browser = "Firefox";
+  else if (/Safari\//.test(s) && !/Chrome\//.test(s)) browser = "Safari";
+  else if (/OPR\//.test(s) || /Opera/.test(s)) browser = "Opera";
+  if (/iPhone/.test(s)) os = "iPhone";
+  else if (/iPad/.test(s)) os = "iPad";
+  else if (/Android/.test(s)) os = "Android";
+  else if (/Windows NT/.test(s)) os = "Windows";
+  else if (/Mac OS X/.test(s)) os = "macOS";
+  else if (/Linux/.test(s)) os = "Linux";
+  return `${browser} on ${os}`;
+}
+
+async function getSessions(env, email) {
+  if (!email || !env.SHINEL_AUDIT) return [];
+  const list = await env.SHINEL_AUDIT.get(`sessions:${email.toLowerCase()}`, "json");
+  return Array.isArray(list) ? list : [];
+}
+
+async function saveSessions(env, email, list) {
+  if (!email || !env.SHINEL_AUDIT) return;
+  // 30-day TTL — longer than refresh TTL so we keep recent device history.
+  await env.SHINEL_AUDIT.put(
+    `sessions:${email.toLowerCase()}`,
+    JSON.stringify(list),
+    { expirationTtl: 30 * 24 * 3600 }
+  );
+}
+
+async function trackNewSession(env, email, jti, request) {
+  if (!jti || !email) return;
+  const ua = request.headers.get("user-agent") || "";
+  const ip = request.headers.get("cf-connecting-ip") || "";
+  const ipHash = ip ? (await sha256Hex(ip)).slice(0, 12) : "";
+  const now = Date.now();
+  const list = await getSessions(env, email);
+  list.push({
+    jti,
+    label: parseUserAgent(ua),
+    ipHash,
+    createdAt: now,
+    lastSeenAt: now,
+  });
+  // FIFO trim if over cap.
+  const trimmed = list.length > MAX_SESSIONS_PER_USER
+    ? list.slice(list.length - MAX_SESSIONS_PER_USER)
+    : list;
+  await saveSessions(env, email, trimmed);
+}
+
+async function rotateSessionJti(env, email, oldJti, newJti) {
+  if (!email || !oldJti || !newJti) return;
+  const list = await getSessions(env, email);
+  const idx = list.findIndex((s) => s.jti === oldJti);
+  if (idx < 0) {
+    // Old session record missing — treat the rotation as a fresh device.
+    list.push({ jti: newJti, label: "Unknown device", ipHash: "", createdAt: Date.now(), lastSeenAt: Date.now() });
+  } else {
+    list[idx].jti = newJti;
+    list[idx].lastSeenAt = Date.now();
+  }
+  await saveSessions(env, email, list);
+}
+
+async function removeSessionByJti(env, email, jti) {
+  if (!email || !jti) return;
+  const list = await getSessions(env, email);
+  const next = list.filter((s) => s.jti !== jti);
+  if (next.length !== list.length) await saveSessions(env, email, next);
+}
+
 async function sha256Hex(input) {
   const enc = new TextEncoder();
   const buf = await crypto.subtle.digest("SHA-256", enc.encode(input));
@@ -1281,6 +1371,17 @@ export default {
         const access = await signAccess(payload, secret, 30); // 30m
         const refresh = await signRefresh({ ...payload, kind: "refresh" }, secret, 7); // 7d
 
+        // Per-device session tracking. We hook the refresh JTI because
+        // it's the long-lived one; access tokens rotate every 30m.
+        try {
+          const refreshPayload = await verifyJWT(refresh, secret).catch(() => null);
+          if (refreshPayload?.jti) {
+            await trackNewSession(env, user.email, refreshPayload.jti, request);
+          }
+        } catch (e) {
+          console.warn("trackNewSession failed (login):", e?.message || e);
+        }
+
         // SameSite=None (+ Secure + HttpOnly) so the cookie rides cross-site
         // POSTs from the frontend at shinelstudios.in to this worker at
         // *.workers.dev. Lax silently blocked these requests; reload logged
@@ -1327,6 +1428,7 @@ export default {
         const oldExp = Number(payload.exp || 0);
         const remaining = oldExp ? Math.max(60, oldExp - Math.floor(Date.now() / 1000)) : 7 * 24 * 3600;
         if (payload.jti) await revokeJti(env, payload.jti, remaining);
+        const oldJti = payload.jti;
 
         const newAccess = await signAccess(
           {
@@ -1356,6 +1458,17 @@ export default {
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
         });
+
+        // Update the device's session row with the new refresh JTI so the
+        // device record survives token rotation (createdAt preserved).
+        try {
+          const newPayload = await verifyJWT(newRefresh, secret).catch(() => null);
+          if (newPayload?.jti && payload.email) {
+            await rotateSessionJti(env, payload.email, oldJti, newPayload.jti);
+          }
+        } catch (e) {
+          console.warn("rotateSessionJti failed:", e?.message || e);
+        }
 
         const headers = { ...cors, "content-type": "application/json", "set-cookie": cookie };
         return new Response(JSON.stringify({ token: newAccess, role: payload.role }), {
@@ -1399,6 +1512,8 @@ export default {
           if (rp && rp.jti) {
             const ttl = Number(rp.exp || 0) - Math.floor(Date.now() / 1000);
             await revokeJti(env, rp.jti, Math.max(60, ttl || 7 * 24 * 3600));
+            // Drop this device's session row.
+            if (rp.email) await removeSessionByJti(env, rp.email, rp.jti);
           }
         }
       } catch { /* best-effort: never fail logout */ }
@@ -1412,6 +1527,69 @@ export default {
       });
       const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+    }
+
+    /* ----------------------------- GET /auth/sessions -----------------------------
+     * Returns the active per-device sessions for the logged-in user.
+     * Each entry: { jti, label, ipHash, createdAt, lastSeenAt, current }.
+     * `current` is true if the entry's jti is bound to the request's
+     * refresh cookie — that's the device hitting this endpoint right now.
+     */
+    if (url.pathname === "/auth/sessions" && request.method === "GET") {
+      try {
+        const me = await requireAuthOrThrow(request, secret, env);
+        const list = await getSessions(env, me.email);
+
+        // Find the current device by reading the refresh cookie's jti.
+        let currentJti = null;
+        const cookies = request.headers.get("cookie") || "";
+        const m = cookies.match(/(?:^|;\s*)ss_refresh=([^;]+)/);
+        if (m) {
+          const rp = await verifyJWT(decodeURIComponent(m[1]), secret).catch(() => null);
+          currentJti = rp?.jti || null;
+        }
+
+        const sessions = list
+          .map((s) => ({ ...s, current: s.jti === currentJti }))
+          .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0));
+        return json({ sessions, max: MAX_SESSIONS_PER_USER }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* --------------------------- POST /auth/sessions/revoke -----------------------
+     * Revoke a specific session. Body: { jti }. The user can only revoke
+     * their own sessions — we look up the JTI inside the user's session
+     * list and reject if it isn't there. Adds the JTI to the global
+     * denylist so the device's bearer + refresh stop working immediately
+     * (next /auth/refresh from that device returns 401 + clears the
+     * cookie).
+     *
+     * Note: requires JWT_REVOCATION_ENABLED=1 in worker secrets to
+     * actually evict in-flight access tokens. The session list itself is
+     * always pruned regardless.
+     */
+    if (url.pathname === "/auth/sessions/revoke" && request.method === "POST") {
+      try {
+        const me = await requireAuthOrThrow(request, secret, env);
+        const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
+        const targetJti = String(body?.jti || "").trim();
+        if (!targetJti) return json({ error: "jti required" }, 400, cors);
+
+        const list = await getSessions(env, me.email);
+        const target = list.find((s) => s.jti === targetJti);
+        if (!target) return json({ error: "Session not found" }, 404, cors);
+
+        // Revoke the JTI globally (refresh-token TTL is the cap).
+        await revokeJti(env, targetJti, 7 * 24 * 3600);
+        // Drop from the session list.
+        await saveSessions(env, me.email, list.filter((s) => s.jti !== targetJti));
+
+        return json({ ok: true, revoked: targetJti }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
     }
 
     /* ----------------------------- GET /protected (sample) ----------------------------- */
