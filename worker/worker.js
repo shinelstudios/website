@@ -3281,6 +3281,69 @@ export default {
       }
     }
 
+    /* ----------------------------- GET /admin/team-activity -----------------------------
+     * Per-day creation count for the last N days (default 84 = 12 weeks),
+     * grouped by team-member (attributed_to). Drives the heatmap on the
+     * admin dashboard.
+     *
+     * Returns:
+     *   { days: ["YYYY-MM-DD", …], members: [{ email, total, byDay: { "YYYY-MM-DD": n } }] }
+     *
+     * Single roundtrip: SQL UNION across inventory_videos + inventory_thumbnails
+     * grouped at the DB. Cheap; runs once per dashboard load.
+     */
+    if (url.pathname === "/admin/team-activity" && request.method === "GET") {
+      try {
+        await requireAdminOrThrow(request, secret, env);
+        if (!env.DB) return json({ error: "DB binding missing" }, 501, cors);
+
+        const days = Math.min(Math.max(Number(url.searchParams.get("days") || 84), 7), 365);
+        const sinceMs = Date.now() - days * 86_400_000;
+        const sinceIso = new Date(sinceMs).toISOString();
+
+        const sql = `
+          SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
+            FROM inventory_videos
+           WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
+           GROUP BY attributed_to, day
+          UNION ALL
+          SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
+            FROM inventory_thumbnails
+           WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
+           GROUP BY attributed_to, day
+        `;
+        const { results } = await env.DB.prepare(sql).bind(sinceIso, sinceIso).all();
+
+        // Build the day axis (oldest → newest).
+        const dayList = [];
+        const startDate = new Date(sinceMs);
+        startDate.setUTCHours(0, 0, 0, 0);
+        for (let i = 0; i < days; i++) {
+          const d = new Date(startDate);
+          d.setUTCDate(d.getUTCDate() + i);
+          dayList.push(d.toISOString().slice(0, 10));
+        }
+
+        // Aggregate rows by member.
+        const byMember = {};
+        for (const r of (results || [])) {
+          const who = String(r.who || "").toLowerCase();
+          const day = String(r.day || "").slice(0, 10);
+          const n = Number(r.n || 0);
+          if (!who || !day || !n) continue;
+          if (!byMember[who]) byMember[who] = { email: who, total: 0, byDay: {} };
+          byMember[who].byDay[day] = (byMember[who].byDay[day] || 0) + n;
+          byMember[who].total += n;
+        }
+
+        const members = Object.values(byMember).sort((a, b) => b.total - a.total);
+        return json({ ok: true, days: dayList, members }, 200, cors);
+      } catch (e) {
+        console.error("GET /admin/team-activity:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
     /* ------------------------------- blog ------------------------------- */
     // GET /blog/posts - Public list (drafts hidden unless authenticated team)
     // NOTE: Blog markdown is rendered client-side via react-markdown WITHOUT rehype-raw,

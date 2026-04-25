@@ -21,6 +21,8 @@ import { useClientStats } from "../context/ClientStatsContext";
 
 import { AUTH_BASE } from "../config/constants";
 import { getAccessToken } from "../utils/tokenStore";
+import LeadsFunnel from "./admin/LeadsFunnel";
+import ActivityHeatmap from "./admin/ActivityHeatmap";
 
 export default function AdminStats() {
     const [stats, setStats] = useState({
@@ -449,6 +451,15 @@ export default function AdminStats() {
                         )}
                     </AnimatePresence>
                 </div>
+            </div>
+
+            {/* --- DASHBOARD REFRESH (Phase 2 #6) ---
+                LeadsFunnel + ActivityHeatmap rendered as a 2-column row on
+                lg, stacked on mobile. Both are self-contained tiles with
+                their own loading/error states. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                <LeadsFunnel />
+                <ActivityHeatmap />
             </div>
         </div>
     );

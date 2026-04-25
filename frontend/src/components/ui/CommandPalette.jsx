@@ -36,7 +36,19 @@ export default function CommandPalette() {
     const navigate = useNavigate();
     const { stats: creators } = useClientStats();
 
-    const role = localStorage.getItem("role") || "";
+    // Role lives in the JWT payload — localStorage was the legacy key,
+    // never written post-tokenStore migration so this used to read null
+    // (admin and editor surfaces never appeared in the palette).
+    const role = (() => {
+        try {
+            const tok = getAccessToken();
+            if (!tok) return "";
+            const [, p] = tok.split(".");
+            if (!p) return "";
+            const json = atob(p.replace(/-/g, "+").replace(/_/g, "/"));
+            return String((JSON.parse(json) || {}).role || "").toLowerCase();
+        } catch { return ""; }
+    })();
     const isAdmin = role.includes("admin");
     const isEditor = role.includes("editor");
 
