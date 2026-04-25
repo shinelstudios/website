@@ -56,10 +56,21 @@ export default function Img({
     ...rest,
   };
 
-  if (webp) {
+  // Auto-derive a sibling .webp for local raster sources. The build step at
+  // frontend/scripts/images-to-webp.js emits a .webp next to every JPG/PNG
+  // under src/assets and public/assets, so this lookup is always correct
+  // for local sources. External URLs (YouTube CDN, placehold.co) are
+  // skipped — they don't have a .webp companion.
+  const isLocal = typeof src === "string" && (src.startsWith("/") || src.startsWith("./") || !src.includes("://"));
+  const autoWebp = isLocal && /\.(jpe?g|png)$/i.test(src || "")
+    ? src.replace(/\.(jpe?g|png)$/i, ".webp")
+    : null;
+  const webpSrc = webp || autoWebp;
+
+  if (webpSrc) {
     return (
       <picture>
-        <source type="image/webp" srcSet={webp} />
+        <source type="image/webp" srcSet={webpSrc} />
         <img src={src} {...sharedProps} />
       </picture>
     );

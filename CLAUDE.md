@@ -60,6 +60,11 @@ backend/               Legacy Node/Express server for the YouTube Captions tool.
   catch it gracefully.
 - **Env vars / secrets**: `wrangler secret put NAME` for the worker;
   `frontend/.env` (gitignored) for build-time Vite vars.
+- **YouTube API key lives ONLY in the worker** as `YOUTUBE_API_KEYS`
+  (comma-separated pool, rotated by `getYoutubeKey()` at
+  worker.js:486). Never re-add it to `frontend/.env` — every `VITE_*`
+  var ships in the public bundle. Frontend always proxies YouTube
+  calls through the worker.
 
 ## Redesign v2 — what's done (24 commits, Phase 1)
 
