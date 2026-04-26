@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run images-to-webp && vite build && npm run generate-sitemap && node scripts/prerender.js",
+    "build": "npm run images-to-webp && npm run generate-og && vite build && npm run generate-sitemap && node scripts/prerender.js",
     "images-to-webp": "node scripts/images-to-webp.js",
+    "generate-og": "node scripts/generate-og-images.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "generate-sitemap": "node scripts/generate-sitemap.js"
@@ -33,7 +34,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@fontsource/outfit": "^5.2.8",
     "@playwright/test": "^1.59.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/cli": "^4.1.11",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
@@ -46,6 +49,7 @@
     "globals": "^16.3.0",
     "postcss": "^8.5.6",
     "puppeteer": "^24.36.0",
+    "satori": "^0.26.0",
     "sharp": "^0.34.5",
     "sitemap": "^8.0.0",
     "tailwindcss": "^3.4.17",

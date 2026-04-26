@@ -4,74 +4,39 @@ import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { STATIC_ROUTES } from '../src/config/staticRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const toAbsolute = (p) => path.resolve(__dirname, '..', p);
 
-const ROUTES = [
-    '/',
-    '/about',
-    '/work',
-    '/pricing',
-    '/faq',
-    '/live',
-    '/contact',
-
-    // Services
-    '/services/gfx',
-    '/services/editing',
-    '/services/growth',
-
-    // Service Items
-    '/thumbnails',
-    '/branding',
-    '/shorts',
-    '/video-editing',
-    '/services/growth/seo',
-    '/services/growth/captions',
-
-    // Subcategories (GFX)
+// Deep service-taxonomy subcategories — kept here rather than in
+// staticRoutes.js because they don't warrant per-route OG cards (they're
+// programmatic SEO landing pages that fall back to the parent /services/
+// OG image).
+const SERVICE_SUBCATEGORIES = [
     '/services/gfx/thumbnails/youtube',
     '/services/gfx/thumbnails/gaming',
     '/services/gfx/thumbnails/podcast',
     '/services/gfx/branding/channel',
     '/services/gfx/branding/social',
     '/services/gfx/branding/banners',
-
-    // Subcategories (Editing)
     '/services/editing/shorts/gaming',
     '/services/editing/shorts/vlog',
     '/services/editing/shorts/podcast',
     '/services/editing/long/gaming',
     '/services/editing/long/vlog',
     '/services/editing/long/podcast',
-
-    // Subcategories (Growth)
     '/services/growth/seo/titles',
     '/services/growth/seo/descriptions',
     '/services/growth/seo/keywords',
     '/services/growth/captions/srt',
     '/services/growth/captions/styles',
-
-    // Tools
-    "/tools",
-    "/tools/thumbnail-previewer",
-    "/roi-calculator",
-    "/tools/srt",
-    "/tools/seo",
-    "/tools/comparison",
-
-    // Industries (Programmatic SEO)
-    "/industries/real-estate",
-    "/industries/tech-creators",
-    "/industries/financial-advisors",
-    "/industries/podcast-clips",
-
-    // Legal & Other
-    "/privacy",
-    "/terms",
-    "/live-templates",
 ];
+
+const ROUTES = Array.from(new Set([
+    ...STATIC_ROUTES.map((r) => r.path),
+    ...SERVICE_SUBCATEGORIES,
+]));
 
 (async () => {
     console.log('✨ Starting Pre-rendering with custom server...');
