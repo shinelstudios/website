@@ -37,6 +37,13 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Run smoke suite
+        env:
+          # Optional: when these secrets are set on the repo, the admin
+          # spec runs end-to-end (real login against the dedicated test
+          # user in KV). When missing, those tests are skipped so PRs
+          # from forks still run the public surfaces cleanly.
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: npx playwright test --reporter=github,list
 
       - name: Upload Playwright report on failure
