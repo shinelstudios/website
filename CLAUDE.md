@@ -31,6 +31,8 @@ frontend/              React 18 + Vite + Tailwind SPA
     blog/              Blog index + card + post
     tools/             Creator tools (ToolsIndex + each tool file)
     hub/               Authenticated dashboard surfaces
+    c/                 Public per-client pages at /c/<slug> + 16 modules/
+    clientportal/      Client self-edit surface at /clients/me + /edit + /inbox
   src/config/constants.js   Brand tokens, API bases, festival discounts
   src/utils/tokenStore.js   In-memory access token + refreshOnce() singleton
 
@@ -54,7 +56,7 @@ backend/               Legacy Node/Express server for the YouTube Captions tool.
   `cd frontend && npm run build` → `frontend/dist/`. `_redirects` and `_headers`
   in `frontend/public/` drive SPA fallback and security headers.
 - **Worker**: `cd worker && npx wrangler deploy`. Currently at version
-  `72da6790-79b4-4057-bb3e-923bce98892f` as of redesign-v2 Phase 1.
+  `233479df-4160-4829-a6cd-90f1371eef9e` (Phase 4 client portal).
 - **D1 migrations**: `wrangler d1 execute shinel-db --remote --command "…"`.
   Running an ALTER twice errors with "duplicate column"; worker endpoints
   catch it gracefully.
@@ -96,7 +98,7 @@ page without removing the first.
 | `/me`, `/dashboard/*` | None — interaction feedback only |
 | Site-wide | GrainOverlay fixed layer |
 
-### Team portfolios (the big new feature)
+### Team portfolios
 - Worker endpoints: `GET /team`, `GET /profiles/:slug`, `PUT /profiles/me`,
   `PUT /profiles/me/work-visibility`.
 - Frontend: `/team` directory, `/team/:slug` per-member microsite,
@@ -104,6 +106,56 @@ page without removing the first.
   visibility toggles).
 - D1: `is_visible_on_personal` column on `inventory_videos` +
   `inventory_thumbnails` (run the ALTERs in `worker/schema.sql` once).
+
+### Client portal — per-client public pages at /c/<slug>
+The bio-link product. Each client (brand/creator we work with) gets a
+public modular page they can put in their IG/YT bio. They self-edit it
+through `/clients/me/edit` after the admin grants them portal access.
+
+- **URL**: `/c/<slug>` — short, bio-friendly. Frontend SPA route +
+  worker `/api/c/:slug` data endpoint. Slug regex: lowercase letters,
+  digits, dashes; 3–30 chars; not in the reserved list (admin/api/c/
+  dashboard/login/logout/me/studio/hub/blog/work/team/contact/pricing/
+  tools/faq/about/live/privacy/terms/services/live-templates/portfolio/
+  portal/settings/leaderboard).
+- **Module registry** at
+  `frontend/src/components/c/modules/index.js` — single source of truth.
+  16 modules in 3 buckets:
+  - **Core (5)**: Hero, BioLinks, LatestVideo, Stats30Day, TipJar
+  - **Revenue / Phase 2 (7)**: SponsorRates, AffiliateShelf, MerchShelf,
+    Calendly, CourseLinks, Newsletter, Contact
+  - **Engagement / Phase 4 (4)**: PressKit (jsPDF lazy import),
+    FanWall, AMA, DevLog
+  - Plus forced **ShinelFooter** ("Hire my editor" CTA, mandatory
+    on free tier).
+  - Adding a new module: drop a `XxxModule.jsx` exporting
+    `default { Render, Editor }`, add one entry to the registry, add
+    one type to `CLIENT_MODULE_TYPES` + a `sanitizeModuleConfig` case
+    in `worker/worker.js`. Zero schema changes.
+- **Auth**: reuses existing `/auth/login` + `tokenStore`. New helper
+  `requireClientOrThrow(request, secret, env)` checks role includes
+  `"client"` or `"admin"`. Client→D1 link via `clients.portal_email`
+  column matching the JWT email.
+- **Worker endpoints**:
+  - Public: `GET/POST /api/c/:slug/{,youtube/latest,stats/30day,
+    sponsor,contact,newsletter,wall,ama,devlog}` — all rate-limited
+    per-slug, honeypot-gated where POST.
+  - Self-serve: `GET/PUT /portal/me`, `PUT /portal/me/modules`,
+    `GET/PATCH /portal/me/inbox*`, `GET /portal/me/inbox/newsletter.csv`.
+  - Admin: `POST/DELETE /admin/clients/:id/portal-access` (creates
+    SHINEL_USERS KV row + sets `clients.portal_email`),
+    `POST /admin/clients/:id/devlog` (Shinel team posts to a client's
+    BTS timeline).
+- **D1**: 12 columns on `clients` (slug, public_enabled, tier,
+  tier_expires_at, display_name, tagline, avatar_url, banner_url,
+  discord_webhook_url, modules_json, last_login_at, portal_email).
+  New table `client_inbox` (id, client_id, type, payload_json,
+  read_at, pinned_at, created_at). All four engagement modules
+  (wall, ama, devLog) reuse `client_inbox` under different `type`
+  values + `pinned_at` as the moderation/publish toggle.
+- **Notifications**: per-client Discord webhook URL stored on the
+  client row. Validated to discord.com hosts. Worker fire-and-forgets
+  on every inbox row. No outbound email path.
 
 ### Self-hosted fonts
 `@fontsource-variable/{outfit,inter,space-grotesk}` — no Google Fonts
@@ -142,6 +194,20 @@ directly. Accepted trade-off today. If leads start bypassing Shinel's
 admin queue in a way that costs agency margin, the plan to revisit is
 "route through Shinel, tag with maker slug" — see
 `PortfolioPage.jsx:socials` + `worker.js /leads` for the plumbing.
+
+### Client portal pages: shareable, NEVER browseable
+
+Same rule as `/team`, stricter: `/c/<slug>` is **public + sitemap-indexed**
+but MUST NOT appear in site nav, the homepage, or any marketing
+surface. Clients put their own URL in their IG/YT bio; that's the only
+discovery path other than direct share/Google. There is no `/c` index
+page and never should be — it would compete with `/team` and Shinel's
+own funnel.
+
+The Shinel "Hire my editor" footer is forced on every free-tier page
+(`forced: true` on `MODULE_REGISTRY.shinelFooter`). That's the
+monetisation handshake: free distribution for the client, lead gen
+for Shinel. Don't make it removable except on a future paid Pro tier.
 
 ---
 
@@ -238,6 +304,11 @@ cd frontend && node scripts/generate-sitemap.js
 - **Never animate fonts, colors via keyframes, or anything that triggers
   paint.** If you need a color transition, use `opacity` on a layered element.
 - **When you add a page, update `frontend/scripts/generate-sitemap.js`**.
+- **Never link `/c/<slug>` from nav or the homepage** — same rule as
+  `/team`. Direct URL only. Forced ShinelFooter on free tier stays on.
+- **Adding a client-portal module = one file + one registry entry +
+  one server-side sanitizer case.** Don't invent new patterns —
+  copy `HeroModule.jsx` or `BioLinksModule.jsx`.
 
 ---
 
@@ -273,6 +344,16 @@ execution plan archived at
    `/api/metrics/summary`. Admin UI at `/dashboard/metrics` with
    1/7/30-day window, Google-banded p75 cards, per-day bar chart,
    per-path breakdown (commit `c1da404`).
+13. ✅ **Client portal v1+2+4** — full bio-link product at
+    `/c/<slug>`. 16 modules, self-edit at `/clients/me/edit`,
+    moderation inbox at `/clients/me/inbox`, admin grants portal
+    access from `/dashboard/clients`. See "Client portal" section
+    above for endpoints/schema/policy. Commits `186df25` (v1
+    foundation), `1d5e018` (lazy-migrate fix), `3d6b98c` (Phase 2:
+    7 revenue modules + KV→D1 backfill), `5ba2ec9` (Phase 4: 4
+    engagement modules + pin/answer inbox). Deferred forever
+    (per user): Razorpay billing / Pro tier, Resend email, R2
+    upload, custom domains, self-serve password reset.
 
 ### Not started
 
@@ -326,9 +407,27 @@ execution plan archived at
   you add a new service.
 - `/services` root redirects to `/work` — per user policy, Work is the
   single browse surface; there is no "services" landing page.
+- The legacy `/clients` worker endpoint dual-writes to KV
+  (`app:clients:registry`) AND D1 `clients` table, but D1 inserts
+  silently failed for years — the table was empty while all 14 clients
+  lived only in KV. `getClients()` returns D1 if non-empty, KV as
+  fallback. Lazy-migrating just one client into D1 (for portal
+  access) caused the other 13 to vanish from `/dashboard/clients`
+  because the fallback stopped firing. Fixed by `worker/scripts/
+  backfill-clients-to-d1.mjs` (one-shot INSERT OR IGNORE for all 14)
+  in commit `3d6b98c`. D1 is now source of truth; KV stays in sync
+  via dual-write on POST/PUT/DELETE. If you ever see clients
+  disappear from the Pulse Registry, the prime suspect is D1↔KV drift
+  again — re-run that backfill script.
+- `/admin/clients/:id/portal-access` includes a lazy KV→D1 fallback
+  (commit `1d5e018`). If a client is in KV but not D1, the worker
+  copies the row over from KV before creating the portal user. Safety
+  net for any KV-only clients added in the future, though the
+  backfill above means this branch should rarely fire.
 
-Last updated: 2026-04-22 — multi-commit Phase 2 delivery session
-(commits `2b3229b` robustness, `8cd034b` restructure, `e462b13` +
-`f35a3b2` polish/a11y, `c1da404` web vitals, `ad44abb` testimonials,
-`b808475` thumbnail clickability, then channel audit + content
-calendar).
+Last updated: 2026-04-27 — Client Portal v1 → Phase 4 delivery
+session. Commits `186df25` (v1 foundation: 6 core modules + auth +
+admin), `1d5e018` (KV→D1 lazy-migrate), `3d6b98c` (Phase 2: 7 revenue
+modules + full KV backfill), `5ba2ec9` (Phase 4: PressKit + FanWall +
+AMA + DevLog + inbox moderation). 16 modules total. Worker version
+`233479df`.
