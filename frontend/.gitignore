@@ -20,6 +20,7 @@ build/
 # Local env files
 *.local
 .env
+.env.*
 .env.*.local
 
 # Editor directories and files
@@ -49,6 +50,7 @@ Thumbs.db
 # pnpm-lock.yaml
 
 # Playwright
-frontend/test-results/
-frontend/playwright-report/
-frontend/.playwright/
+test-results/
+playwright-report/
+.playwright/
+tests/.auth/

@@ -1,9 +1,14 @@
 // Playwright config — smoke suite for shinelstudios.in surfaces.
 // Runs in two browsers (Chromium + WebKit) on every PR via .github/workflows/playwright.yml.
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4173);
 const PREVIEW_URL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${PORT}`;
+const HAS_ADMIN_CREDS = !!(process.env.E2E_TEST_EMAIL && process.env.E2E_TEST_PASSWORD);
+const ADMIN_STORAGE = path.join(__dirname, "tests", ".auth", "admin.json");
 
 export default defineConfig({
   testDir: "./tests",
@@ -25,14 +30,37 @@ export default defineConfig({
   },
 
   projects: [
+    // Public smoke suites — never touch the admin surface.
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: /admin\.spec\.js/,
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
+      testIgnore: /admin\.spec\.js/,
     },
+    // Admin suite — only enabled when E2E credentials are configured.
+    // The setup project performs ONE login and saves storage state;
+    // every admin test reuses it (no rate-limit pressure on /auth/login).
+    ...(HAS_ADMIN_CREDS
+      ? [
+          {
+            name: "setup",
+            testMatch: /auth\.setup\.js/,
+          },
+          {
+            name: "admin",
+            testMatch: /admin\.spec\.js/,
+            dependencies: ["setup"],
+            use: {
+              ...devices["Desktop Chrome"],
+              storageState: ADMIN_STORAGE,
+            },
+          },
+        ]
+      : []),
   ],
 
   // Spin vite preview server before tests. Skipped on CI when
