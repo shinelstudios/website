@@ -23,6 +23,7 @@
 
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
+import * as Sentry from "@sentry/cloudflare";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -1216,7 +1217,21 @@ async function performClientSync(env, isForced = false, debug = false) {
 }
 
 /* ================================= worker ================================= */
-export default {
+// Worker DSN — public, safe to commit (Sentry DSNs are write-only by design).
+const SENTRY_WORKER_DSN = "https://0e7298209c36b9d98569b265d3ff6a55@o4511286896951296.ingest.de.sentry.io/4511286968123472";
+
+// Same noise-filter list as the frontend so we don't pay for false positives.
+const SENTRY_IGNORE = [
+  /No refresh token/i,           // expected on logged-out reload
+  /Token expired/i,              // routine; happens every 30m + tab idle
+  /Token revoked/i,              // expected after logout
+  /Forbidden/i,                  // 403 — design-level, not a bug
+  /Missing token/i,              // unauthed traffic
+  /rate limited/i,               // by-design
+  /Backend returned non-JSON/i,  // captions backend offline
+];
+
+const handler = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("origin") || "";
@@ -4332,3 +4347,38 @@ export default {
     })());
   }
 };
+
+// Wrap the handler with Sentry so unhandled errors in fetch + scheduled get
+// captured automatically. Free-tier safe defaults:
+//   - tracesSampleRate 0.05 → ~150 transactions/mo at expected volume
+//     (vs the 10k/mo perf quota). Always-on tracing on a worker that gets
+//     ~3-5k requests/day would burn the quota in a week.
+//   - sendDefaultPii: false — never auto-attach IPs/cookies/headers.
+//   - beforeSend filter drops the routine 401/403/expected-error noise that
+//     would otherwise dominate the issue list.
+//
+// withSentry preserves the original handler signature so existing routes
+// keep working unchanged.
+export default Sentry.withSentry(
+  (env) => ({
+    dsn: SENTRY_WORKER_DSN,
+    environment: env.ENVIRONMENT || "production",
+    tracesSampleRate: 0.05,
+    sendDefaultPii: false,
+    ignoreErrors: SENTRY_IGNORE,
+    initialScope: { tags: { surface: "worker" } },
+    beforeSend(event, hint) {
+      // Drop expected auth/business errors — keep real bugs only.
+      const msg = String(hint?.originalException?.message || event?.message || "");
+      if (SENTRY_IGNORE.some((re) => re.test(msg))) return null;
+      // Strip cookies on the off chance the SDK auto-collected them.
+      if (event.request?.cookies) delete event.request.cookies;
+      if (event.request?.headers) {
+        delete event.request.headers.cookie;
+        delete event.request.headers.authorization;
+      }
+      return event;
+    },
+  }),
+  handler
+);
