@@ -1015,7 +1015,6 @@ export default function ShinelStudiosHomepage() {
           title={META.title}
           description={META.description}
           keywords={META.keywords}
-          ogImage={META.ogImage}
         />
 
         {/* Structured Data */}
