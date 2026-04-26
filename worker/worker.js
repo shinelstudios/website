@@ -5202,9 +5202,39 @@ const handler = {
         const email = String(body.email || "").trim().toLowerCase();
         if (!EMAIL_RE.test(email) || email.length > 254) return json({ error: "Invalid email" }, 400, cors);
 
-        // Look up the client.
-        const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ? LIMIT 1").bind(id).first();
-        if (!client) return json({ error: "Client not found" }, 404, cors);
+        // Look up the client in D1. The legacy /clients endpoints write to
+        // both KV and D1, but historically D1 inserts have been silently
+        // failing for many records — so the KV registry is the source of
+        // truth for who-exists. Lazy-migrate on portal grant: if the client
+        // is in KV but missing from D1, copy the row over before continuing.
+        let client = await env.DB.prepare("SELECT * FROM clients WHERE id = ? LIMIT 1").bind(id).first();
+        if (!client) {
+          const kvList = await env.SHINEL_AUDIT.get("app:clients:registry", "json") || [];
+          const kvClient = Array.isArray(kvList) ? kvList.find(c => c?.id === id) : null;
+          if (!kvClient) return json({ error: "Client not found" }, 404, cors);
+          try {
+            await env.DB.prepare(
+              "INSERT INTO clients (id, name, youtube_id, handle, instagram_handle, uploads_playlist_id, category, status, subscribers, instagram_followers, instagram_logo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ).bind(
+              kvClient.id,
+              kvClient.name || "",
+              kvClient.youtubeId || null,
+              kvClient.handle || "",
+              kvClient.instagramHandle || "",
+              kvClient.uploadsPlaylistId || "",
+              kvClient.category || "",
+              kvClient.status || "active",
+              Number(kvClient.subscribers || 0),
+              Number(kvClient.instagramFollowers || 0),
+              kvClient.instagramLogo || ""
+            ).run();
+            client = await env.DB.prepare("SELECT * FROM clients WHERE id = ? LIMIT 1").bind(id).first();
+          } catch (e) {
+            console.error("Lazy-migrate KV→D1 failed:", e?.message || e);
+            return json({ error: "Could not migrate client to D1: " + (e?.message || "unknown") }, 500, cors);
+          }
+          if (!client) return json({ error: "Client migration succeeded but row not readable" }, 500, cors);
+        }
 
         // Generate a strong temp password — alpha+num+symbol, 16 chars.
         const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
