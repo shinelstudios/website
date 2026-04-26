@@ -4480,13 +4480,19 @@ const handler = {
     }
 
     /* ----------------------------------------------------------------------
-     * Live-templates thumbnails registry
-     * Powers the /live-templates marketing page's "Same template, different
-     * creators" grid. Admins add/remove/reorder thumbnails without a deploy.
-     * Public GET so the marketing page can fetch on render.
+     * Live-templates registry (template-grouped: each item = base + V1 + V2)
+     * Powers the /live-templates marketing page's TripleBeforeAfterSlider
+     * cards. Admins add/remove/reorder full templates without a deploy.
      *
-     * Key: `app:live-templates:thumbnails`  →  { items: [...] }
-     * Item: { id, imageUrl, label, sortOrder, createdAt, updatedAt }
+     * Key: `app:live-templates:items`  →  { items: [...] }
+     * Item shape:
+     *   {
+     *     id, name, sortOrder,
+     *     baseUrl,  baseLabel,
+     *     v1Url,    v1Label,
+     *     v2Url,    v2Label,
+     *     createdAt, updatedAt
+     *   }
      *
      * GET    /api/live-templates              (public, sorted by sortOrder asc)
      * POST   /api/live-templates              (admin)
@@ -4495,16 +4501,16 @@ const handler = {
      * ---------------------------------------------------------------------- */
     if (url.pathname === "/api/live-templates" && request.method === "GET") {
       try {
-        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:items", "json") || { items: [] };
         const items = Array.isArray(raw.items) ? raw.items : [];
         const sorted = items.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        return json({ ok: true, thumbnails: sorted }, 200, {
+        return json({ ok: true, templates: sorted }, 200, {
           ...cors,
           "Cache-Control": "public, max-age=300", // 5-min edge cache
         });
       } catch (e) {
         console.error("GET /api/live-templates:", e?.message || e);
-        return json({ ok: true, thumbnails: [] }, 200, cors);
+        return json({ ok: true, templates: [] }, 200, cors);
       }
     }
 
@@ -4518,30 +4524,37 @@ const handler = {
         if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
 
         const s = (v, max) => clampStr(v, max).trim();
-        const imageUrl = s(body.imageUrl, 800);
-        const label    = s(body.label, 80);
-        if (!imageUrl) return json({ error: "imageUrl required" }, 400, cors);
-        if (!/^(\/|https?:\/\/)/i.test(imageUrl)) {
-          return json({ error: "imageUrl must start with / or https://" }, 400, cors);
+        const baseUrl = s(body.baseUrl, 800);
+        const v1Url   = s(body.v1Url, 800);
+        const v2Url   = s(body.v2Url, 800);
+        const name    = s(body.name, 80);
+
+        if (!baseUrl || !v1Url || !v2Url) return json({ error: "baseUrl, v1Url, v2Url all required" }, 400, cors);
+        for (const u of [baseUrl, v1Url, v2Url]) {
+          if (!/^(\/|https?:\/\/)/i.test(u)) {
+            return json({ error: "URLs must start with / or https://" }, 400, cors);
+          }
         }
 
-        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:items", "json") || { items: [] };
         const items = Array.isArray(raw.items) ? raw.items : [];
-        if (items.length >= 12) return json({ error: "Cap reached (12). Delete one first." }, 409, cors);
+        if (items.length >= 8) return json({ error: "Cap reached (8). Delete one first." }, 409, cors);
 
         const now = Date.now();
         const maxSort = items.reduce((m, it) => Math.max(m, Number(it.sortOrder) || 0), 0);
         const entry = {
           id: `lt_${now}_${Math.random().toString(36).slice(2, 8)}`,
-          imageUrl,
-          label,
+          name,
+          baseUrl,  baseLabel: s(body.baseLabel, 60) || "Base",
+          v1Url,    v1Label:   s(body.v1Label, 60)   || "Variation 1",
+          v2Url,    v2Label:   s(body.v2Label, 60)   || "Variation 2",
           sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : maxSort + 10,
           createdAt: now,
           updatedAt: now,
         };
         items.push(entry);
-        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items });
-        return json({ ok: true, thumbnail: entry }, 201, cors);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:items", { items });
+        return json({ ok: true, template: entry }, 201, cors);
       } catch (e) {
         console.error("POST /api/live-templates:", e?.message || e);
         return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
@@ -4559,7 +4572,7 @@ const handler = {
         });
         if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
 
-        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:items", "json") || { items: [] };
         const items = Array.isArray(raw.items) ? raw.items : [];
         const idx = items.findIndex(t => t && t.id === id);
         if (idx < 0) return json({ error: "not found" }, 404, cors);
@@ -4568,20 +4581,25 @@ const handler = {
         const now = Date.now();
         const merged = {
           ...items[idx],
-          imageUrl:  body.imageUrl !== undefined  ? s(body.imageUrl, 800) : items[idx].imageUrl,
-          label:     body.label !== undefined     ? s(body.label, 80)     : items[idx].label,
+          name:      body.name !== undefined      ? s(body.name, 80)       : items[idx].name,
+          baseUrl:   body.baseUrl !== undefined   ? s(body.baseUrl, 800)   : items[idx].baseUrl,
+          baseLabel: body.baseLabel !== undefined ? (s(body.baseLabel, 60) || "Base") : items[idx].baseLabel,
+          v1Url:     body.v1Url !== undefined     ? s(body.v1Url, 800)     : items[idx].v1Url,
+          v1Label:   body.v1Label !== undefined   ? (s(body.v1Label, 60) || "Variation 1") : items[idx].v1Label,
+          v2Url:     body.v2Url !== undefined     ? s(body.v2Url, 800)     : items[idx].v2Url,
+          v2Label:   body.v2Label !== undefined   ? (s(body.v2Label, 60) || "Variation 2") : items[idx].v2Label,
           sortOrder: body.sortOrder !== undefined ? (Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : items[idx].sortOrder) : items[idx].sortOrder,
           updatedAt: now,
         };
-        if (!merged.imageUrl) {
-          return json({ error: "imageUrl is required" }, 400, cors);
-        }
-        if (!/^(\/|https?:\/\/)/i.test(merged.imageUrl)) {
-          return json({ error: "imageUrl must start with / or https://" }, 400, cors);
+        for (const u of [merged.baseUrl, merged.v1Url, merged.v2Url]) {
+          if (!u) return json({ error: "baseUrl, v1Url and v2Url are required" }, 400, cors);
+          if (!/^(\/|https?:\/\/)/i.test(u)) {
+            return json({ error: "URLs must start with / or https://" }, 400, cors);
+          }
         }
         items[idx] = merged;
-        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items });
-        return json({ ok: true, thumbnail: merged }, 200, cors);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:items", { items });
+        return json({ ok: true, template: merged }, 200, cors);
       } catch (e) {
         console.error("PUT /api/live-templates/:id:", e?.message || e);
         return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
@@ -4593,11 +4611,11 @@ const handler = {
         await requireTeamOrThrow(request, secret, env);
         const id = decodeURIComponent(url.pathname.split("/")[3] || "");
         if (!id) return json({ error: "id required" }, 400, cors);
-        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:items", "json") || { items: [] };
         const items = Array.isArray(raw.items) ? raw.items : [];
         const next = items.filter(t => t && t.id !== id);
         if (next.length === items.length) return json({ error: "not found" }, 404, cors);
-        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items: next });
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:items", { items: next });
         return json({ ok: true, deleted: id }, 200, cors);
       } catch (e) {
         console.error("DELETE /api/live-templates/:id:", e?.message || e);

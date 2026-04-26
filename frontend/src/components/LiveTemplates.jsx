@@ -2,18 +2,19 @@
  * LiveTemplates — direct-URL only (no nav link).
  *
  * One-page landing for the BGMI livestream-thumbnail subscription product.
- * Two pricing models: ₹120/express (one-off, 3–4 hr swap) and ₹500/mo
- * subscription (5–15 thumbnails/month from a high-CTR template).
+ * Three pricing tiers (single ₹150, subscription ₹600/5, pro ₹1500/15)
+ * with the middle one highlighted as MOST POPULAR.
  *
- * Refreshed 2026-04-26 to use the editorial design system (Section /
- * Kicker / Display / Lede / HairlineCard / Img). Old version was 1816
- * lines of duplicated bespoke markup.
+ * The "Same template, different creators" section is the signature feature:
+ * each template renders as a TripleBeforeAfterSlider showing Base → V1 → V2
+ * with two draggable handles. Restored from the pre-2026-04-26 version.
  *
- * Per business policy, this URL must NEVER be linked from site nav. Tracked
+ * Per business policy this URL must NEVER be linked from site nav. Tracked
  * in the admin "Hidden landing pages" registry at /dashboard/landing-pages.
+ * Admin can edit the template sliders at /dashboard/live-templates.
  */
 import { useEffect, useState } from "react";
-import { ArrowRight, Sparkles, Zap, Repeat, ShieldCheck, MessageCircle } from "lucide-react";
+import { ArrowRight, Sparkles, Zap, Repeat, ShieldCheck, MessageCircle, Check } from "lucide-react";
 import {
   Section,
   Kicker,
@@ -27,34 +28,43 @@ import {
 } from "../design";
 import MetaTags, { ProductSchema, FAQSchema } from "./MetaTags";
 import { AUTH_BASE } from "../config/constants";
+import TripleBeforeAfterSlider from "./live-templates/TripleBeforeAfterSlider";
 
+import bgmiBase from "@/assets/bgmi-thumbnail-base.jpg";
 import bgmiCreator1 from "@/assets/bgmi-thumbnail-creator1.jpg";
-import bgmiCreator1Webp from "@/assets/bgmi-thumbnail-creator1.webp";
 import bgmiCreator2 from "@/assets/bgmi-thumbnail-creator2.jpg";
-import bgmiCreator2Webp from "@/assets/bgmi-thumbnail-creator2.webp";
 import bgmiBase2 from "@/assets/bgmi-thumbnail-base2.jpg";
 import bgmiBase2Webp from "@/assets/bgmi-thumbnail-base2.webp";
 import bgmiCreator3 from "@/assets/bgmi-thumbnail-creator3.jpg";
 import bgmiCreator3Webp from "@/assets/bgmi-thumbnail-creator3.webp";
 import bgmiCreator4 from "@/assets/bgmi-thumbnail-creator4.jpg";
-import bgmiCreator4Webp from "@/assets/bgmi-thumbnail-creator4.webp";
 
 const WHATSAPP_HREF = "https://wa.me/918968141585?text=Hi%20Shinel%20%E2%80%94%20I%27d%20like%20a%20BGMI%20livestream%20thumbnail";
 
-// Hardcoded defaults — used at build-time prerender AND as the fallback if
-// /api/live-templates is unreachable or empty. Admin edits via
+// Hardcoded defaults — render at build-time prerender AND fall back here if
+// /api/live-templates is unreachable or empty. Admin edits at
 // /dashboard/live-templates override these on the live site.
 const FALLBACK_TEMPLATES = [
-  { creator: bgmiCreator1, creatorWebp: bgmiCreator1Webp, name: "BGMI Series A" },
-  { creator: bgmiCreator2, creatorWebp: bgmiCreator2Webp, name: "BGMI Series A" },
-  { creator: bgmiCreator3, creatorWebp: bgmiCreator3Webp, name: "BGMI Series B" },
-  { creator: bgmiCreator4, creatorWebp: bgmiCreator4Webp, name: "BGMI Series B" },
+  {
+    id: "bgmi-a",
+    name: "BGMI Series A",
+    baseUrl: bgmiBase,    baseLabel: "Base",
+    v1Url:   bgmiCreator1, v1Label:  "Creator 1",
+    v2Url:   bgmiCreator2, v2Label:  "Creator 2",
+  },
+  {
+    id: "bgmi-b",
+    name: "BGMI Series B",
+    baseUrl: bgmiBase2,    baseLabel: "Base",
+    v1Url:   bgmiCreator3, v1Label:  "Creator 3",
+    v2Url:   bgmiCreator4, v2Label:  "Creator 4",
+  },
 ];
 
 const STEPS = [
   { icon: Sparkles, title: "Pick a template", body: "Browse our high-CTR BGMI templates. One winner is all you need." },
   { icon: Zap, title: "Send your photo + name", body: "We swap in your face and handle. Same composition, your branding." },
-  { icon: Repeat, title: "Get it back in 3–4 hours", body: "Express delivery. Subscribers get 5–15 swaps every month." },
+  { icon: Repeat, title: "Get it back in 3–4 hours", body: "Express delivery. Subscribers get up to 15 swaps every month." },
 ];
 
 const FAQS = [
@@ -63,8 +73,8 @@ const FAQS = [
     answer: "3–4 hours from when you send us your photo and stream title. We work IST 10am–10pm. Orders after 9pm ship next morning.",
   },
   {
-    question: "What's included in the ₹500/mo subscription?",
-    answer: "5–15 thumbnails per month using your chosen template. Pause anytime, no contract. Same composition every stream — that's the point.",
+    question: "What's the difference between the 3 tiers?",
+    answer: "All three deliver the same quality. The single (₹150) is for one-off streams; the 5-pack (₹600) saves ₹150 if you stream weekly; the 15-pack (₹1500) saves ₹750 if you stream daily — that's ₹100 per thumbnail, our best rate.",
   },
   {
     question: "Can I request a fresh template design?",
@@ -74,21 +84,75 @@ const FAQS = [
     question: "Why one template over many?",
     answer: "Channel consistency. Viewers recognise you in their feed faster, your CTR climbs, the algorithm rewards it. The whole product is built around this insight.",
   },
+  {
+    question: "Can I cancel my subscription anytime?",
+    answer: "Yes — month-to-month, no lock-in. Pause for a slow month, resume when you're streaming again.",
+  },
 ];
 
 const PRODUCT_SCHEMA = {
   name: "BGMI Livestream Thumbnail Templates",
-  description: "High-CTR gaming livestream thumbnails on subscription. ₹120 express or ₹500/mo for 5–15 swaps.",
+  description: "High-CTR gaming livestream thumbnails. ₹150 single, ₹600 for 5 (₹120 each), ₹1500 for 15 (₹100 each).",
   image: "/assets/bgmi-thumbnail-creator1.jpg",
-  price: "120",
+  price: "100",
   currency: "INR",
 };
+
+const PRICING_TIERS = [
+  {
+    badge: null,
+    label: "Single",
+    price: "₹150",
+    unit: "/ thumbnail",
+    sub: "One-off, no commitment.",
+    features: [
+      "1 thumbnail from any template",
+      "Your photo + stream title swapped in",
+      "Delivered in 3–4 working hours",
+      "Pay per thumbnail",
+    ],
+    cta: "Order one",
+    primary: false,
+  },
+  {
+    badge: "Most popular",
+    label: "Subscription · 5 / month",
+    price: "₹600",
+    unit: "/ month",
+    sub: "Effective ₹120 per thumbnail. Save ₹150 vs. single.",
+    features: [
+      "5 thumbnails every month",
+      "Pick one template, use it all month",
+      "Same 3–4 hour express turnaround",
+      "Priority WhatsApp queue",
+      "Pause or cancel anytime",
+    ],
+    cta: "Start subscription",
+    primary: true,
+  },
+  {
+    badge: "Best value",
+    label: "Pro · 15 / month",
+    price: "₹1500",
+    unit: "/ month",
+    sub: "Effective ₹100 per thumbnail. Save ₹750 vs. single.",
+    features: [
+      "Up to 15 thumbnails every month",
+      "Front-of-queue delivery",
+      "Multiple templates if needed",
+      "Pause or cancel anytime",
+      "Best per-thumbnail rate we offer",
+    ],
+    cta: "Go pro",
+    primary: false,
+  },
+];
 
 export default function LiveTemplates() {
   const reduced = useReducedMotion();
   const [templates, setTemplates] = useState(FALLBACK_TEMPLATES);
 
-  // Fetch admin-managed thumbnails on mount; gracefully fall back to the
+  // Fetch admin-managed templates on mount; gracefully fall back to the
   // hardcoded defaults if the worker is unreachable or returns nothing.
   // The endpoint is edge-cached for 5 min so this is essentially free.
   useEffect(() => {
@@ -96,12 +160,14 @@ export default function LiveTemplates() {
     fetch(`${AUTH_BASE}/api/live-templates`, { headers: { Accept: "application/json" } })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled || !data || !Array.isArray(data.thumbnails) || data.thumbnails.length === 0) return;
+        if (cancelled || !data || !Array.isArray(data.templates) || data.templates.length === 0) return;
         setTemplates(
-          data.thumbnails.map((t) => ({
-            creator: t.imageUrl,
-            creatorWebp: undefined, // arbitrary URLs don't have a known sibling
-            name: t.label || "",
+          data.templates.map((t) => ({
+            id: t.id,
+            name: t.name || "",
+            baseUrl: t.baseUrl, baseLabel: t.baseLabel || "Base",
+            v1Url: t.v1Url,     v1Label:   t.v1Label   || "Variation 1",
+            v2Url: t.v2Url,     v2Label:   t.v2Label   || "Variation 2",
           }))
         );
       })
@@ -112,17 +178,17 @@ export default function LiveTemplates() {
   return (
     <>
       <MetaTags
-        title="BGMI Livestream Thumbnail Templates — ₹120 express or ₹500/mo"
-        description="High-CTR gaming livestream thumbnails on subscription. Pick a template, send your photo, get it back in 3–4 hours. From ₹120 or ₹500/mo for 5–15 thumbnails."
+        title="BGMI Livestream Thumbnail Templates — from ₹100 each"
+        description="High-CTR gaming livestream thumbnails. Single ₹150, 5/mo ₹600 (₹120 each), Pro 15/mo ₹1500 (₹100 each). Pick a template, send your photo, get it back in 3–4 hours."
         keywords="BGMI thumbnails, livestream thumbnails, gaming thumbnail templates, YouTube gaming, stream branding"
       />
       <ProductSchema product={PRODUCT_SCHEMA} />
       <FAQSchema faqs={FAQS} />
 
       {/* HERO */}
-      <Section size="lg" className="relative pt-24 md:pt-32 pb-16 overflow-hidden">
+      <Section size="lg" className="relative pt-24 md:pt-32 pb-12 md:pb-16 overflow-hidden">
         {!reduced && <SpotlightSweep />}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center relative z-10">
           <div className="lg:col-span-7">
             <RevealOnScroll>
               <Kicker>BGMI · Live thumbnail templates</Kicker>
@@ -136,17 +202,18 @@ export default function LiveTemplates() {
             <RevealOnScroll delay="160ms">
               <Lede>
                 One high-CTR template, your face every time. Viewers recognise you
-                in their feed; your click-through climbs. From ₹120 express or
-                ₹500/mo for 5–15 swaps.
+                in their feed; your click-through climbs. From{" "}
+                <strong style={{ color: "var(--text)" }}>₹100 a thumbnail</strong>{" "}
+                on the 15-pack.
               </Lede>
             </RevealOnScroll>
             <RevealOnScroll delay="240ms">
-              <div className="flex flex-wrap items-center gap-3 mt-8">
+              <div className="flex flex-wrap items-center gap-3 mt-6 md:mt-8">
                 <a
                   href={WHATSAPP_HREF}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-4 rounded-full font-black text-base focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--orange)]"
+                  className="inline-flex items-center gap-2 px-5 md:px-6 py-3 md:py-4 rounded-full font-black text-sm md:text-base focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--orange)]"
                   style={{ background: "var(--orange)", color: "#fff", boxShadow: "0 10px 30px rgba(232,80,2,0.35)" }}
                 >
                   <MessageCircle size={18} />
@@ -155,7 +222,7 @@ export default function LiveTemplates() {
                 </a>
                 <a
                   href="#pricing"
-                  className="inline-flex items-center gap-2 px-5 py-4 rounded-full font-bold text-sm border hairline hover:bg-[var(--surface-alt)] focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                  className="inline-flex items-center gap-2 px-5 py-3 md:py-4 rounded-full font-bold text-sm border hairline hover:bg-[var(--surface-alt)] focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                   style={{ color: "var(--text)" }}
                 >
                   See pricing ↓
@@ -164,8 +231,8 @@ export default function LiveTemplates() {
             </RevealOnScroll>
           </div>
 
-          {/* Hero preview — single before/after */}
-          <div className="lg:col-span-5">
+          {/* Hero preview — quick before/after pair */}
+          <div className="lg:col-span-5 w-full">
             <RevealOnScroll delay="200ms">
               <HairlineCard className="p-3">
                 <div className="grid grid-cols-2 gap-2">
@@ -201,21 +268,21 @@ export default function LiveTemplates() {
       </Section>
 
       {/* HOW IT WORKS */}
-      <Section size="lg" className="py-16">
+      <Section size="lg" className="py-12 md:py-16">
         <RevealOnScroll>
           <Kicker>How it works</Kicker>
         </RevealOnScroll>
         <RevealOnScroll delay="80ms">
-          <Display as="h2" size="lg" className="mt-3 mb-10">
+          <Display as="h2" size="lg" className="mt-3 mb-8 md:mb-10">
             Three steps. Same day delivery.
           </Display>
         </RevealOnScroll>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
           {STEPS.map((s, i) => {
             const Icon = s.icon;
             return (
               <RevealOnScroll key={s.title} delay={`${i * 80}ms`}>
-                <HairlineCard className="p-6 h-full">
+                <HairlineCard className="p-5 md:p-6 h-full">
                   <div
                     className="w-10 h-10 rounded-xl grid place-items-center mb-4"
                     style={{ background: "var(--orange-soft)", color: "var(--orange)" }}
@@ -225,12 +292,8 @@ export default function LiveTemplates() {
                   <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: "var(--text-muted)" }}>
                     Step {i + 1}
                   </div>
-                  <h3 className="font-black text-lg mb-2" style={{ color: "var(--text)" }}>
-                    {s.title}
-                  </h3>
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    {s.body}
-                  </p>
+                  <h3 className="font-black text-lg mb-2" style={{ color: "var(--text)" }}>{s.title}</h3>
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{s.body}</p>
                 </HairlineCard>
               </RevealOnScroll>
             );
@@ -238,10 +301,10 @@ export default function LiveTemplates() {
         </div>
       </Section>
 
-      {/* TEMPLATE GRID */}
-      <Section size="lg" className="py-16">
+      {/* TEMPLATE SLIDERS — the signature comparison feature */}
+      <Section size="lg" className="py-12 md:py-16">
         <RevealOnScroll>
-          <Kicker>Recent work</Kicker>
+          <Kicker>The work</Kicker>
         </RevealOnScroll>
         <RevealOnScroll delay="80ms">
           <Display as="h2" size="lg" className="mt-3 mb-3">
@@ -249,173 +312,128 @@ export default function LiveTemplates() {
           </Display>
         </RevealOnScroll>
         <RevealOnScroll delay="160ms">
-          <Lede className="mb-10">
-            Two of our most-used BGMI templates, swapped for four different
-            streamers. The composition stays — your face, name and the highlight
-            text change.
+          <Lede className="mb-8 md:mb-10">
+            Drag the orange handles to compare the empty <strong>Base</strong>{" "}
+            against two real creator deliveries. The composition stays — your
+            face, name and the highlight text change.
           </Lede>
         </RevealOnScroll>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
           {templates.map((t, i) => (
-            <RevealOnScroll key={i} delay={`${(i % 2) * 80}ms`}>
-              <HairlineCard className="p-2">
-                <Img
-                  src={t.creator}
-                  webp={t.creatorWebp}
-                  alt={`${t.name} — creator example ${i + 1}`}
-                  className="w-full aspect-video object-cover rounded-lg"
-                  loading="lazy"
+            <RevealOnScroll key={t.id || i} delay={`${(i % 2) * 80}ms`}>
+              <HairlineCard className="p-3 md:p-4">
+                {t.name && (
+                  <div className="px-1 pb-3 flex items-center justify-between">
+                    <span className="text-sm font-black" style={{ color: "var(--text)" }}>{t.name}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--orange)" }}>Live</span>
+                  </div>
+                )}
+                <TripleBeforeAfterSlider
+                  base={t.baseUrl}      baseLabel={t.baseLabel}
+                  v1={t.v1Url}          v1Label={t.v1Label}
+                  v2={t.v2Url}          v2Label={t.v2Label}
                 />
-                <div className="px-2 py-2 flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: "var(--text)" }}>
-                    {t.name}
-                  </span>
-                  <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                    Live
-                  </span>
-                </div>
               </HairlineCard>
             </RevealOnScroll>
           ))}
         </div>
       </Section>
 
-      {/* PRICING */}
-      <Section size="lg" id="pricing" className="py-16 scroll-mt-24">
+      {/* PRICING — 3 tiers, middle highlighted */}
+      <Section size="lg" id="pricing" className="py-12 md:py-16 scroll-mt-24">
         <RevealOnScroll>
           <Kicker>Pricing</Kicker>
         </RevealOnScroll>
         <RevealOnScroll delay="80ms">
           <Display as="h2" size="lg" className="mt-3 mb-3">
-            Pay once or stay on subscription.
+            Pay once or save big monthly.
           </Display>
         </RevealOnScroll>
         <RevealOnScroll delay="160ms">
-          <Lede className="mb-10">
-            Most active streamers save more on the monthly. One-off works if
-            you stream less than 4× a month.
+          <Lede className="mb-10 md:mb-12">
+            The more you commit, the cheaper each thumbnail gets. Most active
+            streamers pick the 5/month subscription — the sweet spot.
           </Lede>
         </RevealOnScroll>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl">
-          {/* Express */}
-          <RevealOnScroll>
-            <HairlineCard className="p-7 h-full flex flex-col">
-              <div className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: "var(--text-muted)" }}>
-                Express
-              </div>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-4xl font-black" style={{ color: "var(--text)" }}>
-                  ₹120
-                </span>
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  / thumbnail
-                </span>
-              </div>
-              <p className="text-xs mb-6" style={{ color: "var(--text-muted)" }}>
-                One-off delivery in 3–4 hours.
-              </p>
-              <ul className="space-y-2 text-sm flex-1" style={{ color: "var(--text)" }}>
-                {[
-                  "1 thumbnail from any existing template",
-                  "Your photo + stream title swapped in",
-                  "Delivered in 3–4 working hours",
-                  "Pay per thumbnail, no commitment",
-                ].map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--orange)" }} />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              <a
-                href={WHATSAPP_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full font-bold text-sm border hairline hover:bg-[var(--surface-alt)] focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{ color: "var(--text)" }}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 items-stretch">
+          {PRICING_TIERS.map((tier, i) => (
+            <RevealOnScroll key={tier.label} delay={`${i * 80}ms`}>
+              <div
+                className={`relative h-full rounded-2xl border p-5 md:p-6 flex flex-col ${tier.primary ? "md:scale-[1.04] md:shadow-2xl" : ""}`}
+                style={{
+                  background: tier.primary ? "linear-gradient(180deg, rgba(232,80,2,0.10), var(--surface))" : "var(--surface)",
+                  borderColor: tier.primary ? "var(--orange)" : "var(--border)",
+                  boxShadow: tier.primary ? "0 18px 40px rgba(232,80,2,0.18)" : undefined,
+                }}
               >
-                Order one
-                <ArrowRight size={14} />
-              </a>
-            </HairlineCard>
-          </RevealOnScroll>
-
-          {/* Subscription */}
-          <RevealOnScroll delay="80ms">
-            <HairlineCard
-              className="p-7 h-full flex flex-col relative"
-              style={{ borderColor: "var(--orange)" }}
-            >
-              <span
-                className="absolute -top-3 left-7 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest"
-                style={{ background: "var(--orange)", color: "#fff" }}
-              >
-                Most popular
-              </span>
-              <div className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: "var(--orange)" }}>
-                Subscription
+                {tier.badge && (
+                  <span
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+                    style={{
+                      background: tier.primary ? "var(--orange)" : "var(--surface-alt)",
+                      color: tier.primary ? "#fff" : "var(--text)",
+                      border: tier.primary ? "none" : "1px solid var(--border)",
+                    }}
+                  >
+                    {tier.badge}
+                  </span>
+                )}
+                <div className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: tier.primary ? "var(--orange)" : "var(--text-muted)" }}>
+                  {tier.label}
+                </div>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="text-4xl md:text-5xl font-black" style={{ color: "var(--text)" }}>{tier.price}</span>
+                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>{tier.unit}</span>
+                </div>
+                <p className="text-xs mb-6" style={{ color: tier.primary ? "var(--text)" : "var(--text-muted)" }}>
+                  {tier.sub}
+                </p>
+                <ul className="space-y-2.5 text-sm flex-1" style={{ color: "var(--text)" }}>
+                  {tier.features.map((line) => (
+                    <li key={line} className="flex items-start gap-2">
+                      <Check size={14} className="mt-1 shrink-0" style={{ color: "var(--orange)" }} />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href={WHATSAPP_HREF}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`mt-6 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-sm focus-visible:ring-2 focus-visible:ring-[var(--orange)] ${tier.primary ? "font-black" : "font-bold border hairline hover:bg-[var(--surface-alt)]"}`}
+                  style={tier.primary
+                    ? { background: "var(--orange)", color: "#fff", boxShadow: "0 10px 30px rgba(232,80,2,0.35)" }
+                    : { color: "var(--text)" }
+                  }
+                >
+                  {tier.cta}
+                  <ArrowRight size={14} />
+                </a>
               </div>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-4xl font-black" style={{ color: "var(--text)" }}>
-                  ₹500
-                </span>
-                <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  / month
-                </span>
-              </div>
-              <p className="text-xs mb-6" style={{ color: "var(--text-muted)" }}>
-                5–15 thumbnails per month. Effective rate: ₹33–₹100.
-              </p>
-              <ul className="space-y-2 text-sm flex-1" style={{ color: "var(--text)" }}>
-                {[
-                  "Up to 15 thumbnails per month",
-                  "Pick one template, use it all month",
-                  "Same 3–4 hour express turnaround",
-                  "Pause or cancel anytime",
-                  "Priority WhatsApp queue",
-                ].map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--orange)" }} />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-              <a
-                href={WHATSAPP_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full font-black text-sm focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
-                style={{ background: "var(--orange)", color: "#fff", boxShadow: "0 10px 30px rgba(232,80,2,0.35)" }}
-              >
-                Start subscription
-                <ArrowRight size={14} />
-              </a>
-            </HairlineCard>
-          </RevealOnScroll>
+            </RevealOnScroll>
+          ))}
         </div>
+
+        <p className="text-xs text-center mt-8" style={{ color: "var(--text-muted)" }}>
+          All prices in INR. Subscription pauses + cancels via WhatsApp anytime.
+        </p>
       </Section>
 
       {/* FAQ */}
-      <Section size="lg" className="py-16">
+      <Section size="lg" className="py-12 md:py-16">
         <RevealOnScroll>
           <Kicker>FAQ</Kicker>
         </RevealOnScroll>
         <RevealOnScroll delay="80ms">
-          <Display as="h2" size="lg" className="mt-3 mb-10">
-            Quick answers.
-          </Display>
+          <Display as="h2" size="lg" className="mt-3 mb-8 md:mb-10">Quick answers.</Display>
         </RevealOnScroll>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
           {FAQS.map((f, i) => (
             <RevealOnScroll key={f.question} delay={`${(i % 2) * 80}ms`}>
-              <HairlineCard className="p-6 h-full">
-                <h3 className="font-black mb-2" style={{ color: "var(--text)" }}>
-                  {f.question}
-                </h3>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {f.answer}
-                </p>
+              <HairlineCard className="p-5 md:p-6 h-full">
+                <h3 className="font-black mb-2" style={{ color: "var(--text)" }}>{f.question}</h3>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>{f.answer}</p>
               </HairlineCard>
             </RevealOnScroll>
           ))}
@@ -423,9 +441,9 @@ export default function LiveTemplates() {
       </Section>
 
       {/* FINAL CTA */}
-      <Section size="lg" className="py-20">
+      <Section size="lg" className="py-16 md:py-20">
         <RevealOnScroll>
-          <HairlineCard className="p-8 md:p-12 text-center" style={{ borderColor: "var(--orange)" }}>
+          <HairlineCard className="p-6 md:p-12 text-center" style={{ borderColor: "var(--orange)" }}>
             <div
               className="w-12 h-12 mx-auto rounded-2xl grid place-items-center mb-5"
               style={{ background: "var(--orange-soft)", color: "var(--orange)" }}
