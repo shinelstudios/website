@@ -603,6 +603,9 @@ function validateClientSlug(slug) {
 // missing fields to defaults rather than rejecting (forgiving editor UX).
 const CLIENT_MODULE_TYPES = new Set([
   "hero", "bioLinks", "latestVideo", "stats30day", "tipJar", "shinelFooter",
+  // Phase 2 (revenue + engagement modules)
+  "sponsorRates", "affiliateShelf", "merchShelf", "calendly", "courseLinks",
+  "newsletter", "contact",
 ]);
 function sanitizeClientModules(input) {
   if (!Array.isArray(input)) return [];
@@ -651,6 +654,87 @@ function sanitizeModuleConfig(type, c) {
       };
     case "shinelFooter":
       return {}; // no config — text is fixed
+
+    // ----- Phase 2 modules -----
+    case "sponsorRates": {
+      const tiers = Array.isArray(cfg.tiers) ? cfg.tiers.slice(0, 3) : [];
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 60),
+        tiers: tiers
+          .filter(t => t && typeof t === "object")
+          .map(t => ({
+            name: clampStr(t.name, 40),
+            price: clampStr(t.price, 40),
+            deliverables: clampStr(t.deliverables, 200),
+          })),
+      };
+    }
+    case "affiliateShelf": {
+      const items = Array.isArray(cfg.items) ? cfg.items.slice(0, 12) : [];
+      return {
+        headline: clampStr(cfg.headline, 60),
+        disclaimer: clampStr(cfg.disclaimer, 200),
+        items: items
+          .filter(it => it && typeof it === "object" && it.name)
+          .map(it => ({
+            name: clampStr(it.name, 80),
+            url: clampStr(it.url, 500),
+            image: clampStr(it.image, 500),
+            price: clampStr(it.price, 20),
+          })),
+      };
+    }
+    case "merchShelf": {
+      const items = Array.isArray(cfg.items) ? cfg.items.slice(0, 8) : [];
+      return {
+        headline: clampStr(cfg.headline, 60),
+        items: items
+          .filter(it => it && typeof it === "object" && it.name)
+          .map(it => ({
+            name: clampStr(it.name, 80),
+            url: clampStr(it.url, 500),
+            image: clampStr(it.image, 500),
+            price: clampStr(it.price, 20),
+          })),
+      };
+    }
+    case "calendly":
+      return {
+        url: clampStr(cfg.url, 500),
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 40),
+      };
+    case "courseLinks": {
+      const items = Array.isArray(cfg.items) ? cfg.items.slice(0, 6) : [];
+      const platforms = new Set(["course", "patreon", "discord", "telegram", "website", "generic"]);
+      return {
+        headline: clampStr(cfg.headline, 60),
+        items: items
+          .filter(it => it && typeof it === "object" && it.label)
+          .map(it => ({
+            platform: platforms.has(it.platform) ? it.platform : "generic",
+            label: clampStr(it.label, 60),
+            description: clampStr(it.description, 120),
+            url: clampStr(it.url, 500),
+          })),
+      };
+    }
+    case "newsletter":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 20),
+      };
+    case "contact":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 20),
+      };
+
     default:
       return {};
   }
