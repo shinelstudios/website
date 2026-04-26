@@ -39,12 +39,41 @@ async function fetchTeamSlugs() {
   }
 }
 
+/**
+ * Fetch publicly-enabled client-portal slugs from /clients. Each one becomes
+ * a /c/<slug> entry. We only ship slugs where the client has flipped
+ * publicEnabled=true (so unpublished portals don't get indexed). Same
+ * fail-soft contract as fetchTeamSlugs.
+ */
+async function fetchClientPortalSlugs() {
+  try {
+    const res = await fetch(`${AUTH_BASE}/clients`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`⚠️  /clients endpoint returned ${res.status}; skipping client portal slugs`);
+      return [];
+    }
+    const data = await res.json();
+    const clients = Array.isArray(data?.clients) ? data.clients : [];
+    return clients
+      .filter((c) => c?.slug && c?.publicEnabled)
+      .map((c) => c.slug);
+  } catch (e) {
+    console.warn(`⚠️  could not fetch /clients for sitemap: ${e.message}`);
+    return [];
+  }
+}
+
 async function generate() {
   const sitemap = new SitemapStream({
     hostname: "https://shinelstudios.in",
   });
 
-  const teamSlugs = await fetchTeamSlugs();
+  const [teamSlugs, clientPortalSlugs] = await Promise.all([
+    fetchTeamSlugs(),
+    fetchClientPortalSlugs(),
+  ]);
 
   const pages = [
     // Core marketing pages (editorial v2)
@@ -95,6 +124,11 @@ async function generate() {
 
     // Live pulse templates
     "/live-templates",
+
+    // Client portal — public per-creator pages (only the publicly-enabled ones).
+    // Creators share these as their bio link, so they get indexed for
+    // "<creator name>" Google searches the same way /team profiles do.
+    ...clientPortalSlugs.map((slug) => `/c/${slug}`),
   ];
 
   // De-dupe just in case
@@ -105,7 +139,11 @@ async function generate() {
     sitemap.write({
       url,
       changefreq: url === "/" ? "daily" : "weekly",
-      priority: url === "/" ? 1.0 : url.startsWith("/team/") ? 0.7 : 0.8,
+      priority:
+        url === "/" ? 1.0 :
+        url.startsWith("/team/") ? 0.7 :
+        url.startsWith("/c/") ? 0.6 :
+        0.8,
       lastmod: new Date().toISOString(),
     });
   }
@@ -116,7 +154,7 @@ async function generate() {
   writeFileSync("./public/sitemap.xml", xml);
 
   console.log(
-    `✅ sitemap.xml generated — ${seen.size} URLs (${teamSlugs.length} team profiles)`
+    `✅ sitemap.xml generated — ${seen.size} URLs (${teamSlugs.length} team profiles, ${clientPortalSlugs.length} client portal pages)`
   );
 }
 

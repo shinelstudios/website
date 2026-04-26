@@ -161,3 +161,46 @@ CREATE INDEX IF NOT EXISTS idx_inventory_videos_video_id       ON inventory_vide
 CREATE INDEX IF NOT EXISTS idx_inventory_videos_attributed_to  ON inventory_videos(attributed_to);
 CREATE INDEX IF NOT EXISTS idx_inventory_thumbnails_attributed_to ON inventory_thumbnails(attributed_to);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at           ON audit_logs(created_at);
+
+-- === Client Portal v1: per-client public pages at /c/<slug> ===
+-- Each ALTER is idempotent-by-convention only — re-running errors with
+-- "duplicate column"; the worker endpoints catch that gracefully. Run the
+-- ALTERs one at a time (or as a batched script) the FIRST time only:
+--   wrangler d1 execute shinel-db --remote --command "ALTER TABLE ..."
+--
+-- portal_email links the client D1 row to a SHINEL_USERS KV record (auth
+-- always keys on email — clients.user_id is left untouched for legacy use).
+-- modules_json holds an ordered array of {type,enabled,config} per page.
+ALTER TABLE clients ADD COLUMN slug TEXT;
+ALTER TABLE clients ADD COLUMN public_enabled INTEGER DEFAULT 0;
+ALTER TABLE clients ADD COLUMN tier TEXT DEFAULT 'free';
+ALTER TABLE clients ADD COLUMN tier_expires_at INTEGER;
+ALTER TABLE clients ADD COLUMN display_name TEXT;
+ALTER TABLE clients ADD COLUMN tagline TEXT;
+ALTER TABLE clients ADD COLUMN avatar_url TEXT;
+ALTER TABLE clients ADD COLUMN banner_url TEXT;
+ALTER TABLE clients ADD COLUMN discord_webhook_url TEXT;
+ALTER TABLE clients ADD COLUMN modules_json TEXT DEFAULT '[]';
+ALTER TABLE clients ADD COLUMN last_login_at INTEGER;
+ALTER TABLE clients ADD COLUMN portal_email TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_slug_unique
+  ON clients(slug) WHERE slug IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_portal_email_unique
+  ON clients(portal_email) WHERE portal_email IS NOT NULL;
+
+-- Inbox table: sponsor inquiries, contact messages, newsletter signups.
+-- Soft-capped at 1000 rows per client (worker prunes oldest read row on write).
+CREATE TABLE IF NOT EXISTS client_inbox (
+    id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    type TEXT NOT NULL,            -- 'sponsor' | 'contact' | 'newsletter'
+    payload_json TEXT NOT NULL,
+    read_at INTEGER,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(client_id) REFERENCES clients(id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_inbox_client_unread
+  ON client_inbox(client_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_client_inbox_client_created
+  ON client_inbox(client_id, created_at DESC);

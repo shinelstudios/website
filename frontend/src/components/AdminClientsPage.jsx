@@ -18,7 +18,10 @@ import {
     TrendingDown,
     Edit3,
     Users,
-    RotateCw
+    RotateCw,
+    KeyRound,
+    Copy,
+    Check
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useClientStats } from "../context/ClientStatsContext";
@@ -75,6 +78,47 @@ export default function AdminClientsPage() {
         instagramFollowers: "",
         instagramLogo: ""
     });
+
+    // Client portal access modal — admin grants /clients/me login to an existing client.
+    const [portalModal, setPortalModal] = useState(null); // { client, email, status, tempPassword?, error? }
+    const [portalCopied, setPortalCopied] = useState(false);
+
+    const openPortalModal = (client) => {
+        setPortalModal({ client, email: "", status: "form", tempPassword: null, error: null });
+        setPortalCopied(false);
+    };
+    const closePortalModal = () => setPortalModal(null);
+
+    const submitPortalAccess = async () => {
+        if (!portalModal) return;
+        const email = String(portalModal.email || "").trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+            setPortalModal(p => ({ ...p, error: "Please enter a valid email." }));
+            return;
+        }
+        setPortalModal(p => ({ ...p, status: "loading", error: null }));
+        try {
+            const res = await authedFetch(AUTH_BASE, `/admin/clients/${encodeURIComponent(portalModal.client.id)}/portal-access`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, firstName: portalModal.client.name }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+            setPortalModal(p => ({ ...p, status: "done", tempPassword: data.tempPassword, email }));
+        } catch (e) {
+            setPortalModal(p => ({ ...p, status: "form", error: e.message || "Failed" }));
+        }
+    };
+
+    const copyTempPassword = async () => {
+        if (!portalModal?.tempPassword) return;
+        try {
+            await navigator.clipboard.writeText(`Email: ${portalModal.email}\nPassword: ${portalModal.tempPassword}\nLogin: https://shinelstudios.in/login`);
+            setPortalCopied(true);
+            setTimeout(() => setPortalCopied(false), 2000);
+        } catch { /* */ }
+    };
 
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({
@@ -951,6 +995,24 @@ export default function AdminClientsPage() {
                                                     >
                                                         <Edit3 size={14} />
                                                     </button>
+                                                    <button
+                                                        onClick={() => openPortalModal(client)}
+                                                        className="h-9 w-9 flex items-center justify-center bg-orange-500/10 border border-orange-500/20 text-orange-500 rounded-lg hover:bg-orange-500/20 hover:border-orange-500/30 transition-all"
+                                                        title="Set up client portal access (/c/<slug>)"
+                                                    >
+                                                        <KeyRound size={14} />
+                                                    </button>
+                                                    {client.slug ? (
+                                                        <a
+                                                            href={`/c/${client.slug}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="h-9 w-9 flex items-center justify-center bg-orange-500/5 border border-orange-500/15 text-orange-500/80 rounded-lg hover:bg-orange-500/15 hover:text-orange-400 transition-all"
+                                                            title={`View public page /c/${client.slug}`}
+                                                        >
+                                                            <UserPlus size={14} />
+                                                        </a>
+                                                    ) : null}
                                                     <a
                                                         href={`https://youtube.com/channel/${client.youtubeId}`}
                                                         target="_blank"
@@ -1032,6 +1094,108 @@ export default function AdminClientsPage() {
                     )
                 }
             </AnimatePresence >
+
+            {/* Client Portal Access Modal */}
+            <AnimatePresence>
+                {portalModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] grid place-items-center p-4"
+                        style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+                        onClick={(e) => { if (e.target === e.currentTarget) closePortalModal(); }}
+                    >
+                        <motion.div
+                            initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 12, opacity: 0 }}
+                            className="w-full max-w-md rounded-2xl bg-[#0f0f0f] border border-white/10 shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-500 grid place-items-center">
+                                        <KeyRound size={18} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-base font-black text-white">Client portal access</h3>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-0.5">
+                                            {portalModal.client.name}
+                                        </p>
+                                    </div>
+                                    <button onClick={closePortalModal} className="text-white/40 hover:text-white"><X size={18} /></button>
+                                </div>
+
+                                {portalModal.status !== "done" ? (
+                                    <>
+                                        <p className="text-xs text-white/60 mb-3">
+                                            Creates a login the client can use at <code>/login</code> to edit their /c/&lt;slug&gt; page.
+                                            We'll generate a one-time password — copy and send it to them through your usual channel.
+                                        </p>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">
+                                            Client's email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            autoFocus
+                                            value={portalModal.email}
+                                            onChange={(e) => setPortalModal(p => ({ ...p, email: e.target.value }))}
+                                            placeholder="creator@gmail.com"
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white"
+                                            disabled={portalModal.status === "loading"}
+                                        />
+                                        {portalModal.error ? (
+                                            <p className="mt-2 text-xs text-red-400">{portalModal.error}</p>
+                                        ) : null}
+                                        <div className="mt-4 flex justify-end gap-2">
+                                            <button
+                                                onClick={closePortalModal}
+                                                className="px-4 py-2 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={submitPortalAccess}
+                                                disabled={portalModal.status === "loading"}
+                                                className="px-4 py-2 text-xs font-black uppercase tracking-widest rounded-lg bg-orange-500 hover:bg-orange-400 text-white disabled:opacity-50"
+                                            >
+                                                {portalModal.status === "loading" ? "Creating…" : "Create access"}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="rounded-lg bg-orange-500/10 border border-orange-500/30 p-4 mb-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-orange-300 mb-2">
+                                                Save these now — the password is shown ONCE
+                                            </p>
+                                            <div className="font-mono text-xs text-white space-y-1">
+                                                <div>Email: <strong>{portalModal.email}</strong></div>
+                                                <div>Password: <strong className="select-all">{portalModal.tempPassword}</strong></div>
+                                                <div>Login: <strong>https://shinelstudios.in/login</strong></div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={copyTempPassword}
+                                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                                        >
+                                            {portalCopied ? <Check size={14} /> : <Copy size={14} />}
+                                            {portalCopied ? "Copied to clipboard" : "Copy all credentials"}
+                                        </button>
+                                        <p className="mt-3 text-[10px] text-white/40">
+                                            The client can change their password later from /me. They land at /clients/me on first login.
+                                        </p>
+                                        <div className="mt-4 flex justify-end">
+                                            <button
+                                                onClick={closePortalModal}
+                                                className="px-4 py-2 text-xs font-black uppercase tracking-widest text-white/60 hover:text-white"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </section >
     );
 }

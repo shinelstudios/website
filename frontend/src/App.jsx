@@ -129,6 +129,12 @@ const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"
 const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
 const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
 
+// Client Portal v1 — public per-client pages at /c/<slug> + self-edit at /clients/me/*
+const ClientPublicPage = React.lazy(() => import("./components/c/ClientPublicPage.jsx"));
+const ClientPortalDashboard = React.lazy(() => import("./components/clientportal/ClientPortalDashboard.jsx"));
+const ClientPortalEditor = React.lazy(() => import("./components/clientportal/ClientPortalEditor.jsx"));
+const ClientPortalInbox = React.lazy(() => import("./components/clientportal/ClientPortalInbox.jsx"));
+
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -275,7 +281,16 @@ function RedirectIfAuthed({ children }) {
       return false;
     }
   }, []);
-  return isAuthed ? <Navigate to="/studio" replace /> : children;
+  if (!isAuthed) return children;
+  // Role-aware bounce — clients land in their own portal, not /studio.
+  let target = "/studio";
+  try {
+    const roles = (localStorage.getItem("role") || "").toLowerCase().split(",").map(s => s.trim());
+    if (roles.includes("client") && !roles.includes("admin") && !roles.includes("team")) {
+      target = "/clients/me";
+    }
+  } catch { /* */ }
+  return <Navigate to={target} replace />;
 }
 
 // Run logout side-effects synchronously (not inside useEffect) so that listeners
@@ -428,6 +443,33 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/live-templates" element={<LiveTemplates />} />
+
+          {/* Client portal — public per-client pages (/c/<slug>) + self-edit (/clients/me/*) */}
+          <Route path="/c/:slug" element={<ClientPublicPage />} />
+          <Route
+            path="/clients/me"
+            element={
+              <ProtectedRoute>
+                <ClientPortalDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/clients/me/edit"
+            element={
+              <ProtectedRoute>
+                <ClientPortalEditor />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/clients/me/inbox"
+            element={
+              <ProtectedRoute>
+                <ClientPortalInbox />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ---------------------------- Auth & Studio --------------------------- */}
           <Route

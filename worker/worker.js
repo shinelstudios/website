@@ -434,6 +434,7 @@ function sanitizeClientForPublic(c) {
   return {
     id: c.id,
     name: c.name,
+    displayName: c.display_name || c.displayName || c.name || "",
     displayHandle: c.displayHandle || c.handle || c.instagram_handle || "",
     youtubeId: c.youtubeId || c.youtube_id || "",
     youtubeUrl: c.youtubeUrl || (c.youtube_id ? `https://www.youtube.com/channel/${c.youtube_id}` : ""),
@@ -441,6 +442,12 @@ function sanitizeClientForPublic(c) {
     subscribers: Number(c.subscribers || 0),
     publicSocials: c.publicSocials || null,
     avatarUrl: c.avatarUrl || c.avatar_url || "",
+    // Client portal v1 fields — exposed so the sitemap script and any
+    // future "Featured creators" surface can find publicly-enabled pages.
+    // Sensitive portal fields (portal_email, discord_webhook_url, etc.)
+    // are NEVER returned by this function.
+    slug: c.slug || null,
+    publicEnabled: !!c.public_enabled,
   };
 }
 
@@ -536,6 +543,131 @@ async function requireAdminOrThrow(request, secret, env) {
   const hasAdmin = role === "admin" || role.split(",").map(s => s.trim()).includes("admin");
   if (!hasAdmin) throw Object.assign(new Error("Admin access required"), { status: 403 });
   return payload;
+}
+
+// Client portal: requires the JWT to carry the "client" role (or "admin" so
+// admins can act-as during debugging). Use with getCurrentClientFromPayload
+// to fetch the owning D1 row.
+async function requireClientOrThrow(request, secret, env) {
+  const token = readBearerToken(request);
+  if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
+  const payload = await verifyJwtOr401(token, secret);
+  if (env && await isJtiRevoked(env, payload.jti)) {
+    throw Object.assign(new Error("Token revoked"), { status: 401 });
+  }
+  const roles = String(payload.role || "").toLowerCase().split(",").map(s => s.trim());
+  if (!roles.includes("client") && !roles.includes("admin")) {
+    throw Object.assign(new Error("Client portal access required"), { status: 403 });
+  }
+  return payload;
+}
+
+// Look up the clients D1 row attached to a logged-in portal user.
+// Returns null for callers without an attached client (e.g. admins acting
+// without ?actAs= override — endpoint handlers decide what to do then).
+async function getCurrentClientFromPayload(env, payload) {
+  if (!env?.DB || !payload?.email) return null;
+  try {
+    const email = String(payload.email).trim().toLowerCase();
+    const row = await env.DB
+      .prepare("SELECT * FROM clients WHERE LOWER(portal_email) = ? LIMIT 1")
+      .bind(email).first();
+    return row || null;
+  } catch (e) {
+    console.error("getCurrentClientFromPayload failed:", e?.message || e);
+    return null;
+  }
+}
+
+// Slug validation for /c/<slug>. Lowercase + digits + dashes, 3-30 chars,
+// not starting/ending with a dash, plus a reserved-word blocklist so a
+// client can't claim a path that conflicts with our SPA routes.
+const CLIENT_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/;
+const CLIENT_SLUG_RESERVED = new Set([
+  "admin", "api", "c", "dashboard", "login", "logout", "me", "studio",
+  "hub", "blog", "work", "team", "contact", "pricing", "tools", "faq",
+  "about", "live", "privacy", "terms", "services", "live-templates",
+  "portfolio", "portal", "settings", "leaderboard",
+]);
+function validateClientSlug(slug) {
+  const s = String(slug || "").trim().toLowerCase();
+  if (!s) return { ok: false, error: "slug required" };
+  if (s.length < 3 || s.length > 30) return { ok: false, error: "slug must be 3-30 chars" };
+  if (!CLIENT_SLUG_RE.test(s)) return { ok: false, error: "slug must be lowercase letters/digits/dashes" };
+  if (CLIENT_SLUG_RESERVED.has(s)) return { ok: false, error: "slug is reserved" };
+  return { ok: true, slug: s };
+}
+
+// Server-side module-config validation. Mirrors the frontend module
+// registry. Each type validates its own config object — silently coerces
+// missing fields to defaults rather than rejecting (forgiving editor UX).
+const CLIENT_MODULE_TYPES = new Set([
+  "hero", "bioLinks", "latestVideo", "stats30day", "tipJar", "shinelFooter",
+]);
+function sanitizeClientModules(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const m of input.slice(0, 20)) {
+    if (!m || typeof m !== "object") continue;
+    const type = String(m.type || "").trim();
+    if (!CLIENT_MODULE_TYPES.has(type)) continue;
+    if (seen.has(type)) continue; // one of each type max
+    seen.add(type);
+    const enabled = Boolean(m.enabled);
+    const config = sanitizeModuleConfig(type, m.config);
+    out.push({ type, enabled, config });
+  }
+  return out;
+}
+function sanitizeModuleConfig(type, c) {
+  const cfg = (c && typeof c === "object") ? c : {};
+  switch (type) {
+    case "hero":
+      return { tagline: clampStr(cfg.tagline, 200) };
+    case "bioLinks": {
+      const links = Array.isArray(cfg.links) ? cfg.links.slice(0, 10) : [];
+      return {
+        links: links
+          .filter(l => l && typeof l === "object" && l.label && l.url)
+          .map(l => ({
+            label: clampStr(l.label, 60),
+            url: clampStr(l.url, 500),
+            icon: clampStr(l.icon || "link", 24),
+          })),
+      };
+    }
+    case "latestVideo":
+      // Channel/handle resolved from the parent client row's youtube_id;
+      // module config only carries display preferences.
+      return { showStats: cfg.showStats !== false };
+    case "stats30day":
+      return { metric: ["subscribers","instagram_followers","view_count"].includes(cfg.metric) ? cfg.metric : "subscribers" };
+    case "tipJar":
+      return {
+        upi: clampStr(cfg.upi, 80),
+        externalUrl: clampStr(cfg.externalUrl, 500),
+        message: clampStr(cfg.message, 200),
+      };
+    case "shinelFooter":
+      return {}; // no config — text is fixed
+    default:
+      return {};
+  }
+}
+
+// Fire-and-forget Discord webhook. Swallows all errors — the inbox row
+// is the source of truth, the webhook is the convenience push.
+function fireDiscordWebhook(webhookUrl, payload) {
+  if (!webhookUrl || typeof webhookUrl !== "string") return;
+  if (!/^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(webhookUrl)) return;
+  try {
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => { /* silent */ });
+  } catch { /* silent */ }
 }
 
 // Allowed user roles (server-side whitelist for /admin/users mutations).
@@ -4620,6 +4752,534 @@ const handler = {
       } catch (e) {
         console.error("DELETE /api/live-templates/:id:", e?.message || e);
         return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    /* ====================================================================== *
+     * Client Portal v1 — per-client public pages (/c/<slug>) + self-edit
+     *
+     * Public:
+     *   GET    /api/c/:slug                  — page data (sanitized)
+     *   GET    /api/c/:slug/youtube/latest   — proxy YT for latest upload
+     *   GET    /api/c/:slug/stats/30day      — last 30 client_stats rows
+     *   POST   /api/c/:slug/sponsor          — sponsor inquiry
+     *   POST   /api/c/:slug/contact          — generic contact
+     *   POST   /api/c/:slug/newsletter       — newsletter signup
+     *
+     * Client (require role=client or admin):
+     *   GET    /portal/me                    — own client row + inbox unread count
+     *   PUT    /portal/me                    — top-level fields (slug, tagline,…)
+     *   PUT    /portal/me/modules            — modules array
+     *   GET    /portal/me/inbox              — paginated inbox
+     *   PATCH  /portal/me/inbox/:id/read     — mark read
+     *   GET    /portal/me/inbox/newsletter.csv — CSV export
+     *
+     * Admin:
+     *   POST   /admin/clients/:id/portal-access  — create/regenerate portal user
+     *   DELETE /admin/clients/:id/portal-access  — revoke
+     * ====================================================================== */
+
+    // Helper used by every /api/c/:slug endpoint below — looks up the client
+    // row by slug (case-insensitive). Returns null when missing or not public.
+    const getPublicClientBySlug = async (rawSlug) => {
+      if (!env?.DB) return null;
+      const slug = String(rawSlug || "").trim().toLowerCase();
+      if (!slug) return null;
+      try {
+        return await env.DB
+          .prepare("SELECT * FROM clients WHERE LOWER(slug) = ? AND public_enabled = 1 LIMIT 1")
+          .bind(slug).first();
+      } catch (e) {
+        console.error("getPublicClientBySlug failed:", e?.message || e);
+        return null;
+      }
+    };
+
+    // Sanitize a clients row for the public page response — strip auth +
+    // notification fields. The `tier` field is exposed because the public
+    // ShinelFooter module conditionally hides on Pro tier.
+    const sanitizeClientForPortal = (c) => {
+      if (!c) return null;
+      let modules = [];
+      try { modules = JSON.parse(c.modules_json || "[]"); } catch { modules = []; }
+      return {
+        id: c.id,
+        slug: c.slug,
+        tier: c.tier || "free",
+        displayName: c.display_name || c.name || "",
+        tagline: c.tagline || "",
+        avatarUrl: c.avatar_url || "",
+        bannerUrl: c.banner_url || "",
+        youtubeId: c.youtube_id || "",
+        instagramHandle: c.instagram_handle || "",
+        subscribers: Number(c.subscribers || 0),
+        instagramFollowers: Number(c.instagram_followers || 0),
+        modules,
+      };
+    };
+
+    /* ----------------------------- /api/c/:slug ----------------------------- */
+    if (url.pathname.startsWith("/api/c/") && request.method === "GET") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      // /api/c/:slug                       → parts.length === 3
+      // /api/c/:slug/youtube/latest        → parts.length === 5
+      // /api/c/:slug/stats/30day           → parts.length === 5
+      const slug = parts[2] || "";
+      const sub = parts.slice(3).join("/");
+
+      const client = await getPublicClientBySlug(slug);
+      if (!client) return json({ error: "Page not found" }, 404, cors);
+
+      if (sub === "") {
+        return json({ ok: true, client: sanitizeClientForPortal(client) }, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=60",
+        });
+      }
+
+      if (sub === "youtube/latest") {
+        if (!client.youtube_id) return json({ ok: true, video: null }, 200, cors);
+        // 30-min cache per slug to stay well under the 10k YT quota/day.
+        const cacheKey = `client:yt:${slug}`;
+        try {
+          const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
+          if (cached) return json({ ok: true, video: cached, cached: true }, 200, cors);
+        } catch { /* fallthrough */ }
+        try {
+          const key = await getYoutubeKey(env);
+          if (!key) return json({ ok: true, video: null, error: "no_key" }, 200, cors);
+          const playlistId = client.uploads_playlist_id || `UU${String(client.youtube_id).slice(2)}`;
+          const api = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=1&playlistId=${encodeURIComponent(playlistId)}&key=${encodeURIComponent(key)}`;
+          const resp = await fetch(api, { headers: { accept: "application/json" } });
+          if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            if (resp.status === 403 && (errBody?.error?.message || "").toLowerCase().includes("quota")) {
+              await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+            }
+            return json({ ok: true, video: null, error: `yt_${resp.status}` }, 200, cors);
+          }
+          const data = await resp.json().catch(() => ({}));
+          const item = data?.items?.[0];
+          if (!item) return json({ ok: true, video: null }, 200, cors);
+          const video = {
+            videoId: item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || "",
+            title: String(item.snippet?.title || "").slice(0, 200),
+            thumbnail: item.snippet?.thumbnails?.maxres?.url || item.snippet?.thumbnails?.high?.url || "",
+            publishedAt: item.snippet?.publishedAt || item.contentDetails?.videoPublishedAt || "",
+          };
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(video), { expirationTtl: 1800 });
+          return json({ ok: true, video }, 200, cors);
+        } catch (e) {
+          console.error("api/c/:slug/youtube/latest:", e?.message || e);
+          return json({ ok: true, video: null }, 200, cors);
+        }
+      }
+
+      if (sub === "stats/30day") {
+        try {
+          const { results = [] } = await env.DB
+            .prepare("SELECT subscribers, instagram_followers, view_count, video_count, captured_at FROM client_stats WHERE client_id = ? ORDER BY captured_at DESC LIMIT 30")
+            .bind(client.id).all();
+          // Reverse so oldest-first for charting.
+          const series = results.slice().reverse();
+          return json({ ok: true, series }, 200, cors);
+        } catch (e) {
+          console.error("api/c/:slug/stats/30day:", e?.message || e);
+          return json({ ok: true, series: [] }, 200, cors);
+        }
+      }
+
+      return json({ error: "Not found" }, 404, cors);
+    }
+
+    /* ----------------------- /api/c/:slug POST forms ----------------------- */
+    if (url.pathname.startsWith("/api/c/") && request.method === "POST") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const slug = parts[2] || "";
+      const sub = parts.slice(3).join("/");
+      if (!["sponsor", "contact", "newsletter"].includes(sub)) {
+        return json({ error: "Not found" }, 404, cors);
+      }
+
+      try {
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 16 * 1024) return json({ error: "Payload too large" }, 413, cors);
+
+        // Per-slug rate limit so spam targeting one client doesn't exhaust
+        // another's quota. Newsletter gets a higher cap (it's just an email).
+        const window = sub === "newsletter" ? 600 : 3600;
+        const max = sub === "newsletter" ? 10 : 5;
+        if (await isRateLimited(env, ip, window, max, `c:${sub}:${slug}`)) {
+          return json({ error: "Too many submissions, please try again later" }, 429, cors);
+        }
+
+        const body = await request.json().catch(() => ({}));
+        // Honeypot — silent success.
+        if (body && typeof body.website === "string" && body.website.trim()) {
+          return json({ ok: true }, 200, cors);
+        }
+
+        const client = await getPublicClientBySlug(slug);
+        if (!client) return json({ error: "Page not found" }, 404, cors);
+
+        // Build payload per type.
+        let payload = null;
+        if (sub === "newsletter") {
+          const email = String(body.email || "").trim().toLowerCase();
+          if (!EMAIL_RE.test(email) || email.length > 254) {
+            return json({ error: "Invalid email" }, 400, cors);
+          }
+          payload = { email: clampStr(email, 254) };
+        } else {
+          // sponsor + contact share schema: name, email, message, optional brand/budget
+          const name = clampStr(String(body.name || "").trim(), 120);
+          const email = String(body.email || "").trim().toLowerCase();
+          const message = clampStr(String(body.message || "").trim(), 2000);
+          if (name.length < 2) return json({ error: "Name required" }, 400, cors);
+          if (!EMAIL_RE.test(email) || email.length > 254) return json({ error: "Invalid email" }, 400, cors);
+          if (message.length < 5) return json({ error: "Message too short" }, 400, cors);
+          payload = {
+            name, email: clampStr(email, 254), message,
+            brand: clampStr(String(body.brand || "").trim(), 120),
+            budget: clampStr(String(body.budget || "").trim(), 60),
+          };
+        }
+
+        const now = Date.now();
+        const id = `inb-${now}-${Math.random().toString(36).slice(2, 8)}`;
+
+        try {
+          await env.DB.prepare(
+            "INSERT INTO client_inbox (id, client_id, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)"
+          ).bind(id, client.id, sub, JSON.stringify(payload), now).run();
+        } catch (e) {
+          console.error("client_inbox INSERT failed:", e?.message || e);
+          return json({ error: "Could not save" }, 500, cors);
+        }
+
+        // Soft cap: prune oldest READ rows when client crosses 1000 entries.
+        try {
+          const { results: cnt = [] } = await env.DB
+            .prepare("SELECT COUNT(*) AS n FROM client_inbox WHERE client_id = ?").bind(client.id).all();
+          const total = Number(cnt?.[0]?.n || 0);
+          if (total > 1000) {
+            await env.DB.prepare(
+              "DELETE FROM client_inbox WHERE id IN (SELECT id FROM client_inbox WHERE client_id = ? AND read_at IS NOT NULL ORDER BY created_at ASC LIMIT ?)"
+            ).bind(client.id, total - 1000).run();
+          }
+        } catch { /* non-fatal */ }
+
+        // Best-effort Discord notification.
+        if (client.discord_webhook_url) {
+          fireDiscordWebhook(client.discord_webhook_url, {
+            username: "Shinel Inbox",
+            embeds: [{
+              title: `New ${sub} on /c/${slug}`,
+              description: sub === "newsletter"
+                ? `Subscriber: ${payload.email}`
+                : (payload.message ? payload.message.slice(0, 1500) : "(no message)"),
+              fields: sub === "newsletter" ? [] : [
+                { name: "From", value: `${payload.name} · ${payload.email}` },
+                ...(payload.brand ? [{ name: "Brand", value: payload.brand, inline: true }] : []),
+                ...(payload.budget ? [{ name: "Budget", value: payload.budget, inline: true }] : []),
+              ],
+              url: `https://shinelstudios.in/portal/me/inbox`,
+              timestamp: new Date(now).toISOString(),
+              color: sub === "sponsor" ? 0xE85002 : sub === "contact" ? 0xFFD27A : 0x9B59B6,
+            }],
+          });
+        }
+
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) {
+        console.error(`POST /api/c/:slug/${parts.slice(3).join("/")}:`, e?.message || e);
+        return json({ error: "Submission failed" }, 500, cors);
+      }
+    }
+
+    /* ------------------------------ /portal/me ------------------------------ */
+    if (url.pathname === "/portal/me" && request.method === "GET") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        let modules = [];
+        try { modules = JSON.parse(client.modules_json || "[]"); } catch { modules = []; }
+        // Inbox unread count (cheap COUNT query).
+        let unread = 0;
+        try {
+          const { results = [] } = await env.DB
+            .prepare("SELECT COUNT(*) AS n FROM client_inbox WHERE client_id = ? AND read_at IS NULL")
+            .bind(client.id).all();
+          unread = Number(results?.[0]?.n || 0);
+        } catch { /* */ }
+        return json({
+          ok: true,
+          client: {
+            id: client.id,
+            slug: client.slug || "",
+            publicEnabled: !!client.public_enabled,
+            tier: client.tier || "free",
+            displayName: client.display_name || client.name || "",
+            name: client.name || "",
+            tagline: client.tagline || "",
+            avatarUrl: client.avatar_url || "",
+            bannerUrl: client.banner_url || "",
+            discordWebhookUrl: client.discord_webhook_url || "",
+            youtubeId: client.youtube_id || "",
+            instagramHandle: client.instagram_handle || "",
+            subscribers: Number(client.subscribers || 0),
+            instagramFollowers: Number(client.instagram_followers || 0),
+            modules,
+            inboxUnread: unread,
+          },
+        }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/portal/me" && request.method === "PUT") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 16 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        const body = await request.json().catch(() => ({}));
+
+        const updates = {};
+
+        if (body.slug !== undefined) {
+          const v = validateClientSlug(body.slug);
+          if (!v.ok) return json({ error: v.error }, 400, cors);
+          // Uniqueness: exclude self.
+          const conflict = await env.DB
+            .prepare("SELECT id FROM clients WHERE LOWER(slug) = ? AND id != ? LIMIT 1")
+            .bind(v.slug, client.id).first();
+          if (conflict) return json({ error: "Slug already taken" }, 409, cors);
+          updates.slug = v.slug;
+        }
+
+        if (body.publicEnabled !== undefined) updates.public_enabled = body.publicEnabled ? 1 : 0;
+        if (body.displayName !== undefined) updates.display_name = clampStr(body.displayName, 120);
+        if (body.tagline !== undefined) updates.tagline = clampStr(body.tagline, 200);
+        if (body.avatarUrl !== undefined) updates.avatar_url = clampStr(body.avatarUrl, 500);
+        if (body.bannerUrl !== undefined) updates.banner_url = clampStr(body.bannerUrl, 500);
+        if (body.discordWebhookUrl !== undefined) {
+          const w = String(body.discordWebhookUrl || "").trim();
+          if (w && !/^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(w)) {
+            return json({ error: "discordWebhookUrl must be a Discord webhook URL" }, 400, cors);
+          }
+          updates.discord_webhook_url = clampStr(w, 500);
+        }
+
+        if (Object.keys(updates).length === 0) return json({ ok: true, noop: true }, 200, cors);
+
+        const setClause = Object.keys(updates).map(k => `${k} = ?`).join(", ");
+        const values = Object.values(updates);
+        try {
+          await env.DB
+            .prepare(`UPDATE clients SET ${setClause} WHERE id = ?`)
+            .bind(...values, client.id).run();
+        } catch (e) {
+          console.error("PUT /portal/me UPDATE failed:", e?.message || e);
+          return json({ error: "Save failed" }, 500, cors);
+        }
+        return json({ ok: true, updated: Object.keys(updates) }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/portal/me/modules" && request.method === "PUT") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 32 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        const body = await request.json().catch(() => ({}));
+        const modules = sanitizeClientModules(body.modules);
+        // Force shinelFooter on for free tier (mandatory branding).
+        if ((client.tier || "free") !== "pro") {
+          let footer = modules.find(m => m.type === "shinelFooter");
+          if (!footer) {
+            modules.push({ type: "shinelFooter", enabled: true, config: {} });
+          } else {
+            footer.enabled = true;
+          }
+        }
+        try {
+          await env.DB
+            .prepare("UPDATE clients SET modules_json = ? WHERE id = ?")
+            .bind(JSON.stringify(modules), client.id).run();
+        } catch (e) {
+          console.error("PUT /portal/me/modules UPDATE failed:", e?.message || e);
+          return json({ error: "Save failed" }, 500, cors);
+        }
+        return json({ ok: true, modules }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/portal/me/inbox" && request.method === "GET") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const unreadOnly = url.searchParams.get("unreadOnly") === "true";
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") || 100)));
+        const sql = unreadOnly
+          ? "SELECT * FROM client_inbox WHERE client_id = ? AND read_at IS NULL ORDER BY created_at DESC LIMIT ?"
+          : "SELECT * FROM client_inbox WHERE client_id = ? ORDER BY created_at DESC LIMIT ?";
+        const { results = [] } = await env.DB.prepare(sql).bind(client.id, limit).all();
+        const items = results.map(r => {
+          let payload = {};
+          try { payload = JSON.parse(r.payload_json || "{}"); } catch { /* */ }
+          return { id: r.id, type: r.type, payload, readAt: r.read_at, createdAt: r.created_at };
+        });
+        return json({ ok: true, items }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/portal/me/inbox/") && url.pathname.endsWith("/read") && request.method === "PATCH") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const id = decodeURIComponent(url.pathname.split("/")[4] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        await env.DB.prepare(
+          "UPDATE client_inbox SET read_at = ? WHERE id = ? AND client_id = ?"
+        ).bind(Date.now(), id, client.id).run();
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/portal/me/inbox/newsletter.csv" && request.method === "GET") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const { results = [] } = await env.DB
+          .prepare("SELECT payload_json, created_at FROM client_inbox WHERE client_id = ? AND type = 'newsletter' ORDER BY created_at ASC")
+          .bind(client.id).all();
+        const lines = ["email,subscribed_at"];
+        for (const r of results) {
+          let p = {};
+          try { p = JSON.parse(r.payload_json || "{}"); } catch { /* */ }
+          if (!p.email) continue;
+          // CSV-escape: surround with quotes if contains comma/quote.
+          const safe = (s) => /[",\r\n]/.test(s) ? `"${String(s).replace(/"/g, '""')}"` : String(s);
+          lines.push(`${safe(p.email)},${new Date(r.created_at).toISOString()}`);
+        }
+        return new Response(lines.join("\n"), {
+          status: 200,
+          headers: {
+            ...cors,
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="newsletter-${client.slug || client.id}.csv"`,
+          },
+        });
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* ----------------- /admin/clients/:id/portal-access ----------------- */
+    if (url.pathname.startsWith("/admin/clients/") && url.pathname.endsWith("/portal-access") && request.method === "POST") {
+      try {
+        await requireAdminOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "client id required" }, 400, cors);
+        const body = await request.json().catch(() => ({}));
+        const email = String(body.email || "").trim().toLowerCase();
+        if (!EMAIL_RE.test(email) || email.length > 254) return json({ error: "Invalid email" }, 400, cors);
+
+        // Look up the client.
+        const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ? LIMIT 1").bind(id).first();
+        if (!client) return json({ error: "Client not found" }, 404, cors);
+
+        // Generate a strong temp password — alpha+num+symbol, 16 chars.
+        const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
+        const buf = new Uint8Array(16);
+        crypto.getRandomValues(buf);
+        const tempPassword = Array.from(buf, b => alphabet[b % alphabet.length]).join("");
+
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+        const userKey = `user:${email}`;
+
+        // Read existing user (if any) so we preserve profile fields.
+        let existing = null;
+        try {
+          const raw = await env.SHINEL_USERS.get(userKey);
+          if (raw) existing = JSON.parse(raw);
+        } catch { /* */ }
+
+        const userData = {
+          ...(existing || {}),
+          email,
+          passwordHash,
+          role: "client",
+          firstName: existing?.firstName || String(body.firstName || client.name || "").slice(0, 60),
+          lastName: existing?.lastName || String(body.lastName || "").slice(0, 60),
+          // Block this user from /team scans (they're a client, not a teammate).
+          profilePublic: false,
+        };
+
+        await env.SHINEL_USERS.put(userKey, JSON.stringify(userData));
+        invalidateAdminUsersCache();
+
+        // Link client row → portal_email.
+        try {
+          await env.DB
+            .prepare("UPDATE clients SET portal_email = ? WHERE id = ?")
+            .bind(email, id).run();
+        } catch (e) {
+          console.error("UPDATE clients SET portal_email failed:", e?.message || e);
+          return json({ error: "Could not link email to client" }, 500, cors);
+        }
+
+        await audit(env, "client_portal_access_granted", { clientId: id, portalEmail: email, ip });
+
+        return json({
+          ok: true,
+          tempPassword,
+          loginUrl: "https://shinelstudios.in/login",
+          email,
+          warning: "This password is shown ONCE. Copy it now.",
+        }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/admin/clients/") && url.pathname.endsWith("/portal-access") && request.method === "DELETE") {
+      try {
+        await requireAdminOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "client id required" }, 400, cors);
+        const client = await env.DB.prepare("SELECT portal_email FROM clients WHERE id = ? LIMIT 1").bind(id).first();
+        if (!client) return json({ error: "Client not found" }, 404, cors);
+        if (client.portal_email) {
+          try { await env.SHINEL_USERS.delete(`user:${client.portal_email}`); } catch { /* */ }
+          invalidateAdminUsersCache();
+        }
+        try {
+          await env.DB.prepare("UPDATE clients SET portal_email = NULL WHERE id = ?").bind(id).run();
+        } catch (e) {
+          console.error("UPDATE clients clear portal_email failed:", e?.message || e);
+        }
+        await audit(env, "client_portal_access_revoked", { clientId: id, ip });
+        return json({ ok: true }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
       }
     }
 

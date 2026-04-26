@@ -117,11 +117,19 @@ export default function LoginPage() {
         window.dispatchEvent(new Event("auth:changed"));
       } catch (e) { console.error("Persistence Error:", e); }
 
-      // Intelligent Redirect
+      // Intelligent Redirect — admins land in the management dashboard,
+      // clients in their /c/ portal, anyone else on the team overview.
       let targetPath = next;
       if (targetPath === "/" || !targetPath) {
         const roleLower = (data.role || payload.role || "").toLowerCase();
-        targetPath = roleLower.includes("admin") || roleLower.includes("team") ? "/dashboard" : "/dashboard/overview";
+        const roles = roleLower.split(",").map(s => s.trim());
+        if (roles.includes("admin") || roles.includes("team")) {
+          targetPath = "/dashboard";
+        } else if (roles.includes("client")) {
+          targetPath = "/clients/me";
+        } else {
+          targetPath = "/dashboard/overview";
+        }
       }
 
       setTimeout(() => nav(targetPath, { replace: true }), 1200);
