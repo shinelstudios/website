@@ -147,3 +147,17 @@ CREATE TABLE IF NOT EXISTS media_collection_items (
 -- endpoints catch that gracefully and keep working.
 ALTER TABLE inventory_videos ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;
 ALTER TABLE inventory_thumbnails ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;
+
+-- === Hot-path indexes (audit pass — already applied to remote) ===
+-- Speeds up the JOIN at /clients/pulse-history (clients ↔ youtube_id),
+-- the per-client growth-history lookup (client_stats ↔ client_id), the
+-- pulse-feed by-client query, the bulk view-refresh single-row UPDATE
+-- (inventory_videos ↔ video_id), the team-activity heatmap aggregation
+-- (attributed_to GROUP BY), and audit-log time-range filtering.
+CREATE INDEX IF NOT EXISTS idx_clients_youtube_id              ON clients(youtube_id);
+CREATE INDEX IF NOT EXISTS idx_client_stats_client_id          ON client_stats(client_id);
+CREATE INDEX IF NOT EXISTS idx_pulse_client_id                 ON pulse_activities(client_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_videos_video_id       ON inventory_videos(video_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_videos_attributed_to  ON inventory_videos(attributed_to);
+CREATE INDEX IF NOT EXISTS idx_inventory_thumbnails_attributed_to ON inventory_thumbnails(attributed_to);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at           ON audit_logs(created_at);

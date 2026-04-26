@@ -201,7 +201,7 @@ export default function SpecialtyPageTemplate({ slug }) {
   const { palette, title, tagline, heroCopy, services, processSteps, pricingAnchor, verb, meta } = specialty;
   const samples = SPECIALTY_SAMPLES[slug] || [];
 
-  const whatsappHref = `https://wa.me/919876543210?text=${encodeURIComponent(
+  const whatsappHref = `https://wa.me/918968141585?text=${encodeURIComponent(
     `Hi Shinel — I'd like to talk about ${title}.`
   )}`;
 

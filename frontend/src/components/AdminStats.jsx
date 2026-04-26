@@ -70,6 +70,7 @@ export default function AdminStats() {
         try {
             setLoading(true);
             const res = await fetch(`${AUTH_BASE}/stats`);
+            if (!res.ok) throw new Error(`Stats (${res.status})`);
             const data = await res.json();
             if (data.counts) setStats(data.counts);
 

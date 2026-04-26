@@ -64,7 +64,7 @@ export default function SignalReelHero({
   projects = [],
   counters = [],
   onBookCall,
-  whatsappHref = "https://wa.me/919876543210?text=Hi%20Shinel%20—%20I%27d%20like%20to%20start%20a%20project",
+  whatsappHref = "https://wa.me/918968141585?text=Hi%20Shinel%20—%20I%27d%20like%20to%20start%20a%20project",
 }) {
   const reduced = useReducedMotion();
   const tiles = useMemo(() => buildTilesFromProjects(projects), [projects]);
