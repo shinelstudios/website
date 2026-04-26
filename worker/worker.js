@@ -587,9 +587,15 @@ const ytIdFrom = (url) => {
  * Intelligent Key Rotation
  * - Support multiple comma-separated keys in YOUTUBE_API_KEYS
  * - Automatically skips keys blacklisted in KV (1 hour cooldown for quota)
+ *
+ * Only reads from YOUTUBE_API_KEYS (the wrangler secret). The legacy
+ * VITE_YOUTUBE_API_KEY fallback was removed — VITE_-prefixed vars are
+ * for the frontend bundle only and should never be set as worker
+ * secrets. The git-history-leaked frontend key is no longer reachable
+ * through any fallback path.
  */
 async function getYoutubeKey(env) {
-  const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "";
+  const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || "";
   const keys = keysStr.split(",").map(k => k.trim()).filter(Boolean);
 
   for (const k of keys) {
