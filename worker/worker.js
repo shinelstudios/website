@@ -85,6 +85,16 @@ function pickAllowedOrigin(origin, allowedOrigins) {
 /* ============================== auth helpers ============================== */
 // USERS: KV-first (SHINEL_USERS) with fallback to USERS_JSON allowlist
 
+// Module-scope cache for /admin/users — saves a KV.list() + N KV.get() per
+// admin page load. The Cloudflare Free tier caps list operations at 1000/day;
+// without this cache, a few rounds of admin browsing + the daily Playwright
+// run trip the limit. Cache survives within an isolate (not across cold
+// starts), invalidated explicitly on every user mutation.
+let _adminUsersCache = null;
+let _adminUsersCacheExpiry = 0;
+const ADMIN_USERS_TTL_MS = 60_000;
+function invalidateAdminUsersCache() { _adminUsersCacheExpiry = 0; _adminUsersCache = null; }
+
 async function getUserFromKV(env, email) {
   const key = `user:${String(email || "").trim().toLowerCase()}`;
   const raw = await env.SHINEL_USERS.get(key);
@@ -2248,10 +2258,17 @@ const handler = {
 
     /* =============================== /admin/users =============================== */
 
-    // GET /admin/users - List all users
+    // GET /admin/users - List all users (60s in-isolate cache; ?force=1 bypasses)
     if (url.pathname === "/admin/users" && request.method === "GET") {
       try {
         await requireTeamOrThrow(request, secret);
+        const force = url.searchParams.get("force") === "1";
+        const now = Date.now();
+
+        if (!force && _adminUsersCache && now < _adminUsersCacheExpiry) {
+          return json({ users: _adminUsersCache, cached: true }, 200, cors);
+        }
+
         const list = [];
 
         // 1) From KV
@@ -2261,6 +2278,7 @@ const handler = {
           for (const k of keys) {
             const val = await env.SHINEL_USERS.get(k.name, "json");
             if (val) {
+              if (val.e2eTest === true) continue; // don't show CI test admin
               list.push({
                 firstName: val.firstName || "",
                 lastName: val.lastName || "",
@@ -2286,7 +2304,10 @@ const handler = {
           }
         }
 
-        return json({ users: list }, 200, cors);
+        _adminUsersCache = list;
+        _adminUsersCacheExpiry = now + ADMIN_USERS_TTL_MS;
+
+        return json({ users: list, cached: false }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Fetch failed" }, e.status || 500, cors);
       }
@@ -2331,6 +2352,7 @@ const handler = {
         };
 
         await env.SHINEL_USERS.put(`user:${email}`, JSON.stringify(userData));
+        invalidateAdminUsersCache();
         return json({ ok: true, user: { email, role: userData.role } }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Creation failed" }, e.status || 500, cors);
@@ -2380,6 +2402,7 @@ const handler = {
         }
 
         await env.SHINEL_USERS.put(`user:${email}`, JSON.stringify(merged));
+        invalidateAdminUsersCache();
         return json({ ok: true }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Update failed" }, e.status || 500, cors);
@@ -2392,6 +2415,7 @@ const handler = {
         await requireTeamOrThrow(request, secret);
         const email = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
         await env.SHINEL_USERS.delete(`user:${email}`);
+        invalidateAdminUsersCache();
         return json({ ok: true }, 200, cors);
       } catch (e) {
         return json({ error: e.message || "Delete failed" }, e.status || 500, cors);
@@ -4451,6 +4475,132 @@ const handler = {
         return json({ ok: true, deleted: id }, 200, cors);
       } catch (e) {
         console.error("DELETE /api/landing-pages/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    /* ----------------------------------------------------------------------
+     * Live-templates thumbnails registry
+     * Powers the /live-templates marketing page's "Same template, different
+     * creators" grid. Admins add/remove/reorder thumbnails without a deploy.
+     * Public GET so the marketing page can fetch on render.
+     *
+     * Key: `app:live-templates:thumbnails`  →  { items: [...] }
+     * Item: { id, imageUrl, label, sortOrder, createdAt, updatedAt }
+     *
+     * GET    /api/live-templates              (public, sorted by sortOrder asc)
+     * POST   /api/live-templates              (admin)
+     * PUT    /api/live-templates/:id          (admin)
+     * DELETE /api/live-templates/:id          (admin)
+     * ---------------------------------------------------------------------- */
+    if (url.pathname === "/api/live-templates" && request.method === "GET") {
+      try {
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const sorted = items.slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        return json({ ok: true, thumbnails: sorted }, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=300", // 5-min edge cache
+        });
+      } catch (e) {
+        console.error("GET /api/live-templates:", e?.message || e);
+        return json({ ok: true, thumbnails: [] }, 200, cors);
+      }
+    }
+
+    if (url.pathname === "/api/live-templates" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const imageUrl = s(body.imageUrl, 800);
+        const label    = s(body.label, 80);
+        if (!imageUrl) return json({ error: "imageUrl required" }, 400, cors);
+        if (!/^(\/|https?:\/\/)/i.test(imageUrl)) {
+          return json({ error: "imageUrl must start with / or https://" }, 400, cors);
+        }
+
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        if (items.length >= 12) return json({ error: "Cap reached (12). Delete one first." }, 409, cors);
+
+        const now = Date.now();
+        const maxSort = items.reduce((m, it) => Math.max(m, Number(it.sortOrder) || 0), 0);
+        const entry = {
+          id: `lt_${now}_${Math.random().toString(36).slice(2, 8)}`,
+          imageUrl,
+          label,
+          sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : maxSort + 10,
+          createdAt: now,
+          updatedAt: now,
+        };
+        items.push(entry);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items });
+        return json({ ok: true, thumbnail: entry }, 201, cors);
+      } catch (e) {
+        console.error("POST /api/live-templates:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/live-templates/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const idx = items.findIndex(t => t && t.id === id);
+        if (idx < 0) return json({ error: "not found" }, 404, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const now = Date.now();
+        const merged = {
+          ...items[idx],
+          imageUrl:  body.imageUrl !== undefined  ? s(body.imageUrl, 800) : items[idx].imageUrl,
+          label:     body.label !== undefined     ? s(body.label, 80)     : items[idx].label,
+          sortOrder: body.sortOrder !== undefined ? (Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : items[idx].sortOrder) : items[idx].sortOrder,
+          updatedAt: now,
+        };
+        if (!merged.imageUrl) {
+          return json({ error: "imageUrl is required" }, 400, cors);
+        }
+        if (!/^(\/|https?:\/\/)/i.test(merged.imageUrl)) {
+          return json({ error: "imageUrl must start with / or https://" }, 400, cors);
+        }
+        items[idx] = merged;
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items });
+        return json({ ok: true, thumbnail: merged }, 200, cors);
+      } catch (e) {
+        console.error("PUT /api/live-templates/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/live-templates/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const raw = await env.SHINEL_AUDIT.get("app:live-templates:thumbnails", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const next = items.filter(t => t && t.id !== id);
+        if (next.length === items.length) return json({ error: "not found" }, 404, cors);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:live-templates:thumbnails", { items: next });
+        return json({ ok: true, deleted: id }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /api/live-templates/:id:", e?.message || e);
         return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
       }
     }
