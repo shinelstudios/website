@@ -12,7 +12,7 @@
  * Per business policy, this URL must NEVER be linked from site nav. Tracked
  * in the admin "Hidden landing pages" registry at /dashboard/landing-pages.
  */
-import React from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Sparkles, Zap, Repeat, ShieldCheck, MessageCircle } from "lucide-react";
 import {
   Section,
@@ -26,6 +26,7 @@ import {
   useReducedMotion,
 } from "../design";
 import MetaTags, { ProductSchema, FAQSchema } from "./MetaTags";
+import { AUTH_BASE } from "../config/constants";
 
 import bgmiCreator1 from "@/assets/bgmi-thumbnail-creator1.jpg";
 import bgmiCreator1Webp from "@/assets/bgmi-thumbnail-creator1.webp";
@@ -40,7 +41,10 @@ import bgmiCreator4Webp from "@/assets/bgmi-thumbnail-creator4.webp";
 
 const WHATSAPP_HREF = "https://wa.me/918968141585?text=Hi%20Shinel%20%E2%80%94%20I%27d%20like%20a%20BGMI%20livestream%20thumbnail";
 
-const TEMPLATES = [
+// Hardcoded defaults — used at build-time prerender AND as the fallback if
+// /api/live-templates is unreachable or empty. Admin edits via
+// /dashboard/live-templates override these on the live site.
+const FALLBACK_TEMPLATES = [
   { creator: bgmiCreator1, creatorWebp: bgmiCreator1Webp, name: "BGMI Series A" },
   { creator: bgmiCreator2, creatorWebp: bgmiCreator2Webp, name: "BGMI Series A" },
   { creator: bgmiCreator3, creatorWebp: bgmiCreator3Webp, name: "BGMI Series B" },
@@ -82,6 +86,28 @@ const PRODUCT_SCHEMA = {
 
 export default function LiveTemplates() {
   const reduced = useReducedMotion();
+  const [templates, setTemplates] = useState(FALLBACK_TEMPLATES);
+
+  // Fetch admin-managed thumbnails on mount; gracefully fall back to the
+  // hardcoded defaults if the worker is unreachable or returns nothing.
+  // The endpoint is edge-cached for 5 min so this is essentially free.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${AUTH_BASE}/api/live-templates`, { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !Array.isArray(data.thumbnails) || data.thumbnails.length === 0) return;
+        setTemplates(
+          data.thumbnails.map((t) => ({
+            creator: t.imageUrl,
+            creatorWebp: undefined, // arbitrary URLs don't have a known sibling
+            name: t.label || "",
+          }))
+        );
+      })
+      .catch(() => { /* keep fallback */ });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <>
@@ -230,7 +256,7 @@ export default function LiveTemplates() {
           </Lede>
         </RevealOnScroll>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {TEMPLATES.map((t, i) => (
+          {templates.map((t, i) => (
             <RevealOnScroll key={i} delay={`${(i % 2) * 80}ms`}>
               <HairlineCard className="p-2">
                 <Img

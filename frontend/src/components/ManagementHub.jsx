@@ -136,6 +136,13 @@ export default function ManagementHub() {
             roles: ['admin']
         },
         {
+            id: 'live-templates',
+            label: 'Live templates · thumbs',
+            path: '/dashboard/live-templates',
+            icon: ImageIcon,
+            roles: ['admin']
+        },
+        {
             id: 'settings',
             label: 'Global Settings',
             path: '/dashboard/settings',
