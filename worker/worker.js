@@ -606,6 +606,8 @@ const CLIENT_MODULE_TYPES = new Set([
   // Phase 2 (revenue + engagement modules)
   "sponsorRates", "affiliateShelf", "merchShelf", "calendly", "courseLinks",
   "newsletter", "contact",
+  // Phase 4 (engagement loops)
+  "pressKit", "fanWall", "ama", "devLog",
 ]);
 function sanitizeClientModules(input) {
   if (!Array.isArray(input)) return [];
@@ -733,6 +735,33 @@ function sanitizeModuleConfig(type, c) {
         headline: clampStr(cfg.headline, 80),
         subheadline: clampStr(cfg.subheadline, 200),
         ctaLabel: clampStr(cfg.ctaLabel, 20),
+      };
+
+    // ----- Phase 4 modules -----
+    case "pressKit":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        contactEmail: clampStr(cfg.contactEmail, 254),
+        bio: clampStr(cfg.bio, 800),
+        includeStats: cfg.includeStats !== false,
+      };
+    case "fanWall":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 20),
+        autoPin: cfg.autoPin !== false, // default: new comments show immediately
+      };
+    case "ama":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
+        ctaLabel: clampStr(cfg.ctaLabel, 20),
+      };
+    case "devLog":
+      return {
+        headline: clampStr(cfg.headline, 80),
+        subheadline: clampStr(cfg.subheadline, 200),
       };
 
     default:
@@ -5271,6 +5300,238 @@ const handler = {
             "Content-Disposition": `attachment; filename="newsletter-${client.slug || client.id}.csv"`,
           },
         });
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    /* ---------------- Phase 4: wall / ama / devlog ---------------- *
+     * All three live in client_inbox under different `type` values:
+     *   wall   — public comments, auto-pinned (visible immediately)
+     *   ama    — public Q&A, hidden until creator answers + pins
+     *   devLog — Shinel admin posts, public on creation
+     * All POST endpoints reuse the per-slug rate-limit + honeypot pattern
+     * from sponsor/contact/newsletter above.
+     * ============================================================== */
+
+    // POST /api/c/:slug/wall — fan submits a public comment
+    if (url.pathname.startsWith("/api/c/") && url.pathname.endsWith("/wall") && request.method === "POST") {
+      const slug = url.pathname.split("/")[3] || "";
+      try {
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        if (await isRateLimited(env, ip, 600, 3, `c:wall:${slug}`)) {
+          return json({ error: "Too many comments — try again later" }, 429, cors);
+        }
+        const body = await request.json().catch(() => ({}));
+        if (body && typeof body.website === "string" && body.website.trim()) {
+          return json({ ok: true }, 200, cors);
+        }
+        const client = await getPublicClientBySlug(slug);
+        if (!client) return json({ error: "Page not found" }, 404, cors);
+        const name = clampStr(String(body.name || "").trim(), 60);
+        const message = clampStr(String(body.message || "").trim(), 500);
+        if (name.length < 2) return json({ error: "Name required" }, 400, cors);
+        if (message.length < 3) return json({ error: "Message too short" }, 400, cors);
+
+        // Read the wall module's autoPin setting from modules_json. If autoPin
+        // is explicitly false, leave pinned_at NULL so creator must approve.
+        let autoPin = true;
+        try {
+          const modules = JSON.parse(client.modules_json || "[]");
+          const wall = modules.find(m => m.type === "fanWall");
+          if (wall && wall.config && wall.config.autoPin === false) autoPin = false;
+        } catch { /* */ }
+
+        const now = Date.now();
+        const id = `inb-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        await env.DB.prepare(
+          "INSERT INTO client_inbox (id, client_id, type, payload_json, created_at, pinned_at) VALUES (?, ?, 'wall', ?, ?, ?)"
+        ).bind(id, client.id, JSON.stringify({ name, message }), now, autoPin ? now : null).run();
+
+        if (client.discord_webhook_url) {
+          fireDiscordWebhook(client.discord_webhook_url, {
+            username: "Shinel Inbox",
+            embeds: [{
+              title: `New wall comment on /c/${slug}`,
+              description: message.slice(0, 1500),
+              fields: [{ name: "From", value: name }, { name: "Status", value: autoPin ? "auto-pinned (live)" : "pending approval", inline: true }],
+              color: 0x9B59B6,
+              timestamp: new Date(now).toISOString(),
+            }],
+          });
+        }
+        return json({ ok: true, id, autoPinned: autoPin }, 200, cors);
+      } catch (e) {
+        console.error(`POST /api/c/:slug/wall:`, e?.message || e);
+        return json({ error: "Submission failed" }, 500, cors);
+      }
+    }
+
+    // GET /api/c/:slug/wall — public list of pinned comments (latest first, max 50)
+    if (url.pathname.startsWith("/api/c/") && url.pathname.endsWith("/wall") && request.method === "GET") {
+      const slug = url.pathname.split("/")[3] || "";
+      const client = await getPublicClientBySlug(slug);
+      if (!client) return json({ error: "Page not found" }, 404, cors);
+      try {
+        const { results = [] } = await env.DB
+          .prepare("SELECT id, payload_json, created_at, pinned_at FROM client_inbox WHERE client_id = ? AND type = 'wall' AND pinned_at IS NOT NULL ORDER BY pinned_at DESC LIMIT 50")
+          .bind(client.id).all();
+        const items = results.map(r => {
+          let p = {};
+          try { p = JSON.parse(r.payload_json || "{}"); } catch { /* */ }
+          return { id: r.id, name: p.name || "", message: p.message || "", createdAt: r.created_at };
+        });
+        return json({ ok: true, items }, 200, { ...cors, "Cache-Control": "public, max-age=30" });
+      } catch (e) {
+        console.error("GET /api/c/:slug/wall:", e?.message || e);
+        return json({ ok: true, items: [] }, 200, cors);
+      }
+    }
+
+    // POST /api/c/:slug/ama — fan submits a question
+    if (url.pathname.startsWith("/api/c/") && url.pathname.endsWith("/ama") && request.method === "POST") {
+      const slug = url.pathname.split("/")[3] || "";
+      try {
+        const contentLen = Number(request.headers.get("content-length") || 0);
+        if (contentLen > 8 * 1024) return json({ error: "Payload too large" }, 413, cors);
+        if (await isRateLimited(env, ip, 3600, 5, `c:ama:${slug}`)) {
+          return json({ error: "Too many questions — try again later" }, 429, cors);
+        }
+        const body = await request.json().catch(() => ({}));
+        if (body && typeof body.website === "string" && body.website.trim()) {
+          return json({ ok: true }, 200, cors);
+        }
+        const client = await getPublicClientBySlug(slug);
+        if (!client) return json({ error: "Page not found" }, 404, cors);
+        const name = clampStr(String(body.name || "").trim(), 60);
+        const question = clampStr(String(body.question || "").trim(), 500);
+        if (question.length < 5) return json({ error: "Question too short" }, 400, cors);
+
+        const now = Date.now();
+        const id = `inb-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        await env.DB.prepare(
+          "INSERT INTO client_inbox (id, client_id, type, payload_json, created_at) VALUES (?, ?, 'ama', ?, ?)"
+        ).bind(id, client.id, JSON.stringify({ name, question }), now).run();
+
+        if (client.discord_webhook_url) {
+          fireDiscordWebhook(client.discord_webhook_url, {
+            username: "Shinel Inbox",
+            embeds: [{
+              title: `New AMA question on /c/${slug}`,
+              description: question.slice(0, 1500),
+              fields: name ? [{ name: "From", value: name }] : [],
+              color: 0xFFD27A,
+              timestamp: new Date(now).toISOString(),
+            }],
+          });
+        }
+        return json({ ok: true, id }, 200, cors);
+      } catch (e) {
+        console.error(`POST /api/c/:slug/ama:`, e?.message || e);
+        return json({ error: "Submission failed" }, 500, cors);
+      }
+    }
+
+    // GET /api/c/:slug/ama — public list of ANSWERED questions (creator pinned them)
+    if (url.pathname.startsWith("/api/c/") && url.pathname.endsWith("/ama") && request.method === "GET") {
+      const slug = url.pathname.split("/")[3] || "";
+      const client = await getPublicClientBySlug(slug);
+      if (!client) return json({ error: "Page not found" }, 404, cors);
+      try {
+        const { results = [] } = await env.DB
+          .prepare("SELECT id, payload_json, pinned_at FROM client_inbox WHERE client_id = ? AND type = 'ama' AND pinned_at IS NOT NULL ORDER BY pinned_at DESC LIMIT 30")
+          .bind(client.id).all();
+        const items = results.map(r => {
+          let p = {};
+          try { p = JSON.parse(r.payload_json || "{}"); } catch { /* */ }
+          return { id: r.id, name: p.name || "", question: p.question || "", answer: p.answer || "", answeredAt: r.pinned_at };
+        }).filter(it => it.answer);
+        return json({ ok: true, items }, 200, { ...cors, "Cache-Control": "public, max-age=60" });
+      } catch (e) {
+        console.error("GET /api/c/:slug/ama:", e?.message || e);
+        return json({ ok: true, items: [] }, 200, cors);
+      }
+    }
+
+    // GET /api/c/:slug/devlog — public read of admin-posted timeline
+    if (url.pathname.startsWith("/api/c/") && url.pathname.endsWith("/devlog") && request.method === "GET") {
+      const slug = url.pathname.split("/")[3] || "";
+      const client = await getPublicClientBySlug(slug);
+      if (!client) return json({ error: "Page not found" }, 404, cors);
+      try {
+        const { results = [] } = await env.DB
+          .prepare("SELECT id, payload_json, created_at FROM client_inbox WHERE client_id = ? AND type = 'devLog' ORDER BY created_at DESC LIMIT 20")
+          .bind(client.id).all();
+        const items = results.map(r => {
+          let p = {};
+          try { p = JSON.parse(r.payload_json || "{}"); } catch { /* */ }
+          return { id: r.id, body: p.body || "", postedBy: p.postedBy || "Shinel team", createdAt: r.created_at };
+        });
+        return json({ ok: true, items }, 200, { ...cors, "Cache-Control": "public, max-age=60" });
+      } catch (e) {
+        console.error("GET /api/c/:slug/devlog:", e?.message || e);
+        return json({ ok: true, items: [] }, 200, cors);
+      }
+    }
+
+    // POST /admin/clients/:id/devlog — Shinel admin posts an update
+    if (url.pathname.startsWith("/admin/clients/") && url.pathname.endsWith("/devlog") && request.method === "POST") {
+      try {
+        const callerPayload = await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "client id required" }, 400, cors);
+        const body = await request.json().catch(() => ({}));
+        const text = clampStr(String(body.body || "").trim(), 1000);
+        if (text.length < 3) return json({ error: "Message too short" }, 400, cors);
+        const client = await env.DB.prepare("SELECT id FROM clients WHERE id = ? LIMIT 1").bind(id).first();
+        if (!client) return json({ error: "Client not found" }, 404, cors);
+
+        const now = Date.now();
+        const inboxId = `inb-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        const postedBy = String(body.postedBy || callerPayload.firstName || callerPayload.email || "Shinel team").slice(0, 80);
+        await env.DB.prepare(
+          "INSERT INTO client_inbox (id, client_id, type, payload_json, created_at, pinned_at) VALUES (?, ?, 'devLog', ?, ?, ?)"
+        ).bind(inboxId, id, JSON.stringify({ body: text, postedBy }), now, now).run();
+        return json({ ok: true, id: inboxId }, 200, cors);
+      } catch (e) {
+        return json({ error: e.message || "Failed" }, e.status || 500, cors);
+      }
+    }
+
+    // PATCH /portal/me/inbox/:id — creator moderates a row
+    //   { pin: true }            → set pinned_at = now (publish wall comment / dev log)
+    //   { pin: false }           → set pinned_at = NULL (unpublish)
+    //   { answer: "…" }          → set payload_json.answer + auto-pin (publish AMA answer)
+    if (url.pathname.startsWith("/portal/me/inbox/") && !url.pathname.endsWith("/read") && request.method === "PATCH") {
+      try {
+        const payload = await requireClientOrThrow(request, secret, env);
+        const client = await getCurrentClientFromPayload(env, payload);
+        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        const inboxId = decodeURIComponent(url.pathname.split("/")[4] || "");
+        if (!inboxId) return json({ error: "id required" }, 400, cors);
+        const body = await request.json().catch(() => ({}));
+        const row = await env.DB.prepare("SELECT * FROM client_inbox WHERE id = ? AND client_id = ? LIMIT 1").bind(inboxId, client.id).first();
+        if (!row) return json({ error: "Not found" }, 404, cors);
+
+        if (typeof body.answer === "string") {
+          let p = {};
+          try { p = JSON.parse(row.payload_json || "{}"); } catch { /* */ }
+          p.answer = clampStr(body.answer, 1000);
+          await env.DB.prepare(
+            "UPDATE client_inbox SET payload_json = ?, pinned_at = ?, read_at = ? WHERE id = ? AND client_id = ?"
+          ).bind(JSON.stringify(p), Date.now(), Date.now(), inboxId, client.id).run();
+          return json({ ok: true, pinned: true }, 200, cors);
+        }
+
+        if (typeof body.pin === "boolean") {
+          await env.DB.prepare(
+            "UPDATE client_inbox SET pinned_at = ? WHERE id = ? AND client_id = ?"
+          ).bind(body.pin ? Date.now() : null, inboxId, client.id).run();
+          return json({ ok: true, pinned: body.pin }, 200, cors);
+        }
+
+        return json({ error: "No supported action in body" }, 400, cors);
       } catch (e) {
         return json({ error: e.message || "Failed" }, e.status || 500, cors);
       }

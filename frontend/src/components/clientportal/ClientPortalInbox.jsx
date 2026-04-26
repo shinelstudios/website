@@ -4,14 +4,20 @@
  */
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, AlertTriangle, Download, Mail } from "lucide-react";
+import { ChevronLeft, AlertTriangle, Download, Mail, Pin, PinOff, MessageCircle } from "lucide-react";
 import { Section, HairlineCard } from "../../design";
 import { authedFetch, getAccessToken } from "../../utils/tokenStore";
 import { AUTH_BASE } from "../../config/constants";
 import MetaTags from "../MetaTags.jsx";
 
-const TYPE_LABELS = { sponsor: "Sponsor", contact: "Contact", newsletter: "Newsletter" };
-const TYPE_COLORS = { sponsor: "#E85002", contact: "#FFD27A", newsletter: "#9B59B6" };
+const TYPE_LABELS = {
+  sponsor: "Sponsor", contact: "Contact", newsletter: "Newsletter",
+  wall: "Fan wall", ama: "AMA", devLog: "Devlog",
+};
+const TYPE_COLORS = {
+  sponsor: "#E85002", contact: "#FFD27A", newsletter: "#9B59B6",
+  wall: "#9B59B6", ama: "#FFD27A", devLog: "#16a34a",
+};
 
 function fmtTime(ms) {
   if (!ms) return "";
@@ -48,6 +54,24 @@ export default function ClientPortalInbox() {
     setItems(prev => prev.map(it => it.id === id ? { ...it, readAt: Date.now() } : it));
     try {
       await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}/read`, { method: "PATCH" });
+    } catch { /* */ }
+  };
+
+  const togglePin = async (id, pin) => {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, pinnedAt: pin ? Date.now() : null } : it));
+    try {
+      await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }),
+      });
+    } catch { /* */ }
+  };
+
+  const submitAnswer = async (id, answer) => {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, payload: { ...it.payload, answer }, pinnedAt: Date.now(), readAt: Date.now() } : it));
+    try {
+      await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer }),
+      });
     } catch { /* */ }
   };
 
@@ -94,7 +118,7 @@ export default function ClientPortalInbox() {
           </div>
 
           <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-            {["all", "sponsor", "contact", "newsletter"].map(t => (
+            {["all", "sponsor", "contact", "newsletter", "wall", "ama", "devLog"].map(t => (
               <button
                 key={t}
                 type="button"
@@ -142,6 +166,24 @@ export default function ClientPortalInbox() {
                   </div>
                   {it.type === "newsletter" ? (
                     <p className="font-bold text-sm" style={{ color: "var(--text)" }}>{it.payload?.email}</p>
+                  ) : it.type === "wall" ? (
+                    <>
+                      <p className="text-sm" style={{ color: "var(--text)" }}>
+                        <strong>{it.payload?.name || "Anonymous"}</strong> says:
+                      </p>
+                      <p className="mt-1 text-sm whitespace-pre-wrap" style={{ color: "var(--text-muted)" }}>
+                        {it.payload?.message}
+                      </p>
+                    </>
+                  ) : it.type === "ama" ? (
+                    <AmaInboxRow it={it} onAnswer={submitAnswer} />
+                  ) : it.type === "devLog" ? (
+                    <>
+                      <p className="text-[10px] font-mono mb-1" style={{ color: "var(--text-muted)" }}>
+                        Posted by {it.payload?.postedBy || "Shinel team"}
+                      </p>
+                      <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>{it.payload?.body}</p>
+                    </>
                   ) : (
                     <>
                       <div className="text-sm" style={{ color: "var(--text)" }}>
@@ -157,8 +199,8 @@ export default function ClientPortalInbox() {
                       ) : null}
                     </>
                   )}
-                  {!it.readAt && (
-                    <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!it.readAt && it.type !== "ama" && (
                       <button
                         type="button"
                         onClick={() => markRead(it.id)}
@@ -167,14 +209,83 @@ export default function ClientPortalInbox() {
                       >
                         Mark read
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {it.type === "wall" && (
+                      <button
+                        type="button"
+                        onClick={() => togglePin(it.id, !it.pinnedAt)}
+                        className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded inline-flex items-center gap-1"
+                        style={{
+                          background: it.pinnedAt ? "var(--orange)" : "transparent",
+                          color: it.pinnedAt ? "#fff" : "var(--text-muted)",
+                          border: it.pinnedAt ? "1px solid var(--orange)" : "1px solid var(--hairline)",
+                        }}
+                      >
+                        {it.pinnedAt ? <><Pin size={10} /> Pinned</> : <><PinOff size={10} /> Pin to wall</>}
+                      </button>
+                    )}
+                  </div>
                 </HairlineCard>
               ))}
             </div>
           )}
         </div>
       </Section>
+    </>
+  );
+}
+
+// AMA inbox row — shows the question, lets the creator type and submit
+// an answer. The answer auto-pins (i.e. publishes) the row.
+function AmaInboxRow({ it, onAnswer }) {
+  const [answer, setAnswer] = React.useState(it.payload?.answer || "");
+  const [editing, setEditing] = React.useState(!it.payload?.answer);
+  const submit = () => {
+    if (!answer.trim()) return;
+    onAnswer(it.id, answer.trim());
+    setEditing(false);
+  };
+  return (
+    <>
+      <p className="text-xs font-bold mb-1" style={{ color: "var(--orange)" }}>
+        {it.payload?.name ? `${it.payload.name} asks:` : "Someone asks:"}
+      </p>
+      <p className="text-sm mb-2" style={{ color: "var(--text)" }}>{it.payload?.question}</p>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            rows={2}
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            maxLength={1000}
+            placeholder="Type your answer (publishes immediately)…"
+            className="w-full rounded p-2.5 text-sm"
+            style={{ background: "var(--surface-alt)", border: "1px solid var(--hairline)", color: "var(--text)" }}
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!answer.trim()}
+            className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded disabled:opacity-40"
+            style={{ background: "var(--orange)", color: "#fff" }}
+          >
+            Answer & publish
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs font-mono mb-1" style={{ color: "var(--text-muted)" }}>Your answer (live):</p>
+          <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-muted)" }}>{answer}</p>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-2 text-[10px] font-black uppercase tracking-widest"
+            style={{ color: "var(--orange)" }}
+          >
+            Edit answer
+          </button>
+        </>
+      )}
     </>
   );
 }

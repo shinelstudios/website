@@ -204,3 +204,12 @@ CREATE INDEX IF NOT EXISTS idx_client_inbox_client_unread
   ON client_inbox(client_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_client_inbox_client_created
   ON client_inbox(client_id, created_at DESC);
+
+-- Phase 4 engagement modules: comments / Q&A / devlog all live in
+-- client_inbox under different `type` values. pinned_at is the moderation
+-- toggle that promotes a row from "in inbox only" to "shown publicly on
+-- /c/<slug>". Wall comments default to pinned (auto-show); AMA + devlog
+-- need explicit creator/admin action to publish.
+ALTER TABLE client_inbox ADD COLUMN pinned_at INTEGER;
+CREATE INDEX IF NOT EXISTS idx_client_inbox_client_type_pinned
+  ON client_inbox(client_id, type, pinned_at);

@@ -20,6 +20,12 @@ import CourseLinksModule from "./CourseLinksModule.jsx";
 import NewsletterModule from "./NewsletterModule.jsx";
 import ContactModule from "./ContactModule.jsx";
 
+// Phase 4 (engagement loops)
+import PressKitModule from "./PressKitModule.jsx";
+import FanWallModule from "./FanWallModule.jsx";
+import AmaModule from "./AmaModule.jsx";
+import DevLogModule from "./DevLogModule.jsx";
+
 export const MODULE_REGISTRY = {
   hero: {
     label: "Hero",
@@ -117,6 +123,40 @@ export const MODULE_REGISTRY = {
     Render: ContactModule.Render,
     Editor: ContactModule.Editor,
     defaultConfig: { headline: "", subheadline: "", ctaLabel: "" },
+    forced: false,
+  },
+
+  // ----- Phase 4 modules (engagement loops) -----
+  pressKit: {
+    label: "Press kit (PDF)",
+    description: "1-page downloadable PDF with avatar, stats, bio, contacts. For journalists & sponsors.",
+    Render: PressKitModule.Render,
+    Editor: PressKitModule.Editor,
+    defaultConfig: { headline: "", contactEmail: "", bio: "", includeStats: true },
+    forced: false,
+  },
+  fanWall: {
+    label: "Fan wall",
+    description: "Public comments from fans. Auto-publish or moderate from /clients/me/inbox.",
+    Render: FanWallModule.Render,
+    Editor: FanWallModule.Editor,
+    defaultConfig: { headline: "", subheadline: "", ctaLabel: "", autoPin: true },
+    forced: false,
+  },
+  ama: {
+    label: "Ask Me Anything",
+    description: "Fans submit questions; you answer + publish from inbox. Public Q&A appears here.",
+    Render: AmaModule.Render,
+    Editor: AmaModule.Editor,
+    defaultConfig: { headline: "", subheadline: "", ctaLabel: "" },
+    forced: false,
+  },
+  devLog: {
+    label: "Behind the scenes (dev log)",
+    description: "Production updates posted by Shinel team. Read-only timeline.",
+    Render: DevLogModule.Render,
+    Editor: DevLogModule.Editor,
+    defaultConfig: { headline: "", subheadline: "" },
     forced: false,
   },
 
