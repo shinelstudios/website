@@ -6,6 +6,7 @@ import { Save, Eye, ArrowLeft, Image as ImageIcon, Calendar, FileText, CheckCirc
 import { AUTH_BASE } from "../config/constants"; // Ensure correct import path
 import { authedFetch } from "../utils/tokenStore";
 import { Input, TextArea, LoadingOverlay } from "./AdminUIComponents";
+import { Img } from "../design";
 
 function toast(type, msg) {
     window.dispatchEvent(new CustomEvent("notify", { detail: { type, message: msg } }));
@@ -276,7 +277,7 @@ export default function AdminBlogEditor() {
                             </div>
                             {form.coverImage && (
                                 <div className="mt-2 rounded-lg overflow-hidden border border-[var(--border)] aspect-video">
-                                    <img src={form.coverImage} alt="Cover" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                    <Img src={form.coverImage} alt="Cover" className="w-full h-full object-cover" />
                                 </div>
                             )}
                         </div>

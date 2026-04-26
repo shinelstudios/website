@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { createLeadStorage } from "./cloudflare-lead-storage";
 import { LoadingOverlay } from "./AdminUIComponents";
+import { Img } from "../design";
 import { AUTH_BASE } from "../config/constants";
 import { getAccessToken } from "../utils/tokenStore";
 
@@ -291,7 +292,7 @@ function LeadCard({ lead, isSelected, onSelect, onUpdateStatus, onDelete }) {
                     />
                     <div className="w-12 h-12 rounded-xl bg-[var(--surface)] flex items-center justify-center border border-[var(--border)] overflow-hidden">
                         {lead.avatar ? (
-                            <img src={lead.avatar} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                            <Img src={lead.avatar} alt="" className="w-full h-full object-cover" />
                         ) : (
                             <User size={24} className="text-[var(--text-muted)]" />
                         )}

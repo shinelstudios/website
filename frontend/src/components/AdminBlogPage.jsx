@@ -4,6 +4,7 @@ import { Plus, Edit2, Trash2, FileText, Eye, CheckCircle, XCircle } from "lucide
 import { AUTH_BASE } from "../config/constants"; // Ensure this exists, or use absolute URL
 import { getAccessToken } from "../utils/tokenStore";
 import { LoadingOverlay } from "./AdminUIComponents";
+import { Img } from "../design";
 
 function toast(type, msg) {
     window.dispatchEvent(new CustomEvent("notify", { detail: { type, message: msg } }));
@@ -112,7 +113,7 @@ export default function AdminBlogPage() {
                         >
                             <div className="flex items-start gap-4">
                                 {post.coverImage ? (
-                                    <img src={post.coverImage} alt="" className="w-16 h-16 rounded-lg object-cover bg-[var(--surface-alt)]" />
+                                    <Img src={post.coverImage} alt="" className="w-16 h-16 rounded-lg object-cover bg-[var(--surface-alt)]" />
                                 ) : (
                                     <div className="w-16 h-16 rounded-lg bg-[var(--surface-alt)] flex items-center justify-center text-[var(--text-muted)]">
                                         <FileText size={24} />

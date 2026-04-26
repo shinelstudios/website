@@ -27,6 +27,31 @@ import Skeleton from "./Skeleton";
 import Sparkline from "./Sparkline";
 import { AUTH_BASE } from "../config/constants";
 import { getAccessToken, authedFetch } from "../utils/tokenStore";
+import { Img } from "../design";
+
+// State-driven logo cell so Img's failure path replaces the picture with the
+// branded YouTube fallback instead of leaving a broken image element.
+function ClientLogoCell({ src, name }) {
+    const [failed, setFailed] = useState(false);
+    if (!src || failed) {
+        return (
+            <div
+                className="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 flex items-center justify-center text-orange-500 shrink-0 shadow-md"
+                aria-label={name || "client"}
+            >
+                <Youtube size={28} />
+            </div>
+        );
+    }
+    return (
+        <Img
+            src={src}
+            alt={name}
+            className="w-14 h-14 rounded-xl object-cover border border-white/10 shadow-md shrink-0"
+            onError={() => setFailed(true)}
+        />
+    );
+}
 
 export default function AdminClientsPage() {
     const { refreshStats, refreshSync, getProxiedImage } = useClientStats();
@@ -796,22 +821,10 @@ export default function AdminClientsPage() {
                                         <div className="flex flex-col lg:flex-row gap-4 pr-8">
                                             {/* Logo & Info */}
                                             <div className="flex items-start gap-4 flex-grow min-w-0">
-                                                {client.logo ? (
-                                                    <img
-                                                        src={getProxiedImage(client.logo)}
-                                                        alt={client.name}
-                                                        className="w-14 h-14 rounded-xl object-cover border border-white/10 shadow-md shrink-0"
-                                                        onError={(e) => {
-                                                            e.target.style.display = 'none';
-                                                            e.target.nextSibling.style.display = 'flex';
-                                                        }}
-                                                    />
-                                                ) : null}
-                                                <div
-                                                    className={`w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 ${client.logo ? 'hidden' : 'flex'} items-center justify-center text-orange-500 shrink-0 shadow-md`}
-                                                >
-                                                    <Youtube size={28} />
-                                                </div>
+                                                <ClientLogoCell
+                                                    src={client.logo ? getProxiedImage(client.logo) : null}
+                                                    name={client.name}
+                                                />
 
                                                 <div className="flex-grow min-w-0 pt-0.5">
                                                     <div className="flex items-center gap-2 mb-1 flex-wrap">

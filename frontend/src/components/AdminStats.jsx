@@ -23,6 +23,7 @@ import { AUTH_BASE } from "../config/constants";
 import { getAccessToken } from "../utils/tokenStore";
 import LeadsFunnel from "./admin/LeadsFunnel";
 import ActivityHeatmap from "./admin/ActivityHeatmap";
+import { Img } from "../design";
 
 export default function AdminStats() {
     const [stats, setStats] = useState({
@@ -245,7 +246,7 @@ export default function AdminStats() {
                                 {topMovers.map(c => (
                                     <div key={c.id} className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between group hover:border-green-500/30 transition-all">
                                         <div className="flex items-center gap-3">
-                                            {c.logo && <img src={c.logo} className="w-6 h-6 rounded-full" alt="" />}
+                                            {c.logo && <Img src={c.logo} className="w-6 h-6 rounded-full" alt="" />}
                                             <span className="text-xs font-bold text-gray-300 truncate max-w-[80px]">{c.title}</span>
                                         </div>
                                         <div className={`flex items-center gap-1 text-[10px] font-black ${c.growth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
