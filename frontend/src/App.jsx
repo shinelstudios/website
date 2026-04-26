@@ -120,6 +120,7 @@ const AdminBlogPage = React.lazy(() => import("./components/AdminBlogPage.jsx"))
 const AdminBlogEditor = React.lazy(() => import("./components/AdminBlogEditor.jsx"));
 const AdminMetricsPage = React.lazy(() => import("./components/AdminMetricsPage.jsx"));
 const AdminTestimonialsPage = React.lazy(() => import("./components/AdminTestimonialsPage.jsx"));
+const AdminLandingPagesPage = React.lazy(() => import("./components/AdminLandingPagesPage.jsx"));
 const MediaHub = React.lazy(() => import("./components/hub/MediaHub.jsx"));
 const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
@@ -542,6 +543,7 @@ export default function App() {
             <Route path="audits" element={<WeeklyAuditLog />} />
             <Route path="metrics" element={<AdminMetricsPage />} />
             <Route path="testimonials" element={<AdminTestimonialsPage />} />
+            <Route path="landing-pages" element={<AdminLandingPagesPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 

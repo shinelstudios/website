@@ -25,7 +25,8 @@ import {
     FileText,
     Archive,
     BarChart3,
-    Quote
+    Quote,
+    Bookmark
 } from "lucide-react";
 
 
@@ -126,6 +127,13 @@ export default function ManagementHub() {
             path: '/dashboard/testimonials',
             icon: Quote,
             roles: ['admin', 'editor']
+        },
+        {
+            id: 'landing-pages',
+            label: 'Hidden landing pages',
+            path: '/dashboard/landing-pages',
+            icon: Bookmark,
+            roles: ['admin']
         },
         {
             id: 'settings',

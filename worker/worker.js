@@ -4333,6 +4333,128 @@ const handler = {
       }
     }
 
+    /* ----------------------------------------------------------------------
+     * Hidden landing pages registry
+     * Internal-only admin bookmark for one-page landings that live by direct
+     * URL only (e.g. /live-templates) and aren't reachable via site nav.
+     * Keeps them from getting "lost" — admin can see the full list, edit
+     * notes, prune dead ones.
+     *
+     * Key: `app:landing-pages:list`  →  { items: [...] }
+     *
+     * GET    /api/landing-pages       (team)
+     * POST   /api/landing-pages       (team, body={url,title,internalNote})
+     * PUT    /api/landing-pages/:id   (team)
+     * DELETE /api/landing-pages/:id   (team)
+     * ---------------------------------------------------------------------- */
+    if (url.pathname === "/api/landing-pages" && request.method === "GET") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const raw = await env.SHINEL_AUDIT.get("app:landing-pages:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        return json({ ok: true, pages: items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) }, 200, cors);
+      } catch (e) {
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname === "/api/landing-pages" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const urlValue = s(body.url, 500);
+        const title = s(body.title, 120);
+        if (!urlValue) return json({ error: "url required" }, 400, cors);
+        if (!title) return json({ error: "title required" }, 400, cors);
+        if (!/^(\/|https?:\/\/)/i.test(urlValue)) {
+          return json({ error: "url must start with / or https://" }, 400, cors);
+        }
+
+        const raw = await env.SHINEL_AUDIT.get("app:landing-pages:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        if (items.length >= 50) return json({ error: "Cap reached (50). Delete one first." }, 409, cors);
+
+        const now = Date.now();
+        const entry = {
+          id: `lp_${now}_${Math.random().toString(36).slice(2, 8)}`,
+          url: urlValue,
+          title,
+          internalNote: s(body.internalNote, 500),
+          createdAt: now,
+          updatedAt: now,
+        };
+        items.push(entry);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:landing-pages:list", { items });
+        return json({ ok: true, page: entry }, 201, cors);
+      } catch (e) {
+        console.error("POST /api/landing-pages:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/landing-pages/") && request.method === "PUT") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const body = await request.json().catch((e) => {
+          console.warn(`bad json body @ ${url.pathname}:`, e?.message || e);
+          return null;
+        });
+        if (!body || typeof body !== "object") return json({ error: "Invalid body" }, 400, cors);
+
+        const raw = await env.SHINEL_AUDIT.get("app:landing-pages:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const idx = items.findIndex(t => t && t.id === id);
+        if (idx < 0) return json({ error: "not found" }, 404, cors);
+
+        const s = (v, max) => clampStr(v, max).trim();
+        const now = Date.now();
+        const merged = {
+          ...items[idx],
+          url:          body.url !== undefined          ? s(body.url, 500)          : items[idx].url,
+          title:        body.title !== undefined        ? s(body.title, 120)        : items[idx].title,
+          internalNote: body.internalNote !== undefined ? s(body.internalNote, 500) : items[idx].internalNote,
+          updatedAt: now,
+        };
+        if (!merged.url || !merged.title) {
+          return json({ error: "url and title are required" }, 400, cors);
+        }
+        if (!/^(\/|https?:\/\/)/i.test(merged.url)) {
+          return json({ error: "url must start with / or https://" }, 400, cors);
+        }
+        items[idx] = merged;
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:landing-pages:list", { items });
+        return json({ ok: true, page: merged }, 200, cors);
+      } catch (e) {
+        console.error("PUT /api/landing-pages/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/landing-pages/") && request.method === "DELETE") {
+      try {
+        await requireTeamOrThrow(request, secret, env);
+        const id = decodeURIComponent(url.pathname.split("/")[3] || "");
+        if (!id) return json({ error: "id required" }, 400, cors);
+        const raw = await env.SHINEL_AUDIT.get("app:landing-pages:list", "json") || { items: [] };
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        const next = items.filter(t => t && t.id !== id);
+        if (next.length === items.length) return json({ error: "not found" }, 404, cors);
+        await putJsonGuarded(env.SHINEL_AUDIT, "app:landing-pages:list", { items: next });
+        return json({ ok: true, deleted: id }, 200, cors);
+      } catch (e) {
+        console.error("DELETE /api/landing-pages/:id:", e?.message || e);
+        return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
     /* ------------------------------- not found ------------------------------- */
     return json({ error: "Not found" }, 404, cors);
   },
