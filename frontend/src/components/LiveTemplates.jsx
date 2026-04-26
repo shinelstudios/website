@@ -27,20 +27,24 @@ import {
 } from "../design";
 import MetaTags, { ProductSchema, FAQSchema } from "./MetaTags";
 
-import bgmiBase from "@/assets/bgmi-thumbnail-base.jpg";
 import bgmiCreator1 from "@/assets/bgmi-thumbnail-creator1.jpg";
+import bgmiCreator1Webp from "@/assets/bgmi-thumbnail-creator1.webp";
 import bgmiCreator2 from "@/assets/bgmi-thumbnail-creator2.jpg";
+import bgmiCreator2Webp from "@/assets/bgmi-thumbnail-creator2.webp";
 import bgmiBase2 from "@/assets/bgmi-thumbnail-base2.jpg";
+import bgmiBase2Webp from "@/assets/bgmi-thumbnail-base2.webp";
 import bgmiCreator3 from "@/assets/bgmi-thumbnail-creator3.jpg";
+import bgmiCreator3Webp from "@/assets/bgmi-thumbnail-creator3.webp";
 import bgmiCreator4 from "@/assets/bgmi-thumbnail-creator4.jpg";
+import bgmiCreator4Webp from "@/assets/bgmi-thumbnail-creator4.webp";
 
 const WHATSAPP_HREF = "https://wa.me/918968141585?text=Hi%20Shinel%20%E2%80%94%20I%27d%20like%20a%20BGMI%20livestream%20thumbnail";
 
 const TEMPLATES = [
-  { base: bgmiBase, creator: bgmiCreator1, name: "BGMI Series A" },
-  { base: bgmiBase, creator: bgmiCreator2, name: "BGMI Series A" },
-  { base: bgmiBase2, creator: bgmiCreator3, name: "BGMI Series B" },
-  { base: bgmiBase2, creator: bgmiCreator4, name: "BGMI Series B" },
+  { creator: bgmiCreator1, creatorWebp: bgmiCreator1Webp, name: "BGMI Series A" },
+  { creator: bgmiCreator2, creatorWebp: bgmiCreator2Webp, name: "BGMI Series A" },
+  { creator: bgmiCreator3, creatorWebp: bgmiCreator3Webp, name: "BGMI Series B" },
+  { creator: bgmiCreator4, creatorWebp: bgmiCreator4Webp, name: "BGMI Series B" },
 ];
 
 const STEPS = [
@@ -145,6 +149,7 @@ export default function LiveTemplates() {
                     </div>
                     <Img
                       src={bgmiBase2}
+                      webp={bgmiBase2Webp}
                       alt="Base template — empty creator slot"
                       className="w-full aspect-video object-cover rounded-lg"
                       loading="lazy"
@@ -156,6 +161,7 @@ export default function LiveTemplates() {
                     </div>
                     <Img
                       src={bgmiCreator3}
+                      webp={bgmiCreator3Webp}
                       alt="Customised — creator photo + name swapped in"
                       className="w-full aspect-video object-cover rounded-lg"
                       loading="lazy"
@@ -229,6 +235,7 @@ export default function LiveTemplates() {
               <HairlineCard className="p-2">
                 <Img
                   src={t.creator}
+                  webp={t.creatorWebp}
                   alt={`${t.name} — creator example ${i + 1}`}
                   className="w-full aspect-video object-cover rounded-lg"
                   loading="lazy"

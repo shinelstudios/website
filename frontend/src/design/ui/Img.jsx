@@ -56,16 +56,16 @@ export default function Img({
     ...rest,
   };
 
-  // Auto-derive a sibling .webp for local raster sources. The build step at
-  // frontend/scripts/images-to-webp.js emits a .webp next to every JPG/PNG
-  // under src/assets and public/assets, so this lookup is always correct
-  // for local sources. External URLs (YouTube CDN, placehold.co) are
-  // skipped — they don't have a .webp companion.
-  const isLocal = typeof src === "string" && (src.startsWith("/") || src.startsWith("./") || !src.includes("://"));
-  const autoWebp = isLocal && /\.(jpe?g|png)$/i.test(src || "")
-    ? src.replace(/\.(jpe?g|png)$/i, ".webp")
-    : null;
-  const webpSrc = webp || autoWebp;
+  // WebP is opt-in via the explicit `webp` prop — auto-derivation by
+  // string substitution is unsafe for Vite-hashed assets (JPG and WebP
+  // get DIFFERENT hashes from Vite, so /foo-AAA.jpg has a sibling at
+  // /foo-BBB.webp, not /foo-AAA.webp). Chrome doesn't always fall back
+  // to the <img> when the matching <source> 404s, so silent failures
+  // surface as "image unavailable" placeholders. For Vite-imported
+  // assets, also import the .webp explicitly and pass it as `webp`.
+  // For files in public/assets/ (no hash), pass `webp` derived from
+  // the same path with the .webp extension.
+  const webpSrc = webp || null;
 
   if (webpSrc) {
     return (
