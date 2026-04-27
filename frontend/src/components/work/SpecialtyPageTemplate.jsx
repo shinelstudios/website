@@ -35,6 +35,14 @@ import { AUTH_BASE } from "../../config/constants";
 import { resolveMediaUrl, formatCompactNumber } from "../../utils/formatters";
 import { extractYouTubeId } from "../../utils/youtube";
 
+// Pull the shortcode out of any public IG reel/post URL. Same shape as
+// the worker-side helper. Returns "" when the URL isn't recognisable.
+function extractIgShortcode(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  const m = raw.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]{5,40})/i);
+  return m ? m[1] : "";
+}
+
 function HeroArt({ slug, palette }) {
   // Tiny per-specialty graphic so each hero feels bespoke.
   const common = "absolute inset-0 w-full h-full pointer-events-none";
@@ -227,12 +235,18 @@ function SampleStrip({ samples, palette, onPlay }) {
 
         const cellClasses = `group snap-start shrink-0 ${cellWidth} rounded-xl md:rounded-2xl overflow-hidden hairline`;
 
-        if (s.playable && s.videoId) {
+        if (s.playable && (s.videoId || s.igCode)) {
+          // YouTube wins when present (the project's "mirror URL plays
+          // on the site" convention). Instagram is the fallback for
+          // clips that exist only as a Reel.
+          const playPayload = s.videoId
+            ? { source: "youtube", videoId: s.videoId, isShort, title: s.alt }
+            : { source: "instagram", igCode: s.igCode, isShort: true, title: s.alt };
           return (
             <li key={i} className={cellClasses} style={{ background: "var(--surface-alt)" }}>
               <button
                 type="button"
-                onClick={() => onPlay({ videoId: s.videoId, isShort, title: s.alt })}
+                onClick={() => onPlay(playPayload)}
                 className="block w-full text-left focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
                 aria-label={`Play ${s.alt || "sample"}`}
               >
@@ -267,7 +281,7 @@ function SampleStrip({ samples, palette, onPlay }) {
   );
 }
 
-function YouTubeLightbox({ payload, onClose }) {
+function VideoLightbox({ payload, onClose }) {
   React.useEffect(() => {
     if (!payload) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -281,8 +295,14 @@ function YouTubeLightbox({ payload, onClose }) {
   }, [payload, onClose]);
 
   if (!payload) return null;
-  const { videoId, isShort, title } = payload;
-  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+  const { source, videoId, igCode, isShort, title } = payload;
+
+  // Instagram's /embed/ iframe is Meta-hosted, no auth, stable.
+  // YouTube embed gets autoplay + minimal chrome. Both honour
+  // isShort by switching the lightbox aspect ratio to 9:16.
+  const src = source === "instagram"
+    ? `https://www.instagram.com/reel/${encodeURIComponent(igCode)}/embed/`
+    : `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
 
   return (
     <div
@@ -301,7 +321,7 @@ function YouTubeLightbox({ payload, onClose }) {
         <X size={18} />
       </button>
       <div
-        className="relative w-full max-h-[90vh] overflow-hidden rounded-2xl"
+        className="relative w-full max-h-[90vh] overflow-hidden rounded-2xl bg-black"
         style={{
           aspectRatio: isShort ? "9 / 16" : "16 / 9",
           maxWidth: isShort ? "min(420px, 92vw)" : "min(1100px, 92vw)",
@@ -353,6 +373,7 @@ export default function SpecialtyPageTemplate({ slug }) {
             const vid = it.videoId || extractYouTubeId(
               it.mirrorUrl || it.primaryUrl || it.creatorUrl || ""
             );
+            const igCode = extractIgShortcode(it.igUrl || "");
             // YouTube CDN serves 16:9 thumbs even for shorts; we still tag
             // shorts as 9:16 so the cell shape matches the actual content.
             const src = vid
@@ -364,26 +385,29 @@ export default function SpecialtyPageTemplate({ slug }) {
               kind: "image",
               ratio: isShort ? "9/16" : "16/9",
               videoId: vid,
-              playable: !!vid,
+              igCode,
+              playable: !!vid || !!igCode,
               views: Number(it.views || 0),
               igViews: Number(it.igViews || 0),
               igUrl: it.igUrl || "",
-              href: it.mirrorUrl || it.primaryUrl || it.creatorUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
+              href: it.mirrorUrl || it.primaryUrl || it.creatorUrl || it.igUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
             };
           }
           // Thumbnail asset — usually 16:9 cover art, may link to a video.
           const vid = it.videoId || extractYouTubeId(it.youtubeUrl || "");
+          const igCode = extractIgShortcode(it.igUrl || "");
           return {
             src: resolveMediaUrl(it.imageUrl, AUTH_BASE) || "",
             alt: it.title,
             kind: "image",
             ratio: "16/9",
             videoId: vid,
-            playable: !!vid,
+            igCode,
+            playable: !!vid || !!igCode,
             views: Number(it.views || 0),
             igViews: Number(it.igViews || 0),
             igUrl: it.igUrl || "",
-            href: it.youtubeUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
+            href: it.youtubeUrl || it.igUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
           };
         }).filter((x) => x.src);
         setLiveSamples(transformed);
@@ -549,7 +573,7 @@ export default function SpecialtyPageTemplate({ slug }) {
         </RevealOnScroll>
       </Section>
 
-      <YouTubeLightbox payload={lightbox} onClose={() => setLightbox(null)} />
+      <VideoLightbox payload={lightbox} onClose={() => setLightbox(null)} />
 
       {/* WHAT WE HANDLE */}
       <Section size="md">
