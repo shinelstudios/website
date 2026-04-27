@@ -1,38 +1,63 @@
 /**
- * PricingTeaser — 3-tier condensed pricing strip pointing at /pricing.
- * Middle tier highlighted (most-popular pattern proven on /live-templates).
+ * PricingTeaser — homepage strip mirroring real /pricing data, NOT made-up
+ * numbers. Shows one coherent ladder (gaming) since the homepage testimonials
+ * lean gaming. Vlog / podcast / brand pipelines live at /pricing where users
+ * can switch category. Middle tier (Shorts Factory) is marked POPULAR per
+ * the same `POPULAR` map in Pricing.jsx.
+ *
+ * If pricing numbers change in Pricing.jsx, update them here too — these
+ * are the only three plans surfaced on /. (Or pull from a shared constant
+ * if/when we extract one.)
  */
 import React from "react";
 import { Link } from "react-router-dom";
 import { Check, ArrowUpRight } from "lucide-react";
 import { Section, Kicker, Display, Lede, HairlineCard, RevealOnScroll } from "../../design";
 
+// Mirrors PLANS.gaming from Pricing.jsx as of 2026-04-27. Three plans
+// (skipping "The Vanguard" middle tier on the homepage to keep the
+// teaser scannable). Full ladder + categories at /pricing.
 const TIERS = [
   {
-    name: "Starter",
-    price: "₹4,999",
-    unit: "/ thumbnail pack",
-    desc: "Single creator, single drop. 3 thumbnail concepts + 2 revisions.",
-    bullets: ["3 concepts", "2 revisions", "48 h delivery"],
-    cta: "Try a single project",
+    name: "Trial Sprint",
+    tag: "Test the workflow",
+    price: "₹599",
+    unit: "one-time",
+    desc: "Single deliverable to prove the quality before you commit to monthly. 48-hour handoff.",
+    bullets: [
+      "1 cinematic thumbnail (A/B ready)",
+      "1 high-octane short (≤50s)",
+      "Channel audit + SEO baseline",
+    ],
+    cta: "Start a trial",
   },
   {
-    name: "Monthly retainer",
-    price: "₹49,999",
+    name: "Shorts Factory",
+    tag: "Viral frequency",
+    price: "₹6,999",
     unit: "/ month",
-    desc: "4 long-form edits, 8 shorts, 12 thumbnails, named editor.",
-    bullets: ["4 long-form + 8 shorts", "12 thumbnails", "Named editor + slack"],
-    cta: "Plan a retainer",
+    desc: "30 shorts + 30 thumbnails on a 72-hour priority queue. The plan most gaming creators land on.",
+    bullets: [
+      "30 optimized shorts / month",
+      "30 vertical thumbnails",
+      "Meme-engine + trend captions",
+    ],
+    cta: "Scale shorts",
     badge: "Most popular",
     primary: true,
   },
   {
-    name: "Brand systems",
-    price: "Custom",
-    unit: "scoped per project",
-    desc: "Full brand identity, motion package, channel rebrand. Quote in 24 h.",
-    bullets: ["Logo + motion + GFX", "Channel art + templates", "Style guide"],
-    cta: "Get a custom quote",
+    name: "Empire Tier",
+    tag: "Full studio outsource",
+    price: "₹13,499",
+    unit: "/ month",
+    desc: "Complete channel management: long-form + shorts + thumbnails + monthly growth audit. 48h SLA.",
+    bullets: [
+      "4 long-form + 20 shorts / mo",
+      "Complete channel management",
+      "Monthly growth & analytics audit",
+    ],
+    cta: "Build my empire",
   },
 ];
 
@@ -45,17 +70,19 @@ export default function PricingTeaser() {
         </RevealOnScroll>
         <RevealOnScroll delay="80ms">
           <Display size="lg" className="mb-4">
-            Three tiers. Pick the one{" "}
+            Test the workflow.{" "}
             <span style={{ color: "var(--orange)" }} className="italic">
-              that fits.
+              Then scale up.
             </span>
           </Display>
         </RevealOnScroll>
         <RevealOnScroll delay="160ms">
           <Lede>
-            Most creators land on the monthly retainer — predictable output, a
-            named editor, and the best per-deliverable rate. One-off projects
-            and brand systems on either side.
+            Most creators start with the <strong>Trial Sprint</strong> at ₹599
+            to see the quality, then move to a monthly retainer once
+            they've shipped a deliverable they're happy with. Three of our
+            gaming plans below — vlog, podcast, and brand pipelines have
+            their own pricing.
           </Lede>
         </RevealOnScroll>
       </div>
@@ -64,7 +91,7 @@ export default function PricingTeaser() {
         {TIERS.map((t, i) => (
           <RevealOnScroll key={t.name} delay={`${i * 80}ms`}>
             <HairlineCard
-              className="relative p-6 md:p-7 h-full"
+              className="relative p-6 md:p-7 h-full flex flex-col"
               style={{
                 background: t.primary ? "rgba(232,80,2,0.04)" : "var(--surface)",
                 borderColor: t.primary ? "var(--orange)" : "var(--hairline)",
@@ -80,18 +107,21 @@ export default function PricingTeaser() {
                   {t.badge}
                 </span>
               )}
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-3" style={{ color: "var(--orange)" }}>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: "var(--orange)" }}>
                 {t.name}
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: "var(--text-muted)" }}>
+                {t.tag}
               </p>
               <p className="text-display-md leading-none mb-1" style={{ color: "var(--text)" }}>
                 <span className="text-mono-num">{t.price}</span>
               </p>
               <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>{t.unit}</p>
               <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--text-muted)" }}>{t.desc}</p>
-              <ul className="space-y-2 mb-6">
+              <ul className="space-y-2 mb-6 flex-1">
                 {t.bullets.map((b) => (
                   <li key={b} className="flex items-start gap-2 text-sm" style={{ color: "var(--text)" }}>
-                    <Check size={14} style={{ color: "var(--orange)", marginTop: 3 }} aria-hidden="true" />
+                    <Check size={14} style={{ color: "var(--orange)", marginTop: 3, flexShrink: 0 }} aria-hidden="true" />
                     <span>{b}</span>
                   </li>
                 ))}
@@ -113,7 +143,7 @@ export default function PricingTeaser() {
           className="text-xs font-black uppercase tracking-widest inline-flex items-center gap-1.5"
           style={{ color: "var(--orange)" }}
         >
-          See full pricing breakdown <ArrowUpRight size={12} />
+          See all 14 plans across gaming, vlog, podcast & brand <ArrowUpRight size={12} />
         </Link>
       </div>
     </Section>
