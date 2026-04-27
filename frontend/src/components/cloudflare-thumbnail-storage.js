@@ -1,5 +1,20 @@
 // src/components/cloudflare-thumbnail-storage.js
 
+// Same error-surfacing pattern as cloudflare-video-storage.js — propagate
+// the worker's error body + HTTP status so the admin form can show
+// specifics instead of "Save failed".
+async function failWithBody(res, fallback) {
+    let serverMessage = "";
+    try {
+        const data = await res.json();
+        serverMessage = data?.error || data?.message || "";
+    } catch { /* non-JSON body */ }
+    const err = new Error(serverMessage || `${fallback} — HTTP ${res.status}`);
+    err.status = res.status;
+    err.serverMessage = serverMessage;
+    throw err;
+}
+
 export function createThumbnailStorage(baseUrl, getToken) {
     const getHeaders = () => ({
         "Content-Type": "application/json",
@@ -11,7 +26,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
             const res = await fetch(`${baseUrl}/thumbnails`, {
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Failed to fetch thumbnails");
+            if (!res.ok) await failWithBody(res, "Failed to fetch thumbnails");
             const data = await res.json();
             return data.thumbnails || [];
         },
@@ -20,7 +35,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
             const res = await fetch(`${baseUrl}/thumbnails/stats`, {
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Failed to fetch stats");
+            if (!res.ok) await failWithBody(res, "Failed to fetch stats");
             return await res.json();
         },
 
@@ -30,7 +45,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error("Failed to create thumbnail");
+            if (!res.ok) await failWithBody(res, "Failed to create thumbnail");
             return await res.json();
         },
 
@@ -40,7 +55,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error("Failed to update thumbnail");
+            if (!res.ok) await failWithBody(res, "Failed to update thumbnail");
             return await res.json();
         },
 
@@ -49,7 +64,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 method: "DELETE",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Failed to delete thumbnail");
+            if (!res.ok) await failWithBody(res, "Failed to delete thumbnail");
             return await res.json();
         },
 
@@ -59,7 +74,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify({ ids })
             });
-            if (!res.ok) throw new Error("Bulk delete failed");
+            if (!res.ok) await failWithBody(res, "Bulk delete failed");
             return await res.json();
         },
 
@@ -68,7 +83,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 method: "POST",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Refresh failed");
+            if (!res.ok) await failWithBody(res, "Refresh failed");
             return await res.json();
         },
 
@@ -77,7 +92,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 method: "POST",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Bulk refresh failed");
+            if (!res.ok) await failWithBody(res, "Bulk refresh failed");
             return await res.json();
         },
         async fetchYoutube(url) {
@@ -86,7 +101,7 @@ export function createThumbnailStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify({ url })
             });
-            if (!res.ok) throw new Error("YouTube fetch failed");
+            if (!res.ok) await failWithBody(res, "YouTube fetch failed");
             const data = await res.json();
             return data.details || {};
         }

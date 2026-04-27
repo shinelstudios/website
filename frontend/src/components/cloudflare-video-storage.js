@@ -1,5 +1,22 @@
 // src/components/cloudflare-video-storage.js
 
+// Throw an Error that carries the HTTP status + the worker's actual
+// `error` body, so the admin UI can surface specifics ("youtube_views
+// column missing" / "validation failed: ...") instead of a generic
+// "Failed to save". Past incidents: the silent generic-message path
+// hid a 500 from a missing column for hours.
+async function failWithBody(res, fallback) {
+    let serverMessage = "";
+    try {
+        const data = await res.json();
+        serverMessage = data?.error || data?.message || "";
+    } catch { /* non-JSON body */ }
+    const err = new Error(serverMessage || `${fallback} — HTTP ${res.status}`);
+    err.status = res.status;
+    err.serverMessage = serverMessage;
+    throw err;
+}
+
 export function createVideoStorage(baseUrl, getToken) {
     const getHeaders = () => ({
         "Content-Type": "application/json",
@@ -11,7 +28,7 @@ export function createVideoStorage(baseUrl, getToken) {
             const res = await fetch(`${baseUrl}/videos`, {
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Failed to fetch videos");
+            if (!res.ok) await failWithBody(res, "Failed to fetch videos");
             const data = await res.json();
             return data.videos || [];
         },
@@ -22,7 +39,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error("Failed to create video record");
+            if (!res.ok) await failWithBody(res, "Failed to create video record");
             return await res.json();
         },
 
@@ -32,7 +49,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error("Failed to update video record");
+            if (!res.ok) await failWithBody(res, "Failed to update video record");
             return await res.json();
         },
 
@@ -41,7 +58,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 method: "DELETE",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Failed to delete video record");
+            if (!res.ok) await failWithBody(res, "Failed to delete video record");
             return await res.json();
         },
 
@@ -51,7 +68,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify({ ids })
             });
-            if (!res.ok) throw new Error("Bulk delete failed");
+            if (!res.ok) await failWithBody(res, "Bulk delete failed");
             return await res.json();
         },
 
@@ -60,7 +77,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 method: "POST",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Refresh failed");
+            if (!res.ok) await failWithBody(res, "Refresh failed");
             return await res.json();
         },
 
@@ -69,7 +86,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 method: "POST",
                 headers: getHeaders()
             });
-            if (!res.ok) throw new Error("Bulk sync failed");
+            if (!res.ok) await failWithBody(res, "Bulk sync failed");
             return await res.json();
         },
         async fetchYoutube(url) {
@@ -78,7 +95,7 @@ export function createVideoStorage(baseUrl, getToken) {
                 headers: getHeaders(),
                 body: JSON.stringify({ url })
             });
-            if (!res.ok) throw new Error("YouTube fetch failed");
+            if (!res.ok) await failWithBody(res, "YouTube fetch failed");
             const data = await res.json();
             return data.details || {};
         }

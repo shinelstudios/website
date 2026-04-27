@@ -28,6 +28,7 @@ const VideoForm = ({
     onRefreshInstagram,
     busy,
     busyLabel,
+    saveError,
     user
 }) => {
     const { isAdmin, email: userEmail } = user || { isAdmin: false, email: "" };
@@ -402,6 +403,18 @@ const VideoForm = ({
                         disabled={!isAdmin}
                     />
                 </div>
+
+                {/* Save error banner — shows the worker's actual error string
+                    (HTTP status + message) so failures aren't a mystery. */}
+                {saveError && (
+                    <div
+                        role="alert"
+                        className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-300 leading-relaxed"
+                    >
+                        <div className="font-black uppercase tracking-widest text-[10px] text-red-400 mb-1">Save failed</div>
+                        <div className="break-words">{saveError}</div>
+                    </div>
+                )}
 
                 {/* Submit */}
                 <button

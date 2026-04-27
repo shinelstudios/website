@@ -2987,6 +2987,10 @@ const handler = {
         // Coerce every optional field to a real string; D1 rejects `undefined`
         // binds with "Type 'undefined' not supported".
         const s = (v) => (v == null ? "" : String(v));
+        // Defensive numeric coerce: D1 also rejects NaN/Infinity. Strings
+        // like "abc" used to take down POST /videos with a 500. This
+        // returns 0 for any non-finite input.
+        const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 
         await env.DB.prepare(
           "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty, instagram_url, instagram_views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -3001,13 +3005,13 @@ const handler = {
           creatorUrl,    // creator_url ← source for view counts
           mirrorUrl,     // mirror_url  ← Shinel re-upload, plays on the site
           videoId,
-          Number(body.youtubeViews || 0),
+          n(body.youtubeViews),
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
           body.isShinel === false ? 0 : 1,
           sanitizeSpecialty(body.specialty),
           s(body.instagramUrl) || null,
-          Number(body.instagramViews || 0)
+          n(body.instagramViews)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -3133,7 +3137,16 @@ const handler = {
           fields.push(`${dbKey} = ?`);
           // Sanitize specialty to one of the allowed slugs or NULL — admin
           // form picker should already enforce this, but defense-in-depth.
-          params.push(key === "specialty" ? sanitizeSpecialty(val) : val);
+          // Numeric columns (instagramViews, youtubeViews) get the
+          // NaN-safe coerce so D1 doesn't 500 on a malformed input.
+          let bound = val;
+          if (key === "specialty") {
+            bound = sanitizeSpecialty(val);
+          } else if (key === "instagramViews" || key === "youtubeViews") {
+            const x = Number(val);
+            bound = Number.isFinite(x) ? x : 0;
+          }
+          params.push(bound);
         }
 
         if (fields.length === 0) return json({ error: "No valid fields to update" }, 400, cors);
@@ -3748,6 +3761,7 @@ const handler = {
         // crash the insert. Previous code was erroring intermittently when
         // admin uploaded a thumbnail without a filename.
         const s = (v) => (v == null ? "" : String(v));
+        const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
         const filename = s(body.filename) || (videoId ? `${videoId}.jpg` : `thumb-${id}`);
 
         await env.DB.prepare(
@@ -3761,13 +3775,13 @@ const handler = {
           s(body.variant) || "VIDEO",
           s(body.imageUrl),
           videoId,
-          Number(body.youtubeViews || 0),
+          n(body.youtubeViews),
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
           body.isShinel === false ? 0 : 1,
           sanitizeSpecialty(body.specialty),
           s(body.instagramUrl) || null,
-          Number(body.instagramViews || 0)
+          n(body.instagramViews)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -3798,7 +3812,15 @@ const handler = {
 
           const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
           fields.push(`${dbKey} = ?`);
-          params.push(key === "specialty" ? sanitizeSpecialty(val) : val);
+          // Same NaN-safe coerce as the videos PUT handler.
+          let bound = val;
+          if (key === "specialty") {
+            bound = sanitizeSpecialty(val);
+          } else if (key === "instagramViews" || key === "youtubeViews") {
+            const x = Number(val);
+            bound = Number.isFinite(x) ? x : 0;
+          }
+          params.push(bound);
         }
 
         if (fields.length === 0) return json({ error: "No valid fields to update" }, 400, cors);
@@ -5254,6 +5276,59 @@ const handler = {
      * specialty = <slug>. Returns mixed items in a shape SpecialtyPageTemplate
      * can render directly. Cached 5min in KV.
      * ====================================================================== */
+    // Sub-route: /api/specialty/:slug/stats — must come BEFORE the
+    // generic /api/specialty/:slug catch-all below or startsWith
+    // would swallow it. KV-cached 30 min. Always returns 200.
+    if (url.pathname.startsWith("/api/specialty/") && url.pathname.endsWith("/stats") && request.method === "GET") {
+      const slug = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
+      if (!ALLOWED_SPECIALTIES.has(slug)) {
+        return json({ error: "Unknown specialty" }, 404, cors);
+      }
+      const cacheKey = `app:specialty:${slug}:stats`;
+      try {
+        const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
+        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=1800" });
+      } catch { /* fall through */ }
+
+      try {
+        const { results: videoRows = [] } = await env.DB.prepare(
+          `SELECT youtube_views, instagram_views
+             FROM inventory_videos
+            WHERE specialty = ? AND is_shinel = 1`
+        ).bind(slug).all();
+
+        const { results: thumbRows = [] } = await env.DB.prepare(
+          `SELECT youtube_views, instagram_views
+             FROM inventory_thumbnails
+            WHERE specialty = ? AND is_shinel = 1`
+        ).bind(slug).all();
+
+        const allRows = [...videoRows, ...thumbRows];
+        const samples = allRows.length;
+        const totalViews = allRows.reduce((sum, r) => {
+          const yt = Number(r.youtube_views || 0);
+          const ig = Number(r.instagram_views || 0);
+          return sum + Math.max(yt, ig);
+        }, 0);
+
+        const payload = {
+          ok: true,
+          slug,
+          samples,
+          totalViews,
+          turnaroundDays: 2,
+        };
+
+        try {
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 1800 });
+        } catch { /* non-fatal */ }
+        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=1800" });
+      } catch (e) {
+        console.error(`GET /api/specialty/${slug}/stats:`, e?.message || e);
+        return json({ ok: true, slug, samples: 0, totalViews: 0, turnaroundDays: 2 }, 200, cors);
+      }
+    }
+
     if (url.pathname.startsWith("/api/specialty/") && request.method === "GET") {
       const slug = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
       if (!ALLOWED_SPECIALTIES.has(slug)) {

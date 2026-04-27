@@ -132,6 +132,7 @@ export default function AdminVideosPage() {
   const handleSave = async () => {
     setBusy(true);
     setBusyLabel(editingId ? "Updating record..." : "Creating record...");
+    setErr("");
     try {
       const payload = {
         ...form,
@@ -149,8 +150,14 @@ export default function AdminVideosPage() {
       setForm(DEFAULT_FORM);
       setEditingId(null);
     } catch (e) {
-      setErr(e.message || "Failed to save video");
-      toast("error", "Save failed");
+      // Surface the real error: HTTP status, worker's message, and the
+      // payload keys we sent. Generic "Save failed" used to swallow this
+      // — now both the toast and the in-form banner show specifics.
+      const status = e.status ? ` (HTTP ${e.status})` : "";
+      const msg = `${e.message || "Failed to save video"}${status}`;
+      setErr(msg);
+      console.error("Save failed:", { error: e, payloadKeys: Object.keys(form || {}) });
+      toast("error", msg);
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -418,6 +425,7 @@ export default function AdminVideosPage() {
               onRefreshInstagram={handleRefreshInstagram}
               busy={busy}
               busyLabel={busyLabel}
+              saveError={err}
               user={{ email: userEmail, roles: userRoles, isAdmin, isEditor }}
             />
           </div>

@@ -41,6 +41,7 @@ const ThumbnailForm = ({
     busy,
     busyLabel,
     vErrs = {},
+    saveError,
     presets,
     user
 }) => {
@@ -363,6 +364,18 @@ const ThumbnailForm = ({
                         disabled={!isAdmin}
                     />
                 </div>
+
+                {/* Save error banner — full message visible inline (the
+                    floating bottom toast truncates). */}
+                {saveError && (
+                    <div
+                        role="alert"
+                        className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-300 leading-relaxed"
+                    >
+                        <div className="font-black uppercase tracking-widest text-[10px] text-red-400 mb-1">Save failed</div>
+                        <div className="break-words">{saveError}</div>
+                    </div>
+                )}
 
                 {/* Submit */}
                 <button

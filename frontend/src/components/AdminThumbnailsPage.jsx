@@ -225,7 +225,14 @@ export default function AdminThumbnailsPage() {
       setEditingId(null);
       localStorage.removeItem(LS_FORM_DRAFT_KEY);
     } catch (e) {
-      surfaceError(e.message || "Failed to save", e);
+      // Surface specifics: HTTP status + worker's actual error string,
+      // not just "Failed to save". Past incidents: a 500 from a missing
+      // column got swallowed for hours behind the generic message.
+      const status = e.status ? ` (HTTP ${e.status})` : "";
+      const msg = `${e.message || "Failed to save"}${status}`;
+      console.error("Thumbnail save failed:", { error: e, payloadKeys: Object.keys(payload || {}) });
+      surfaceError(msg, e);
+      toast("error", msg);
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -523,6 +530,7 @@ export default function AdminThumbnailsPage() {
               onImageSelected={handleImageSelected}
               onFetchYouTube={handleFetchYouTube}
               onRefreshInstagram={handleRefreshInstagram}
+              saveError={err}
               imagePreview={imagePreview}
               busy={busy}
               busyLabel={busyLabel}
