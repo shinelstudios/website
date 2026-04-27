@@ -1320,7 +1320,9 @@ async function performClientSync(env, isForced = false, debug = false) {
   }
 
   // Best-effort in-progress lock. KV is eventually consistent so this isn't a strict
-  // mutex, but it catches the common cron+manual collision. Clear on finally.
+  // mutex, but it catches the common cron+manual collision. Cleared in the finally
+  // at the bottom of this function so a thrown safety-check or YT quota error
+  // doesn't strand the lock and brick all future cron runs.
   const existingLock = await env.SHINEL_AUDIT.get(syncStateKey, "json");
   if (existingLock && existingLock.status === "in_progress" && (now - Number(existingLock.startedAt || 0) < 10 * 60 * 1000)) {
     const err = new Error("Another sync is already in progress");
@@ -1332,6 +1334,12 @@ async function performClientSync(env, isForced = false, debug = false) {
     JSON.stringify({ status: "in_progress", startedAt: now }),
     { expirationTtl: 15 * 60 }
   );
+
+  // Wrap the rest in try/finally — anything below this line that throws must
+  // still release the lock or the next cron tick will see "in_progress" and
+  // bail. Past incidents: safety check at MIN_RETENTION_RATIO trips → throws
+  // → lock stranded → pulse page goes stale for hours.
+  try {
 
   const clients = await getClients(env);
   const existingStatsRaw = await env.SHINEL_AUDIT.get("app:clients:stats", "json") || [];
@@ -1525,12 +1533,24 @@ async function performClientSync(env, isForced = false, debug = false) {
 
   pulseActivities.sort((a, b) => b.timestamp - a.timestamp);
 
+  // Safety check — only trip when we'd be writing back fewer than 80%
+  // of the *current registry size* (not the last sync's size, which
+  // can drift). Compare against clients.length so adding new clients
+  // doesn't artificially trip the threshold. The loop already backfills
+  // stale stats for failed fetches, so allStats should normally match
+  // clients.length 1:1.
   const MIN_RETENTION_RATIO = 0.8;
-  if (allStats.length < (existingStatsArray.length * MIN_RETENTION_RATIO) && !isForced) {
-    const err = new Error("Safety check active: Sync output is significantly lower than existing records.");
-    err.status = 422;
-    err.data = { synced: allStats.length, existing: existingStatsArray.length };
-    throw err;
+  if (allStats.length < (clients.length * MIN_RETENTION_RATIO) && !isForced) {
+    // Soft warning — log + audit but don't throw. Stranded locks from
+    // a thrown safety check were causing the pulse page to go stale
+    // for hours at a time.
+    const errMsg = `safety-check: low retention (${allStats.length}/${clients.length}) — keeping last good snapshot`;
+    console.warn("performClientSync:", errMsg);
+    errors.push({ id: "_safety", name: "safety", error: errMsg });
+    // Skip the writes that would clobber good data. Pulse activities
+    // we DO write since they only INSERT OR IGNORE — safe additive.
+    await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
+    return { ok: true, synced: allStats.length, total: clients.length, errors, ts: now, skipped: true };
   }
 
   if (registryMutated) {
@@ -1597,23 +1617,42 @@ async function performClientSync(env, isForced = false, debug = false) {
     await env.SHINEL_AUDIT.put("app:audits:weekly_last_ts", String(now));
   }
 
-  const responseData = {
-    ok: true, synced: allStats.length, total: clients.length, errors, ts: now
-  };
-
-  if (debug) {
-    responseData.debug = {
-      trace: [
-        ...allStats.map(s => ({ name: s.title, id: s.id, status: 'success', count: s.videoCount })),
-        ...errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error }))
-      ],
-      keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
-      keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
-      keyValid: true
+    const responseData = {
+      ok: true, synced: allStats.length, total: clients.length, errors, ts: now
     };
-  }
 
-  return responseData;
+    if (debug) {
+      responseData.debug = {
+        trace: [
+          ...allStats.map(s => ({ name: s.title, id: s.id, status: 'success', count: s.videoCount })),
+          ...errors.map(e => ({ name: e.name, id: e.id, status: 'error', error: e.error }))
+        ],
+        keyPresent: !!(env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY),
+        keyCount: (env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || env.VITE_YOUTUBE_API_KEY || "").split(",").filter(Boolean).length,
+        keyValid: true
+      };
+    }
+
+    return responseData;
+  } finally {
+    // Always release the lock — even if the safety check threw, even if YT
+    // quota threw, even if D1 timed out. Mark as "errored" rather than
+    // "idle" so the next observer can tell we crashed mid-sync.
+    try {
+      const existing = await env.SHINEL_AUDIT.get(syncStateKey, "json");
+      const wasInProgress = existing && existing.status === "in_progress";
+      await env.SHINEL_AUDIT.put(
+        syncStateKey,
+        JSON.stringify({
+          status: wasInProgress ? "errored" : "idle",
+          finishedAt: Date.now(),
+        }),
+        { expirationTtl: 24 * 3600 }
+      );
+    } catch (cleanupErr) {
+      console.error("performClientSync: lock release failed:", cleanupErr?.message || cleanupErr);
+    }
+  }
 }
 
 /* ================================= worker ================================= */

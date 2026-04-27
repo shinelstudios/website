@@ -188,9 +188,18 @@ const VideoForm = ({
                                 />
                                 <button
                                     type="button"
-                                    disabled={!form.instagramUrl || igRefreshing || !onRefreshInstagram}
+                                    disabled={igRefreshing || !onRefreshInstagram}
                                     onClick={async () => {
-                                        if (!onRefreshInstagram || !form.instagramUrl) return;
+                                        if (igRefreshing) return;
+                                        if (!form.instagramUrl) {
+                                            try {
+                                                window.dispatchEvent(new CustomEvent("notify", {
+                                                    detail: { type: "error", message: "Paste an Instagram Reel URL first" }
+                                                }));
+                                            } catch { /* ignore */ }
+                                            return;
+                                        }
+                                        if (!onRefreshInstagram) return;
                                         setIgRefreshing(true);
                                         setIgStatus(null);
                                         const notify = (type, message) => {
