@@ -31,6 +31,9 @@ import {
 import { SPECIALTIES, SPECIALTY_SAMPLES } from "../../config/specialties";
 import SpecialtyCard from "./SpecialtyCard";
 import KineticVerb from "./KineticVerb";
+import { AUTH_BASE } from "../../config/constants";
+import { resolveMediaUrl } from "../../utils/formatters";
+import { extractYouTubeId } from "../../utils/youtube";
 
 function HeroArt({ slug, palette }) {
   // Tiny per-specialty graphic so each hero feels bespoke.
@@ -199,7 +202,56 @@ export default function SpecialtyPageTemplate({ slug }) {
   }
 
   const { palette, title, tagline, heroCopy, services, processSteps, pricingAnchor, verb, meta } = specialty;
-  const samples = SPECIALTY_SAMPLES[slug] || [];
+
+  // Live samples from inventory tagged with this specialty. Falls through
+  // to the hardcoded SPECIALTY_SAMPLES (in src/config/specialties.js) so a
+  // backend hiccup or fresh deploy still shows something.
+  const [liveSamples, setLiveSamples] = React.useState([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch(`${AUTH_BASE}/api/specialty/${encodeURIComponent(slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.items) return;
+        const transformed = d.items.map((it) => {
+          if (it.kind === "video") {
+            const isShort = (it.videoKind || "").toUpperCase() === "SHORT" ||
+                            (it.videoKind || "").toUpperCase() === "REEL";
+            const vid = it.videoId || extractYouTubeId(
+              it.mirrorUrl || it.primaryUrl || it.creatorUrl || ""
+            );
+            // YouTube CDN serves 16:9 thumbs even for shorts; we still tag
+            // shorts as 9:16 so the cell shape matches the actual content.
+            const src = vid
+              ? `https://i.ytimg.com/vi/${vid}/maxresdefault.jpg`
+              : "";
+            return {
+              src,
+              alt: it.title,
+              kind: "image",
+              ratio: isShort ? "9/16" : "16/9",
+              href: it.mirrorUrl || it.primaryUrl || it.creatorUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
+            };
+          }
+          // Thumbnail asset (16:9 cover art).
+          return {
+            src: resolveMediaUrl(it.imageUrl, AUTH_BASE) || "",
+            alt: it.title,
+            kind: "image",
+            ratio: "16/9",
+            href: it.youtubeUrl || (it.videoId ? `https://youtube.com/watch?v=${it.videoId}` : ""),
+          };
+        }).filter((x) => x.src);
+        setLiveSamples(transformed);
+      })
+      .catch(() => { /* silent */ });
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  // Live items first (admin-curated), bundled assets as a fallback.
+  const samples = liveSamples.length > 0
+    ? liveSamples
+    : (SPECIALTY_SAMPLES[slug] || []);
 
   const whatsappHref = `https://wa.me/918968141585?text=${encodeURIComponent(
     `Hi Shinel — I'd like to talk about ${title}.`

@@ -43,6 +43,9 @@ const DEFAULT_FORM = {
   tags: "",
   isShinel: true,
   attributedTo: "",
+  // null | "ai-music" | "ai-tattoo" | "ai-gfx" — when set, this row also
+  // surfaces on the corresponding /work/<slug> microsite strip.
+  specialty: null,
 };
 
 const store = createVideoStorage(AUTH_BASE, () => getAccessToken());

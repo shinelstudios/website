@@ -170,6 +170,35 @@ const ThumbnailForm = ({
                     </div>
                 </div>
 
+                {/* Specialty assignment — surfaces this thumbnail on one of
+                    the three /work/<slug> microsites. None = regular work. */}
+                <div className="grid gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                        Specialty microsite
+                        <span className="text-gray-600 normal-case tracking-normal"> · optional, where this surfaces on /work</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { value: null, label: "None" },
+                            { value: "ai-music", label: "AI Music" },
+                            { value: "ai-tattoo", label: "Tattoo Content" },
+                            { value: "ai-gfx", label: "AI Graphics" },
+                        ].map(opt => (
+                            <button
+                                key={opt.value || "none"}
+                                type="button"
+                                onClick={() => handleInputChange("specialty", opt.value)}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${(form.specialty || null) === opt.value
+                                    ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+                                    }`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Ownership */}
                 <div className="pt-4 border-t border-white/5 space-y-4">
                     <label className="flex items-center gap-3 cursor-pointer group">

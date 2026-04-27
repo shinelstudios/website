@@ -785,6 +785,16 @@ function fireDiscordWebhook(webhookUrl, payload) {
 
 // Allowed user roles (server-side whitelist for /admin/users mutations).
 const ALLOWED_ROLES = ["admin", "team", "editor", "artist", "client"];
+
+// Specialty slugs — corresponds to the three /work/<slug> microsites.
+// Inventory rows can be tagged with one of these so they auto-populate
+// the specialty page strip via GET /api/specialty/:slug.
+const ALLOWED_SPECIALTIES = new Set(["ai-music", "ai-tattoo", "ai-gfx"]);
+function sanitizeSpecialty(value) {
+  const s = String(value || "").trim().toLowerCase();
+  if (!s) return null;
+  return ALLOWED_SPECIALTIES.has(s) ? s : null;
+}
 // Accepts single role string or comma-separated multi-role. Returns sanitized comma-separated list,
 // or null if nothing valid remains. Caller must check for "admin" presence separately.
 function sanitizeRoleField(value) {
@@ -2777,6 +2787,7 @@ const handler = {
           attributedTo: v.attributed_to,
           isShinel: v.is_shinel === 1 || v.is_shinel === true,
           isVisibleOnPersonal: v.is_visible_on_personal === null || v.is_visible_on_personal === undefined ? true : (v.is_visible_on_personal === 1 || v.is_visible_on_personal === true),
+          specialty: v.specialty || null,
           platform: v.platform || 'YOUTUBE',
           dateAdded: v.date_added,
           updated: v.last_updated,
@@ -2814,7 +2825,7 @@ const handler = {
         const s = (v) => (v == null ? "" : String(v));
 
         await env.DB.prepare(
-          "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           id,
           s(body.title) || `video-${id}`,
@@ -2829,7 +2840,8 @@ const handler = {
           Number(body.youtubeViews || 0),
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
-          body.isShinel === false ? 0 : 1
+          body.isShinel === false ? 0 : 1,
+          sanitizeSpecialty(body.specialty)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -2898,9 +2910,10 @@ const handler = {
 
     /* =============================== /videos (admin CRUD) =============================== */
     const VIDEO_FIELDS = new Set([
-      "title", "category", "subcategory", "kind", "tags", "primaryUrl", 
-      "creatorUrl", "mirrorUrl", "videoId", "youtubeViews", "viewStatus", 
-      "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal"
+      "title", "category", "subcategory", "kind", "tags", "primaryUrl",
+      "creatorUrl", "mirrorUrl", "videoId", "youtubeViews", "viewStatus",
+      "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal",
+      "specialty",
     ]);
 
     if (url.pathname.startsWith("/videos/") && request.method === "PUT") {
@@ -2952,7 +2965,9 @@ const handler = {
 
           const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
           fields.push(`${dbKey} = ?`);
-          params.push(val);
+          // Sanitize specialty to one of the allowed slugs or NULL — admin
+          // form picker should already enforce this, but defense-in-depth.
+          params.push(key === "specialty" ? sanitizeSpecialty(val) : val);
         }
 
         if (fields.length === 0) return json({ error: "No valid fields to update" }, 400, cors);
@@ -3446,6 +3461,7 @@ const handler = {
           attributedTo: t.attributed_to,
           isShinel: t.is_shinel === 1 || t.is_shinel === true,
           isVisibleOnPersonal: t.is_visible_on_personal === null || t.is_visible_on_personal === undefined ? true : (t.is_visible_on_personal === 1 || t.is_visible_on_personal === true),
+          specialty: t.specialty || null,
           dateAdded: t.date_added,
           updated: t.last_updated,
         }));
@@ -3478,7 +3494,7 @@ const handler = {
         const filename = s(body.filename) || (videoId ? `${videoId}.jpg` : `thumb-${id}`);
 
         await env.DB.prepare(
-          "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           id,
           filename,
@@ -3491,7 +3507,8 @@ const handler = {
           Number(body.youtubeViews || 0),
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
-          body.isShinel === false ? 0 : 1
+          body.isShinel === false ? 0 : 1,
+          sanitizeSpecialty(body.specialty)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -3505,7 +3522,8 @@ const handler = {
     const THUMB_FIELDS = new Set([
       "filename", "youtubeUrl", "category", "subcategory", "variant",
       "imageUrl", "videoId", "youtubeViews", "viewStatus",
-      "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal"
+      "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal",
+      "specialty",
     ]);
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {
@@ -3521,7 +3539,7 @@ const handler = {
 
           const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
           fields.push(`${dbKey} = ?`);
-          params.push(val);
+          params.push(key === "specialty" ? sanitizeSpecialty(val) : val);
         }
 
         if (fields.length === 0) return json({ error: "No valid fields to update" }, 400, cors);
@@ -4967,6 +4985,82 @@ const handler = {
       } catch (e) {
         console.error("DELETE /api/live-templates/:id:", e?.message || e);
         return json({ error: e?.message || "Failed" }, e?.status || 500, cors);
+      }
+    }
+
+    /* ====================================================================== *
+     * GET /api/specialty/:slug — public list of items tagged for a microsite
+     *
+     * Aggregates inventory_videos + inventory_thumbnails where
+     * specialty = <slug>. Returns mixed items in a shape SpecialtyPageTemplate
+     * can render directly. Cached 5min in KV.
+     * ====================================================================== */
+    if (url.pathname.startsWith("/api/specialty/") && request.method === "GET") {
+      const slug = decodeURIComponent(url.pathname.split("/")[3] || "").toLowerCase();
+      if (!ALLOWED_SPECIALTIES.has(slug)) {
+        return json({ error: "Unknown specialty" }, 404, cors);
+      }
+      const cacheKey = `app:specialty:${slug}:cache`;
+      try {
+        const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
+        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+      } catch { /* fall through */ }
+
+      try {
+        // Videos first — these get embedded by the public template (mirror →
+        // primary → creator URL chain handled in the SpecialtyPageTemplate).
+        const { results: videos = [] } = await env.DB.prepare(
+          `SELECT id, title, category, subcategory, kind, video_id, primary_url, creator_url, mirror_url, youtube_views
+             FROM inventory_videos
+            WHERE specialty = ? AND is_shinel = 1
+            ORDER BY last_updated DESC
+            LIMIT 24`
+        ).bind(slug).all();
+
+        const { results: thumbs = [] } = await env.DB.prepare(
+          `SELECT id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views
+             FROM inventory_thumbnails
+            WHERE specialty = ? AND is_shinel = 1
+            ORDER BY last_updated DESC
+            LIMIT 24`
+        ).bind(slug).all();
+
+        const items = [
+          ...videos.map(v => ({
+            kind: "video",
+            id: v.id,
+            title: v.title || "",
+            category: v.category || "",
+            subcategory: v.subcategory || "",
+            videoKind: v.kind || "",  // LONG / SHORT / REEL
+            videoId: v.video_id || "",
+            mirrorUrl: v.mirror_url || "",
+            primaryUrl: v.primary_url || "",
+            creatorUrl: v.creator_url || "",
+            views: Number(v.youtube_views || 0),
+          })),
+          ...thumbs.map(t => ({
+            kind: "thumbnail",
+            id: t.id,
+            title: t.filename || "",
+            category: t.category || "",
+            subcategory: t.subcategory || "",
+            variant: t.variant || "",  // VIDEO / LIVE
+            imageUrl: t.image_url || "",
+            videoId: t.video_id || "",
+            youtubeUrl: t.youtube_url || "",
+            views: Number(t.youtube_views || 0),
+          })),
+        ];
+
+        const payload = { ok: true, slug, items };
+        try {
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 300 });
+        } catch { /* non-fatal */ }
+        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+      } catch (e) {
+        console.error(`GET /api/specialty/${slug}:`, e?.message || e);
+        return json({ ok: true, slug, items: [] }, 200, cors);
       }
     }
 

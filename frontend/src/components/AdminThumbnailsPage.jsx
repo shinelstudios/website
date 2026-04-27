@@ -42,6 +42,9 @@ const DEFAULT_FORM = {
   imageUrl: "",
   isShinel: true,
   attributedTo: "",
+  // null | "ai-music" | "ai-tattoo" | "ai-gfx" — surfaces the row on the
+  // matching /work/<slug> microsite when set. Null = regular work only.
+  specialty: null,
 };
 
 const store = createThumbnailStorage(AUTH_BASE, () => getAccessToken());

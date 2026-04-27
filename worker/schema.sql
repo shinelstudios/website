@@ -154,6 +154,18 @@ ALTER TABLE inventory_thumbnails ADD COLUMN is_visible_on_personal INTEGER DEFAU
 -- create request 500. Run once.
 ALTER TABLE inventory_videos ADD COLUMN mirror_url TEXT;
 
+-- 2026-04-27: specialty tagging — surfaces inventory rows on the three
+-- /work/<slug> microsites (ai-music, ai-tattoo, ai-gfx). Admin sets via
+-- the Specialty picker on Video/Thumbnail edit forms. NULL = regular
+-- work, not pinned to any specialty page. GET /api/specialty/:slug
+-- aggregates videos + thumbnails for the matching SpecialtyPageTemplate.
+ALTER TABLE inventory_videos ADD COLUMN specialty TEXT;
+ALTER TABLE inventory_thumbnails ADD COLUMN specialty TEXT;
+CREATE INDEX IF NOT EXISTS idx_inventory_videos_specialty
+  ON inventory_videos(specialty) WHERE specialty IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_inventory_thumbnails_specialty
+  ON inventory_thumbnails(specialty) WHERE specialty IS NOT NULL;
+
 -- === Hot-path indexes (audit pass — already applied to remote) ===
 -- Speeds up the JOIN at /clients/pulse-history (clients ↔ youtube_id),
 -- the per-client growth-history lookup (client_stats ↔ client_id), the
