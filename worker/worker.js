@@ -832,8 +832,16 @@ const ytIdFrom = (url) => {
     const u = new URL(url);
     if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
     if (u.searchParams.get("v")) return u.searchParams.get("v");
-    const m = u.pathname.match(/\/shorts\/([^/]+)/);
-    if (m) return m[1];
+    // /shorts/<id> (vertical short) and /live/<id> (livestream archive) both
+    // place the videoId directly in the path. /live/<id> matters because
+    // past livestreams in inventory_thumbnails carry these URLs and
+    // refresh-views was failing for them.
+    const shortsMatch = u.pathname.match(/\/shorts\/([^/]+)/);
+    if (shortsMatch) return shortsMatch[1];
+    const liveMatch = u.pathname.match(/\/live\/([^/?]+)/);
+    if (liveMatch) return liveMatch[1];
+    const embedMatch = u.pathname.match(/\/embed\/([^/?]+)/);
+    if (embedMatch) return embedMatch[1];
   } catch { }
   return "";
 };
@@ -3158,11 +3166,36 @@ const handler = {
         if (!videoId && env.DB) {
           const isThumbRoute = url.pathname.startsWith("/thumbnails/");
           const table = isThumbRoute ? "inventory_thumbnails" : "inventory_videos";
+          // Pull both the explicit video_id column AND the URL columns. Some
+          // older rows (notably LIVE-variant thumbnails for past livestreams)
+          // carry a youtube_url like https://youtube.com/live/<id> but never
+          // had video_id populated. ytIdFrom now parses /live/, /shorts/,
+          // /embed/, /watch?v=, and youtu.be — so we can recover the id.
+          const urlCols = isThumbRoute ? "youtube_url" : "primary_url, creator_url";
           try {
             const row = await env.DB.prepare(
-              `SELECT video_id FROM ${table} WHERE id = ?`
+              `SELECT video_id, ${urlCols} FROM ${table} WHERE id = ?`
             ).bind(raw).first();
             videoId = row?.video_id || "";
+            if (!videoId && row) {
+              for (const candidate of [row.youtube_url, row.primary_url, row.creator_url]) {
+                if (candidate) {
+                  const parsed = ytIdFrom(candidate);
+                  if (parsed) { videoId = parsed; break; }
+                }
+              }
+              // Backfill the column so subsequent refreshes are fast and
+              // the row stops failing with "no video id".
+              if (videoId) {
+                try {
+                  await env.DB.prepare(
+                    `UPDATE ${table} SET video_id = ? WHERE id = ?`
+                  ).bind(videoId, raw).run();
+                } catch (backfillErr) {
+                  console.warn("refresh: video_id backfill failed:", backfillErr?.message || backfillErr);
+                }
+              }
+            }
           } catch (lookupErr) {
             console.warn("refresh: row-id lookup failed:", lookupErr?.message || lookupErr);
           }
@@ -3171,10 +3204,19 @@ const handler = {
           if (!videoId) {
             try {
               const otherTable = isThumbRoute ? "inventory_videos" : "inventory_thumbnails";
+              const otherUrlCols = isThumbRoute ? "primary_url, creator_url" : "youtube_url";
               const row = await env.DB.prepare(
-                `SELECT video_id FROM ${otherTable} WHERE id = ?`
+                `SELECT video_id, ${otherUrlCols} FROM ${otherTable} WHERE id = ?`
               ).bind(raw).first();
               videoId = row?.video_id || "";
+              if (!videoId && row) {
+                for (const candidate of [row.youtube_url, row.primary_url, row.creator_url]) {
+                  if (candidate) {
+                    const parsed = ytIdFrom(candidate);
+                    if (parsed) { videoId = parsed; break; }
+                  }
+                }
+              }
             } catch { /* best-effort */ }
           }
         }

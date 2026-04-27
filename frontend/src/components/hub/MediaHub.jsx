@@ -30,7 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken, authedFetch } from "../../utils/tokenStore";
 import { extractYouTubeId } from "../../utils/youtube";
-import { formatCompactNumber } from "../../utils/formatters";
+import { formatCompactNumber, resolveMediaUrl } from "../../utils/formatters";
 
 // Management Imports
 import { createVideoStorage } from "../cloudflare-video-storage";
@@ -370,8 +370,12 @@ export default function MediaHub() {
             if (!res.ok) throw new Error(`Upload failed (${res.status})`);
             const data = await res.json();
             if (data.ok) {
+                // Worker returns a relative path like `/api/media/view/<uuid>.jpg`.
+                // Store the relative path in the form (so D1 stays origin-agnostic),
+                // but resolve through AUTH_BASE for the <img> preview — otherwise
+                // the browser tries to load it from shinelstudios.in and 404s.
                 setThumbForm(f => ({ ...f, imageUrl: data.url }));
-                setImagePreview(data.url);
+                setImagePreview(resolveMediaUrl(data.url, AUTH_BASE));
                 toast("success", "Image uploaded!");
                 fetchDirectMedia();
             } else {
@@ -924,7 +928,7 @@ export default function MediaHub() {
                                     refreshingId={null}
                                     onEdit={() => {
                                         setThumbForm(t);
-                                        setImagePreview(t.imageUrl);
+                                        setImagePreview(resolveMediaUrl(t.imageUrl, AUTH_BASE));
                                         setEditingItem({ type: 'thumbnail', data: t });
                                     }}
                                     onDelete={() => thumbStore.delete(t.id).then(loadThumbnails)}

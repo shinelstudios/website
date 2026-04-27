@@ -148,6 +148,12 @@ CREATE TABLE IF NOT EXISTS media_collection_items (
 ALTER TABLE inventory_videos ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;
 ALTER TABLE inventory_thumbnails ADD COLUMN is_visible_on_personal INTEGER DEFAULT 1;
 
+-- 2026-04-27: POST /videos INSERTs a `mirror_url` column (admin form has a
+-- "Mirror URL (Backup/Protected)" field for archived re-uploads). The
+-- column was missing from the original schema, which made every video
+-- create request 500. Run once.
+ALTER TABLE inventory_videos ADD COLUMN mirror_url TEXT;
+
 -- === Hot-path indexes (audit pass — already applied to remote) ===
 -- Speeds up the JOIN at /clients/pulse-history (clients ↔ youtube_id),
 -- the per-client growth-history lookup (client_stats ↔ client_id), the

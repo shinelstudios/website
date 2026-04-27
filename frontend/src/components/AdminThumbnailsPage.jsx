@@ -26,6 +26,7 @@ import ThumbnailForm from "./ThumbnailForm";
 import ThumbnailFilters from "./ThumbnailFilters";
 
 import { AUTH_BASE } from "../config/constants";
+import { resolveMediaUrl } from "../utils/formatters";
 import { getAccessToken } from "../utils/tokenStore";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
 const LS_PRESETS_KEY = "thumbs-presets";
@@ -434,7 +435,7 @@ export default function AdminThumbnailsPage() {
                       ...t,
                       isVisibleOnPersonal: t.isVisibleOnPersonal !== false
                     });
-                    setImagePreview(t.imageUrl || "");
+                    setImagePreview(resolveMediaUrl(t.imageUrl, AUTH_BASE) || "");
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   onDelete={() => handleDelete(t.id, t)}
