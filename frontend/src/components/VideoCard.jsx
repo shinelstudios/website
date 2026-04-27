@@ -182,10 +182,15 @@ const VideoCard = ({
 
                 <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-white/5">
                     <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Views</span>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">
+                            Views
+                            {Number(v.instagramViews || 0) > Number(v.youtubeViews || 0) && (
+                                <span className="ml-1 text-pink-400 normal-case tracking-normal">· reel</span>
+                            )}
+                        </span>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-black text-white">
-                                {Number(v.youtubeViews || 0).toLocaleString()}
+                                {Math.max(Number(v.youtubeViews || 0), Number(v.instagramViews || 0)).toLocaleString()}
                             </span>
                             <button
                                 disabled={busy}

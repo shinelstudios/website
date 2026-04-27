@@ -176,10 +176,20 @@ const ThumbnailCard = ({
 
                 <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-white/5">
                     <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Views</span>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">
+                            Views
+                            {Number(t.instagramViews || 0) > Number(t.youtubeViews || 0) && (
+                                <span className="ml-1 text-pink-400 normal-case tracking-normal">· reel</span>
+                            )}
+                        </span>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-black text-white">
-                                {t.youtubeViews != null ? Number(t.youtubeViews).toLocaleString() : "—"}
+                                {(() => {
+                                    const yt = Number(t.youtubeViews || 0);
+                                    const ig = Number(t.instagramViews || 0);
+                                    const max = Math.max(yt, ig);
+                                    return max > 0 ? max.toLocaleString() : "—";
+                                })()}
                             </span>
                             {t.youtubeUrl && (
                                 <button
