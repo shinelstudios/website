@@ -58,7 +58,13 @@ function normalizeWork(item, type) {
     link: isVideo ? "/video-editing" : "/thumbnails",
     kind: isVideo ? "video" : "gfx",
     isShinel: item.is_shinel !== 0 && item.isShinel !== false,
-    views: Number(item.youtube_views ?? item.youtubeViews ?? item.views ?? 0),
+    // Use the higher of YouTube vs Instagram views — same "audience reach"
+    // convention as the admin cards + specialty pages. A reel that ran on
+    // both platforms counts at its bigger number, not zero.
+    views: Math.max(
+      Number(item.youtube_views ?? item.youtubeViews ?? item.views ?? 0),
+      Number(item.instagram_views ?? item.instagramViews ?? 0)
+    ),
   };
 }
 

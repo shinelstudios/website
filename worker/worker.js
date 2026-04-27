@@ -914,7 +914,7 @@ async function fetchYouTubeVideoDetails(env, videoId) {
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       if (resp.status === 403 && (err?.error?.message || "").toLowerCase().includes("quota")) {
-        await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+        try { await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 }); } catch (kvErr) { console.warn("yt_key_exhausted KV write failed:", kvErr?.message || kvErr); }
       }
       return { error: err?.error?.message || `HTTP ${resp.status}` };
     }
@@ -956,7 +956,7 @@ async function fetchYouTubeChannelInfo(env, identifier) {
 
       // If quota exceeded, blacklist this key for 1 hour (enough to stop immediate retry spam)
       if (resp.status === 403 && message.toLowerCase().includes("quota")) {
-        await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+        try { await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 }); } catch (kvErr) { console.warn("yt_key_exhausted KV write failed:", kvErr?.message || kvErr); }
       }
 
       return { error: `YouTube API ${resp.status}: ${message}` };
@@ -1006,7 +1006,7 @@ async function fetchYouTubePulse(env, channelId, uploadsPlaylistId = null) {
         const errJson = await resp.json().catch(() => ({}));
         if (errJson?.error?.message?.toLowerCase().includes("quota")) {
           // Temporarily blacklist key to prevent spam
-          await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+          try { await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 }); } catch (kvErr) { console.warn("yt_key_exhausted KV write failed:", kvErr?.message || kvErr); }
         }
       }
     } catch (e) { console.error("Strategy 1 API Failed:", e.message); }
@@ -1060,7 +1060,7 @@ async function fetchYouTubePulse(env, channelId, uploadsPlaylistId = null) {
         const errJson = await resp.json().catch(() => ({}));
         const msg = errJson?.error?.message || `HTTP ${resp.status}`;
         if (resp.status === 403 && msg.toLowerCase().includes("quota")) {
-          await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+          try { await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 }); } catch (kvErr) { console.warn("yt_key_exhausted KV write failed:", kvErr?.message || kvErr); }
         }
         return { error: `YouTube API Error (Search): ${msg}`, items: [] };
       }
@@ -5639,7 +5639,7 @@ const handler = {
           if (!resp.ok) {
             const errBody = await resp.json().catch(() => ({}));
             if (resp.status === 403 && (errBody?.error?.message || "").toLowerCase().includes("quota")) {
-              await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 });
+              try { await env.SHINEL_AUDIT.put(`yt_key_exhausted:${await sha256Hex(key)}`, "true", { expirationTtl: 3600 }); } catch (kvErr) { console.warn("yt_key_exhausted KV write failed:", kvErr?.message || kvErr); }
             }
             return json({ ok: true, video: null, error: `yt_${resp.status}` }, 200, cors);
           }
