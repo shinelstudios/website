@@ -291,10 +291,20 @@ async function sha256Hex(input) {
 async function isRateLimited(env, ip, windowSec = 600, max = 5, bucket = "login") {
   if (!ip) return false;
   const key = `rl:${bucket}:${ip}`;
-  const curr = Number((await env.SHINEL_AUDIT.get(key)) || "0");
-  if (curr >= max) return true;
-  await env.SHINEL_AUDIT.put(key, String(curr + 1), { expirationTtl: windowSec });
-  return false;
+  // FAIL-OPEN on KV read or write failure (e.g. "KV put() limit exceeded
+  // for the day" on the free tier). Returning `false` means "not rate
+  // limited" — login + other auth paths keep working even when the
+  // counter can't be persisted. The alternative (failing closed) takes
+  // the whole site down whenever KV quota burns out.
+  try {
+    const curr = Number((await env.SHINEL_AUDIT.get(key)) || "0");
+    if (curr >= max) return true;
+    await env.SHINEL_AUDIT.put(key, String(curr + 1), { expirationTtl: windowSec });
+    return false;
+  } catch (e) {
+    console.warn(`isRateLimited(${bucket}) KV failure — failing open:`, e?.message || e);
+    return false;
+  }
 }
 
 // Simple RFC-5322-ish email regex (mirrors frontend/QuickLeadForm.jsx:52).
@@ -1860,7 +1870,8 @@ const handler = {
           { status: 200, headers }
         );
       } catch (e) {
-        return json({ error: "Login error" }, 500, cors);
+        console.error("POST /auth/login failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Login error" }, 500, cors);
       }
     }
 
@@ -4676,7 +4687,22 @@ const handler = {
       try {
         const contentLen = Number(request.headers.get("content-length") || 0);
         if (contentLen > 2 * 1024) return json({ error: "Payload too large" }, 413, cors);
-        // 120 beacons / 10 min per IP — enough for a normal SPA session.
+
+        // SAMPLING — was 1:1 (one KV write per pageview), which torches the
+        // free-tier 1000 writes/day quota in a few hundred visitors and
+        // takes down /auth/login + /clients/pulse with "KV put() limit
+        // exceeded for the day". Now: accept every beacon, persist 1 in 10
+        // (10%). p75/p95 percentiles stay statistically meaningful at this
+        // sample rate; the ~10x quota relief is the win. To recover from a
+        // burned quota, bump SAMPLE_RATE down further or set to 0.
+        const SAMPLE_RATE = 0.1;
+        if (Math.random() > SAMPLE_RATE) {
+          return json({ ok: true, sampled: false }, 202, cors);
+        }
+
+        // Skip the rate-limit KV write for the sampled-out 90% — only the
+        // sampled-in 10% ever reach this point, which is well under the
+        // 120 beacons / 10 min cap anyway.
         if (await isRateLimited(env, ip, 600, 120, "pv")) {
           return json({ ok: false, throttled: true }, 202, cors);
         }
@@ -4699,6 +4725,7 @@ const handler = {
           ttfb: Number.isFinite(+m.ttfb) ? Math.round(+m.ttfb) : null,
           conn: String(body.conn || "").slice(0, 8),
           dpr: Number.isFinite(+body.dpr) ? +(+body.dpr).toFixed(1) : null,
+          sampleRate: SAMPLE_RATE,  // store so /metrics/summary can scale counts back up
         };
         const dateKey = `metrics:${new Date(entry.ts).toISOString().slice(0, 10)}`;
         const existing = await env.SHINEL_AUDIT.get(dateKey, "json") || { entries: [] };
@@ -5337,7 +5364,7 @@ const handler = {
       const cacheKey = `app:specialty:${slug}:cache`;
       try {
         const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
-        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=900" });
       } catch { /* fall through */ }
 
       try {
@@ -5395,9 +5422,9 @@ const handler = {
 
         const payload = { ok: true, slug, items };
         try {
-          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 300 });
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 900 });
         } catch { /* non-fatal */ }
-        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=900" });
       } catch (e) {
         console.error(`GET /api/specialty/${slug}:`, e?.message || e);
         return json({ ok: true, slug, items: [] }, 200, cors);
