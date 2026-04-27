@@ -21,8 +21,8 @@ import QuickQuoteBar from "./QuickQuoteBar";
 import FloatingWhatsApp from "./FloatingWhatsApp";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
-// HeroSection retired in favour of EditorialHero (see imports below).
-const ServicesSection = React.lazy(() => import("../components/ServicesSection.jsx"));
+// HeroSection retired in favour of EditorialHero. ServicesSection retired
+// in favour of EditorialServicesGrid (file kept on disk as fallback).
 import QuickLeadForm from "./QuickLeadForm.jsx";
 import AISH_LOGO from '../assets/creators/aish.png';
 import MAGGIE_LOGO from '../assets/creators/maggie.png';
@@ -64,13 +64,22 @@ import {
   // NetworkImpactBar retired \u2014 stats now live inside EditorialHero.
 } from './CinematicComponents';
 
-import ServiceLens from './ServiceLens';
 import StrategyWizard from './StrategyWizard';
 import { GrainOverlay } from "../design";
 import { AUTH_BASE } from "../config/constants";
 import EditorialHero from "./home/EditorialHero";
 import EditorialServicesMarquee from "./home/EditorialServicesMarquee";
 import EditorialProcess from "./home/EditorialProcess";
+// Phase 3 homepage refresh — new editorial sections + value-add strips.
+import LiveNumbersBand from "./home/LiveNumbersBand.jsx";
+import JustShippedTicker from "./home/JustShippedTicker.jsx";
+import EditorialServicesGrid from "./home/EditorialServicesGrid.jsx";
+import EditorialBeforeAfterSection from "./home/EditorialBeforeAfterSection.jsx";
+import ResultsStrip from "./home/ResultsStrip.jsx";
+import EditorialTestimonialsSection from "./home/EditorialTestimonialsSection.jsx";
+import PricingTeaser from "./home/PricingTeaser.jsx";
+import EditorialToolsCTA from "./home/EditorialToolsCTA.jsx";
+import FAQAccordion from "./home/FAQAccordion.jsx";
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -95,8 +104,7 @@ import {
 } from '../config/constants';
 
 // Sample images
-import SAMPLE_VLOG_BEFORE from '../assets/Vlog_sample_before.jpg';
-import SAMPLE_VLOG_AFTER from '../assets/Vlog_sample_after.jpg';
+// Vlog sample assets now imported by EditorialBeforeAfterSection directly.
 
 /**
  * Centralized asset glob (Vite)
@@ -1065,108 +1073,85 @@ export default function ShinelStudiosHomepage() {
           </ErrorBoundary>
 
           {/*
-            Section order reworked for "Sell the craft" flow
-            (user decision 2026-04-21). Prior order led with client logos
-            immediately after the hero; new order surfaces what we make and
-            how we make it first, and pushes social proof below the fold.
-              1. Hero                 (hero already has bento of real thumbnails)
-              2. EditorialServicesMarquee  (what we make \u2014 kinetic type)
-              3. ServicesSection          (what we make \u2014 detailed cards)
-              4. EditorialProcess         (how we work)
-            \u2500\u2500\u2500 fold on most laptops \u2500\u2500\u2500
-              5. CreatorsWorkedWithMarquee (who trusts us)
-              6. Shinel Touch             (quality proof, before/after)
-              7. TestimonialsSection       (human proof)
-              8. AI Tools CTA              (engagement handoff)
+            Section order reworked for the 2026-04-27 Phase 3 homepage refresh.
+            Editorial v2 throughout. Order:
+              1. Hero (existing)
+              2. LiveNumbersBand     \u2605 NEW \u2014 three NumberTickIn counters
+              3. JustShippedTicker   \u2605 NEW \u2014 rotating recent deliveries
+              4. EditorialServicesMarquee (existing)
+              5. EditorialServicesGrid    \u21bb rewrite of ServicesSection
+              6. EditorialProcess (existing)
+              7. CreatorsWorkedWithMarquee (existing)
+              8. EditorialBeforeAfterSection \u21bb replaces ServiceLens
+              9. ResultsStrip        \u2605 NEW
+             10. EditorialTestimonialsSection \u21bb rewrite
+             11. PricingTeaser       \u2605 NEW
+             12. EditorialToolsCTA   \u21bb rewrite of AI Tools CTA
+             13. FAQAccordion        \u2605 NEW (also FAQSchema for SEO)
+            Then: Strategy Wizard + Contact CTA (existing).
           */}
 
-          {/* 2. Editorial services kinetic marquee */}
+          {/* 2. Live numbers band */}
+          <ErrorBoundary>
+            <LiveNumbersBand />
+          </ErrorBoundary>
+
+          {/* 3. Just shipped ticker */}
+          <ErrorBoundary>
+            <JustShippedTicker />
+          </ErrorBoundary>
+
+          {/* 4. Editorial services kinetic marquee */}
           <ErrorBoundary>
             <EditorialServicesMarquee />
           </ErrorBoundary>
 
-          {/* 3. Services (detail cards) */}
+          {/* 5. Services (editorial grid) */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={4} />}>
-            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
-              <ServicesSection />
-            </React.Suspense>
+            <EditorialServicesGrid />
           </ErrorBoundary>
 
-          {/* 4. Editorial six-step process strip */}
+          {/* 6. Editorial six-step process strip */}
           <ErrorBoundary>
             <EditorialProcess />
           </ErrorBoundary>
 
-          {/* 5. Social proof (logos) \u2014 moved down from its former position 3. */}
+          {/* 7. Social proof (logos) */}
           <ErrorBoundary>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
               <CreatorsWorkedWithMarquee isDark={isDark} />
             </React.Suspense>
           </ErrorBoundary>
 
-          {/* 6. The Shinel Touch (Interactive Lens) */}
-          <section id="touch" className="py-24 bg-black overflow-hidden">
-            <div className="container mx-auto px-4 max-w-5xl">
-              <div className="text-center mb-12">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500 mb-4 block">Precision Quality</span>
-                <h2 className="text-4xl md:text-5xl font-black text-white italic tracking-tighter uppercase mb-6">THE <span className="text-orange-500">SHINEL</span> TOUCH</h2>
-                <p className="text-gray-400 max-w-2xl mx-auto font-medium">Use our interactive lens to see how we turn raw footage into high-retention masterpieces.</p>
-              </div>
-              <ErrorBoundary>
-                <ServiceLens
-                  before={SAMPLE_VLOG_BEFORE}
-                  after={SAMPLE_VLOG_AFTER}
-                />
-              </ErrorBoundary>
-            </div>
-          </section>
-
-
-          {/* 7) Testimonials (human proof + analytics) */}
-          <ErrorBoundary fallback={<SectionSkeleton content="testimonial" contentCount={4} />}>
-            <TestimonialsSection isDark={isDark} />
+          {/* 8. Before/after demo (touch-safe slider replaces ServiceLens) */}
+          <ErrorBoundary>
+            <EditorialBeforeAfterSection />
           </ErrorBoundary>
 
-          {/* 8) AI Tools CTA Section (New Central Hub) */}
-          <section className="py-24 relative overflow-hidden" style={{ background: "var(--surface-alt)" }}>
-            <div className="container mx-auto px-4 max-w-6xl text-center">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-6"
-                style={{
-                  color: "var(--orange)",
-                  border: "1px solid var(--border)",
-                  background: "rgba(232,80,2,0.08)",
-                }}
-              >
-                <Wand2 size={14} />
-                Creator Suite
-              </motion.div>
-              <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-6">
-                Master Your <span className="text-[var(--orange)]">Growth</span> with AI
-              </h2>
-              <p className="text-[var(--text-muted)] text-lg mb-10 max-w-2xl mx-auto">
-                Access our full suite of public creator tools including ROI calculators, SEO optimizers, and thumbnail previewers.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/tools"
-                  className="px-10 py-5 rounded-2xl bg-[var(--orange)] text-white font-bold text-lg shadow-xl hover:shadow-[var(--orange)]/20 transition-all flex items-center justify-center gap-2"
-                >
-                  Explore All Tools <ArrowRight size={20} />
-                </Link>
-                <Link
-                  to="/roi-calculator"
-                  className="px-10 py-5 rounded-2xl border-2 border-[var(--border)] font-bold text-lg hover:border-[var(--orange)] transition-all flex items-center justify-center gap-2"
-                  style={{ color: "var(--text)" }}
-                >
-                  <BarChart3 size={20} /> ROI Calculator
-                </Link>
-              </div>
-            </div>
-          </section>
+          {/* 9. Results strip \u2014 case-study teaser carousel */}
+          <ErrorBoundary>
+            <ResultsStrip />
+          </ErrorBoundary>
+
+          {/* 10. Testimonials (editorial cards + KV quote wall) */}
+          <ErrorBoundary fallback={<SectionSkeleton content="testimonial" contentCount={4} />}>
+            <EditorialTestimonialsSection />
+          </ErrorBoundary>
+
+          {/* 11. Pricing teaser \u2014 3 tiers, middle highlighted */}
+          <ErrorBoundary>
+            <PricingTeaser />
+          </ErrorBoundary>
+
+          {/* 12. AI tools CTA */}
+          <ErrorBoundary>
+            <EditorialToolsCTA />
+          </ErrorBoundary>
+
+          {/* 13. FAQ accordion (also emits FAQSchema for SERP) */}
+          <ErrorBoundary>
+            <FAQAccordion />
+          </ErrorBoundary>
 
 
 

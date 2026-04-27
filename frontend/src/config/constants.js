@@ -296,8 +296,9 @@ export const ANALYTICS_EVENTS = {
     exitIntent: 'exit_intent_shown',
 };
 
-// Festival Database (Max 30% discount rule applied)
+// Festival Database (Max 25% discount rule applied)
 // Expanded with major Hindu and Indian festivals
+// Cap: 25% — increases beyond require explicit user approval (was 30% pre-2026-04-27)
 export const FESTIVAL_DATABASE = [
     {
         id: 'makar_sankranti',
@@ -319,7 +320,7 @@ export const FESTIVAL_DATABASE = [
         month: 0, // Jan
         day: 26,
         durationDays: 2,
-        discount: 26,
+        discount: 25,
         code: 'JAIHIND',
         title: '77th Republic Day Special!',
         description: 'Celebrate Indian content with a massive boost.',
@@ -361,8 +362,8 @@ export const FESTIVAL_DATABASE = [
         month: 2, // March (approx for 2026)
         day: 3,
         durationDays: 3,
-        discount: 30,
-        code: 'COLOURS',
+        discount: 25,
+        code: 'COLOURS25',
         title: 'Festival of Colours!',
         description: 'Add vibrant edits to your content library.',
         theme: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
@@ -403,8 +404,8 @@ export const FESTIVAL_DATABASE = [
         month: 7, // Aug
         day: 15,
         durationDays: 3,
-        discount: 30,
-        code: 'FREEDOM30',
+        discount: 25,
+        code: 'FREEDOM25',
         title: 'Independence Day Offer!',
         description: 'Free yourself from the stress of editing.',
         theme: 'linear-gradient(90deg, #FF9933, #FFFFFF, #138808)',
@@ -445,8 +446,8 @@ export const FESTIVAL_DATABASE = [
         month: 9, // Oct (approx Oct 3 in 2026)
         day: 3,
         durationDays: 9,
-        discount: 30,
-        code: 'NAVRATRI30',
+        discount: 25,
+        code: 'NAVRATRI25',
         title: '9 Nights of Savings!',
         description: 'Celebrate with divine discounts.',
         theme: 'linear-gradient(135deg, #FF0080, #FF8C00, #FFD700)',
@@ -459,8 +460,8 @@ export const FESTIVAL_DATABASE = [
         month: 10, // Nov (approx Nov 8 in 2026)
         day: 8,
         durationDays: 5,
-        discount: 30,
-        code: 'DIWALI30',
+        discount: 25,
+        code: 'DIWALI25',
         title: 'Festival of Lights!',
         description: 'Illuminating your channel with premium quality.',
         theme: 'linear-gradient(135deg, #FFD700, #FF8C00)',

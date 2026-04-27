@@ -4869,6 +4869,115 @@ const handler = {
     }
 
     /* ====================================================================== *
+     * Homepage data: /api/just-shipped + /api/homepage-stats
+     *
+     * Both are public, KV-cached, and feed the editorial homepage strips
+     * (LiveNumbersBand + JustShippedTicker). No auth, no schema deps —
+     * just read-only aggregation off inventory_videos.
+     * ====================================================================== */
+
+    // GET /api/just-shipped — returns the latest 5 delivered videos
+    // (Shinel-owned only) for the rotating "JUST SHIPPED" homepage strip.
+    if (url.pathname === "/api/just-shipped" && request.method === "GET") {
+      const cacheKey = "app:just-shipped:cache";
+      try {
+        const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
+        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+      } catch { /* fall through */ }
+      try {
+        // Filter is_shinel = 1 + exclude obvious internal entries by title pattern.
+        const { results = [] } = await env.DB.prepare(
+          `SELECT id, title, category, kind, video_id, last_updated
+             FROM inventory_videos
+            WHERE is_shinel = 1
+              AND title IS NOT NULL
+              AND LENGTH(title) > 4
+              AND LOWER(title) NOT LIKE '%test%'
+              AND LOWER(title) NOT LIKE '%demo%'
+              AND LOWER(title) NOT LIKE '%wip%'
+              AND LOWER(title) NOT LIKE '%draft%'
+            ORDER BY last_updated DESC
+            LIMIT 5`
+        ).all();
+        const items = results.map((r) => ({
+          id: r.id,
+          title: String(r.title).slice(0, 140),
+          category: r.category || "",
+          kind: r.kind || "",
+          videoId: r.video_id || "",
+          deliveredAt: r.last_updated || null,
+        }));
+        const payload = { ok: true, items };
+        try {
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 300 });
+        } catch { /* cache write failure is non-fatal */ }
+        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=300" });
+      } catch (e) {
+        console.error("GET /api/just-shipped:", e?.message || e);
+        return json({ ok: true, items: [] }, 200, cors);
+      }
+    }
+
+    // GET /api/homepage-stats — three numbers for the LiveNumbersBand
+    // (videos shipped this month, total views, hours edited estimate).
+    // 30-min cache. Safe to be slightly stale.
+    if (url.pathname === "/api/homepage-stats" && request.method === "GET") {
+      const cacheKey = "app:homepage-stats:cache";
+      try {
+        const cached = await env.SHINEL_AUDIT.get(cacheKey, "json");
+        if (cached) return json(cached, 200, { ...cors, "Cache-Control": "public, max-age=1800" });
+      } catch { /* */ }
+      try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        // Videos shipped this month
+        const monthRow = await env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM inventory_videos
+            WHERE is_shinel = 1 AND last_updated >= ?`
+        ).bind(monthStart).first();
+        // Total views generated (lifetime)
+        const viewsRow = await env.DB.prepare(
+          `SELECT COALESCE(SUM(youtube_views), 0) AS v FROM inventory_videos WHERE is_shinel = 1`
+        ).first();
+        // Lifetime video count
+        const totalRow = await env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM inventory_videos WHERE is_shinel = 1`
+        ).first();
+        // Hours edited estimate: roughly 4h/long-form, 1.5h/short, 1h/reel.
+        // Cheap aggregate with CASE in SQL; fall back to total*2.5 if kind is null.
+        const hoursRow = await env.DB.prepare(
+          `SELECT COALESCE(SUM(
+              CASE LOWER(COALESCE(kind, ''))
+                WHEN 'long' THEN 4.0
+                WHEN 'short' THEN 1.5
+                WHEN 'reel' THEN 1.0
+                ELSE 2.5
+              END
+            ), 0) AS h
+             FROM inventory_videos WHERE is_shinel = 1`
+        ).first();
+
+        const payload = {
+          ok: true,
+          videosThisMonth: Number(monthRow?.n || 0),
+          totalViews: Number(viewsRow?.v || 0),
+          totalVideos: Number(totalRow?.n || 0),
+          hoursEdited: Math.round(Number(hoursRow?.h || 0)),
+        };
+        try {
+          await env.SHINEL_AUDIT.put(cacheKey, JSON.stringify(payload), { expirationTtl: 1800 });
+        } catch { /* */ }
+        return json(payload, 200, { ...cors, "Cache-Control": "public, max-age=1800" });
+      } catch (e) {
+        console.error("GET /api/homepage-stats:", e?.message || e);
+        return json({
+          ok: false,
+          videosThisMonth: 0, totalViews: 0, totalVideos: 0, hoursEdited: 0,
+        }, 200, cors);
+      }
+    }
+
+    /* ====================================================================== *
      * Client Portal v1 — per-client public pages (/c/<slug>) + self-edit
      *
      * Public:
