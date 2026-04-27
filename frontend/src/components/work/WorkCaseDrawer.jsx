@@ -57,7 +57,17 @@ export default function WorkCaseDrawer({ item, open, onClose }) {
 
   if (!open || !item) return null;
 
-  const videoId = item.videoId || extractYouTubeId(item.youtubeUrl || item.creatorUrl || item.primaryUrl || "");
+  // Playback priority: mirror (our backup, no ads, never deleted) →
+  // primary (legacy) → creator. The cached view count from creator_url
+  // keeps showing on the site even if the original is deleted.
+  const videoId =
+    item.videoId ||
+    extractYouTubeId(
+      item.mirrorUrl || item.mirror_url ||
+      item.primaryUrl || item.primary_url ||
+      item.creatorUrl || item.creator_url ||
+      item.youtubeUrl || ""
+    );
   const maker = item.attributedTo ? String(item.attributedTo).split("@")[0] : "";
   const watchUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : (item.youtubeUrl || "");
 

@@ -2801,11 +2801,16 @@ const handler = {
         const body = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
         const id = `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        const videoId = ytIdFrom(body.primaryUrl || "") || "";
+        // URL model (2026-04-27): creatorUrl is the source of view counts
+        // (the creator's original); mirrorUrl is what plays on the public
+        // site (Shinel re-upload). primary_url is legacy — we keep the
+        // column populated to creatorUrl so older read paths still work.
+        const creatorUrl = String(body.creatorUrl || body.primaryUrl || "");
+        const mirrorUrl  = String(body.mirrorUrl  || "");
+        const videoId    = ytIdFrom(creatorUrl) || ytIdFrom(mirrorUrl) || "";
 
         // Coerce every optional field to a real string; D1 rejects `undefined`
-        // binds with "Type 'undefined' not supported". Same guard as
-        // POST /thumbnails.
+        // binds with "Type 'undefined' not supported".
         const s = (v) => (v == null ? "" : String(v));
 
         await env.DB.prepare(
@@ -2817,9 +2822,9 @@ const handler = {
           s(body.subcategory),
           s(body.kind) || "LONG",
           s(body.tags),
-          s(body.primaryUrl),
-          s(body.creatorUrl),
-          s(body.mirrorUrl),
+          creatorUrl,    // primary_url ← legacy mirror of creator_url
+          creatorUrl,    // creator_url ← source for view counts
+          mirrorUrl,     // mirror_url  ← Shinel re-upload, plays on the site
           videoId,
           Number(body.youtubeViews || 0),
           s(body.viewStatus) || "unknown",
@@ -2903,19 +2908,46 @@ const handler = {
         await requireTeamOrThrow(request, secret);
         const id = decodeURIComponent(url.pathname.split("/")[2] || "");
         const updates = await request.json().catch((e) => { console.warn(`bad json body @ ${url.pathname}:`, e?.message || e); return {}; });
-        
+
         const fields = [];
         const params = [];
+        let videoIdAlreadyPushed = false;
+
         for (const [key, val] of Object.entries(updates)) {
           if (!VIDEO_FIELDS.has(key)) continue; // Whitelist check
 
-          // Calculate side effects
-          if (key === "primaryUrl") {
-             const vId = ytIdFrom(val);
-             if (vId) {
-               fields.push("video_id = ?");
-               params.push(vId);
-             }
+          // creatorUrl is now the canonical view-count source. When the admin
+          // edits it, also (a) re-derive the videoId column and (b) mirror
+          // the value into primary_url so legacy read paths stay consistent.
+          if (key === "creatorUrl") {
+            const vId = ytIdFrom(val);
+            if (vId && !videoIdAlreadyPushed) {
+              fields.push("video_id = ?");
+              params.push(vId);
+              videoIdAlreadyPushed = true;
+            }
+            fields.push("primary_url = ?");
+            params.push(val);
+          }
+          // primaryUrl edits are still accepted (legacy callers) but only
+          // touch the video_id derivation if creatorUrl wasn't also sent.
+          if (key === "primaryUrl" && !updates.creatorUrl) {
+            const vId = ytIdFrom(val);
+            if (vId && !videoIdAlreadyPushed) {
+              fields.push("video_id = ?");
+              params.push(vId);
+              videoIdAlreadyPushed = true;
+            }
+          }
+          // Mirror URL is the playback source. If creatorUrl wasn't provided
+          // and the row had no videoId, fall back to mirror for video_id.
+          if (key === "mirrorUrl" && !updates.creatorUrl && !updates.primaryUrl) {
+            const vId = ytIdFrom(val);
+            if (vId && !videoIdAlreadyPushed) {
+              fields.push("video_id = ?");
+              params.push(vId);
+              videoIdAlreadyPushed = true;
+            }
           }
 
           const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -2926,14 +2958,14 @@ const handler = {
         if (fields.length === 0) return json({ error: "No valid fields to update" }, 400, cors);
 
         params.push(new Date().toISOString(), id);
-        
+
         await env.DB.prepare(
           `UPDATE inventory_videos SET ${fields.join(", ")}, last_updated = ? WHERE id = ?`
         ).bind(...params).run();
 
         return json({ ok: true }, 200, cors);
-      } catch (e) { 
-        return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors); 
+      } catch (e) {
+        return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors);
       }
     }
 
@@ -3171,14 +3203,22 @@ const handler = {
           // carry a youtube_url like https://youtube.com/live/<id> but never
           // had video_id populated. ytIdFrom now parses /live/, /shorts/,
           // /embed/, /watch?v=, and youtu.be — so we can recover the id.
-          const urlCols = isThumbRoute ? "youtube_url" : "primary_url, creator_url";
+          //
+          // Order matters: creator_url is the canonical source-of-truth for
+          // view counts (the creator's original); primary_url is its legacy
+          // mirror. Try creator_url first so a video that was deleted on
+          // the creator's channel but kept on our mirror still resolves
+          // correctly to the *creator's* id (where YouTube's view count
+          // history lives — even after deletion the API can return the last
+          // known views).
+          const urlCols = isThumbRoute ? "youtube_url" : "creator_url, primary_url, mirror_url";
           try {
             const row = await env.DB.prepare(
               `SELECT video_id, ${urlCols} FROM ${table} WHERE id = ?`
             ).bind(raw).first();
             videoId = row?.video_id || "";
             if (!videoId && row) {
-              for (const candidate of [row.youtube_url, row.primary_url, row.creator_url]) {
+              for (const candidate of [row.youtube_url, row.creator_url, row.primary_url, row.mirror_url]) {
                 if (candidate) {
                   const parsed = ytIdFrom(candidate);
                   if (parsed) { videoId = parsed; break; }
@@ -3204,13 +3244,13 @@ const handler = {
           if (!videoId) {
             try {
               const otherTable = isThumbRoute ? "inventory_videos" : "inventory_thumbnails";
-              const otherUrlCols = isThumbRoute ? "primary_url, creator_url" : "youtube_url";
+              const otherUrlCols = isThumbRoute ? "creator_url, primary_url, mirror_url" : "youtube_url";
               const row = await env.DB.prepare(
                 `SELECT video_id, ${otherUrlCols} FROM ${otherTable} WHERE id = ?`
               ).bind(raw).first();
               videoId = row?.video_id || "";
               if (!videoId && row) {
-                for (const candidate of [row.youtube_url, row.primary_url, row.creator_url]) {
+                for (const candidate of [row.youtube_url, row.creator_url, row.primary_url, row.mirror_url]) {
                   if (candidate) {
                     const parsed = ytIdFrom(candidate);
                     if (parsed) { videoId = parsed; break; }

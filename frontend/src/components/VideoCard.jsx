@@ -208,8 +208,9 @@ const VideoCard = ({
                 <div className="mt-4 flex items-center justify-between gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="flex gap-2">
                         <button
-                            onClick={() => window.open(v.primaryUrl, "_blank")}
+                            onClick={() => window.open(v.mirrorUrl || v.primaryUrl || v.creatorUrl, "_blank")}
                             className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black text-gray-400 hover:text-white hover:bg-white/10 transition-all uppercase tracking-widest"
+                            title="Plays from our mirror when available"
                         >
                             <ExternalLink size={12} /> SITE LINK
                         </button>

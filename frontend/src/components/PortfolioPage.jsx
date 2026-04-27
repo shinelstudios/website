@@ -36,8 +36,16 @@ import { Img, GrainOverlay } from "../design";
 function normalizeWork(item, type) {
     const isVideo = type === 'video';
     const KNOWN_BAD_IDS = ["t-vPWTJUIO4", "R2jcaMDAvOU"];
-    const shinelUrl = item.mirror_url || item.mirrorUrl || item.primaryUrl || "";
-    const ytId = extractYouTubeId(shinelUrl) || extractYouTubeId(item.creatorUrl) || item.youtubeId || item.videoId || "";
+    // Playback URL priority: mirror (our backup, no ads, never deleted) →
+    // primary (legacy mirror of creator) → creator (last resort, may be
+    // deleted by the creator). View counts come pre-cached on the row, so
+    // they keep showing even when the creator deletes the original.
+    const shinelUrl =
+      item.mirror_url || item.mirrorUrl ||
+      item.primaryUrl || item.primary_url ||
+      item.creatorUrl || item.creator_url ||
+      "";
+    const ytId = extractYouTubeId(shinelUrl) || extractYouTubeId(item.creatorUrl || item.creator_url) || item.youtubeId || item.videoId || "";
     const useMq = KNOWN_BAD_IDS.includes(ytId);
 
     return {

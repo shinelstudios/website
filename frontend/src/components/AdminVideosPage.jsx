@@ -27,9 +27,13 @@ import VideoFilters from "./VideoFilters";
 import { AUTH_BASE } from "../config/constants";
 import { getAccessToken, authedFetch } from "../utils/tokenStore";
 
+// Form fields. URL model:
+//   creatorUrl — original link from the creator (source for view counts)
+//   mirrorUrl  — Shinel-owned re-upload (what plays on the public site)
+// primaryUrl is no longer surfaced in the form — kept in DB for backwards
+// compatibility and auto-mirrored to creatorUrl on save.
 const DEFAULT_FORM = {
   title: "",
-  primaryUrl: "",
   creatorUrl: "",
   mirrorUrl: "",
   category: "GAMING",

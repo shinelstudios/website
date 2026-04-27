@@ -24,10 +24,17 @@ const VideoForm = ({
         }));
     };
 
+    // Prefer creator URL (the source of truth for views) for the embed
+    // preview. Fall back to mirror URL (our backup) and primary URL
+    // (legacy field) so existing rows still preview while editing.
     const formVideoId = useMemo(() => {
         if (!form) return null;
-        return extractYouTubeId(form.primaryUrl) || extractYouTubeId(form.creatorUrl);
-    }, [form?.primaryUrl, form?.creatorUrl]);
+        return (
+            extractYouTubeId(form.creatorUrl) ||
+            extractYouTubeId(form.mirrorUrl) ||
+            extractYouTubeId(form.primaryUrl)
+        );
+    }, [form?.creatorUrl, form?.mirrorUrl, form?.primaryUrl]);
 
     if (!form) return <div className="p-8 text-center text-gray-500">Error: No Form State</div>;
 
@@ -63,41 +70,62 @@ const VideoForm = ({
                         required
                     />
 
+                    {/* Two URL fields, two clear jobs:
+                        1. Creator URL — source we fetch view counts from
+                           (the creator's original public upload).
+                        2. Our backup URL — what actually plays on the site
+                           (re-upload on Shinel-owned channel; no ads, never
+                           deleted, plays even if creator removes the original
+                           — and we keep the cached view count regardless). */}
                     <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Primary URL (YouTube/Insta)</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                            Creator URL <span className="text-gray-600 normal-case tracking-normal">· source for view counts</span>
+                        </label>
                         <div className="relative">
                             <Input
-                                value={form.primaryUrl}
-                                onChange={(v) => handleInputChange("primaryUrl", v)}
-                                placeholder="YouTube URL for site player"
+                                value={form.creatorUrl}
+                                onChange={(v) => handleInputChange("creatorUrl", v)}
+                                placeholder="https://youtube.com/watch?v=… (the creator's original)"
                                 required
                             />
-                            {form.primaryUrl && form.primaryUrl.includes("youtube.com") && (
+                            {form.creatorUrl && (form.creatorUrl.includes("youtube.com") || form.creatorUrl.includes("youtu.be")) && (
                                 <button
                                     type="button"
                                     onClick={async () => {
                                         setFetching(true);
-                                        await onFetchYouTube(form.primaryUrl);
+                                        await onFetchYouTube(form.creatorUrl);
                                         setFetching(false);
                                     }}
                                     disabled={busy || fetching}
                                     className="absolute right-2 top-2 p-2 rounded-lg bg-orange-500/10 text-orange-500 hover:bg-orange-500 hover:text-white transition-all z-10"
-                                    title="Auto-fetch Title & Metadata"
+                                    title="Auto-fetch title + metadata"
                                 >
                                     <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
                                 </button>
                             )}
                         </div>
+                        <p className="text-[10px] text-gray-600 ml-1 mt-1">
+                            We pull view counts from here. View count keeps showing on the site
+                            even if the creator deletes the original.
+                        </p>
                     </div>
 
-                    <Input
-                        label="Mirror URL (Backup/Protected)"
-                        value={form.mirrorUrl || ""}
-                        onChange={(v) => handleInputChange("mirrorUrl", v)}
-                        placeholder="Custom or protected player link"
-                    />
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                            Our backup URL <span className="text-gray-600 normal-case tracking-normal">· what plays on the site</span>
+                        </label>
+                        <Input
+                            value={form.mirrorUrl || ""}
+                            onChange={(v) => handleInputChange("mirrorUrl", v)}
+                            placeholder="https://youtube.com/watch?v=… (Shinel re-upload)"
+                        />
+                        <p className="text-[10px] text-gray-600 ml-1 mt-1">
+                            Optional but recommended — the player on /work and creator pages
+                            will always use this if set. No ads, persistent, ours.
+                        </p>
+                    </div>
 
-                    {/* Preview Container */}
+                    {/* Preview Container — uses creator URL by default, mirror if set. */}
                     {formVideoId && (
                         <div className="rounded-xl overflow-hidden aspect-video border border-white/10 bg-black animate-in fade-in duration-500 mt-2">
                             <iframe
@@ -110,13 +138,6 @@ const VideoForm = ({
                             />
                         </div>
                     )}
-
-                    <Input
-                        label="Creator URL (Original)"
-                        value={form.creatorUrl}
-                        onChange={(v) => handleInputChange("creatorUrl", v)}
-                        placeholder="The creator's public upload link"
-                    />
                 </div>
 
                 {/* Categorization */}
