@@ -1,7 +1,22 @@
 import React, { useMemo } from "react";
-import { X, Check, Plus, RefreshCw, Info } from "lucide-react";
+import { X, Check, Plus, RefreshCw, Info, Instagram } from "lucide-react";
 import { VIDEO_CATEGORIES, VIDEO_KINDS, extractYouTubeId } from "../utils/constants";
 import { Input, TextArea, SelectWithPresets } from "./AdminUIComponents";
+import { formatCompactNumber } from "../utils/formatters";
+
+// "12.4k" / "1.2M" / "42000" → 12400 / 1200000 / 42000.
+// Empty / NaN / negative → 0.
+function parseCompactNumber(input) {
+    if (input == null) return 0;
+    const s = String(input).trim().replace(/,/g, "").toLowerCase();
+    if (!s) return 0;
+    const m = s.match(/^([\d.]+)\s*([kmb])?$/);
+    if (!m) return 0;
+    const n = parseFloat(m[1]);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    const mult = m[2] === "k" ? 1_000 : m[2] === "m" ? 1_000_000 : m[2] === "b" ? 1_000_000_000 : 1;
+    return Math.round(n * mult);
+}
 
 const VideoForm = ({
     editingId,
@@ -10,12 +25,23 @@ const VideoForm = ({
     onSave,
     onCancel,
     onFetchYouTube,
+    onRefreshInstagram,
     busy,
     busyLabel,
     user
 }) => {
     const { isAdmin, email: userEmail } = user || { isAdmin: false, email: "" };
     const [fetching, setFetching] = React.useState(false);
+    const [igRefreshing, setIgRefreshing] = React.useState(false);
+    const [igStatus, setIgStatus] = React.useState(null); // {ok, count, reason}
+    const [igViewsRaw, setIgViewsRaw] = React.useState("");
+
+    React.useEffect(() => {
+        // Sync the visible input string when the form prop changes
+        // (loading an existing row, or after auto-fill).
+        const stored = Number(form?.instagramViews || 0);
+        setIgViewsRaw(stored > 0 ? String(stored) : "");
+    }, [form?.instagramViews, editingId]);
 
     const handleInputChange = (name, value) => {
         setForm((f) => ({
@@ -123,6 +149,84 @@ const VideoForm = ({
                             Optional but recommended — the player on /work and creator pages
                             will always use this if set. No ads, persistent, ours.
                         </p>
+                    </div>
+
+                    {/* Instagram Reel — manual entry is source of truth.
+                        The Auto-fill button is a best-effort scrape that
+                        pre-fills the views field on success and leaves it
+                        alone on failure. Stored in instagram_url +
+                        instagram_views; surfaced on /work/<slug> cards. */}
+                    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Instagram size={14} className="text-pink-400" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                Instagram Reel <span className="text-gray-600 normal-case tracking-normal">· optional</span>
+                            </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                                Reel URL
+                            </label>
+                            <Input
+                                value={form.instagramUrl || ""}
+                                onChange={(v) => handleInputChange("instagramUrl", v)}
+                                placeholder="https://instagram.com/reel/…"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                                Reel views <span className="text-gray-600 normal-case tracking-normal">· you type the truth</span>
+                            </label>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={igViewsRaw}
+                                    onChange={(v) => {
+                                        setIgViewsRaw(v);
+                                        handleInputChange("instagramViews", parseCompactNumber(v));
+                                    }}
+                                    placeholder="e.g. 12.4k or 12400"
+                                />
+                                <button
+                                    type="button"
+                                    disabled={!editingId || !form.instagramUrl || igRefreshing || !onRefreshInstagram}
+                                    onClick={async () => {
+                                        if (!onRefreshInstagram || !editingId) return;
+                                        setIgRefreshing(true);
+                                        setIgStatus(null);
+                                        try {
+                                            const r = await onRefreshInstagram(editingId);
+                                            if (r?.ok && Number(r.views) > 0) {
+                                                handleInputChange("instagramViews", Number(r.views));
+                                                setIgViewsRaw(String(Number(r.views)));
+                                                setIgStatus({ ok: true, count: Number(r.views) });
+                                            } else {
+                                                setIgStatus({ ok: false, reason: r?.reason || r?.status || "unknown" });
+                                            }
+                                        } catch (err) {
+                                            setIgStatus({ ok: false, reason: err?.message || "error" });
+                                        } finally {
+                                            setIgRefreshing(false);
+                                        }
+                                    }}
+                                    className="shrink-0 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest border border-pink-500/30 text-pink-400 hover:bg-pink-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                                    title={!editingId ? "Save the row first" : !form.instagramUrl ? "Add a Reel URL first" : "Try to scrape view count from Instagram"}
+                                >
+                                    <RefreshCw size={12} className={igRefreshing ? "animate-spin" : ""} />
+                                    Auto-fill
+                                </button>
+                            </div>
+                            <div className="text-[9px] text-gray-600 ml-1 flex items-center gap-2 min-h-[14px]">
+                                {Number(form.instagramViews || 0) > 0 && (
+                                    <span>≈ {formatCompactNumber(form.instagramViews)} views</span>
+                                )}
+                                {igStatus?.ok && (
+                                    <span className="text-green-500">· auto-filled {formatCompactNumber(igStatus.count)}</span>
+                                )}
+                                {igStatus && !igStatus.ok && (
+                                    <span className="text-orange-500">· auto-fill failed ({igStatus.reason}) — type the number</span>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Preview Container — uses creator URL by default, mirror if set. */}

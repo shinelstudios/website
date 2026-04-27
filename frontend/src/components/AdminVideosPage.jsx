@@ -46,6 +46,10 @@ const DEFAULT_FORM = {
   // null | "ai-music" | "ai-tattoo" | "ai-gfx" — when set, this row also
   // surfaces on the corresponding /work/<slug> microsite strip.
   specialty: null,
+  // Instagram Reel — manual entry is source of truth; auto-fill is a
+  // best-effort assist via POST /api/instagram/refresh/:id.
+  instagramUrl: "",
+  instagramViews: 0,
 };
 
 const store = createVideoStorage(AUTH_BASE, () => getAccessToken());
@@ -243,6 +247,26 @@ export default function AdminVideosPage() {
     }
   };
 
+  // Instagram view auto-fill — best-effort scrape via the worker.
+  // Returns the worker's JSON ({ ok, views, status, reason? }) so the
+  // form can surface success/failure inline. Does NOT mutate the form
+  // here — the form takes the response and decides what to do with it.
+  const handleRefreshInstagram = async (rowId) => {
+    if (!rowId) return { ok: false, reason: "no-id" };
+    try {
+      const res = await authedFetch(
+        AUTH_BASE,
+        `/api/instagram/refresh/${encodeURIComponent(rowId)}`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, reason: data?.error || `http-${res.status}` };
+      return data;
+    } catch (e) {
+      return { ok: false, reason: e?.message || "network" };
+    }
+  };
+
   const handleBackupData = async () => {
     setBusy(true);
     setBusyLabel("Generating backup...");
@@ -375,6 +399,7 @@ export default function AdminVideosPage() {
                 setForm(DEFAULT_FORM);
               }}
               onFetchYouTube={handleFetchYouTube}
+              onRefreshInstagram={handleRefreshInstagram}
               busy={busy}
               busyLabel={busyLabel}
               user={{ email: userEmail, roles: userRoles, isAdmin, isEditor }}

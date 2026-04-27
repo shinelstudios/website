@@ -1156,6 +1156,127 @@ async function fetchInstagramInfo(env, handle) {
   }
 }
 
+// Extract the shortcode from a public Instagram Reel/Post URL.
+// Accepts: instagram.com/reel/{code}/, /reels/{code}/, /p/{code}/, /tv/{code}/
+// Returns null if the input doesn't match.
+function extractInstagramShortcode(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+  const m = rawUrl.match(/instagram\.com\/(?:reel|reels|p|tv)\/([A-Za-z0-9_-]{5,40})/i);
+  return m ? m[1] : null;
+}
+
+// fetchInstagramReelViews — best-effort scrape of a public Reel page.
+// The admin form treats this as an OPTIONAL auto-fill; the manually-typed
+// instagram_views value is the source of truth. On failure we return
+// { status: "scrape-failed" } and the caller leaves the prior value alone.
+//
+// Try priority: JSON-LD WatchAction interactionStatistic → inline JSON
+// (video_view_count / play_count) → og:description meta. First hit wins.
+// Cached 6h in KV under ig_reel_views:{code} since views move slowly.
+async function fetchInstagramReelViews(env, reelUrl) {
+  const code = extractInstagramShortcode(reelUrl);
+  if (!code) return { status: "bad-url" };
+
+  // KV cache hit
+  if (env.SHINEL_AUDIT) {
+    try {
+      const cached = await env.SHINEL_AUDIT.get(`ig_reel_views:${code}`, "json");
+      if (cached && Number.isFinite(cached.views) && cached.views > 0) {
+        return { views: cached.views, status: "ok", cached: true };
+      }
+    } catch { /* ignore */ }
+  }
+
+  try {
+    const resp = await fetch(`https://www.instagram.com/reel/${encodeURIComponent(code)}/`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+    if (!resp.ok) return { status: "scrape-failed", reason: `http-${resp.status}` };
+
+    const html = await resp.text();
+
+    let views = 0;
+
+    // 1) JSON-LD WatchAction (most stable).
+    //    <script type="application/ld+json">{ ..., "interactionStatistic": [{ "interactionType": ".../WatchAction", "userInteractionCount": 12400 }] }</script>
+    const ldMatches = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi) || [];
+    for (const block of ldMatches) {
+      const inner = block.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "").trim();
+      try {
+        const data = JSON.parse(inner);
+        const arr = Array.isArray(data) ? data : [data];
+        for (const node of arr) {
+          const stats = node?.interactionStatistic;
+          const list = Array.isArray(stats) ? stats : (stats ? [stats] : []);
+          for (const s of list) {
+            const type = String(s?.interactionType?.["@type"] || s?.interactionType || "");
+            if (/WatchAction/i.test(type)) {
+              const n = Number(s?.userInteractionCount);
+              if (Number.isFinite(n) && n > views) views = n;
+            }
+          }
+        }
+      } catch { /* keep trying */ }
+    }
+
+    // 2) Inline JSON — Instagram embeds GraphQL payload with view counters.
+    if (!views) {
+      const fields = ["video_view_count", "play_count", "video_play_count"];
+      for (const f of fields) {
+        const re = new RegExp(`"${f}"\\s*:\\s*(\\d+)`, "i");
+        const m = html.match(re);
+        if (m) {
+          const n = Number(m[1]);
+          if (Number.isFinite(n) && n > views) views = n;
+        }
+      }
+    }
+
+    // 3) og:description (last resort, format varies).
+    //    e.g. "12,400 likes, 230 comments - foo on instagram"
+    //    Modern reel pages sometimes include "X views" or "X plays".
+    if (!views) {
+      const desc = (html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"/i) ||
+                    html.match(/<meta[^>]*content="([^"]*)"[^>]*property="og:description"/i));
+      if (desc && desc[1]) {
+        const txt = desc[1];
+        const m = txt.match(/([\d,.]+)\s*(?:views|plays)/i) ||
+                  txt.match(/([\d.]+)\s*([KkMm])\s*(?:views|plays)/);
+        if (m) {
+          let raw = m[1].replace(/,/g, "");
+          let n = parseFloat(raw);
+          if (m[2]) {
+            if (/k/i.test(m[2])) n *= 1000;
+            else if (/m/i.test(m[2])) n *= 1_000_000;
+          }
+          if (Number.isFinite(n) && n > 0) views = Math.round(n);
+        }
+      }
+    }
+
+    if (!views) return { status: "scrape-failed", reason: "no-counter-found" };
+
+    // Cache for 6h
+    if (env.SHINEL_AUDIT) {
+      try {
+        await env.SHINEL_AUDIT.put(
+          `ig_reel_views:${code}`,
+          JSON.stringify({ views, at: Date.now() }),
+          { expirationTtl: 6 * 60 * 60 }
+        );
+      } catch { /* non-fatal */ }
+    }
+
+    return { views, status: "ok" };
+  } catch (e) {
+    return { status: "scrape-failed", reason: e.message || "unknown" };
+  }
+}
+
 function isStale(ts, now = Date.now()) {
   if (!ts) return true;
   return now - Number(ts) > 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -2789,6 +2910,10 @@ const handler = {
           isVisibleOnPersonal: v.is_visible_on_personal === null || v.is_visible_on_personal === undefined ? true : (v.is_visible_on_personal === 1 || v.is_visible_on_personal === true),
           specialty: v.specialty || null,
           platform: v.platform || 'YOUTUBE',
+          instagramUrl: v.instagram_url || "",
+          instagramViews: Number(v.instagram_views || 0),
+          instagramViewsStatus: v.instagram_views_status || null,
+          lastIgViewUpdate: v.last_ig_view_update || null,
           dateAdded: v.date_added,
           updated: v.last_updated,
         }));
@@ -2825,7 +2950,7 @@ const handler = {
         const s = (v) => (v == null ? "" : String(v));
 
         await env.DB.prepare(
-          "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO inventory_videos (id, title, category, subcategory, kind, tags, primary_url, creator_url, mirror_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty, instagram_url, instagram_views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           id,
           s(body.title) || `video-${id}`,
@@ -2841,7 +2966,9 @@ const handler = {
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
           body.isShinel === false ? 0 : 1,
-          sanitizeSpecialty(body.specialty)
+          sanitizeSpecialty(body.specialty),
+          s(body.instagramUrl) || null,
+          Number(body.instagramViews || 0)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -2913,7 +3040,7 @@ const handler = {
       "title", "category", "subcategory", "kind", "tags", "primaryUrl",
       "creatorUrl", "mirrorUrl", "videoId", "youtubeViews", "viewStatus",
       "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal",
-      "specialty",
+      "specialty", "instagramUrl", "instagramViews",
     ]);
 
     if (url.pathname.startsWith("/videos/") && request.method === "PUT") {
@@ -3305,6 +3432,71 @@ const handler = {
       }
     }
 
+    // POST /api/instagram/refresh/:id   — best-effort scrape of an
+    // inventory row's instagram_url. Auto-fills instagram_views on
+    // success; preserves the prior value on failure (the manual entry
+    // is the source of truth — see plan: "stable + robust + free").
+    if (url.pathname.startsWith("/api/instagram/refresh/") && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const rowId = decodeURIComponent(url.pathname.split("/")[4] || "");
+        if (!rowId) return json({ error: "Missing id" }, 400, cors);
+        if (!env.DB) return json({ error: "DB missing" }, 501, cors);
+
+        // Probe both inventory tables — the row id is unique across both.
+        let table = null;
+        let row = null;
+        for (const t of ["inventory_videos", "inventory_thumbnails"]) {
+          try {
+            const r = await env.DB.prepare(
+              `SELECT id, instagram_url FROM ${t} WHERE id = ?`
+            ).bind(rowId).first();
+            if (r) { table = t; row = r; break; }
+          } catch { /* table or column missing — skip */ }
+        }
+        if (!row) return json({ error: "Row not found" }, 404, cors);
+        if (!row.instagram_url) return json({ error: "No Instagram URL on this row" }, 400, cors);
+
+        const result = await fetchInstagramReelViews(env, row.instagram_url);
+        const now = new Date().toISOString();
+
+        if (result.status === "ok" && Number.isFinite(result.views) && result.views > 0) {
+          try {
+            await env.DB.prepare(
+              `UPDATE ${table}
+                  SET instagram_views = ?,
+                      instagram_views_status = 'ok',
+                      last_ig_view_update = ?,
+                      last_updated = ?
+                WHERE id = ?`
+            ).bind(result.views, now, now, rowId).run();
+          } catch (e) {
+            console.error("ig refresh: D1 update failed:", e?.message || e);
+            return json({ error: "DB update failed" }, 500, cors);
+          }
+          return json({ ok: true, views: result.views, status: "ok", source: "instagram", cached: !!result.cached }, 200, cors);
+        }
+
+        // Failure — record status, preserve prior count.
+        try {
+          await env.DB.prepare(
+            `UPDATE ${table}
+                SET instagram_views_status = ?,
+                    last_ig_view_update = ?
+              WHERE id = ?`
+          ).bind(result.status || "scrape-failed", now, rowId).run();
+        } catch { /* non-fatal */ }
+        return json({
+          ok: false,
+          status: result.status || "scrape-failed",
+          reason: result.reason || null,
+        }, 200, cors);
+      } catch (e) {
+        console.error("POST /api/instagram/refresh/:id failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Refresh failed" }, e?.status || 500, cors);
+      }
+    }
+
     // POST /videos/refresh-all (bulk, weekly)
     if (url.pathname === "/videos/refresh-all" && request.method === "POST") {
       try {
@@ -3462,6 +3654,10 @@ const handler = {
           isShinel: t.is_shinel === 1 || t.is_shinel === true,
           isVisibleOnPersonal: t.is_visible_on_personal === null || t.is_visible_on_personal === undefined ? true : (t.is_visible_on_personal === 1 || t.is_visible_on_personal === true),
           specialty: t.specialty || null,
+          instagramUrl: t.instagram_url || "",
+          instagramViews: Number(t.instagram_views || 0),
+          instagramViewsStatus: t.instagram_views_status || null,
+          lastIgViewUpdate: t.last_ig_view_update || null,
           dateAdded: t.date_added,
           updated: t.last_updated,
         }));
@@ -3494,7 +3690,7 @@ const handler = {
         const filename = s(body.filename) || (videoId ? `${videoId}.jpg` : `thumb-${id}`);
 
         await env.DB.prepare(
-          "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO inventory_thumbnails (id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views, view_status, attributed_to, is_shinel, specialty, instagram_url, instagram_views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           id,
           filename,
@@ -3508,7 +3704,9 @@ const handler = {
           s(body.viewStatus) || "unknown",
           s(body.attributedTo),
           body.isShinel === false ? 0 : 1,
-          sanitizeSpecialty(body.specialty)
+          sanitizeSpecialty(body.specialty),
+          s(body.instagramUrl) || null,
+          Number(body.instagramViews || 0)
         ).run();
 
         return json({ ok: true, id }, 200, cors);
@@ -3523,7 +3721,7 @@ const handler = {
       "filename", "youtubeUrl", "category", "subcategory", "variant",
       "imageUrl", "videoId", "youtubeViews", "viewStatus",
       "lastViewUpdate", "attributedTo", "isShinel", "isVisibleOnPersonal",
-      "specialty",
+      "specialty", "instagramUrl", "instagramViews",
     ]);
 
     if (url.pathname.startsWith("/thumbnails/") && request.method === "PUT") {
@@ -5010,7 +5208,8 @@ const handler = {
         // Videos first — these get embedded by the public template (mirror →
         // primary → creator URL chain handled in the SpecialtyPageTemplate).
         const { results: videos = [] } = await env.DB.prepare(
-          `SELECT id, title, category, subcategory, kind, video_id, primary_url, creator_url, mirror_url, youtube_views
+          `SELECT id, title, category, subcategory, kind, video_id, primary_url, creator_url, mirror_url,
+                  youtube_views, instagram_url, instagram_views
              FROM inventory_videos
             WHERE specialty = ? AND is_shinel = 1
             ORDER BY last_updated DESC
@@ -5018,7 +5217,8 @@ const handler = {
         ).bind(slug).all();
 
         const { results: thumbs = [] } = await env.DB.prepare(
-          `SELECT id, filename, youtube_url, category, subcategory, variant, image_url, video_id, youtube_views
+          `SELECT id, filename, youtube_url, category, subcategory, variant, image_url, video_id,
+                  youtube_views, instagram_url, instagram_views
              FROM inventory_thumbnails
             WHERE specialty = ? AND is_shinel = 1
             ORDER BY last_updated DESC
@@ -5038,6 +5238,8 @@ const handler = {
             primaryUrl: v.primary_url || "",
             creatorUrl: v.creator_url || "",
             views: Number(v.youtube_views || 0),
+            igUrl: v.instagram_url || "",
+            igViews: Number(v.instagram_views || 0),
           })),
           ...thumbs.map(t => ({
             kind: "thumbnail",
@@ -5050,6 +5252,8 @@ const handler = {
             videoId: t.video_id || "",
             youtubeUrl: t.youtube_url || "",
             views: Number(t.youtube_views || 0),
+            igUrl: t.instagram_url || "",
+            igViews: Number(t.instagram_views || 0),
           })),
         ];
 

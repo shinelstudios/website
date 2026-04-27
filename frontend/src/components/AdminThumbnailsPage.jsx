@@ -27,7 +27,7 @@ import ThumbnailFilters from "./ThumbnailFilters";
 
 import { AUTH_BASE } from "../config/constants";
 import { resolveMediaUrl } from "../utils/formatters";
-import { getAccessToken } from "../utils/tokenStore";
+import { getAccessToken, authedFetch } from "../utils/tokenStore";
 const LS_FORM_DRAFT_KEY = "admin-thumbs-form-draft";
 const LS_PRESETS_KEY = "thumbs-presets";
 const LS_IMPORT_CHECKPOINT = "thumbs-import-checkpoint";
@@ -45,6 +45,10 @@ const DEFAULT_FORM = {
   // null | "ai-music" | "ai-tattoo" | "ai-gfx" — surfaces the row on the
   // matching /work/<slug> microsite when set. Null = regular work only.
   specialty: null,
+  // Instagram Reel — manual entry is source of truth; auto-fill is a
+  // best-effort assist via POST /api/instagram/refresh/:id.
+  instagramUrl: "",
+  instagramViews: 0,
 };
 
 const store = createThumbnailStorage(AUTH_BASE, () => getAccessToken());
@@ -329,6 +333,23 @@ export default function AdminThumbnailsPage() {
     finally { setBusy(false); }
   };
 
+  // Instagram view auto-fill — same shape as AdminVideosPage.
+  const handleRefreshInstagram = async (rowId) => {
+    if (!rowId) return { ok: false, reason: "no-id" };
+    try {
+      const res = await authedFetch(
+        AUTH_BASE,
+        `/api/instagram/refresh/${encodeURIComponent(rowId)}`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, reason: data?.error || `http-${res.status}` };
+      return data;
+    } catch (e) {
+      return { ok: false, reason: e?.message || "network" };
+    }
+  };
+
   const downloadImage = async (url, name) => {
     try {
       const res = await fetch(url);
@@ -486,6 +507,7 @@ export default function AdminThumbnailsPage() {
               }}
               onImageSelected={handleImageSelected}
               onFetchYouTube={handleFetchYouTube}
+              onRefreshInstagram={handleRefreshInstagram}
               imagePreview={imagePreview}
               busy={busy}
               busyLabel={busyLabel}

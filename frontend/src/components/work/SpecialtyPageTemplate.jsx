@@ -32,7 +32,7 @@ import { SPECIALTIES, SPECIALTY_SAMPLES } from "../../config/specialties";
 import SpecialtyCard from "./SpecialtyCard";
 import KineticVerb from "./KineticVerb";
 import { AUTH_BASE } from "../../config/constants";
-import { resolveMediaUrl } from "../../utils/formatters";
+import { resolveMediaUrl, formatCompactNumber } from "../../utils/formatters";
 import { extractYouTubeId } from "../../utils/youtube";
 
 function HeroArt({ slug, palette }) {
@@ -196,9 +196,31 @@ function SampleStrip({ samples, palette, onPlay }) {
               )}
             </div>
             {s.alt && (
-              <div className="p-3 text-xs md:text-sm" style={{ color: "var(--text-muted)" }}>
+              <div className="px-3 pt-3 text-xs md:text-sm" style={{ color: "var(--text-muted)" }}>
                 {s.alt}
               </div>
+            )}
+            {(s.views > 0 || s.igViews > 0) && (
+              <div
+                className="px-3 pt-2 pb-3 flex items-center gap-3 flex-wrap text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {s.views > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Play size={10} fill="currentColor" strokeWidth={0} />
+                    {formatCompactNumber(s.views)} views
+                  </span>
+                )}
+                {s.igViews > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: palette.accent }} aria-hidden="true" />
+                    {formatCompactNumber(s.igViews)} reel views
+                  </span>
+                )}
+              </div>
+            )}
+            {!(s.views > 0 || s.igViews > 0) && s.alt && (
+              <div className="pb-3" aria-hidden="true" />
             )}
           </>
         );
@@ -343,6 +365,9 @@ export default function SpecialtyPageTemplate({ slug }) {
               ratio: isShort ? "9/16" : "16/9",
               videoId: vid,
               playable: !!vid,
+              views: Number(it.views || 0),
+              igViews: Number(it.igViews || 0),
+              igUrl: it.igUrl || "",
               href: it.mirrorUrl || it.primaryUrl || it.creatorUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
             };
           }
@@ -355,6 +380,9 @@ export default function SpecialtyPageTemplate({ slug }) {
             ratio: "16/9",
             videoId: vid,
             playable: !!vid,
+            views: Number(it.views || 0),
+            igViews: Number(it.igViews || 0),
+            igUrl: it.igUrl || "",
             href: it.youtubeUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
           };
         }).filter((x) => x.src);

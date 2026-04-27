@@ -231,3 +231,20 @@ CREATE INDEX IF NOT EXISTS idx_client_inbox_client_created
 ALTER TABLE client_inbox ADD COLUMN pinned_at INTEGER;
 CREATE INDEX IF NOT EXISTS idx_client_inbox_client_type_pinned
   ON client_inbox(client_id, type, pinned_at);
+
+-- 2026-04-27: Instagram Reel view counts on inventory rows. Source of
+-- truth is admin manual entry (instagram_views). The
+-- POST /api/instagram/refresh/:id endpoint can OPTIONALLY auto-fill
+-- this number by scraping the public Reel page — if the scrape fails,
+-- the manually-typed value is preserved. instagram_views_status records
+-- the last refresh outcome ('ok' | 'scrape-failed' | NULL=never tried).
+-- Run each ALTER once per table. Re-running errors with "duplicate
+-- column"; worker handlers tolerate the missing-column case.
+ALTER TABLE inventory_videos ADD COLUMN instagram_url TEXT;
+ALTER TABLE inventory_videos ADD COLUMN instagram_views INTEGER DEFAULT 0;
+ALTER TABLE inventory_videos ADD COLUMN instagram_views_status TEXT;
+ALTER TABLE inventory_videos ADD COLUMN last_ig_view_update DATETIME;
+ALTER TABLE inventory_thumbnails ADD COLUMN instagram_url TEXT;
+ALTER TABLE inventory_thumbnails ADD COLUMN instagram_views INTEGER DEFAULT 0;
+ALTER TABLE inventory_thumbnails ADD COLUMN instagram_views_status TEXT;
+ALTER TABLE inventory_thumbnails ADD COLUMN last_ig_view_update DATETIME;
