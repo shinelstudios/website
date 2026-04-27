@@ -1,36 +1,32 @@
 /**
  * KineticPortfolioGrid — hero right-rail bento for the redesign v2 home.
  *
- * Pulls from BOTH /videos AND /thumbnails so we can route content into
- * cells that match the source's natural aspect:
- *
- *   - SHORT / REEL videos → 9:16 cells (true vertical, no crop)
- *   - LONG videos + thumbnails → 16:9 cells (true landscape, no crop)
- *
- * Layout (flexbox, each tile uses its NATURAL aspect ratio so nothing
- * gets squashed):
+ * Layout: 1 hero feature + 3 supporting tiles, ALL 16:9 — matches the
+ * source content (admin-uploaded thumbnails are video cover art, almost
+ * always 16:9). No more squashing landscape thumbnails into 9:16 cells.
  *
  *   ┌──────────────────────────────┐
- *   │      HERO LONG (16:9)        │
- *   │      full-width feature      │
- *   ├────┬──────────────────┬──────┤
- *   │ T  │                  │  T   │
- *   │ A  │   WIDE LONG      │  A   │
- *   │ L  │   (16:9)         │  L   │
- *   │ L  │                  │  L   │
- *   │ 1  │                  │  2   │
- *   │9:16│                  │ 9:16 │
- *   └────┴──────────────────┴──────┘
+ *   │                              │
+ *   │       FEATURED 16:9          │   Big hero — newest / best work
+ *   │                              │
+ *   ├────────┬─────────┬───────────┤
+ *   │  16:9  │  16:9   │   16:9    │   3 supporting tiles, also 16:9
+ *   └────────┴─────────┴───────────┘
  *
- * If the source data is short on one type (no shorts in /videos yet, or
- * no thumbnails available), we fall back to bundled assets so the grid
- * is always full and polished.
+ * Container aspect ~4:3, similar to the original layout, so the hero text
+ * column on the left still aligns nicely.
+ *
+ * Source: /thumbnails (admin's own Shinel work, already cover-art quality).
+ *
+ * If we ever start uploading true 9:16 vertical short covers — e.g. a new
+ * `cover_url_vertical` column on inventory — we can re-introduce a tall
+ * variant in a future pass. For now, every cell is 16:9 because every
+ * source asset is 16:9.
  *
  * Perf contract:
- *   - Opacity-only crossfade for the peek timer.
- *   - Timer pauses when tab hidden + grid off-screen (IntersectionObserver).
+ *   - Opacity-only crossfade on the peek timer.
+ *   - Timer pauses when tab hidden + grid off-screen (IO).
  *   - <img> uses lazy + async decode.
- *   - YouTube thumbnail URLs decode immediately from cached CDN.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -45,138 +41,60 @@ import BGMI_3 from "../../assets/bgmi-thumbnail-creator3.jpg";
 import BGMI_4 from "../../assets/bgmi-thumbnail-creator4.jpg";
 import VLOG_AFTER from "../../assets/Vlog_sample_after.jpg";
 
-// Slot definitions — kind tells us what content to put here, aspect tells
-// us the cell shape, label is what shows in the corner badge.
-const SLOTS = [
-  { id: "hero",  kind: "long",  shape: "wide", aspect: "16/9", label: "Long-form" },
-  { id: "tall1", kind: "short", shape: "tall", aspect: "9/16", label: "Short" },
-  { id: "wide",  kind: "long",  shape: "wide", aspect: "16/9", label: "Long-form" },
-  { id: "tall2", kind: "short", shape: "tall", aspect: "9/16", label: "Short" },
+const FALLBACKS = [
+  { id: "fb-bgmi-1", image: BGMI_1, title: "Gaming Thumbnail Set", category: "GAMING" },
+  { id: "fb-bgmi-2", image: BGMI_2, title: "Tournament Cover",     category: "GAMING" },
+  { id: "fb-vlog",   image: VLOG_AFTER, title: "Vlog Color Grade", category: "VLOG" },
+  { id: "fb-bgmi-3", image: BGMI_3, title: "Creator Pack",         category: "GAMING" },
+  { id: "fb-bgmi-4", image: BGMI_4, title: "Livestream Cover",     category: "GAMING" },
 ];
 
-// Bundled fallbacks — used when live feed under-fills a slot.
-// All bundled assets are 16:9 thumbnails; for a tall-cell fallback, we'll
-// still use them, accepting that they get center-cropped horizontally.
-const FALLBACK_LONG = [
-  { id: "fb-bgmi-1", image: BGMI_1, title: "Gaming Thumbnail Set", category: "GAMING", kind: "long" },
-  { id: "fb-bgmi-2", image: BGMI_2, title: "Tournament Cover",     category: "GAMING", kind: "long" },
-  { id: "fb-vlog",   image: VLOG_AFTER, title: "Vlog Color Grade", category: "VLOG",    kind: "long" },
-  { id: "fb-bgmi-3", image: BGMI_3, title: "Creator Pack",         category: "GAMING", kind: "long" },
-  { id: "fb-bgmi-4", image: BGMI_4, title: "Livestream Cover",     category: "GAMING", kind: "long" },
-];
-const FALLBACK_SHORT = [
-  // No bundled vertical assets yet — fall back to BGMI thumbs but flag as
-  // shorts so the badge still reads correctly. Real shorts populate from
-  // /videos as soon as inventory has SHORT/REEL rows.
-  { id: "fb-short-1", image: BGMI_3, title: "Shorts Showcase", category: "GAMING", kind: "short" },
-  { id: "fb-short-2", image: BGMI_4, title: "Reel Highlight",  category: "GAMING", kind: "short" },
-];
-
-// YouTube thumbnail URL by videoId. maxres is 1280×720 (16:9), unavailable
-// for some videos — hqdefault always works. We try maxres first and let
-// onError swap to hq.
-const ytMaxThumb = (videoId) => `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
-const ytHqThumb  = (videoId) => `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+const TILE_COUNT = 4; // 1 hero + 3 supporting
 
 export default function KineticPortfolioGrid() {
-  const [longs, setLongs] = useState(FALLBACK_LONG);
-  const [shorts, setShorts] = useState(FALLBACK_SHORT);
+  const [items, setItems] = useState(FALLBACKS);
   const [peekIdx, setPeekIdx] = useState(-1);
   const gridRef = useRef(null);
 
-  // --- Fetch BOTH endpoints in parallel; categorise by kind. ---
+  // --- Fetch live thumbnails. Falls back gracefully on any error. ---
   useEffect(() => {
     let alive = true;
     const ac = new AbortController();
     (async () => {
       try {
-        const [thumbsRes, videosRes] = await Promise.all([
-          fetch(`${AUTH_BASE}/thumbnails`, { signal: ac.signal }).catch(() => null),
-          fetch(`${AUTH_BASE}/videos`,     { signal: ac.signal }).catch(() => null),
-        ]);
+        const res = await fetch(`${AUTH_BASE}/thumbnails`, { signal: ac.signal });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const rows = Array.isArray(data?.thumbnails) ? data.thumbnails : [];
+        if (!rows.length) return;
 
-        // /thumbnails — every entry is treated as long-form (16:9 cover art).
-        const thumbRows = thumbsRes && thumbsRes.ok
-          ? (await thumbsRes.json().catch(() => ({})))?.thumbnails || []
-          : [];
-        const liveLongFromThumbs = thumbRows
+        const live = rows
           .filter((r) => (r.is_shinel ?? r.isShinel) !== false)
           .map((r) => ({
             id: r.id,
             image: resolveThumbnailImage(r, AUTH_BASE),
             title: r.filename || r.title || "Shinel Studios",
             category: r.category || "WORK",
-            kind: "long",
           }))
           .filter((r) => r.image);
 
-        // /videos — split into SHORT/REEL vs LONG by `kind`. Each video has
-        // a videoId we can use to construct a YouTube thumbnail URL (since
-        // /videos doesn't carry an imageUrl).
-        const videoRows = videosRes && videosRes.ok
-          ? (await videosRes.json().catch(() => ({})))?.videos || []
-          : [];
-        const eligibleVideos = videoRows
-          .filter((v) => (v.is_shinel ?? v.isShinel) !== false && v.videoId);
-        const liveShorts = eligibleVideos
-          .filter((v) => {
-            const k = String(v.kind || "").toUpperCase();
-            return k === "SHORT" || k === "REEL";
-          })
-          .map((v) => ({
-            id: v.id,
-            image: ytMaxThumb(v.videoId),
-            fallbackImage: ytHqThumb(v.videoId),
-            title: v.title || "Shinel Studios",
-            category: v.category || "SHORTS",
-            kind: "short",
-            videoId: v.videoId,
-          }));
-        const liveLongFromVideos = eligibleVideos
-          .filter((v) => String(v.kind || "").toUpperCase() === "LONG")
-          .map((v) => ({
-            id: v.id,
-            image: ytMaxThumb(v.videoId),
-            fallbackImage: ytHqThumb(v.videoId),
-            title: v.title || "Shinel Studios",
-            category: v.category || "WORK",
-            kind: "long",
-            videoId: v.videoId,
-          }));
+        if (!alive || !live.length) return;
 
-        // Mix and dedupe by image URL.
-        const dedupeByImage = (arr) =>
-          arr.filter((v, i, a) => a.findIndex((x) => x.image === v.image) === i);
-
-        const mergedLongs = dedupeByImage([...liveLongFromThumbs, ...liveLongFromVideos, ...FALLBACK_LONG]);
-        const mergedShorts = dedupeByImage([...liveShorts, ...FALLBACK_SHORT]);
-
-        if (!alive) return;
-        if (mergedLongs.length) setLongs(mergedLongs);
-        if (mergedShorts.length) setShorts(mergedShorts);
+        // Mix live first, then pad with fallbacks. Dedupe by image URL.
+        const merged = [...live, ...FALLBACKS]
+          .filter((v, i, arr) => arr.findIndex((x) => x.image === v.image) === i)
+          .slice(0, TILE_COUNT);
+        setItems(merged);
       } catch {
-        /* ignore — fallbacks already populated */
+        /* ignore — fallback already populated */
       }
     })();
     return () => { alive = false; ac.abort(); };
   }, []);
 
-  // --- Allocate items to slots by kind. Two long slots, two short slots. ---
-  const tiles = useMemo(() => {
-    let longCursor = 0;
-    let shortCursor = 0;
-    return SLOTS.map((slot) => {
-      if (slot.kind === "short") {
-        const item = shorts[shortCursor++ % Math.max(1, shorts.length)] || FALLBACK_SHORT[0];
-        return { slot, item };
-      }
-      const item = longs[longCursor++ % Math.max(1, longs.length)] || FALLBACK_LONG[0];
-      return { slot, item };
-    });
-  }, [longs, shorts]);
-
-  // --- Peek timer cycles through slots in order every ~6s. ---
+  // --- Peek timer cycles tiles in order every ~6s. ---
   useEffect(() => {
+    if (items.length === 0) return;
     if (typeof document === "undefined") return;
     let t1, t2;
     let stopped = false;
@@ -193,7 +111,7 @@ export default function KineticPortfolioGrid() {
         t1 = setTimeout(runOnce, 6000);
         return;
       }
-      cursor = (cursor + 1) % SLOTS.length;
+      cursor = (cursor + 1) % TILE_COUNT;
       setPeekIdx(cursor);
       t2 = setTimeout(() => setPeekIdx(-1), 1800);
       t1 = setTimeout(runOnce, 6000);
@@ -206,59 +124,60 @@ export default function KineticPortfolioGrid() {
       clearTimeout(t2);
       if (io) io.disconnect();
     };
-  }, []);
+  }, [items.length]);
+
+  const tiles = useMemo(() => {
+    const out = items.slice(0, TILE_COUNT);
+    while (out.length < TILE_COUNT) {
+      out.push(FALLBACKS[out.length % FALLBACKS.length]);
+    }
+    return out;
+  }, [items]);
 
   return (
     <div ref={gridRef} className="flex flex-col gap-3 md:gap-4">
-      {/* Row 1: full-width 16:9 hero long-form */}
-      <Tile {...tiles[0]} peek={peekIdx === 0} />
+      {/* Featured 16:9 hero */}
+      <Tile
+        item={tiles[0]}
+        peek={peekIdx === 0}
+        size="hero"
+        fallbackIdx={0}
+      />
 
-      {/* Row 2: tall + wide + tall — uses the talls' 9:16 height to set the
-          row, with the middle wide tile vertically centred. */}
-      <div className="flex gap-3 md:gap-4 items-stretch">
-        <div className="w-[24%] shrink-0">
-          <Tile {...tiles[1]} peek={peekIdx === 1} />
-        </div>
-        <div className="flex-1 self-center">
-          <Tile {...tiles[2]} peek={peekIdx === 2} />
-        </div>
-        <div className="w-[24%] shrink-0">
-          <Tile {...tiles[3]} peek={peekIdx === 3} />
-        </div>
+      {/* 3 supporting 16:9 tiles below */}
+      <div className="grid grid-cols-3 gap-3 md:gap-4">
+        {tiles.slice(1, 4).map((item, i) => (
+          <Tile
+            key={item.id || `support-${i}`}
+            item={item}
+            peek={peekIdx === i + 1}
+            size="support"
+            fallbackIdx={i + 1}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-function Tile({ slot, item, peek }) {
+function Tile({ item, peek, size, fallbackIdx }) {
+  const fallbackImage = FALLBACKS[fallbackIdx % FALLBACKS.length].image;
   const [src, setSrc] = useState(item.image);
   useEffect(() => { setSrc(item.image); }, [item.image]);
 
   const onError = () => {
-    // First try the per-item fallback (e.g. hqdefault for missing maxres),
-    // then a bundled asset of the right kind.
-    if (item.fallbackImage && src !== item.fallbackImage) {
-      setSrc(item.fallbackImage);
-      return;
-    }
-    const fb = slot.kind === "short" ? FALLBACK_SHORT[0] : FALLBACK_LONG[0];
-    if (src !== fb.image) setSrc(fb.image);
+    if (src !== fallbackImage) setSrc(fallbackImage);
   };
 
-  // Object-position favours the upper-third where YouTube thumbnails put
-  // faces and bold title text — keeps subjects in frame when 16:9 source
-  // is fitted into a non-16:9 cell (matters for the tall slots when
-  // shorts source falls back to a 16:9 image).
-  const objectPosition =
-    slot.shape === "tall" ? "center 30%" : "center center";
-
+  // YouTube thumbnails put faces and big title text in the upper third —
+  // 'center 35%' keeps subjects in frame for any minor crop.
   return (
     <Link
       to="/work"
       className="relative block rounded-xl md:rounded-2xl overflow-hidden hairline group w-full"
       style={{
         background: "var(--surface-alt)",
-        aspectRatio: slot.aspect,
+        aspectRatio: "16/9",
       }}
       aria-label={item.title}
     >
@@ -274,29 +193,26 @@ function Tile({ slot, item, peek }) {
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          objectPosition,
+          objectPosition: "center 35%",
         }}
       />
 
-      {/* Format badge — derived from the tile's actual content kind. */}
-      <div
-        className="absolute top-2 md:top-3 left-2 md:left-3 px-2 py-0.5 rounded-full pointer-events-none"
-        style={{
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-        }}
-      >
-        <span
-          className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.16em]"
-          style={{ color: "rgba(255,255,255,0.85)" }}
+      {/* Featured badge on the hero only — keeps the supporting tiles clean. */}
+      {size === "hero" && (
+        <div
+          className="absolute top-3 left-3 px-2.5 py-1 rounded-full pointer-events-none"
+          style={{
+            background: "rgba(232,80,2,0.92)",
+            border: "1px solid rgba(255,255,255,0.18)",
+          }}
         >
-          {slot.label}
-        </span>
-      </div>
+          <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.18em] text-white">
+            Featured
+          </span>
+        </div>
+      )}
 
-      {/* Peek overlay — title + category crossfade in on timer / hover. */}
+      {/* Peek overlay: title + category fade in on timer / hover. */}
       <div
         className="absolute inset-0 flex flex-col justify-end p-3 md:p-4 transition-opacity duration-500 pointer-events-none"
         style={{
@@ -319,11 +235,11 @@ function Tile({ slot, item, peek }) {
               {item.title}
             </div>
           </div>
-          <ArrowUpRight size={14} style={{ color: "#fff", flexShrink: 0 }} />
+          <ArrowUpRight size={size === "hero" ? 16 : 12} style={{ color: "#fff", flexShrink: 0 }} />
         </div>
       </div>
 
-      {/* Hover-only peek for desktop. */}
+      {/* Hover-only peek (desktop). */}
       <div
         className="absolute inset-0 flex flex-col justify-end p-3 md:p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none md:block hidden"
         style={{
@@ -345,7 +261,7 @@ function Tile({ slot, item, peek }) {
               {item.title}
             </div>
           </div>
-          <ArrowUpRight size={14} style={{ color: "#fff", flexShrink: 0 }} />
+          <ArrowUpRight size={size === "hero" ? 16 : 12} style={{ color: "#fff", flexShrink: 0 }} />
         </div>
       </div>
     </Link>
