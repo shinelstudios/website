@@ -18,7 +18,7 @@
  */
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ImageIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ImageIcon, Play, X } from "lucide-react";
 import MetaTags, { BreadcrumbSchema } from "../MetaTags";
 import {
   Section,
@@ -116,7 +116,7 @@ function HeroArt({ slug, palette }) {
   );
 }
 
-function SampleStrip({ samples, palette }) {
+function SampleStrip({ samples, palette, onPlay }) {
   if (!samples || samples.length === 0) {
     return (
       <div
@@ -146,45 +146,155 @@ function SampleStrip({ samples, palette }) {
       className="flex gap-4 overflow-x-auto snap-x snap-mandatory -mx-4 md:mx-0 px-4 md:px-0 pb-2"
       style={{ scrollbarWidth: "thin" }}
     >
-      {samples.map((s, i) => (
-        <li
-          key={i}
-          className="snap-start shrink-0 w-[85%] md:w-[420px] rounded-xl md:rounded-2xl overflow-hidden hairline"
-          style={{ background: "var(--surface-alt)" }}
-        >
-          <div
-            className="relative w-full"
-            style={{ aspectRatio: s.ratio || "16 / 9" }}
-          >
-            {s.kind === "video" ? (
-              <video
-                src={s.src}
-                poster={s.poster}
-                muted
-                playsInline
-                loop
-                preload="metadata"
-                className="block w-full h-full object-cover"
-                aria-label={s.alt || ""}
-              />
-            ) : (
-              <img
-                src={s.src}
-                alt={s.alt || ""}
-                loading="lazy"
-                decoding="async"
-                className="block w-full h-full object-cover"
-              />
-            )}
-          </div>
-          {s.alt && (
-            <div className="p-3 text-xs md:text-sm" style={{ color: "var(--text-muted)" }}>
-              {s.alt}
+      {samples.map((s, i) => {
+        const isShort = (s.ratio || "").replace(/\s/g, "") === "9/16";
+        const cellWidth = isShort
+          ? "w-[60%] md:w-[260px]"
+          : "w-[85%] md:w-[420px]";
+        const inner = (
+          <>
+            <div
+              className="relative w-full"
+              style={{ aspectRatio: s.ratio || "16 / 9" }}
+            >
+              {s.kind === "video" ? (
+                <video
+                  src={s.src}
+                  poster={s.poster}
+                  muted
+                  playsInline
+                  loop
+                  preload="metadata"
+                  className="block w-full h-full object-cover"
+                  aria-label={s.alt || ""}
+                />
+              ) : (
+                <img
+                  src={s.src}
+                  alt={s.alt || ""}
+                  loading="lazy"
+                  decoding="async"
+                  className="block w-full h-full object-cover"
+                />
+              )}
+              {s.playable && (
+                <div
+                  className="absolute inset-0 grid place-items-center bg-black/0 group-hover:bg-black/30 transition-colors"
+                  aria-hidden="true"
+                >
+                  <span
+                    className="grid place-items-center w-14 h-14 md:w-16 md:h-16 rounded-full backdrop-blur-md transition-transform group-hover:scale-110"
+                    style={{
+                      background: palette.accent,
+                      color: "#0a0a0a",
+                      boxShadow: `0 8px 24px ${palette.glow}`,
+                    }}
+                  >
+                    <Play size={22} fill="#0a0a0a" strokeWidth={0} />
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </li>
-      ))}
+            {s.alt && (
+              <div className="p-3 text-xs md:text-sm" style={{ color: "var(--text-muted)" }}>
+                {s.alt}
+              </div>
+            )}
+          </>
+        );
+
+        const cellClasses = `group snap-start shrink-0 ${cellWidth} rounded-xl md:rounded-2xl overflow-hidden hairline`;
+
+        if (s.playable && s.videoId) {
+          return (
+            <li key={i} className={cellClasses} style={{ background: "var(--surface-alt)" }}>
+              <button
+                type="button"
+                onClick={() => onPlay({ videoId: s.videoId, isShort, title: s.alt })}
+                className="block w-full text-left focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+                aria-label={`Play ${s.alt || "sample"}`}
+              >
+                {inner}
+              </button>
+            </li>
+          );
+        }
+
+        if (s.href) {
+          return (
+            <li key={i} className={cellClasses} style={{ background: "var(--surface-alt)" }}>
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full focus-visible:ring-2 focus-visible:ring-[var(--orange)]"
+              >
+                {inner}
+              </a>
+            </li>
+          );
+        }
+
+        return (
+          <li key={i} className={cellClasses} style={{ background: "var(--surface-alt)" }}>
+            {inner}
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+function YouTubeLightbox({ payload, onClose }) {
+  React.useEffect(() => {
+    if (!payload) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [payload, onClose]);
+
+  if (!payload) return null;
+  const { videoId, isShort, title } = payload;
+  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || "Video player"}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 grid place-items-center w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white"
+        aria-label="Close player"
+      >
+        <X size={18} />
+      </button>
+      <div
+        className="relative w-full max-h-[90vh] overflow-hidden rounded-2xl"
+        style={{
+          aspectRatio: isShort ? "9 / 16" : "16 / 9",
+          maxWidth: isShort ? "min(420px, 92vw)" : "min(1100px, 92vw)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <iframe
+          src={src}
+          title={title || "Sample"}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          className="absolute inset-0 w-full h-full"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -207,6 +317,7 @@ export default function SpecialtyPageTemplate({ slug }) {
   // to the hardcoded SPECIALTY_SAMPLES (in src/config/specialties.js) so a
   // backend hiccup or fresh deploy still shows something.
   const [liveSamples, setLiveSamples] = React.useState([]);
+  const [lightbox, setLightbox] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
     fetch(`${AUTH_BASE}/api/specialty/${encodeURIComponent(slug)}`)
@@ -230,16 +341,21 @@ export default function SpecialtyPageTemplate({ slug }) {
               alt: it.title,
               kind: "image",
               ratio: isShort ? "9/16" : "16/9",
+              videoId: vid,
+              playable: !!vid,
               href: it.mirrorUrl || it.primaryUrl || it.creatorUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
             };
           }
-          // Thumbnail asset (16:9 cover art).
+          // Thumbnail asset — usually 16:9 cover art, may link to a video.
+          const vid = it.videoId || extractYouTubeId(it.youtubeUrl || "");
           return {
             src: resolveMediaUrl(it.imageUrl, AUTH_BASE) || "",
             alt: it.title,
             kind: "image",
             ratio: "16/9",
-            href: it.youtubeUrl || (it.videoId ? `https://youtube.com/watch?v=${it.videoId}` : ""),
+            videoId: vid,
+            playable: !!vid,
+            href: it.youtubeUrl || (vid ? `https://youtube.com/watch?v=${vid}` : ""),
           };
         }).filter((x) => x.src);
         setLiveSamples(transformed);
@@ -397,9 +513,15 @@ export default function SpecialtyPageTemplate({ slug }) {
           </RevealOnScroll>
         </div>
         <RevealOnScroll delay="200ms">
-          <SampleStrip samples={samples} palette={palette} />
+          <SampleStrip
+            samples={samples}
+            palette={palette}
+            onPlay={(payload) => setLightbox(payload)}
+          />
         </RevealOnScroll>
       </Section>
+
+      <YouTubeLightbox payload={lightbox} onClose={() => setLightbox(null)} />
 
       {/* WHAT WE HANDLE */}
       <Section size="md">
