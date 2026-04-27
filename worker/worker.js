@@ -4033,7 +4033,27 @@ const handler = {
 
         const obj = await env.THUMBNAILS.getWithMetadata(`media:${fileName}`, "arrayBuffer");
         if (!obj || !obj.value) {
-          return json({ error: "Object not found" }, 404, cors);
+          // Inventory rows occasionally outlive their KV bytes (admin
+          // deletes, KV write race lost, manual cleanup). Returning a JSON
+          // 404 made every <img> show a broken icon and dirtied the console
+          // on /work. Serve a tiny inline SVG placeholder instead — same
+          // visual treatment as item.image fallbacks, and the response
+          // is a real 200 so the browser stops complaining. Short TTL so
+          // re-uploads under the same UUID resolve cleanly.
+          const placeholder =
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">' +
+            '<rect width="100%" height="100%" fill="#1a1a1a"/>' +
+            '<text x="50%" y="50%" font-family="system-ui,sans-serif" font-size="22" font-weight="700" fill="#666" text-anchor="middle" dominant-baseline="middle" letter-spacing="3">NO PREVIEW</text>' +
+            '</svg>';
+          return new Response(placeholder, {
+            status: 200,
+            headers: {
+              ...cors,
+              "Content-Type": "image/svg+xml; charset=utf-8",
+              "Cache-Control": "public, max-age=300",
+              "X-Placeholder": "missing-media",
+            },
+          });
         }
 
         const contentType = obj.metadata?.contentType || "application/octet-stream";
