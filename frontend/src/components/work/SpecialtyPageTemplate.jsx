@@ -208,28 +208,22 @@ function SampleStrip({ samples, palette, onPlay }) {
                 {s.alt}
               </div>
             )}
-            {(s.views > 0 || s.igViews > 0) && (
-              <div
-                className="px-3 pt-2 pb-3 flex items-center gap-3 flex-wrap text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em]"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {s.views > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <Play size={10} fill="currentColor" strokeWidth={0} />
-                    {formatCompactNumber(s.views)} views
-                  </span>
-                )}
-                {s.igViews > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: palette.accent }} aria-hidden="true" />
-                    {formatCompactNumber(s.igViews)} reel views
-                  </span>
-                )}
-              </div>
-            )}
-            {!(s.views > 0 || s.igViews > 0) && s.alt && (
-              <div className="pb-3" aria-hidden="true" />
-            )}
+            {(() => {
+              // Show whichever platform pulled more views — that's the
+              // truer "audience reach" signal. Don't dilute the card
+              // with both numbers.
+              const best = Math.max(s.views || 0, s.igViews || 0);
+              if (best <= 0) return s.alt ? <div className="pb-3" aria-hidden="true" /> : null;
+              return (
+                <div
+                  className="px-3 pt-2 pb-3 flex items-center gap-1.5 text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <Play size={10} fill="currentColor" strokeWidth={0} />
+                  <span>{formatCompactNumber(best)} views</span>
+                </div>
+              );
+            })()}
           </>
         );
 

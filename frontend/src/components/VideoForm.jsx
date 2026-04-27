@@ -105,14 +105,13 @@ const VideoForm = ({
                            — and we keep the cached view count regardless). */}
                     <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
-                            Creator URL <span className="text-gray-600 normal-case tracking-normal">· source for view counts</span>
+                            Creator URL <span className="text-gray-600 normal-case tracking-normal">· source for view counts · optional if Reel URL is set</span>
                         </label>
                         <div className="relative">
                             <Input
                                 value={form.creatorUrl}
                                 onChange={(v) => handleInputChange("creatorUrl", v)}
                                 placeholder="https://youtube.com/watch?v=… (the creator's original)"
-                                required
                             />
                             {form.creatorUrl && (form.creatorUrl.includes("youtube.com") || form.creatorUrl.includes("youtu.be")) && (
                                 <button
@@ -132,7 +131,8 @@ const VideoForm = ({
                         </div>
                         <p className="text-[10px] text-gray-600 ml-1 mt-1">
                             We pull view counts from here. View count keeps showing on the site
-                            even if the creator deletes the original.
+                            even if the creator deletes the original. Skip this and add a Reel URL
+                            below if the clip is Instagram-only.
                         </p>
                     </div>
 
@@ -188,13 +188,15 @@ const VideoForm = ({
                                 />
                                 <button
                                     type="button"
-                                    disabled={!editingId || !form.instagramUrl || igRefreshing || !onRefreshInstagram}
+                                    disabled={!form.instagramUrl || igRefreshing || !onRefreshInstagram}
                                     onClick={async () => {
-                                        if (!onRefreshInstagram || !editingId) return;
+                                        if (!onRefreshInstagram || !form.instagramUrl) return;
                                         setIgRefreshing(true);
                                         setIgStatus(null);
                                         try {
-                                            const r = await onRefreshInstagram(editingId);
+                                            // editingId path persists to D1; URL-only path
+                                            // just returns the scraped count (for new rows).
+                                            const r = await onRefreshInstagram(editingId, form.instagramUrl);
                                             if (r?.ok && Number(r.views) > 0) {
                                                 handleInputChange("instagramViews", Number(r.views));
                                                 setIgViewsRaw(String(Number(r.views)));
@@ -209,7 +211,7 @@ const VideoForm = ({
                                         }
                                     }}
                                     className="shrink-0 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest border border-pink-500/30 text-pink-400 hover:bg-pink-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-                                    title={!editingId ? "Save the row first" : !form.instagramUrl ? "Add a Reel URL first" : "Try to scrape view count from Instagram"}
+                                    title={!form.instagramUrl ? "Add a Reel URL first" : "Try to scrape view count from Instagram"}
                                 >
                                     <RefreshCw size={12} className={igRefreshing ? "animate-spin" : ""} />
                                     Auto-fill

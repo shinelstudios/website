@@ -3432,6 +3432,28 @@ const handler = {
       }
     }
 
+    // POST /api/instagram/scrape  — URL-only scrape, no persistence.
+    // Used by the admin form when creating a new row (before there's
+    // a row id to refresh by). Body: { url }. Response: same shape
+    // as /api/instagram/refresh/:id but no DB write.
+    if (url.pathname === "/api/instagram/scrape" && request.method === "POST") {
+      try {
+        await requireTeamOrThrow(request, secret);
+        const body = await request.json().catch(() => ({}));
+        const reelUrl = String(body?.url || "").trim();
+        if (!reelUrl) return json({ error: "Missing url" }, 400, cors);
+
+        const result = await fetchInstagramReelViews(env, reelUrl);
+        if (result.status === "ok" && Number.isFinite(result.views) && result.views > 0) {
+          return json({ ok: true, views: result.views, status: "ok", source: "instagram", cached: !!result.cached }, 200, cors);
+        }
+        return json({ ok: false, status: result.status || "scrape-failed", reason: result.reason || null }, 200, cors);
+      } catch (e) {
+        console.error("POST /api/instagram/scrape failed:", e?.stack || e?.message || e);
+        return json({ error: e?.message || "Scrape failed" }, e?.status || 500, cors);
+      }
+    }
+
     // POST /api/instagram/refresh/:id   — best-effort scrape of an
     // inventory row's instagram_url. Auto-fills instagram_views on
     // success; preserves the prior value on failure (the manual entry

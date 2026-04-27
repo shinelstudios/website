@@ -248,17 +248,33 @@ export default function AdminVideosPage() {
   };
 
   // Instagram view auto-fill — best-effort scrape via the worker.
-  // Returns the worker's JSON ({ ok, views, status, reason? }) so the
-  // form can surface success/failure inline. Does NOT mutate the form
-  // here — the form takes the response and decides what to do with it.
-  const handleRefreshInstagram = async (rowId) => {
-    if (!rowId) return { ok: false, reason: "no-id" };
+  // Two modes: with rowId → /api/instagram/refresh/:id (persists views
+  // to D1 + records status). Without rowId (new-row flow) → URL-only
+  // scrape via /api/instagram/scrape so the user can pre-fill before
+  // saving. Returns the worker's JSON either way; form decides what
+  // to do with the views value.
+  const handleRefreshInstagram = async (rowId, reelUrl) => {
     try {
-      const res = await authedFetch(
-        AUTH_BASE,
-        `/api/instagram/refresh/${encodeURIComponent(rowId)}`,
-        { method: "POST" }
-      );
+      let res;
+      if (rowId) {
+        res = await authedFetch(
+          AUTH_BASE,
+          `/api/instagram/refresh/${encodeURIComponent(rowId)}`,
+          { method: "POST" }
+        );
+      } else if (reelUrl) {
+        res = await authedFetch(
+          AUTH_BASE,
+          `/api/instagram/scrape`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: reelUrl }),
+          }
+        );
+      } else {
+        return { ok: false, reason: "missing-url-and-id" };
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, reason: data?.error || `http-${res.status}` };
       return data;

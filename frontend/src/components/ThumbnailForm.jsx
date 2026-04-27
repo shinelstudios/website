@@ -258,13 +258,13 @@ const ThumbnailForm = ({
                             />
                             <button
                                 type="button"
-                                disabled={!editingId || !form.instagramUrl || igRefreshing || !onRefreshInstagram}
+                                disabled={!form.instagramUrl || igRefreshing || !onRefreshInstagram}
                                 onClick={async () => {
-                                    if (!onRefreshInstagram || !editingId) return;
+                                    if (!onRefreshInstagram || !form.instagramUrl) return;
                                     setIgRefreshing(true);
                                     setIgStatus(null);
                                     try {
-                                        const r = await onRefreshInstagram(editingId);
+                                        const r = await onRefreshInstagram(editingId, form.instagramUrl);
                                         if (r?.ok && Number(r.views) > 0) {
                                             handleInputChange("instagramViews", Number(r.views));
                                             setIgViewsRaw(String(Number(r.views)));
@@ -279,7 +279,7 @@ const ThumbnailForm = ({
                                     }
                                 }}
                                 className="shrink-0 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest border border-pink-500/30 text-pink-400 hover:bg-pink-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
-                                title={!editingId ? "Save the row first" : !form.instagramUrl ? "Add a Reel URL first" : "Try to scrape view count from Instagram"}
+                                title={!form.instagramUrl ? "Add a Reel URL first" : "Try to scrape view count from Instagram"}
                             >
                                 <RefreshCw size={12} className={igRefreshing ? "animate-spin" : ""} />
                                 Auto-fill
