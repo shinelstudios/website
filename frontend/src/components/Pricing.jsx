@@ -452,13 +452,14 @@ const Pricing = ({ onOpenCalendly }) => {
           )}
         </AnimatePresence>
 
-        {/* Category Tabs - High Interactive Feedback */}
-        <div className="flex flex-wrap justify-center gap-4 mb-20 px-4">
+        {/* Category Tabs — tighten on mobile so 4 tabs fit one row at
+            375px without horizontal scroll. */}
+        <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-20 px-4">
           {CATS.map((c) => (
             <button
               key={c.k}
               onClick={() => { setCat(c.k); setIdx(0); setOpenIdx(null); }}
-              className={`group relative flex items-center gap-3 px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-wide transition-all duration-500 ${cat === c.k
+              className={`group relative flex items-center gap-2 md:gap-3 px-4 md:px-8 py-3 md:py-4 rounded-xl text-xs md:text-sm font-bold uppercase tracking-wide transition-all duration-500 ${cat === c.k
                 ? "bg-[var(--text)] text-[var(--surface)] scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]"
                 : "bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-alt)]/80 hover:text-[var(--text)] active:scale-95"
                 }`}
@@ -504,7 +505,7 @@ const Pricing = ({ onOpenCalendly }) => {
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.08, type: 'spring', stiffness: 120, damping: 20 }}
                   whileHover={{ y: -8, transition: { duration: 0.3 } }}
-                  className={`relative group shrink-0 ${isMobile ? "w-[88vw] snap-center" : "w-full"}`}
+                  className={`relative group shrink-0 ${isMobile ? "w-[calc(100vw-3rem)] snap-center" : "w-full"}`}
                 >
                   {/* Studio Spec Card - Enhanced Hovers & Contrast */}
                   <div className={`h-full rounded-[2.5rem] p-8 border transition-all duration-500 flex flex-col relative overflow-hidden ${isPopular

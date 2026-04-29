@@ -430,7 +430,9 @@ export default function AdminThumbnailsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10 items-start">
 
           {/* Main Content Area */}
-          <div className="space-y-8 order-2 lg:order-1">
+          {/* Main list above the form on mobile so editors see content
+              first; desktop keeps the side-by-side. */}
+          <div id="thumbs-list" className="space-y-8 lg:order-1">
             <ThumbnailFilters
               search={search}
               setSearch={setSearch}
@@ -516,7 +518,7 @@ export default function AdminThumbnailsPage() {
           </div>
 
           {/* Sticky Sidebar Form */}
-          <div className="order-1 lg:order-2">
+          <div id="thumbs-form" className="lg:order-2">
             <ThumbnailForm
               editingId={editingId}
               form={form}
@@ -562,6 +564,19 @@ export default function AdminThumbnailsPage() {
 
         </div>
       </div>
+
+      {/* Mobile-only FAB: scroll to the form. Hidden on lg where the form
+          is already visible side-by-side. */}
+      <button
+        type="button"
+        onClick={() => {
+          document.getElementById("thumbs-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+        className="fixed bottom-24 right-5 z-30 lg:hidden w-14 h-14 rounded-full grid place-items-center font-black text-2xl bg-orange-500 text-black shadow-2xl shadow-orange-900/50 active:scale-95 transition-transform"
+        aria-label="Add thumbnail"
+      >
+        +
+      </button>
 
       {/* Error Floating Banner */}
       {err && (

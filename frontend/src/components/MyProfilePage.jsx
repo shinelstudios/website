@@ -432,7 +432,7 @@ export default function MyProfilePage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 hidden
                 onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
               />

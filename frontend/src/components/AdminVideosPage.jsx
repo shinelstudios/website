@@ -348,8 +348,10 @@ export default function AdminVideosPage() {
       <div className="container mx-auto px-6 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10 items-start">
 
-          {/* Main Content Area */}
-          <div className="space-y-6 order-2 lg:order-1">
+          {/* Main Content Area — list shows ABOVE the form on mobile so
+              an editor doesn't have to scroll past 8 screens of inputs to
+              see what they're managing. Desktop keeps the side-by-side. */}
+          <div id="videos-list" className="space-y-6 lg:order-1">
             <VideoFilters
               search={search}
               setSearch={setSearch}
@@ -411,7 +413,7 @@ export default function AdminVideosPage() {
           </div>
 
           {/* Sidebar Form */}
-          <div className="order-1 lg:order-2">
+          <div id="videos-form" className="lg:order-2 lg:sticky lg:top-24">
             <VideoForm
               editingId={editingId}
               form={form}
@@ -432,6 +434,20 @@ export default function AdminVideosPage() {
 
         </div>
       </div>
+
+      {/* Mobile-only FAB: scroll to the form. Hidden on lg where the form
+          is already visible side-by-side. Tucked above the floating
+          WhatsApp button so they don't fight for the same corner. */}
+      <button
+        type="button"
+        onClick={() => {
+          document.getElementById("videos-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+        className="fixed bottom-24 right-5 z-30 lg:hidden w-14 h-14 rounded-full grid place-items-center font-black text-2xl bg-orange-500 text-black shadow-2xl shadow-orange-900/50 active:scale-95 transition-transform"
+        aria-label="Add video"
+      >
+        +
+      </button>
     </div>
   );
 }

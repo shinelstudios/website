@@ -117,10 +117,17 @@ const ThumbnailForm = ({
                                 </div>
                             </>
                         )}
+                        {/* accept="image/*" (instead of just png/jpeg) so
+                            iOS Safari accepts HEIC from iPhone Camera Roll
+                            without forcing the user to find a "compatible"
+                            image. No `capture` attr — that would FORCE
+                            camera-only and hide the Photo Library option,
+                            which is the wrong default for editors who
+                            usually upload finished thumbnails. */}
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/png, image/jpeg"
+                            accept="image/*"
                             onChange={(e) => onImageSelected(e.target.files?.[0])}
                             className="hidden"
                         />
@@ -248,7 +255,7 @@ const ThumbnailForm = ({
                         <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">
                             Reel views <span className="text-gray-600 normal-case tracking-normal">· you type the truth</span>
                         </label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                             <Input
                                 value={igViewsRaw}
                                 onChange={(v) => {

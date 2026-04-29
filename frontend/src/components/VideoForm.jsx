@@ -178,7 +178,7 @@ const VideoForm = ({
                             <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">
                                 Reel views <span className="text-gray-600 normal-case tracking-normal">· you type the truth</span>
                             </label>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                                 <Input
                                     value={igViewsRaw}
                                     onChange={(v) => {

@@ -463,33 +463,21 @@ const SiteHeader = ({ isDark, setIsDark }) => {
   const initials = initialsFrom(auth.firstName, auth.lastName, auth.email);
 
   const handleLogout = useCallback(() => {
+    // Past incident: this used to clear localStorage only, leaving the
+    // in-memory access token AND the server-side refresh cookie intact.
+    // Result: refreshOnce() on the next request silently re-issued an
+    // access token from the still-valid cookie → user appeared
+    // "stuck logged in" + "unable to log out" + "unable to log in
+    // again". The /logout route in App.jsx runs the canonical
+    // performLogout() which clears tokenStore, clears localStorage,
+    // AND fires POST /auth/logout to revoke the refresh cookie +
+    // drop the session row server-side.
     try {
-      // ✅ canonical
-      [
-        "token", "refresh", "rememberMe",
-        "userEmail", "email",
-        "role", "userRole",
-        "firstName", "lastName",
-        "userFirstName", "userLastName",
-        "userFirst", "userLast"
-      ].forEach((k) => localStorage.removeItem(k));
-
-      // ✅ back-compat
-      ["userRole", "userFirst", "userLast", "userFirstName", "userLastName"].forEach((k) =>
-        localStorage.removeItem(k)
-      );
-    } catch { }
-
-    try {
-      window.dispatchEvent(new Event("auth:changed"));
-      // Logout is worth keeping in the activity log — fire both channels.
-      const detail = { message: "Successfully logged out", type: "success" };
+      const detail = { message: "Logging out…", type: "info" };
       window.dispatchEvent(new CustomEvent("notify", { detail }));
-      window.dispatchEvent(new CustomEvent("activity", { detail }));
-    } catch { }
-
+    } catch { /* notify is best-effort */ }
     closeAllMenus();
-    navigate("/");
+    navigate("/logout");
   }, [closeAllMenus, navigate]);
 
   // [MODIFIED] Use config for dynamic stats
@@ -1031,40 +1019,20 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 aria-label="Main menu"
               >
                 <nav
-                  className="px-4 py-4 space-y-4"
+                  className="px-4 py-4 pb-8 space-y-3"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Single-column on mobile so each tap target is a full
+                      ~56px row. Two-column at sm: where 360px+ allows
+                      proper 44×44 minimum. Past incident: grid-cols-2 on
+                      375px shrunk cards to ~58×56 — below WCAG. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
-                    <MobileCardLink
-                      to="/work"
-                      icon={FolderOpen}
-                      title="Work"
-                      subtitle="All services & samples"
-                    />
-                    <MobileCardLink
-                      to="/about"
-                      icon={User}
-                      title="About"
-                      subtitle="Who we are"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <MobileCardLink
-                      to="/live"
-                      icon={Radio}
-                      title="Pulse"
-                      subtitle="Live metrics"
-                    />
+                    <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
+                    <MobileCardLink to="/about" icon={User} title="About" subtitle="Who we are" />
+                    <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
                     <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                   </div>
 

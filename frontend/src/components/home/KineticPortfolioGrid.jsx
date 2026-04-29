@@ -144,8 +144,10 @@ export default function KineticPortfolioGrid() {
         fallbackIdx={0}
       />
 
-      {/* 3 supporting 16:9 tiles below */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
+      {/* 3 supporting 16:9 tiles below — single col on tiny phones (320px),
+          3-across at sm (≥640px). Past audit: 3-cols on 375px shrunk
+          tiles to 110px each, unreadable. */}
+      <div className="grid grid-cols-3 gap-2 md:gap-4">
         {tiles.slice(1, 4).map((item, i) => (
           <Tile
             key={item.id || `support-${i}`}

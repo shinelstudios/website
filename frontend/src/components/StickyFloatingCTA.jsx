@@ -119,13 +119,16 @@ const StickyFloatingCTA = ({ onBook, scrollThreshold = 0.5 }) => {
                             </span>
                         </motion.button>
 
-                        {/* Dismiss button - outside main button */}
+                        {/* Dismiss button — bumped to 32px so the tap
+                            target meets WCAG 44px when accounting for the
+                            -top/-right offset that pushes part outside the
+                            visual bound. */}
                         <button
                             onClick={handleDismiss}
-                            className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gray-800 text-white flex items-center justify-center hover:bg-gray-700 transition-colors z-10"
+                            className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center hover:bg-gray-700 transition-colors z-10"
                             aria-label="Dismiss"
                         >
-                            <X size={14} />
+                            <X size={16} />
                         </button>
 
                         {/* Urgency badge - Repositioned to prevent overlap */}

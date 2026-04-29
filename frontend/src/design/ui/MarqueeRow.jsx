@@ -27,9 +27,11 @@ export default function MarqueeRow({
   const items = useMemo(() => React.Children.toArray(children), [children]);
 
   if (reduce) {
+    // overflow-x-hidden so the static fallback doesn't introduce a
+    // horizontal scrollbar on mobile reduced-motion devices.
     return (
       <div className={`marquee-viewport mask-fade-x ${className}`}>
-        <div className={`flex ${gap} px-8 overflow-x-auto no-scrollbar`}>
+        <div className={`flex ${gap} px-8 overflow-x-hidden no-scrollbar`}>
           {items}
         </div>
       </div>
