@@ -135,6 +135,15 @@ const ClientPortalDashboard = React.lazy(() => import("./components/clientportal
 const ClientPortalEditor = React.lazy(() => import("./components/clientportal/ClientPortalEditor.jsx"));
 const ClientPortalInbox = React.lazy(() => import("./components/clientportal/ClientPortalInbox.jsx"));
 
+// Stable role list for the dashboard guard. Defined at module scope so the
+// reference is identical across renders — past behaviour: an inline
+// [...] literal in the <ProtectedRoute roles={...}> JSX created a new
+// array every parent render, which made ProtectedRoute's
+// useEffect(..., [loc.pathname, roles]) re-run every time and spam
+// /auth/refresh. The 5s refresh_lock now in the worker would catch a
+// runaway loop, but the cleanest fix is just not to churn the identity.
+const TEAM_ROLES = ["admin", "team", "editor", "artist"];
+
 
 /* -------------------------------------------------------------------------- */
 /*                             Utility Components                             */
@@ -568,7 +577,7 @@ export default function App() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute roles={["admin", "team", "editor", "artist"]}>
+              <ProtectedRoute roles={TEAM_ROLES}>
                 <ManagementHub />
               </ProtectedRoute>
             }
