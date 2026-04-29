@@ -50,29 +50,65 @@ export default function ClientPortalInbox() {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const markRead = async (id) => {
-    setItems(prev => prev.map(it => it.id === id ? { ...it, readAt: Date.now() } : it));
+  // Optimistic mutation helpers — capture the prior row, apply the
+  // optimistic state, and on server failure restore the prior row +
+  // surface a toast. Past behaviour: catch-silently left the UI showing
+  // a "pinned" or "answered" state the server had rejected.
+  const notifyError = (msg) => {
     try {
-      await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}/read`, { method: "PATCH" });
-    } catch { /* */ }
+      window.dispatchEvent(new CustomEvent("notify", {
+        detail: { type: "error", message: msg },
+      }));
+    } catch { /* notify is best-effort */ }
+  };
+
+  const markRead = async (id) => {
+    let prior = null;
+    setItems(prev => {
+      prior = prev.find(it => it.id === id) || null;
+      return prev.map(it => it.id === id ? { ...it, readAt: Date.now() } : it);
+    });
+    try {
+      const res = await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}/read`, { method: "PATCH" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      if (prior) setItems(prev => prev.map(it => it.id === id ? prior : it));
+      notifyError(`Couldn't mark as read: ${e?.message || "network"}`);
+    }
   };
 
   const togglePin = async (id, pin) => {
-    setItems(prev => prev.map(it => it.id === id ? { ...it, pinnedAt: pin ? Date.now() : null } : it));
+    let prior = null;
+    setItems(prev => {
+      prior = prev.find(it => it.id === id) || null;
+      return prev.map(it => it.id === id ? { ...it, pinnedAt: pin ? Date.now() : null } : it);
+    });
     try {
-      await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
+      const res = await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }),
       });
-    } catch { /* */ }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      if (prior) setItems(prev => prev.map(it => it.id === id ? prior : it));
+      notifyError(`Couldn't ${pin ? "pin" : "unpin"}: ${e?.message || "network"}`);
+    }
   };
 
   const submitAnswer = async (id, answer) => {
-    setItems(prev => prev.map(it => it.id === id ? { ...it, payload: { ...it.payload, answer }, pinnedAt: Date.now(), readAt: Date.now() } : it));
+    let prior = null;
+    setItems(prev => {
+      prior = prev.find(it => it.id === id) || null;
+      return prev.map(it => it.id === id ? { ...it, payload: { ...it.payload, answer }, pinnedAt: Date.now(), readAt: Date.now() } : it);
+    });
     try {
-      await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
+      const res = await authedFetch(AUTH_BASE, `/portal/me/inbox/${encodeURIComponent(id)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answer }),
       });
-    } catch { /* */ }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      if (prior) setItems(prev => prev.map(it => it.id === id ? prior : it));
+      notifyError(`Couldn't post answer: ${e?.message || "network"}`);
+    }
   };
 
   const downloadNewsletterCsv = async () => {

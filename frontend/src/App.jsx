@@ -568,7 +568,7 @@ export default function App() {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute roles={["admin", "team", "editor", "artist"]}>
                 <ManagementHub />
               </ProtectedRoute>
             }

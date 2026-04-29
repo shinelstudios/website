@@ -25,6 +25,7 @@ export function useDeviceCapabilities() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let alive = true;  // guard for the async battery promise below
 
     const isMobile = window.matchMedia?.("(max-width: 768px)").matches ?? false;
     const isTouch = window.matchMedia?.("(hover: none) and (pointer: coarse)").matches ?? false;
@@ -37,24 +38,28 @@ export function useDeviceCapabilities() {
 
     const isLowPower = cores <= 4 || memory <= 2 || saveData || slowNet;
 
-    let nextState = {
+    setCaps({
       isMobile,
       isTouch,
       isLowPower,
       isLowBattery: false,
       saveData,
       ready: true,
-    };
-
-    setCaps(nextState);
+    });
 
     // Battery probe — best-effort, only Chromium supports it today.
+    // The promise can resolve AFTER the component unmounts (e.g. fast
+    // route nav), so the `alive` flag prevents a setState-on-unmounted
+    // warning.
     if (typeof navigator.getBattery === "function") {
       navigator.getBattery().then((battery) => {
+        if (!alive) return;
         const lb = battery.level < 0.2 && !battery.charging;
         setCaps((prev) => ({ ...prev, isLowBattery: lb }));
       }).catch(() => {});
     }
+
+    return () => { alive = false; };
   }, []);
 
   return caps;

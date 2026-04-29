@@ -176,7 +176,11 @@ export default function AdminVideosPage() {
       await loadVideos();
       toast("success", "Video removed");
     } catch (e) {
-      toast("error", "Delete failed");
+      // Surface the worker's actual message + status so failures aren't a
+      // mystery. Past behaviour: generic "Delete failed" hid 403/quota
+      // errors that the user could have acted on.
+      const status = e.status ? ` (HTTP ${e.status})` : "";
+      toast("error", `${e?.message || "Delete failed"}${status}`);
     } finally {
       setBusy(false);
     }
@@ -184,19 +188,32 @@ export default function AdminVideosPage() {
 
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
-    if (!ids.length || !confirm(`Delete ${ids.length} selected videos?`)) return;
+    if (!ids.length) return;
+    // Hard cap matches the worker-side cascade limit. Without this, 1000+
+    // selections could time out the request and leave half the rows
+    // deleted with no clean rollback.
+    if (ids.length > 200) {
+      toast("error", "Select 200 or fewer rows for bulk delete.");
+      return;
+    }
+    if (!confirm(`Delete ${ids.length} selected videos?`)) return;
 
     setBusy(true);
     setBusyLabel(`Batch deleting ${ids.length} items...`);
     try {
       await store.bulkDelete(ids);
-      setSelectedIds(new Set());
       await loadVideos();
       toast("success", `Bulk removal complete`);
     } catch (e) {
-      toast("error", "Bulk delete failed");
+      const status = e.status ? ` (HTTP ${e.status})` : "";
+      toast("error", `${e?.message || "Bulk delete failed"}${status}`);
     } finally {
+      // Clear selection regardless of outcome — past bug: selection
+      // persisted across a failed delete and a stray double-click
+      // re-fired the same delete request.
+      setSelectedIds(new Set());
       setBusy(false);
+      setBusyLabel("");
     }
   };
 
@@ -230,7 +247,9 @@ export default function AdminVideosPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          // Read at request time, not from a stale closure capture.
+          // refreshOnce() may have rotated the token between mount and now.
+          "Authorization": `Bearer ${getAccessToken()}`
         },
         body: JSON.stringify({ url })
       });

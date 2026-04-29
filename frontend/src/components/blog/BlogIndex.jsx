@@ -13,23 +13,31 @@ const BlogIndex = () => {
     const [selectedTag, setSelectedTag] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
 
     const [allTags, setAllTags] = useState(['All']);
 
     useEffect(() => {
+        let cancelled = false;
         const loadPosts = async () => {
-            const data = await getAllPosts();
-            setPosts(data);
-            setFilteredPosts(data);
-
-            // Extract unique tags
-            const tags = new Set(['All']);
-            data.forEach(p => p.frontmatter.tags?.forEach(t => tags.add(t)));
-            setAllTags(Array.from(tags));
-
-            setLoading(false);
+            try {
+                const data = await getAllPosts();
+                if (cancelled) return;
+                setPosts(data);
+                setFilteredPosts(data);
+                const tags = new Set(['All']);
+                data.forEach(p => p.frontmatter.tags?.forEach(t => tags.add(t)));
+                setAllTags(Array.from(tags));
+            } catch (e) {
+                if (cancelled) return;
+                console.error("Blog index load failed:", e);
+                setLoadError(e?.message || "Couldn't load posts");
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         };
         loadPosts();
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {
@@ -120,6 +128,17 @@ const BlogIndex = () => {
                         {[1, 2, 3].map(n => (
                             <div key={n} className="h-96 rounded-2xl bg-[var(--surface-alt)] animate-pulse" />
                         ))}
+                    </div>
+                ) : loadError ? (
+                    <div className="text-center py-16 rounded-2xl border border-[var(--border)] bg-[var(--surface-alt)]/50 px-6 space-y-3">
+                        <p className="text-base font-bold text-[var(--text)]">Couldn't load posts.</p>
+                        <p className="text-xs text-[var(--text-muted)]">{loadError}</p>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest bg-[var(--orange)] text-black"
+                        >
+                            Retry
+                        </button>
                     </div>
                 ) : filteredPosts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

@@ -262,7 +262,15 @@ export default function AdminThumbnailsPage() {
 
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds);
-    if (!ids.length || !confirm(`Delete ${ids.length} selected items?`)) return;
+    if (!ids.length) return;
+    // Hard cap matches the worker-side cascade limit. Past bug: 500+
+    // selections could time out and leave half the rows deleted with
+    // no way to roll back.
+    if (ids.length > 200) {
+      surfaceError("Select 200 or fewer rows for bulk delete.");
+      return;
+    }
+    if (!confirm(`Delete ${ids.length} selected items?`)) return;
 
     setBusy(true);
     setBusyLabel(`Deleting ${ids.length} items...`);
@@ -270,13 +278,18 @@ export default function AdminThumbnailsPage() {
 
     try {
       await store.bulkDelete(ids);
-      setSelectedIds(new Set());
       await Promise.all([loadThumbnails(), loadStats()]);
       toast("success", `Removed ${ids.length} items`);
     } catch (e) {
-      surfaceError(e.message || "Bulk delete failed", e);
+      const status = e.status ? ` (HTTP ${e.status})` : "";
+      surfaceError(`${e?.message || "Bulk delete failed"}${status}`, e);
     } finally {
+      // Always clear selection — leaving stale ids selected after a
+      // failed delete invited an accidental retry that re-fired the
+      // same request.
+      setSelectedIds(new Set());
       setBusy(false);
+      setBusyLabel("");
       setOp(null);
     }
   };

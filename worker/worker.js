@@ -805,6 +805,24 @@ function sanitizeSpecialty(value) {
   if (!s) return null;
   return ALLOWED_SPECIALTIES.has(s) ? s : null;
 }
+
+// Bust the /api/specialty/:slug payload + stats caches across all three
+// microsites whenever inventory changes. Cheap (6 KV deletes per
+// mutation) and ensures a freshly-uploaded reel shows up on /work/<slug>
+// without waiting up to 15 min for the TTL. Best-effort — KV failures
+// don't block the underlying mutation.
+async function bustSpecialtyCaches(env) {
+  if (!env?.SHINEL_AUDIT) return;
+  const keys = [];
+  for (const slug of ALLOWED_SPECIALTIES) {
+    keys.push(`app:specialty:${slug}:cache`, `app:specialty:${slug}:stats`);
+  }
+  await Promise.all(keys.map(k =>
+    env.SHINEL_AUDIT.delete(k).catch(err =>
+      console.warn(`bustSpecialtyCaches(${k}) failed:`, err?.message || err)
+    )
+  ));
+}
 // Accepts single role string or comma-separated multi-role. Returns sanitized comma-separated list,
 // or null if nothing valid remains. Caller must check for "admin" presence separately.
 function sanitizeRoleField(value) {
@@ -1718,8 +1736,19 @@ const handler = {
     const isSync = (url.pathname === "/clients/sync" || url.pathname === "/clients/pulse/refresh") && request.method === "POST";
     if (isSync) {
       try {
-        await requireTeamOrThrow(request, secret);
-        const isForced = url.searchParams.has("force");
+        const claims = await requireTeamOrThrow(request, secret);
+        const wantsForce = url.searchParams.has("force");
+        // ?force=1 bypasses the 15-min cooldown — useful for unsticking
+        // pulse data after a YT quota reset, but a malicious team
+        // member could spam it and burn the KV write quota in one go
+        // (each forced sync is ~7 KV writes × N creators). Restrict to
+        // admin role only.
+        const roles = String(claims?.role || "").toLowerCase().split(",").map(r => r.trim());
+        const isAdmin = roles.includes("admin");
+        if (wantsForce && !isAdmin) {
+          return json({ error: "Force sync requires admin role" }, 403, cors);
+        }
+        const isForced = wantsForce && isAdmin;
         const isDebug = url.searchParams.has("debug");
         const result = await performClientSync(env, isForced, isDebug);
         return json(result, 200, cors);
@@ -1889,6 +1918,32 @@ const handler = {
         if (await isJtiRevoked(env, payload.jti)) {
           throw Object.assign(new Error("Refresh token revoked"), { status: 401 });
         }
+
+        // Rotation race protection: if two parallel /auth/refresh calls
+        // arrive with the same refresh token (race window ~100ms during
+        // page reloads or auto-refresh + manual click), both used to
+        // revoke the old JTI and mint NEW pairs — leaving two valid
+        // refresh tokens in the wild. A captured token replay would
+        // remain valid even after the legitimate device rotated.
+        // Lock-and-bail: first caller acquires a 5s KV lock keyed on
+        // the old JTI; any second caller seeing the lock returns 409.
+        // The frontend's refreshOnce() singleton already de-dupes
+        // calls within the same tab, so this catches cross-tab + retry
+        // races. Best-effort — KV write failure falls open (better to
+        // accept the race than to lock auth out when KV is exhausted).
+        if (payload.jti) {
+          const lockKey = `refresh_lock:${payload.jti}`;
+          try {
+            const existingLock = await env.SHINEL_AUDIT.get(lockKey);
+            if (existingLock) {
+              return json({ error: "Refresh in progress, retry" }, 409, cors);
+            }
+            await env.SHINEL_AUDIT.put(lockKey, "1", { expirationTtl: 5 });
+          } catch (lockErr) {
+            console.warn("refresh_lock failed (failing open):", lockErr?.message || lockErr);
+          }
+        }
+
         // Rotate: revoke the old refresh jti before issuing the new pair.
         const oldExp = Number(payload.exp || 0);
         const remaining = oldExp ? Math.max(60, oldExp - Math.floor(Date.now() / 1000)) : 7 * 24 * 3600;
@@ -3025,6 +3080,7 @@ const handler = {
           n(body.instagramViews)
         ).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true, id }, 200, cors);
       } catch (e) {
         console.error("POST /videos failed:", e?.stack || e?.message || e);
@@ -3168,6 +3224,7 @@ const handler = {
           `UPDATE inventory_videos SET ${fields.join(", ")}, last_updated = ? WHERE id = ?`
         ).bind(...params).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true }, 200, cors);
       } catch (e) {
         return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors);
@@ -3203,6 +3260,7 @@ const handler = {
           `DELETE FROM inventory_videos WHERE id IN (${placeholders})`
         ).bind(...ids).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true, deleted: res.meta?.changes ?? ids.length, ids }, 200, cors);
       } catch (e) {
         console.error("DELETE /videos/bulk failed:", e?.stack || e?.message || e);
@@ -3230,6 +3288,7 @@ const handler = {
         }
 
         await env.DB.prepare("DELETE FROM inventory_videos WHERE id = ?").bind(id).run();
+        await bustSpecialtyCaches(env);
         return json({ ok: true, id }, 200, cors);
       } catch (e) {
         // Respect thrown status (e.g. 401 from requireTeamOrThrow) so the
@@ -3795,6 +3854,7 @@ const handler = {
           n(body.instagramViews)
         ).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true, id }, 200, cors);
       } catch (e) {
         console.error("POST /thumbnails failed:", e?.stack || e?.message || e);
@@ -3842,9 +3902,10 @@ const handler = {
           `UPDATE inventory_thumbnails SET ${fields.join(", ")}, last_updated = ? WHERE id = ?`
         ).bind(...params).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true }, 200, cors);
-      } catch (e) { 
-        return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors); 
+      } catch (e) {
+        return json({ error: "Update failed: " + (e.message || "Unknown error") }, 500, cors);
       }
     }
 
@@ -3874,6 +3935,7 @@ const handler = {
           `DELETE FROM inventory_thumbnails WHERE id IN (${placeholders})`
         ).bind(...ids).run();
 
+        await bustSpecialtyCaches(env);
         return json({ ok: true, deleted: res.meta?.changes ?? ids.length, ids }, 200, cors);
       } catch (e) {
         console.error("DELETE /thumbnails/bulk failed:", e?.stack || e?.message || e);
@@ -3897,6 +3959,7 @@ const handler = {
         }
 
         await env.DB.prepare("DELETE FROM inventory_thumbnails WHERE id = ?").bind(id).run();
+        await bustSpecialtyCaches(env);
         return json({ ok: true, id }, 200, cors);
       } catch (e) {
         console.error("DELETE /thumbnails failed:", e?.stack || e?.message || e);
@@ -3983,16 +4046,26 @@ const handler = {
         const sinceMs = Date.now() - days * 86_400_000;
         const sinceIso = new Date(sinceMs).toISOString();
 
+        // Safety LIMIT on each subquery — pathological dataset (100k+
+        // attributed rows) shouldn't be able to time out the worker
+        // CPU budget. Practical team-of-30 over 365 days produces
+        // maybe ~3000 group rows, well under the cap.
         const sql = `
-          SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
-            FROM inventory_videos
-           WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
-           GROUP BY attributed_to, day
+          SELECT * FROM (
+            SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
+              FROM inventory_videos
+             WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
+             GROUP BY attributed_to, day
+             LIMIT 5000
+          )
           UNION ALL
-          SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
-            FROM inventory_thumbnails
-           WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
-           GROUP BY attributed_to, day
+          SELECT * FROM (
+            SELECT attributed_to AS who, substr(date_added, 1, 10) AS day, COUNT(*) AS n
+              FROM inventory_thumbnails
+             WHERE date_added >= ? AND attributed_to IS NOT NULL AND attributed_to != ''
+             GROUP BY attributed_to, day
+             LIMIT 5000
+          )
         `;
         const { results } = await env.DB.prepare(sql).bind(sinceIso, sinceIso).all();
 

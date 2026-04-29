@@ -73,6 +73,7 @@ export default function WorkPage() {
   const { config } = useGlobalConfig();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const portfolioRef = useRef(null);
 
   // Immersive work-reel state (redesign v2):
@@ -88,12 +89,17 @@ export default function WorkPage() {
     `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
 
   useEffect(() => {
+    // AbortController guards setState-after-unmount when the user
+    // navigates away mid-fetch. Past warning: "setProjects on unmounted
+    // component" because Promise.all resolves after navigation.
+    const ctrl = new AbortController();
     async function loadWork() {
       try {
+        setLoadError(null);
         const [vRes, tRes, cRes] = await Promise.all([
-          fetch(`${AUTH_BASE}/videos`),
-          fetch(`${AUTH_BASE}/thumbnails`),
-          fetch(`${AUTH_BASE}/clients`),
+          fetch(`${AUTH_BASE}/videos`, { signal: ctrl.signal }),
+          fetch(`${AUTH_BASE}/thumbnails`, { signal: ctrl.signal }),
+          fetch(`${AUTH_BASE}/clients`, { signal: ctrl.signal }),
         ]);
         const vData = await vRes.json();
         const tData = await tRes.json();
@@ -128,12 +134,15 @@ export default function WorkPage() {
 
         setProjects(combined);
       } catch (e) {
+        if (e.name === "AbortError") return;  // navigated away — silent
         console.error("Failed to load work:", e);
+        setLoadError(e?.message || "Couldn't load the work feed");
       } finally {
         setLoading(false);
       }
     }
     loadWork();
+    return () => ctrl.abort();
   }, []);
 
   // Reel derivations — unique categories, filtered list. kindFilter maps
@@ -267,6 +276,24 @@ export default function WorkPage() {
                 style={{ aspectRatio: "16/9", background: "var(--surface)" }}
               />
             ))}
+          </div>
+        ) : loadError ? (
+          <div
+            className="rounded-2xl p-10 text-center hairline space-y-3"
+            style={{ background: "var(--surface)", color: "var(--text-muted)" }}
+          >
+            <p className="text-base font-bold" style={{ color: "var(--text)" }}>
+              Couldn't load the work feed.
+            </p>
+            <p className="text-xs">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest"
+              style={{ background: "var(--orange)", color: "#0a0a0a" }}
+            >
+              Retry
+            </button>
           </div>
         ) : reelItems.length === 0 ? (
           <div
