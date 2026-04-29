@@ -3,13 +3,15 @@
  * element enters the viewport. Transform/opacity free: it only mutates a span's
  * textContent. Zero layout thrash because the container reserves space.
  *
- * Implementation note: prior version called setState every RAF tick (60×/sec
- * → 60 React renders per ticking element per second). On a hero with 3 tickers
- * that's 180 renders/sec just to update text. Now the RAF loop mutates the
- * span's textContent directly via a ref; React renders happen only at mount,
- * unmount, and prop change.
+ * Implementation note: an earlier rewrite tried to mutate `textContent`
+ * directly via a ref to skip the per-frame React render. That version
+ * introduced subtle reconciler issues (multiple text-node children getting
+ * replaced with a single textContent write) that crashed pages under
+ * concurrent rendering. Reverted to the simple setState approach — the
+ * three or so renders/sec per ticker are fine. 60 React renders/sec for
+ * 1.4 seconds is < 90 renders, well within React's batching budget.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useInView } from "../hooks/useInView";
 
@@ -33,33 +35,11 @@ export default function NumberTickIn({
   className = "",
 }) {
   const reduce = useReducedMotion();
-  const [inViewRef, inView] = useInView({ once: true, threshold: 0.3 });
-  const spanRef = useRef(null);
-
-  // Combine the inView ref + the textContent-mutation ref onto the same span.
-  const setRef = (node) => {
-    spanRef.current = node;
-    if (typeof inViewRef === "function") {
-      inViewRef(node);
-    } else if (inViewRef) {
-      inViewRef.current = node;
-    }
-  };
-
-  // Initial textContent set on mount + whenever the props that determine the
-  // final value change.
-  useEffect(() => {
-    if (!spanRef.current) return;
-    spanRef.current.textContent = `${prefix}${format(reduce ? to : from, formatter)}${suffix}`;
-  }, [from, to, prefix, suffix, formatter, reduce]);
+  const [ref, inView] = useInView({ once: true, threshold: 0.3 });
+  const [value, setValue] = useState(reduce ? to : from);
 
   useEffect(() => {
-    if (reduce) {
-      if (spanRef.current) {
-        spanRef.current.textContent = `${prefix}${format(to, formatter)}${suffix}`;
-      }
-      return;
-    }
+    if (reduce) { setValue(to); return; }
     if (!inView) return;
 
     let raf = 0;
@@ -69,22 +49,16 @@ export default function NumberTickIn({
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
-      const value = from + delta * eased;
-      // Direct DOM mutation — no React render. textContent assignment is
-      // cheap and doesn't trigger reflow when the string length is stable.
-      if (spanRef.current) {
-        spanRef.current.textContent = `${prefix}${format(value, formatter)}${suffix}`;
-      }
+      setValue(from + delta * eased);
       if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [inView, from, to, duration, reduce, prefix, suffix, formatter]);
+  }, [inView, from, to, duration, reduce]);
 
   return (
-    <span ref={setRef} className={`text-mono-num tabular-nums ${className}`}>
-      {/* Initial render — replaced by the effect above before paint. */}
-      {prefix}{format(reduce ? to : from, formatter)}{suffix}
+    <span ref={ref} className={`text-mono-num tabular-nums ${className}`}>
+      {prefix}{format(value, formatter)}{suffix}
     </span>
   );
 }
