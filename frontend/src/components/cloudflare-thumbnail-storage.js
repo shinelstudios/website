@@ -1,7 +1,13 @@
 // src/components/cloudflare-thumbnail-storage.js
+//
+// authedFetch handles the Bearer header + 401 auto-refresh + retry, so
+// a stale access token recovers transparently instead of leaving the
+// admin UI stuck on "Failed to fetch".
 
-// Same error-surfacing pattern as cloudflare-video-storage.js — propagate
-// the worker's error body + HTTP status so the admin form can show
+import { authedFetch } from "../utils/tokenStore";
+
+// Same error-surfacing pattern as the video helper — propagate the
+// worker's error body + HTTP status so the admin form can show
 // specifics instead of "Save failed".
 async function failWithBody(res, fallback) {
     let serverMessage = "";
@@ -15,91 +21,74 @@ async function failWithBody(res, fallback) {
     throw err;
 }
 
-export function createThumbnailStorage(baseUrl, getToken) {
-    const getHeaders = () => ({
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${getToken()}`
-    });
-
+export function createThumbnailStorage(baseUrl /*, getToken — unused, kept for signature compat */) {
     return {
         async getAll() {
-            const res = await fetch(`${baseUrl}/thumbnails`, {
-                headers: getHeaders()
-            });
+            const res = await authedFetch(baseUrl, "/thumbnails");
             if (!res.ok) await failWithBody(res, "Failed to fetch thumbnails");
             const data = await res.json();
             return data.thumbnails || [];
         },
 
         async getStats() {
-            const res = await fetch(`${baseUrl}/thumbnails/stats`, {
-                headers: getHeaders()
-            });
+            const res = await authedFetch(baseUrl, "/thumbnails/stats");
             if (!res.ok) await failWithBody(res, "Failed to fetch stats");
             return await res.json();
         },
 
         async add(payload) {
-            const res = await fetch(`${baseUrl}/thumbnails`, {
+            const res = await authedFetch(baseUrl, "/thumbnails", {
                 method: "POST",
-                headers: getHeaders(),
-                body: JSON.stringify(payload)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
             });
             if (!res.ok) await failWithBody(res, "Failed to create thumbnail");
             return await res.json();
         },
 
         async update(id, payload) {
-            const res = await fetch(`${baseUrl}/thumbnails/${id}`, {
+            const res = await authedFetch(baseUrl, `/thumbnails/${id}`, {
                 method: "PUT",
-                headers: getHeaders(),
-                body: JSON.stringify(payload)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
             });
             if (!res.ok) await failWithBody(res, "Failed to update thumbnail");
             return await res.json();
         },
 
         async delete(id) {
-            const res = await fetch(`${baseUrl}/thumbnails/${id}`, {
-                method: "DELETE",
-                headers: getHeaders()
-            });
+            const res = await authedFetch(baseUrl, `/thumbnails/${id}`, { method: "DELETE" });
             if (!res.ok) await failWithBody(res, "Failed to delete thumbnail");
             return await res.json();
         },
 
         async bulkDelete(ids) {
-            const res = await fetch(`${baseUrl}/thumbnails/bulk`, {
+            const res = await authedFetch(baseUrl, "/thumbnails/bulk", {
                 method: "DELETE",
-                headers: getHeaders(),
-                body: JSON.stringify({ ids })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids }),
             });
             if (!res.ok) await failWithBody(res, "Bulk delete failed");
             return await res.json();
         },
 
         async refreshOne(videoId) {
-            const res = await fetch(`${baseUrl}/thumbnails/refresh/${videoId}`, {
-                method: "POST",
-                headers: getHeaders()
-            });
+            const res = await authedFetch(baseUrl, `/thumbnails/refresh/${videoId}`, { method: "POST" });
             if (!res.ok) await failWithBody(res, "Refresh failed");
             return await res.json();
         },
 
         async refreshAll() {
-            const res = await fetch(`${baseUrl}/thumbnails/refresh-all`, {
-                method: "POST",
-                headers: getHeaders()
-            });
+            const res = await authedFetch(baseUrl, "/thumbnails/refresh-all", { method: "POST" });
             if (!res.ok) await failWithBody(res, "Bulk refresh failed");
             return await res.json();
         },
+
         async fetchYoutube(url) {
-            const res = await fetch(`${baseUrl}/thumbnails/fetch-youtube`, {
+            const res = await authedFetch(baseUrl, "/thumbnails/fetch-youtube", {
                 method: "POST",
-                headers: getHeaders(),
-                body: JSON.stringify({ url })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url }),
             });
             if (!res.ok) await failWithBody(res, "YouTube fetch failed");
             const data = await res.json();
