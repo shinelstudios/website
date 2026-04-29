@@ -931,21 +931,15 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 </Link>
               </>
             ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="md:hidden btn-editorial"
-                  style={{ padding: "0.5rem 1rem", fontSize: "0.75rem" }}
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/login"
-                  className="hidden md:inline-flex btn-editorial"
-                >
-                  Login
-                </Link>
-              </>
+              /* Single Login button — past bug: two separate buttons
+                 gated by md:hidden / hidden md:inline-flex, but
+                 `.btn-editorial { display: inline-flex }` is declared
+                 after Tailwind's `.hidden` with equal specificity, so
+                 .btn-editorial won and both buttons rendered on mobile.
+                 Default btn-editorial size reads fine on phones. */
+              <Link to="/login" className="btn-editorial">
+                Login
+              </Link>
             )}
 
             {/* theme toggle */}
