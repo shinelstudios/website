@@ -70,14 +70,17 @@ const ThumbnailPreviewerPage = () => {
                         </p>
                     </section>
 
-                    {/* Features Grid */}
+                    {/* Features Grid — Phase 2 signature: `drop-shadow-hover` lifts
+                        each card on hover with a soft orange shadow. Replaces
+                        the rejected device-tilt-parallax idea. Pure CSS,
+                        skipped on coarse pointers + reduced motion. */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {[
                             { icon: Target, title: "A/B Testing", text: "Compare two variations side-by-side to determine which design captures more attention." },
                             { icon: Zap, title: "CTR Analytics", text: "Simulated heatmaps and contrast scores help identify the focal points of your design." },
                             { icon: Eye, title: "Simulated Feeds", text: "Preview your thumbnail in Home, Search, and Sidebar layouts with Dark and Light mode support." }
                         ].map((f, i) => (
-                            <div key={i} className="p-8 rounded-[32px] bg-[var(--surface-alt)] border border-[var(--border)] hover:border-[var(--orange)] transition-colors group">
+                            <div key={i} className="drop-shadow-hover p-8 rounded-[32px] bg-[var(--surface-alt)] border border-[var(--border)] hover:border-[var(--orange)] transition-colors group">
                                 <f.icon className="text-[var(--orange)] mb-6 group-hover:scale-110 transition-transform" size={40} />
                                 <h3 className="text-xl font-bold mb-3">{f.title}</h3>
                                 <p className="text-[var(--text-muted)] leading-relaxed">{f.text}</p>

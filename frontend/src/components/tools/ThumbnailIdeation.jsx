@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { LetterFall } from "../../design";
 
 const STYLES = [
   { name: "Big Bold", desc: "2–3 word punch, large contrast, face crop optional" },
@@ -48,11 +49,15 @@ export default function ThumbnailIdeation() {
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Phase 2 signature: each generated card's style title arrives via
+            LetterFall — letters drop in one by one with a 28 ms stagger.
+            `key={style + topic + angle}` forces remount on regeneration so
+            the animation re-runs for the new ideas. */}
+        <div key={`${topic}|${angle}|${out.length}`} className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
           {out.map(({ style, desc, texts, composition }) => (
             <div key={style} className="rounded-2xl p-4 border"
                  style={{ background:"var(--surface-alt)", borderColor:"var(--border)", color:"var(--text)" }}>
-              <div className="font-semibold">{style}</div>
+              <LetterFall as="div" className="font-semibold">{style}</LetterFall>
               <div className="text-xs mb-2" style={{ color:"var(--text-muted)" }}>{desc}</div>
               <ul className="list-disc pl-5 space-y-1">
                 {texts.map((t,i)=> <li key={i}>{t}</li>)}

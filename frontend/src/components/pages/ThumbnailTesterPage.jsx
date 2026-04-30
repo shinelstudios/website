@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, X, Share2, BarChart2, Check, ArrowRight, ThumbsUp, Download, Twitter, Linkedin, MessageCircle, Facebook, Copy, Info, RefreshCw, Briefcase, Zap, Mail } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import MetaTags from "../MetaTags";
+import { BorderDraw } from "../../design";
 import logo from "../../assets/logo.png";
 
 const FileUpload = ({ label, file, setFile, id }) => {
@@ -402,10 +403,14 @@ export default function ThumbnailTesterPage() {
                                 </div>
                             </div>
 
-                            {/* Results Grid */}
+                            {/* Results Grid — Phase 2 signature: BorderDraw traces
+                                an orange outline around the winning variation when
+                                results land. Replaces the rejected "vote burst"
+                                idea — feels like a verdict, not a confetti pop. */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                                 {/* Result A */}
-                                <div className={`p-6 rounded-2xl border transition-all ${results.a > 50 ? "border-green-500/50 bg-green-500/5 shadow-[0_0_30px_rgba(34,197,94,0.1)] order-first" : "border-[var(--border)] bg-[var(--surface)] opacity-70 grayscale-[0.5] order-last md:order-none"}`}>
+                                <div className={`relative p-6 rounded-2xl border transition-all ${results.a > 50 ? "border-green-500/50 bg-green-500/5 shadow-[0_0_30px_rgba(34,197,94,0.1)] order-first" : "border-[var(--border)] bg-[var(--surface)] opacity-70 grayscale-[0.5] order-last md:order-none"}`}>
+                                    {results.a > 50 && <BorderDraw radius={16} strokeWidth={2} color="rgb(34, 197, 94)" />}
                                     <div className="flex justify-between items-start mb-6">
                                         <h4 className="text-[var(--text-muted)] font-bold uppercase tracking-wider text-sm">Variation A</h4>
                                         {results.a > 50 && <span className="text-green-500 font-bold text-xs bg-green-500/10 px-2 py-1 rounded">WINNER</span>}
@@ -418,7 +423,8 @@ export default function ThumbnailTesterPage() {
                                 </div>
 
                                 {/* Result B */}
-                                <div className={`p-6 rounded-2xl border transition-all ${results.a <= 50 ? "border-green-500/50 bg-green-500/5 shadow-[0_0_30px_rgba(34,197,94,0.1)] order-first" : "border-[var(--border)] bg-[var(--surface)] opacity-70 grayscale-[0.5] order-last md:order-none"}`}>
+                                <div className={`relative p-6 rounded-2xl border transition-all ${results.a <= 50 ? "border-green-500/50 bg-green-500/5 shadow-[0_0_30px_rgba(34,197,94,0.1)] order-first" : "border-[var(--border)] bg-[var(--surface)] opacity-70 grayscale-[0.5] order-last md:order-none"}`}>
+                                    {results.a <= 50 && <BorderDraw radius={16} strokeWidth={2} color="rgb(34, 197, 94)" />}
                                     <div className="flex justify-between items-start mb-6">
                                         <h4 className="text-[var(--text-muted)] font-bold uppercase tracking-wider text-sm">Variation B</h4>
                                         {results.a <= 50 && <span className="text-green-500 font-bold text-xs bg-green-500/10 px-2 py-1 rounded">WINNER</span>}

@@ -25,7 +25,7 @@
  * All work happens on a 256px-max downsample, so analysis runs in a
  * few ms on a mid-range phone. No workers, no lag.
  */
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Upload,
   RefreshCw,
@@ -38,6 +38,55 @@ import {
   Info,
 } from "lucide-react";
 import MetaTags, { BreadcrumbSchema } from "../MetaTags";
+import { NumberTickIn, useReducedMotion } from "../../design";
+
+/**
+ * ScoreDial — Phase 2 signature for /tools/thumbnail-clickability.
+ * SVG circular ring that draws from 0° to the score's angle on result
+ * reveal. The score number ticks up via NumberTickIn next to it. Uses
+ * stroke-dashoffset (GPU-cheap) and respects reduced-motion (snaps to
+ * the final angle). 110 px square, scales with surrounding type.
+ */
+function ScoreDial({ value, color = "var(--orange)", size = 96 }) {
+  const reduce = useReducedMotion();
+  const [drawn, setDrawn] = useState(reduce);
+  useEffect(() => {
+    if (reduce) { setDrawn(true); return; }
+    // Reset when value changes (re-analysing a new thumbnail) so the
+    // ring redraws each time.
+    setDrawn(false);
+    const id = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(id);
+  }, [value, reduce]);
+  const r = (size - 8) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = drawn ? c - (c * value) / 100 : c;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      style={{ transform: "rotate(-90deg)" }}
+      aria-hidden="true"
+    >
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-alt)" strokeWidth="6" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+        style={{
+          transition: reduce ? "none" : "stroke-dashoffset 1100ms cubic-bezier(0.65, 0, 0.35, 1)",
+        }}
+      />
+    </svg>
+  );
+}
 import { Kicker, Display, Lede, RevealOnScroll } from "../../design";
 
 /* ---------- scoring ---------- */
@@ -436,17 +485,31 @@ export default function ThumbnailClickability() {
                 {result && band && (
                   <>
                     <div className="p-6 rounded-2xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-                      <div className="text-xs uppercase tracking-widest font-bold mb-2" style={{ color: "var(--text-muted)" }}>
+                      <div className="text-xs uppercase tracking-widest font-bold mb-3" style={{ color: "var(--text-muted)" }}>
                         Score
                       </div>
-                      <div className="flex items-baseline gap-3">
-                        <div className="text-6xl font-black" style={{ color: band.color }}>
-                          {result.total}
+                      {/* Phase 2 signature: ScoreDial sweeps from 0° to the
+                          score angle while NumberTickIn counts up the digit.
+                          Two complementary motions, both ~1.1s, both pure
+                          GPU-composited. */}
+                      <div className="flex items-center gap-5">
+                        <div className="relative shrink-0" style={{ width: 96, height: 96 }}>
+                          <ScoreDial value={result.total} color={band.color} />
+                          <div
+                            className="absolute inset-0 flex items-center justify-center text-3xl font-black"
+                            style={{ color: band.color }}
+                          >
+                            <NumberTickIn to={result.total} duration={1100} />
+                          </div>
                         </div>
-                        <div className="text-xl" aria-hidden="true">{band.emoji}</div>
-                      </div>
-                      <div className="text-sm font-bold mt-1" style={{ color: band.color }}>
-                        {band.label}
+                        <div>
+                          <div className="text-sm font-bold mb-0.5" style={{ color: band.color }}>
+                            {band.label} <span aria-hidden="true">{band.emoji}</span>
+                          </div>
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            out of 100
+                          </div>
+                        </div>
                       </div>
                     </div>
 
