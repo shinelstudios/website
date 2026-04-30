@@ -231,8 +231,23 @@ const FAQSection = () => {
                   transition={{ duration: 0.3 }}
                   style={{ overflow: "hidden" }}
                 >
+                  {/* Phase 2 signature: when an FAQ opens, the answer
+                      lifts in via the .faq-line-stagger-in CSS class.
+                      `key={open}` resets the animation each time the
+                      panel re-opens. Splitting the answer on sentence
+                      boundaries (period followed by capital) lets each
+                      sentence stagger separately for multi-sentence
+                      answers, while the regex preserves URLs/numbers. */}
                   <div className="px-5 pb-5 pl-[4.25rem]" style={{ color: 'var(--text-muted)' }}>
-                    {f.answer}
+                    {open ? (
+                      <div key={`${i}-${open}`} className="faq-line-stagger-in space-y-2">
+                        {f.answer.split(/(?<=\.\s)(?=[A-Z])/).map((sentence, j) => (
+                          <p key={j} className="m-0">{sentence}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      f.answer
+                    )}
                   </div>
                 </motion.div>
               </motion.div>

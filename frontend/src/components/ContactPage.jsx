@@ -38,6 +38,7 @@ import {
   HairlineCard,
   RevealOnScroll,
   GrainOverlay,
+  MagneticButton,
 } from "../design";
 
 const INTEREST_OPTIONS = [
@@ -374,6 +375,7 @@ export default function ContactPage() {
                   <p className="text-meta" style={{ color: "var(--text-muted)" }}>
                     By submitting, you agree to our <Link to="/privacy" style={{ color: "var(--orange)" }}>privacy policy</Link>.
                   </p>
+                  <MagneticButton strength={6}>
                   <button
                     type="submit"
                     disabled={status === "loading"}
@@ -389,6 +391,7 @@ export default function ContactPage() {
                       </>
                     )}
                   </button>
+                  </MagneticButton>
                 </div>
               </div>
             </HairlineCard>
@@ -402,8 +405,12 @@ export default function ContactPage() {
 function Field({ label, value, onChange, multiline, rows = 2, className = "", required, ...rest }) {
   const Tag = multiline ? "textarea" : "input";
   const id = label?.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  // Phase 2 signature: each Field uses .field-focus-underline so a thin
+  // orange line draws across the bottom on focus-within. CSS-only,
+  // pure scaleX transition, no JS frame work. Pairs with the existing
+  // focus-border color shift on the input itself.
   return (
-    <label className={`block ${className}`}>
+    <label className={`block field-focus-underline ${className}`}>
       <span className="text-eyebrow block mb-1.5">
         {label}
         {required && <span style={{ color: "var(--orange)" }}>*</span>}
