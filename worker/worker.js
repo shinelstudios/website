@@ -1382,6 +1382,18 @@ async function performClientSync(env, isForced = false, debug = false) {
 
   for (let i = 0; i < clients.length; i++) {
     const c = clients[i];
+    // Normalize snake_case (D1 column names) → camelCase (KV-style + the
+    // legacy in-memory shape this loop was written against). Without this,
+    // every D1-sourced client looked like it had no youtube_id because
+    // the loop only checked `c.youtubeId`. Result: every client fell
+    // through to "No successful fetches" and only the four with manual
+    // subscriber overrides (c.subscribers > 0) showed any data.
+    if (!c.youtubeId && c.youtube_id) c.youtubeId = c.youtube_id;
+    if (!c.uploadsPlaylistId && c.uploads_playlist_id) c.uploadsPlaylistId = c.uploads_playlist_id;
+    if (!c.instagramHandle && c.instagram_handle) c.instagramHandle = c.instagram_handle;
+    if (!c.instagramFollowers && c.instagram_followers) c.instagramFollowers = c.instagram_followers;
+    if (!c.instagramLogo && c.instagram_logo) c.instagramLogo = c.instagram_logo;
+
     let statsObj = null;
     let ytError = null;
     let igError = null;
