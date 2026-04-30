@@ -1837,6 +1837,118 @@ img {
   .ken-burns { animation: none; }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   Phase 2 creative-motion utility classes
+   Pure CSS, transform/opacity only, paired with the design-system
+   primitives in src/design/animations/.
+   ───────────────────────────────────────────────────────────────── */
+
+/* FieldFocusUnderline — orange line scales in across the bottom of an
+   input on focus. The wrapper `<span class="field-focus-underline">`
+   contains the input; the ::after pseudo draws the line. Pure CSS,
+   no JS frame work. */
+.field-focus-underline {
+  position: relative;
+  display: block;
+}
+.field-focus-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--orange);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 240ms cubic-bezier(0.65, 0, 0.35, 1);
+  pointer-events: none;
+  border-radius: 2px;
+}
+.field-focus-underline:focus-within::after {
+  transform: scaleX(1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-focus-underline::after { transition: none; }
+}
+
+/* drop-shadow-hover — soft elevation on hover, used by
+   /tools/thumbnail-previewer (replacing the rejected 3D tilt idea).
+   Pure CSS, opacity-driven on a pseudo-element so the shadow doesn't
+   cause repaints on the host. */
+.drop-shadow-hover {
+  position: relative;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.drop-shadow-hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 24px 48px -12px rgba(232, 80, 2, 0.25), 0 8px 16px -4px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .drop-shadow-hover:hover {
+    transform: translate3d(0, -3px, 0) scale(1.012);
+  }
+  .drop-shadow-hover:hover::before {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drop-shadow-hover, .drop-shadow-hover:hover {
+    transform: none !important;
+    transition: none;
+  }
+  .drop-shadow-hover:hover::before { opacity: 0.4; transition: none; }
+}
+
+/* faq-line-stagger-in — child paragraphs/lines fade + lift staggered
+   when an FAQ item opens. Used inside `<details[open]>`. The opening
+   transition itself is handled natively by <details>; this class
+   styles the contents. */
+.faq-line-stagger-in > * {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0);
+  animation: faq-line-in 360ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.faq-line-stagger-in > *:nth-child(1) { animation-delay: 40ms; }
+.faq-line-stagger-in > *:nth-child(2) { animation-delay: 80ms; }
+.faq-line-stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+.faq-line-stagger-in > *:nth-child(4) { animation-delay: 160ms; }
+.faq-line-stagger-in > *:nth-child(n + 5) { animation-delay: 200ms; }
+@keyframes faq-line-in {
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .faq-line-stagger-in > * {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* tools-card-breathe — very subtle scale on tool cards in /tools index
+   to make the grid feel alive without animating each card's opacity
+   or repainting. ~2 % scale on a 6 s cycle, deeply staggered so no
+   two cards breathe in unison. Already-existing GridMatrix on /tools
+   keeps its place; this layers underneath. Currently unused — kept
+   here as opt-in via className. */
+@keyframes tools-card-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -1px, 0) scale(1.012); }
+}
+.tools-card-breathe {
+  animation: tools-card-breathe 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tools-card-breathe { animation: none; }
+}
+
 /* Scroll reveal: opacity-only, used with IntersectionObserver */
 .reveal {
   opacity: 0;
