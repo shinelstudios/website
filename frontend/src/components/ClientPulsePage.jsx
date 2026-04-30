@@ -219,6 +219,28 @@ const ClientPulsePage = () => {
                 }
 
                 {
+                    /* Cron is supposed to run every 30 min. If lastSync is
+                       > 90 min ago, something is genuinely stuck — the cron
+                       failed three ticks in a row, or the worker's having
+                       trouble. Surface it so a quiet feed isn't mistaken
+                       for a healthy system, and so admins know to check
+                       wrangler tail. Skip when quotaExceeded is already
+                       shown — that banner already explains the staleness. */
+                    !quotaExceeded && lastSync && (Date.now() - lastSync) > 90 * 60 * 1000 && (
+                        <div className="mb-10 p-6 rounded-3xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 flex items-center gap-4">
+                            <Clock size={24} />
+                            <div>
+                                <div className="font-bold">Sync is running behind</div>
+                                <div className="text-xs opacity-80">
+                                    Last successful sync: {Math.round((Date.now() - lastSync) / 60000)} min ago.
+                                    Normally every 30. Activity below may be stale.
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
+
+                {
                     error && (
                         <div className="mb-10 p-6 rounded-3xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-4">
                             <AlertCircle size={24} />
@@ -251,10 +273,20 @@ const ClientPulsePage = () => {
                             </Link>
                         </div>
                     ) : !loading && (
+                        // Past behaviour: this read "Silence in the pulse — no
+                        // client uploads or live streams detected." which made
+                        // a quiet day look like a broken pipeline. The feed is
+                        // a 24 h window over channels that don't all upload
+                        // daily, so empty is the common case. Reframe as
+                        // "caught up" and include the sync cadence so a
+                        // visitor knows the system itself is alive.
                         <div className="py-32 text-center border-2 border-dashed border-[var(--border)] rounded-[40px]">
                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
-                            <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">Silence in the pulse</h3>
-                            <p className="text-[var(--text-muted)]/80 max-w-xs mx-auto">No client uploads or live streams detected in the last 24 hours for {stats.length} registered channels.</p>
+                            <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">All caught up</h3>
+                            <p className="text-[var(--text-muted)]/80 max-w-md mx-auto">
+                                No new uploads in the last 24 hours from our active client channels.
+                                The feed refreshes automatically every 30 minutes — check back soon.
+                            </p>
                         </div>
                     )
                 }

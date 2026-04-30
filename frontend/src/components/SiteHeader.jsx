@@ -708,10 +708,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           </Link>
 
           {/* desktop nav
-             — Pulse (/live) is a public marketing surface. Once a user is
-               logged in they have their own hub/portfolio, so we drop it
-               from their nav to avoid the impression that they "control"
-               anything from there. Still visible to non-authed visitors.
+             — Pulse (/live) is the public real-time activity feed of all
+               active client channels. Visible to everyone (not gated on
+               auth) — it's a showcase, not a control surface. The
+               "control" of Pulse (which clients are active, registry
+               edits) lives behind /dashboard/clients (TEAM_ROLES).
              — Portfolio (/me) is shown to team/editor/artist/admin users so
                there's a discoverable path to their personal /team/:slug
                page editor instead of burying it in the avatar dropdown. */}
@@ -719,9 +720,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
             <DesktopNavLink label="About" to="/about" icon={User} />
-            {!auth.isAuthed && (
-              <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
-            )}
+            <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
             <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
             {auth.isAuthed && userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
               <DesktopNavLink label="Portfolio" to="/me" icon={User} />
@@ -1036,10 +1035,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
                     <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
                     <MobileCardLink to="/about" icon={User} title="About" subtitle="Who we are" />
-                    {/* Pulse hidden when authed — same reason as desktop nav above. */}
-                    {!auth.isAuthed && (
-                      <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
-                    )}
+                    <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
                     <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
@@ -1050,12 +1046,17 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
                       <SectionHeader icon={User} title="Account" subtitle={`${auth.firstName || "User"}`} right={null} />
                       <div className="grid grid-cols-1 gap-2">
-                        {(['admin', 'team', 'editor', 'artist'].some(r => (role || "").includes(r))) && (
+                        {/* Use the parsed userRoles array, not raw `role` string. Past
+                            bug: `(role || "").includes("team")` would match "teamlead"
+                            (false positive) and miss role="admin,team" parsing. The
+                            desktop dropdown already uses userRoles.some(...) — keep
+                            mobile in sync so editors reliably see this card. */}
+                        {userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
                           <MobileCardLink to="/me" icon={User} title="My public profile" subtitle="Edit bio, work & socials" />
                         )}
                         <MobileCardLink to="/profile" icon={User} title="Profile" subtitle="Personal details" />
                         <MobileCardLink to="/settings" icon={Settings} title="Settings" subtitle="Preferences" />
-                        {['admin', 'editor', 'artist'].includes(role) && (
+                        {userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
                           <MobileCardLink to="/dashboard" icon={Shield} title="Management Hub" subtitle="Studio Control" />
                         )}
                         <button

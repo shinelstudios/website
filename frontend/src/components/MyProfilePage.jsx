@@ -238,6 +238,26 @@ export default function MyProfilePage() {
   const fileInputRef = useRef(null);
   const handleAvatarUpload = useCallback(async (file) => {
     if (!file) return;
+    // Client-side size cap. The worker's media-upload endpoint also
+    // rejects oversized files, but failing locally avoids a wasted
+    // upload over a phone connection. 5 MB is generous for a profile
+    // photo — anything bigger is almost always an unintended HEIC dump
+    // straight from a camera roll.
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setSaveMsg({
+        type: "error",
+        text: `Photo is ${(file.size / 1024 / 1024).toFixed(1)} MB — please pick one under 5 MB.`,
+      });
+      return;
+    }
+    if (!/^image\//.test(file.type) && file.type !== "") {
+      // Some HEIC files come through with empty type — let those past;
+      // the worker will reject if it can't decode them. Reject only
+      // clearly non-image MIMEs.
+      setSaveMsg({ type: "error", text: "That doesn't look like an image file." });
+      return;
+    }
     setSaveMsg({ type: "info", text: "Uploading avatar..." });
     try {
       const form = new FormData();
@@ -396,8 +416,11 @@ export default function MyProfilePage() {
         <HairlineCard className="p-6 md:p-8">
           <Eyebrow className="mb-4">Identity</Eyebrow>
 
+          {/* Avatar column centers on mobile so it doesn't sit in a 140 px
+              column with a giant whitespace gap on the right. Tap target
+              for "Upload photo" widened to 44 px-ish for phones. */}
           <div className="grid md:grid-cols-[140px_1fr] gap-6 mb-6">
-            <div>
+            <div className="flex flex-col items-center md:items-start">
               {profile.avatarUrl ? (
                 <Img
                   src={profile.avatarUrl}
@@ -424,11 +447,17 @@ export default function MyProfilePage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-3 text-xs flex items-center gap-1.5"
-                style={{ color: "var(--orange)" }}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs px-4 py-2 min-h-[40px] rounded-full hairline"
+                style={{
+                  color: "var(--orange)",
+                  borderColor: "color-mix(in oklab, var(--orange) 30%, transparent)",
+                }}
               >
-                <Upload size={12} /> Upload photo
+                <Upload size={14} /> {profile.avatarUrl ? "Change photo" : "Upload photo"}
               </button>
+              <p className="mt-2 text-[10px] text-center md:text-left" style={{ color: "var(--text-muted)" }}>
+                JPG / PNG / HEIC · up to 5 MB
+              </p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -438,11 +467,14 @@ export default function MyProfilePage() {
               />
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            {/* Phones get full-width fields — `sm:` (640 px) was crammed.
+                Two-column kicks in at `md:` (768 px) where each field has
+                room for its placeholder text without truncating. */}
+            <div className="grid md:grid-cols-2 gap-4">
               <Field label="First name" value={profile.firstName} onChange={(v) => update({ firstName: v })} />
               <Field label="Last name" value={profile.lastName} onChange={(v) => update({ lastName: v })} />
               <Field
-                className="sm:col-span-2"
+                className="md:col-span-2"
                 label="Headline (one line)"
                 placeholder="e.g. Cinematic long-form editor for gaming creators"
                 value={profile.headline}
@@ -450,7 +482,7 @@ export default function MyProfilePage() {
                 maxLength={140}
               />
               <Field
-                className="sm:col-span-2"
+                className="md:col-span-2"
                 label="Bio"
                 multiline
                 rows={4}
@@ -460,7 +492,7 @@ export default function MyProfilePage() {
                 maxLength={1500}
               />
               <Field
-                className="sm:col-span-2"
+                className="md:col-span-2"
                 label="Skills (comma-separated)"
                 placeholder="Premiere, After Effects, Figma, DaVinci Resolve"
                 value={profile.skills}
@@ -497,7 +529,11 @@ export default function MyProfilePage() {
           <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
             Pick the services you want on your public page. Clients will be able to inquire about these specifically.
           </p>
-          <div className="flex flex-wrap gap-2">
+          {/* 2-col grid on phones (each pill ~half width — tap target 44 px+),
+              3-col on small tablets, then loose flex-wrap on desktop. Past
+              behaviour was flex-wrap at every breakpoint, which on 375 px
+              produced 3-4 cramped pills per row that were hard to tap. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-wrap gap-2">
             {PRESET_SERVICES.map((svc) => {
               const active = (profile.services || []).includes(svc);
               return (
@@ -505,12 +541,13 @@ export default function MyProfilePage() {
                   key={svc}
                   type="button"
                   onClick={() => toggleService(svc)}
-                  className="text-sm px-3 py-1.5 rounded-full hairline transition-colors"
+                  className="text-sm px-3 py-2 min-h-[40px] rounded-full hairline transition-colors text-center"
                   style={{
                     background: active ? "var(--orange)" : "transparent",
                     color: active ? "#fff" : "var(--text)",
                     borderColor: active ? "var(--orange)" : "var(--hairline)",
                   }}
+                  aria-pressed={active}
                 >
                   {svc}
                 </button>
@@ -524,7 +561,7 @@ export default function MyProfilePage() {
       <Section size="sm">
         <HairlineCard className="p-6 md:p-8">
           <Eyebrow className="mb-4">Socials & contact</Eyebrow>
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             <Field icon={<Instagram size={16} />} label="Instagram URL" value={profile.socials?.instagram || ""} onChange={(v) => updateSocial("instagram", v)} />
             <Field icon={<Youtube size={16} />} label="YouTube URL" value={profile.socials?.youtube || ""} onChange={(v) => updateSocial("youtube", v)} />
             <Field icon={<Linkedin size={16} />} label="LinkedIn URL" value={profile.socials?.linkedin || ""} onChange={(v) => updateSocial("linkedin", v)} />
@@ -632,25 +669,31 @@ function Field({ label, value, onChange, multiline, rows = 2, icon, className = 
 }
 
 function WorkRow({ kind, title, meta, visible, onToggle }) {
+  // Mobile: stack the title above the toggle so neither truncates and the
+  // toggle keeps a 44 px tap target. Past behaviour: side-by-side at all
+  // widths with `ml-4` margin meant the title would either truncate or
+  // the "Visible/Hidden" pill would wrap onto two lines on phones <360 px.
   return (
-    <div className="flex items-center justify-between py-2.5 hairline-b last:border-b-0">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 hairline-b last:border-b-0">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="text-eyebrow">{kind}</span>
           <span style={{ color: "var(--text-muted)" }}>·</span>
-          <span className="text-meta" style={{ color: "var(--text-muted)" }}>{meta}</span>
+          <span className="text-meta truncate" style={{ color: "var(--text-muted)" }}>{meta}</span>
         </div>
-        <div className="font-medium truncate">{title}</div>
+        <div className="font-medium break-words sm:truncate">{title}</div>
       </div>
       <button
         type="button"
         onClick={() => onToggle(!visible)}
-        className="shrink-0 ml-4 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full hairline transition-colors"
+        className="self-start sm:self-auto shrink-0 sm:ml-4 inline-flex items-center gap-1.5 text-xs px-4 py-2 min-h-[36px] rounded-full hairline transition-colors"
         style={{
           background: visible ? "var(--orange-soft)" : "transparent",
           color: visible ? "var(--orange)" : "var(--text-muted)",
           borderColor: visible ? "color-mix(in oklab, var(--orange) 30%, transparent)" : "var(--hairline)",
         }}
+        aria-pressed={visible}
+        aria-label={`${visible ? "Hide" : "Show"} ${kind.toLowerCase()} on public portfolio`}
       >
         {visible ? <Eye size={13} /> : <EyeOff size={13} />}
         {visible ? "Visible" : "Hidden"}

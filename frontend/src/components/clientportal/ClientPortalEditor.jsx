@@ -45,6 +45,7 @@ export default function ClientPortalEditor() {
     authedFetch(AUTH_BASE, "/portal/me")
       .then(async (r) => {
         if (r.status === 401) { nav("/login?next=/clients/me/edit"); return null; }
+        if (r.status === 404) return { client: null }; // legacy worker behaviour — see ClientPortalDashboard for context
         if (!r.ok) {
           const data = await r.json().catch(() => ({}));
           throw new Error(data?.error || `HTTP ${r.status}`);
@@ -54,6 +55,7 @@ export default function ClientPortalEditor() {
       .then((d) => {
         if (!d) return;
         const c = d.client;
+        if (!c) { setError("No client portal attached to this account."); return; }
         setClient(c);
         setSlug(c.slug || "");
         setPublicEnabled(!!c.publicEnabled);

@@ -23,6 +23,11 @@ export default function ClientPortalDashboard() {
     authedFetch(AUTH_BASE, "/portal/me")
       .then(async (r) => {
         if (r.status === 401) { nav("/login?next=/clients/me"); return null; }
+        // Worker returns 200 + { client: null } when the logged-in user
+        // has no portal record (the common admin-without-portal case).
+        // Older worker versions returned 404 here; tolerate both so a
+        // staged rollout doesn't briefly flash a fake error.
+        if (r.status === 404) return { client: null };
         if (!r.ok) {
           const data = await r.json().catch(() => ({}));
           throw new Error(data?.error || `HTTP ${r.status}`);

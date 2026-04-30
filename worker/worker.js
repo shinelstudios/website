@@ -5860,7 +5860,15 @@ const handler = {
       try {
         const payload = await requireClientOrThrow(request, secret, env);
         const client = await getCurrentClientFromPayload(env, payload);
-        if (!client) return json({ error: "No client portal attached to this user" }, 404, cors);
+        // Past behaviour: 404 here for "user is logged in with the
+        // client/admin role but no client D1 row is attached." Browsers
+        // log every 404 to the network panel as a red error, which made
+        // /clients/me look broken every time an admin (with no portal
+        // client of their own) opened the dashboard. The state isn't an
+        // error — it's an answer. Return 200 + client:null so the UI can
+        // render the "no portal attached" affordance without polluting
+        // the console with a non-issue.
+        if (!client) return json({ ok: true, client: null }, 200, cors);
         let modules = [];
         try { modules = JSON.parse(client.modules_json || "[]"); } catch { modules = []; }
         // Inbox unread count (cheap COUNT query).
