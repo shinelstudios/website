@@ -707,13 +707,25 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             </span>
           </Link>
 
-          {/* desktop nav */}
+          {/* desktop nav
+             — Pulse (/live) is a public marketing surface. Once a user is
+               logged in they have their own hub/portfolio, so we drop it
+               from their nav to avoid the impression that they "control"
+               anything from there. Still visible to non-authed visitors.
+             — Portfolio (/me) is shown to team/editor/artist/admin users so
+               there's a discoverable path to their personal /team/:slug
+               page editor instead of burying it in the avatar dropdown. */}
           <div className="hidden md:flex items-center gap-8 relative">
             <DesktopNavLink label="Home" to="/" icon={Home} />
             <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
             <DesktopNavLink label="About" to="/about" icon={User} />
-            <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
+            {!auth.isAuthed && (
+              <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
+            )}
             <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
+            {auth.isAuthed && userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
+              <DesktopNavLink label="Portfolio" to="/me" icon={User} />
+            )}
             {auth.isAuthed && (
               <DesktopNavLink
                 label={userRoles.includes("client") && !userRoles.includes("admin") ? "Client Hub" : "Hub"}
@@ -1024,7 +1036,10 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                     <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
                     <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
                     <MobileCardLink to="/about" icon={User} title="About" subtitle="Who we are" />
-                    <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
+                    {/* Pulse hidden when authed — same reason as desktop nav above. */}
+                    {!auth.isAuthed && (
+                      <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
+                    )}
                     <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
