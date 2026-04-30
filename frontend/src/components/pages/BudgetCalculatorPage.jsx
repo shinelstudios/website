@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calculator, Check, ArrowRight, DollarSign, Mail, Sparkles, Sliders } from "lucide-react";
 import MetaTags from "../MetaTags";
+import { NumberTickIn, FieldFocusUnderline, MagneticButton } from "../../design";
 
 const ServiceToggle = ({ label, active, onClick, icon: Icon }) => (
     <button
@@ -230,13 +231,18 @@ export default function BudgetCalculatorPage() {
                                     <DollarSign size={120} />
                                 </div>
 
+                                {/* Phase 2 signature: estimate ticks up via
+                                    NumberTickIn whenever the user toggles a
+                                    service or changes a volume. `key={…}`
+                                    on each span forces remount on value
+                                    change so the tick replays. */}
                                 <h3 className="text-lg text-[var(--text-muted)] font-bold uppercase tracking-wider mb-2">Estimated Investment</h3>
                                 <div className="text-4xl sm:text-5xl font-black text-[var(--text)] mb-2 flex items-baseline gap-2">
-                                    <span>${estimate.min.toLocaleString()}</span>
+                                    <span key={`min-${estimate.min}`}>$<NumberTickIn to={estimate.min} duration={700} /></span>
                                     {estimate.min !== estimate.max && (
                                         <>
                                             <span className="text-2xl text-[var(--text-muted)]">-</span>
-                                            <span>${estimate.max.toLocaleString()}</span>
+                                            <span key={`max-${estimate.max}`}>$<NumberTickIn to={estimate.max} duration={700} /></span>
                                         </>
                                     )}
                                 </div>
@@ -248,6 +254,10 @@ export default function BudgetCalculatorPage() {
                                     <form onSubmit={handleQuoteRequest} className="space-y-4">
                                         <div>
                                             <label className="block text-xs font-bold uppercase text-[var(--text-muted)] mb-2">Email Address</label>
+                                            {/* Phase 2 signature: FieldFocusUnderline draws the
+                                                orange line on focus; CTA is wrapped in
+                                                MagneticButton (skipped on touch). */}
+                                            <FieldFocusUnderline>
                                             <div className="relative">
                                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                                                 <input
@@ -259,7 +269,9 @@ export default function BudgetCalculatorPage() {
                                                     className="w-full pl-12 pr-4 py-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] focus:outline-none focus:border-[var(--orange)] transition-colors"
                                                 />
                                             </div>
+                                            </FieldFocusUnderline>
                                         </div>
+                                        <MagneticButton strength={6} className="w-full">
                                         <button
                                             type="submit"
                                             className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-[var(--orange)] text-white font-black uppercase tracking-wide hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[var(--orange)]/25"
@@ -267,6 +279,7 @@ export default function BudgetCalculatorPage() {
                                             Get Exact Quote
                                             <ArrowRight size={20} />
                                         </button>
+                                        </MagneticButton>
                                     </form>
                                 ) : (
                                     <motion.div

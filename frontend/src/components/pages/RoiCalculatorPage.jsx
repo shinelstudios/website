@@ -10,6 +10,7 @@ import RoiCalculator from "../RoiCalculator";
 import MetaTags from "../MetaTags";
 import { Zap, TrendingUp, Search, Target, ShieldCheck, Mail } from "lucide-react";
 import { motion } from "framer-motion";
+import { MagneticButton } from "../../design";
 
 const RoiCalculatorPage = ({ onBook }) => {
     return (
@@ -69,12 +70,15 @@ const RoiCalculatorPage = ({ onBook }) => {
                     <p className="text-[var(--text-muted)] mb-8 max-w-2xl mx-auto">
                         Calculators are great for planning, but execution is what matters. Book a free 15-minute audit where we'll look at your actual data and tell you exactly where your CTR leak is.
                     </p>
+                    {/* Phase 2 signature: MagneticButton on the audit CTA */}
+                    <MagneticButton strength={8}>
                     <button
                         onClick={() => window.dispatchEvent(new Event("calendly:open"))}
                         className="px-8 py-4 rounded-2xl bg-[var(--orange)] text-white font-bold shadow-lg hover:shadow-orange-500/20 transition-all flex items-center gap-2 mx-auto"
                     >
                         <Mail size={18} /> Schedule My Audit
                     </button>
+                    </MagneticButton>
                 </motion.div>
             </div>
         </div>

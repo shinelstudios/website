@@ -5,6 +5,7 @@ import { NICHES } from '../../data/niches';
 import { ArrowRight, CheckCircle, Play, Star, Sparkles, Target, Zap } from 'lucide-react';
 import NewsletterSignup from '../ui/NewsletterSignup';
 import MetaTags from '../MetaTags';
+import { MaskReveal, MagneticButton } from '../../design';
 
 const ServicePage = () => {
     const { niche } = useParams();
@@ -81,7 +82,12 @@ const ServicePage = () => {
                         </div>
                     </div>
 
+                    {/* Phase 2 signature: hero image reveals via MaskReveal
+                        from the left as the page enters viewport. Pairs with
+                        the existing motion.h1 fade-in on the headline above —
+                        same arrival beat, different visual primitive. */}
                     <div className="flex-1 relative">
+                        <MaskReveal from="left" durationMs={900}>
                         <div className="aspect-video rounded-3xl overflow-hidden shadow-2xl border border-[var(--border)] relative bg-[var(--surface)]">
                             <img
                                 src={data.heroImage}
@@ -94,6 +100,7 @@ const ServicePage = () => {
                                 </Link>
                             </div>
                         </div>
+                        </MaskReveal>
                         {/* Decorative Blur */}
                         <div className="absolute -inset-4 bg-[var(--orange)]/20 blur-3xl -z-10 rounded-full opacity-50" />
                     </div>

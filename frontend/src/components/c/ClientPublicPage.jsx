@@ -88,6 +88,10 @@ export default function ClientPublicPage() {
         ogImage={ogImage}
         canonicalUrl={`https://shinelstudios.in/c/${client.slug}`}
       />
+      {/* Phase 2 signature: each module rises into place on first load —
+          stagger of 80 ms, slightly bigger Y travel + 0.96 scale, custom
+          easeEditorial bezier. The continuous "breath/pulse" idea was
+          rejected to keep bio-link pages calm; this one-shot stays. */}
       <Section size="md" className="pt-10 md:pt-16 pb-20">
         <div className="max-w-xl mx-auto space-y-5">
           {renderableModules.map((m, i) => {
@@ -97,9 +101,9 @@ export default function ClientPublicPage() {
             return (
               <motion.div
                 key={`${m.type}-${i}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.06, ease: [0.4, 0, 0.2, 1] }}
+                initial={{ opacity: 0, y: 16, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.55, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
               >
                 <Render client={client} config={m.config || reg.defaultConfig} />
               </motion.div>
