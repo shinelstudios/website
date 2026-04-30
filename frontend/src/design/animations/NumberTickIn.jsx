@@ -43,17 +43,36 @@ export default function NumberTickIn({
     if (!inView) return;
 
     let raf = 0;
+    let cancelled = false;
     const start = performance.now();
     const delta = to - from;
 
+    // Pause-on-hide compliance with the CLAUDE.md perf contract. If the
+    // user tab-switches mid-tick, snap to the final value and stop —
+    // there's no useful state for a backgrounded number ticker, and
+    // continuing the RAF burns CPU + drains battery for no reason.
+    const onVis = () => {
+      if (document.hidden && !cancelled) {
+        cancelled = true;
+        if (raf) cancelAnimationFrame(raf);
+        setValue(to);
+      }
+    };
+
     const tick = (now) => {
+      if (cancelled) return;
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3);
       setValue(from + delta * eased);
       if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [inView, from, to, duration, reduce]);
 
   return (

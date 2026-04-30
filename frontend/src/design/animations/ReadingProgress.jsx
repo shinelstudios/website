@@ -47,7 +47,14 @@ export default function ReadingProgress({ target }) {
     measure();
 
     let raf = 0;
+    let paused = false;
     const onScroll = () => {
+      // Skip the RAF queue entirely when the tab is hidden — the
+      // CLAUDE.md perf contract mandates animations pause when not
+      // visible. Past behaviour: a tab-switch mid-scroll left a
+      // pending RAF that fired the next time the engine ticked,
+      // briefly burning CPU on a backgrounded tab.
+      if (paused) return;
       if (raf) return;
       raf = requestAnimationFrame(() => {
         let progress;
@@ -62,6 +69,10 @@ export default function ReadingProgress({ target }) {
     };
 
     const onResize = () => { measure(); onScroll(); };
+    const onVis = () => {
+      paused = document.hidden;
+      if (!paused) onScroll(); // catch up the bar if scroll happened while hidden
+    };
 
     let ro = null;
     if (target?.current && typeof ResizeObserver !== "undefined") {
@@ -71,12 +82,14 @@ export default function ReadingProgress({ target }) {
 
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize, { passive: true });
+    document.addEventListener("visibilitychange", onVis);
     onScroll();
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVis);
       if (ro) ro.disconnect();
     };
   }, [reduce, target]);

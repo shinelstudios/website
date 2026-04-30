@@ -25,7 +25,17 @@ export default function ScrollAurora({ intensity = 1 }) {
     if (!blob || !container) return;
 
     let raf = 0;
-    let paused = false;
+    // Past behaviour: paused defaulted to `false`, so any scroll fired
+    // between mount and the first IntersectionObserver callback (which
+    // is always async) would queue a RAF on a device whose hero might
+    // not even be on-screen — measurable battery drain on a route
+    // change that mounts ScrollAurora while the user has already
+    // scrolled past where it sits. Now we seed `paused` from a
+    // synchronous bounding-rect check at mount and let IO take over.
+    const initialRect = container.getBoundingClientRect();
+    let paused =
+      initialRect.bottom < 0 ||
+      initialRect.top > (window.innerHeight || document.documentElement.clientHeight);
     let lastScroll = window.scrollY || 0;
 
     const onScroll = () => {
@@ -48,10 +58,19 @@ export default function ScrollAurora({ intensity = 1 }) {
     );
     io.observe(container);
 
-    const onVis = () => { paused = document.hidden; };
+    const onVis = () => {
+      // visibilitychange must fold in with the IO state — never blindly
+      // set `paused = document.hidden`, that would un-pause an
+      // off-screen aurora when the user re-foregrounds the tab.
+      if (document.hidden) paused = true;
+      else {
+        const r = container.getBoundingClientRect();
+        paused = r.bottom < 0 || r.top > (window.innerHeight || document.documentElement.clientHeight);
+      }
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    if (!paused) onScroll();
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
