@@ -315,13 +315,20 @@ export default function ContentCalendar() {
             </div>
           </div>
 
-          {/* Plan */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Plan — Phase 2 signature: each generated cell paints in with
+              a translateY + opacity stagger, ~28 ms per cell. The grid
+              feels like it's being laid down rather than appearing all at
+              once. Re-keyed on `seed` so a Refresh re-runs the animation. */}
+          <div key={seed} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {plan.map((p, i) => (
               <div
                 key={i}
-                className="p-4 rounded-2xl border"
-                style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                className="p-4 rounded-2xl border calendar-cell-in"
+                style={{
+                  background: "var(--surface)",
+                  borderColor: "var(--border)",
+                  animationDelay: `${Math.min(i, 30) * 28}ms`,
+                }}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-black uppercase tracking-widest" style={{ color: "var(--orange)" }}>

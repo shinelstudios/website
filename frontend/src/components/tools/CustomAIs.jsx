@@ -1,5 +1,6 @@
 import React from "react";
 import { Wand2, ShieldCheck, Cpu } from "lucide-react";
+import { MagneticButton } from "../../design";
 
 /** Admin-only placeholder page to list/launch internal assistants. */
 const items = [
@@ -31,10 +32,16 @@ export default function CustomAIs() {
           Internal assistants to speed up intake, QA, and ideation. Wire these to your preferred LLM later.
         </p>
 
+        {/* Phase 2 signature: each card uses .drop-shadow-hover for soft
+            elevation on hover, and the Launch CTA is wrapped in
+            MagneticButton (cursor-tracking on hover-pointer devices).
+            Original ConstellationHover idea would have looked sparse
+            with only 3 cards — pivoted to the same pattern other CTAs
+            on the marketing site use. */}
         <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
           {items.map(({ title, desc, icon: Icon }) => (
             <div key={title}
-                 className="rounded-2xl p-5 border"
+                 className="drop-shadow-hover rounded-2xl p-5 border"
                  style={{ background:"var(--surface-alt)", borderColor:"var(--border)", color:"var(--text)" }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl grid place-items-center"
@@ -44,6 +51,7 @@ export default function CustomAIs() {
                 <div className="font-semibold">{title}</div>
               </div>
               <div className="mt-2 text-sm" style={{ color:"var(--text-muted)" }}>{desc}</div>
+              <MagneticButton strength={4}>
               <button
                 className="mt-3 w-full rounded-xl px-4 py-2 font-semibold text-white"
                 style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}
@@ -51,6 +59,7 @@ export default function CustomAIs() {
               >
                 Launch
               </button>
+              </MagneticButton>
             </div>
           ))}
         </div>

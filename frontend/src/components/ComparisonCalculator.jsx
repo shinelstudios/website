@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, DollarSign, Clock, ArrowRight } from "lucide-react";
+import { CheckStamp, MagneticButton } from "../design";
 
 /**
  * DIY vs Shinel Studios Comparison Calculator
@@ -176,7 +177,10 @@ const ComparisonCalculator = ({ onBook }) => {
                             </div>
                         </div>
 
-                        {/* Cost Comparison */}
+                        {/* Cost Comparison — Phase 2 signature: CheckStamp lands
+                            next to the Shinel monthly figure, visually crowning
+                            it the winning option. The DIY cost stays as a
+                            line-through compare. */}
                         <div
                             className="p-6 rounded-2xl border"
                             style={{
@@ -195,9 +199,10 @@ const ComparisonCalculator = ({ onBook }) => {
                                     <div className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
                                         Monthly Investment
                                     </div>
-                                    <div className="flex items-baseline gap-2">
-                                        <div className="text-2xl font-bold" style={{ color: "var(--text)" }}>
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <div className="text-2xl font-bold inline-flex items-center gap-2" style={{ color: "var(--text)" }}>
                                             ₹{shinelMonthlyCost.toLocaleString()}
+                                            <CheckStamp size={14} delayMs={200} />
                                         </div>
                                         <div className="text-sm line-through" style={{ color: "var(--text-muted)" }}>
                                             ₹{diyMonthlyCost.toLocaleString()}
@@ -209,13 +214,16 @@ const ComparisonCalculator = ({ onBook }) => {
                     </motion.div>
                 </div>
 
-                {/* CTA */}
+                {/* CTA — Phase 2 signature: MagneticButton subtly tracks
+                    the cursor on hover (hover-pointer gated). Phones get a
+                    plain wrapper. */}
                 <motion.div
                     className="text-center"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                 >
+                    <MagneticButton strength={8}>
                     <button
                         onClick={onBook}
                         className="group inline-flex items-center gap-2 px-8 py-4 rounded-full font-bold text-white transition-all"
@@ -227,6 +235,7 @@ const ComparisonCalculator = ({ onBook }) => {
                         Get Your Free Audit
                         <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                     </button>
+                    </MagneticButton>
                     <p className="text-sm mt-3" style={{ color: "var(--text-muted)" }}>
                         See exactly how we can improve your channel
                     </p>

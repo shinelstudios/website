@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CheckStamp } from "../../design";
 
 /**
  * Local “Auto SRT” builder:
@@ -129,10 +130,30 @@ export default function SrtTool() {
 
           <div className="rounded-2xl p-4 border"
             style={{ background: "var(--surface-alt)", borderColor: "var(--border)" }}>
-            <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Preview / Export</div>
-            <textarea readOnly value={result} rows={16}
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>Preview / Export</div>
+              {/* Phase 2 signature: CheckStamp lands when a result is
+                  generated. Calmer than a typewriter reveal of the
+                  whole SRT (which can be hundreds of lines and lag on
+                  phones) and gives the same "it's done" feedback. */}
+              {result && <CheckStamp size={16} bg="var(--orange)" />}
+            </div>
+            {/* Result textarea fades in on first generation — opacity
+                only, no layout shift. `key={result.length}` so a fresh
+                generation re-runs the fade. */}
+            <textarea
+              key={result.length}
+              readOnly
+              value={result}
+              rows={16}
               className="mt-2 w-full rounded-xl p-3 outline-none font-accent text-sm"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }} />
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text)",
+                animation: result ? "fadeIn 360ms ease both" : undefined,
+              }}
+            />
             <button disabled={!result} onClick={download}
               className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}>

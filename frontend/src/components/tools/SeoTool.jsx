@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { LetterFall } from "../../design";
 
 /** Lightweight on-device title/desc/tag suggester (no API calls). */
 const toSlugTags = (s) =>
@@ -89,10 +90,18 @@ tools, mistakes to avoid, and a repeatable workflow. Chapters below.`;
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Phase 2 signature: each generated title arrives via LetterFall
+            (per-letter drop-in, 22 ms stagger). Re-keyed on `topic` so
+            regeneration replays the motion. Replaces the rejected
+            slot-shuffle idea — calmer, on-brand. */}
+        <div key={`${topic}|${tone}|${ideas.length}`} className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title="Title ideas">
             <ol className="list-decimal pl-5 space-y-1">
-              {ideas.map((t, i) => <li key={i}>{t}</li>)}
+              {ideas.map((t, i) => (
+                <li key={i}>
+                  <LetterFall as="span" staggerMs={22} delayMs={i * 60}>{t}</LetterFall>
+                </li>
+              ))}
             </ol>
           </Card>
           <Card title="Description (markdown)">

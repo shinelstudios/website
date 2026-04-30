@@ -31,7 +31,7 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import MetaTags, { BreadcrumbSchema } from "../MetaTags";
-import { Kicker, Display, Lede, RevealOnScroll } from "../../design";
+import { Kicker, Display, Lede, RevealOnScroll, MaskReveal } from "../../design";
 import { AUTH_BASE } from "../../config/constants";
 import { formatCompactNumber } from "../../utils/formatters";
 
@@ -308,8 +308,13 @@ export default function ChannelAudit() {
           )}
 
           {data && result && band && (
-            <div className="mt-8 space-y-6">
+            // Phase 2 signature: each report section reveals via MaskReveal
+            // with progressive delays — feels like a printout being rolled
+            // out. clip-path is GPU-composited, ~600 ms per section, no
+            // layout cost. Re-keyed on data so a fresh audit replays.
+            <div key={data?.channel?.id || "audit"} className="mt-8 space-y-6">
               {/* Channel header */}
+              <MaskReveal from="left" durationMs={600} delayMs={0}>
               <div className="flex items-center gap-4 p-5 rounded-2xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
                 {data.channel.logo ? (
                   <img src={data.channel.logo} alt="" className="w-14 h-14 rounded-full object-cover" loading="lazy" />
@@ -337,8 +342,10 @@ export default function ChannelAudit() {
                   </a>
                 )}
               </div>
+              </MaskReveal>
 
-              {/* Score + breakdown + fixes */}
+              {/* Score + breakdown + fixes — second-stage MaskReveal, 200 ms after the header. */}
+              <MaskReveal from="bottom" durationMs={700} delayMs={200}>
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-5 space-y-5">
                   <div className="p-6 rounded-2xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -407,8 +414,10 @@ export default function ChannelAudit() {
                   </div>
                 </div>
               </div>
+              </MaskReveal>
 
-              {/* Videos table */}
+              {/* Videos table — third-stage MaskReveal, 400 ms after score grid. */}
+              <MaskReveal from="bottom" durationMs={700} delayMs={400}>
               <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
                 <div className="px-5 py-4 flex items-center gap-2 text-xs uppercase tracking-widest font-bold" style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
                   <TrendingUp size={12} />
@@ -450,6 +459,7 @@ export default function ChannelAudit() {
                   </table>
                 </div>
               </div>
+              </MaskReveal>
 
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Scoring is heuristic — use it as a compass, not a verdict. Quota-limited to 5 audits per 15 minutes per IP.
