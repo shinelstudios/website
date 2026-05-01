@@ -271,7 +271,7 @@ export default function BudgetCalculatorPage() {
                                             </div>
                                             </FieldFocusUnderline>
                                         </div>
-                                        <MagneticButton strength={6} className="w-full">
+                                        <MagneticButton strength={6} block>
                                         <button
                                             type="submit"
                                             className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-[var(--orange)] text-white font-black uppercase tracking-wide hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[var(--orange)]/25"

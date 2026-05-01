@@ -51,7 +51,7 @@ export default function CustomAIs() {
                 <div className="font-semibold">{title}</div>
               </div>
               <div className="mt-2 text-sm" style={{ color:"var(--text-muted)" }}>{desc}</div>
-              <MagneticButton strength={4}>
+              <MagneticButton strength={4} block>
               <button
                 className="mt-3 w-full rounded-xl px-4 py-2 font-semibold text-white"
                 style={{ background: "linear-gradient(90deg, var(--orange), #ff9357)" }}

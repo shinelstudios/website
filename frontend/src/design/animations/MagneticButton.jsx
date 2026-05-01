@@ -6,6 +6,14 @@
  *
  * Usage:
  *   <MagneticButton><button className="btn-editorial">Send</button></MagneticButton>
+ *   <MagneticButton block><button className="w-full ...">Wide CTA</button></MagneticButton>
+ *
+ * The `block` prop switches the wrapper from `inline-block` (default,
+ * good for inline CTAs) to `block` so a `w-full` child button can
+ * actually fill its parent. Past behaviour: the inline-block wrapper
+ * collapsed `w-full` children to their intrinsic width, making CTA
+ * buttons appear narrow on mobile in pricing/calculator, custom-ais,
+ * and contact.
  *
  * Perf contract:
  *   - transform-only writes on RAF
@@ -15,7 +23,7 @@
 import React, { useEffect, useRef } from "react";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
-export default function MagneticButton({ children, strength = 6, className = "" }) {
+export default function MagneticButton({ children, strength = 6, className = "", block = false }) {
   const wrapRef = useRef(null);
   const innerRef = useRef(null);
   const reduce = useReducedMotion();
@@ -77,9 +85,25 @@ export default function MagneticButton({ children, strength = 6, className = "" 
     };
   }, [reduce, strength]);
 
+  // `block` mode: wrapper renders as a `<span style="display: block">`
+  // so a `w-full` child button stretches. `inline-block` fallback covers
+  // the common inline-CTA case (default).
+  const wrapperDisplay = block ? "block" : "inline-block";
+  const wrapperClass = block ? `block ${className}` : `inline-block ${className}`;
   return (
-    <span ref={wrapRef} className={`inline-block ${className}`} style={{ display: "inline-block" }}>
-      <span ref={innerRef} style={{ display: "inline-block", willChange: "transform" }}>
+    <span
+      ref={wrapRef}
+      className={wrapperClass}
+      style={{ display: wrapperDisplay, width: block ? "100%" : undefined }}
+    >
+      <span
+        ref={innerRef}
+        style={{
+          display: wrapperDisplay,
+          width: block ? "100%" : undefined,
+          willChange: "transform",
+        }}
+      >
         {children}
       </span>
     </span>
