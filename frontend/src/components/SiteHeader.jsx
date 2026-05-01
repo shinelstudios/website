@@ -1138,7 +1138,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
                     <div className="grid grid-cols-1 gap-2">
                       {(searchQuery.trim() ? filteredTools : allToolsForMenu)
-                        .filter(t => t.roles.includes("public") || (auth.isAuthed && t.roles.includes(role)))
+                        .filter(t => t.roles.includes("public") || (auth.isAuthed && t.roles.some(r => userRoles.includes(r))))
                         .map((t) => {
                           const Icon = t.icon;
                           const allowed = true; // Since we filtered, all remaining are allowed
