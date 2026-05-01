@@ -509,6 +509,25 @@ export const FESTIVAL_DATABASE = [
         theme: 'linear-gradient(90deg, #d42426, #165b33)',
         textColor: '#fff',
         badgeColor: '#ffffff'
+    },
+    // Year-round fallback: shown on any day no other festival is active,
+    // so the banner is visible most of the year. FestivalOfferBanner.jsx
+    // matches windowed festivals first, then falls back to alwaysOn.
+    // Discount stays well below the 25% cap.
+    {
+        id: 'creator_special',
+        alwaysOn: true,
+        name: 'Creator Special',
+        month: 0,
+        day: 1,
+        durationDays: 365,
+        discount: 15,
+        code: 'CREATOR15',
+        title: 'New Creator Special',
+        description: 'Year-round welcome offer for first-time projects.',
+        theme: 'linear-gradient(90deg, #E85002, #ff9357)',
+        textColor: '#fff',
+        badgeColor: '#fff'
     }
 ];
 

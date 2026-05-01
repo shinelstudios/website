@@ -358,15 +358,18 @@ const SiteFooter = ({
               >
                 Quick Links
               </div>
+              {/* Footer Quick Links is the canonical sitemap of items NOT
+                  in the new 5-item primary nav (Work · Tools · Pricing ·
+                  Blog · Pulse). Home/Our Work/Tools dropped here to
+                  avoid duplicating the header. About + FAQ added here
+                  since they were demoted from the top nav. */}
               <ul className="space-y-2 mb-8">
                 {[
-                  { t: "Home", href: "/", icon: Sparkles },
                   { t: "About", href: "/about", icon: User },
-                  { t: "Our Work", href: "/work", icon: TrendingUp },
-                  { t: "Graphic Design", href: "/graphic-design", icon: Sparkles },
                   { t: "FAQ", href: "/faq", icon: HelpCircle },
+                  { t: "Pulse", href: "/live", icon: Radio },
                   { t: "Contact", href: "/contact", icon: Mail },
-                  { t: "Tools & Resources", href: "/tools" },
+                  { t: "Graphic Design", href: "/graphic-design", icon: Sparkles },
                 ].map((l) => (
                   <li key={l.t}>
                     <Link

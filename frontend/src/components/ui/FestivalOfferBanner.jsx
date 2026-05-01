@@ -28,18 +28,28 @@ const FestivalOfferBanner = () => {
     try { return sessionStorage.getItem(DISMISS_KEY) || null; } catch { return null; }
   });
 
+  // Prefer a date-windowed festival (Diwali, Holi, etc.). If nothing
+  // matches today, fall back to any entry flagged `alwaysOn: true` —
+  // a year-round creator special so the banner is visible most days,
+  // not just a few weeks a year.
   const activeOffer = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
-    return FESTIVAL_DATABASE.find((fest) => {
+    const windowed = FESTIVAL_DATABASE.find((fest) => {
+      if (fest.alwaysOn) return false;
       const start = new Date(currentYear, fest.month, fest.day - 1);
       const end = new Date(currentYear, fest.month, fest.day + fest.durationDays);
       return now >= start && now <= end;
     });
+    if (windowed) return windowed;
+    return FESTIVAL_DATABASE.find((fest) => fest.alwaysOn);
   }, []);
 
   useEffect(() => {
     if (!activeOffer) return;
+    // Always-on offers don't have a meaningful expiry — skip the
+    // countdown so we don't show a misleading "320d remaining" chip.
+    if (activeOffer.alwaysOn) { setTimeLeft(""); return; }
     const tick = () => {
       const now = new Date();
       const end = new Date(now.getFullYear(), activeOffer.month, activeOffer.day + activeOffer.durationDays);

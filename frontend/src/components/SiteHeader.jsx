@@ -41,6 +41,7 @@ import {
   Youtube,
   Instagram,
   HelpCircle,
+  Mail,
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
@@ -524,7 +525,11 @@ const SiteHeader = ({ isDark, setIsDark }) => {
     [config, totalSubscribers, totalInstagramFollowers, formatFmt]
   );
 
-  const DesktopNavLink = ({ label, to, icon: Icon }) => {
+  // Editorial nav: text + animated underline only. Per-link icons were dropped
+  // when we cut the nav from 8 → 5 items — at that density the icons read as
+  // clutter against the redesign v2 type system. Mobile drawer keeps icons
+  // (cards have room).
+  const DesktopNavLink = ({ label, to }) => {
     const isActive =
       location.pathname === to ||
       location.pathname.startsWith(to + "/") ||
@@ -534,7 +539,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       <div className="relative">
         <Link
           to={to}
-          className="relative px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded flex items-center gap-1.5 transition-all duration-200"
+          className="relative px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] rounded inline-flex items-center transition-all duration-200"
           aria-current={isActive ? "page" : undefined}
           onMouseEnter={() => setHovered(label)}
           onMouseLeave={() => setHovered(null)}
@@ -550,7 +555,6 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                 : "translateY(0)",
           }}
         >
-          {Icon && <Icon size={14} strokeWidth={2} />}
           <span
             className="absolute left-0 -bottom-1 h-[1.5px] bg-[var(--orange)] transition-all duration-200 rounded-full"
             style={{ width: isActive || hovered === label ? "100%" : "0%" }}
@@ -709,35 +713,22 @@ const SiteHeader = ({ isDark, setIsDark }) => {
             </span>
           </Link>
 
-          {/* desktop nav
-             — Pulse (/live) is the public real-time activity feed of all
-               active client channels. Visible to everyone (not gated on
-               auth) — it's a showcase, not a control surface. The
-               "control" of Pulse (which clients are active, registry
-               edits) lives behind /dashboard/clients (TEAM_ROLES).
-             — Portfolio (/me) is shown to team/editor/artist/admin users so
-               there's a discoverable path to their personal /team/:slug
-               page editor instead of burying it in the avatar dropdown. */}
-          <div className="hidden md:flex items-center gap-8 relative">
-            <DesktopNavLink label="Home" to="/" icon={Home} />
-            <DesktopNavLink label="Work" to="/work" icon={FolderOpen} />
-            <DesktopNavLink label="About" to="/about" icon={User} />
-            <DesktopNavLink label="Pulse" to="/live" icon={Radio} />
-            <DesktopNavLink label="Tools" to="/tools" icon={Wand2} />
-            {auth.isAuthed && userRoles.some(r => ['admin', 'team', 'editor', 'artist'].includes(r)) && (
-              <DesktopNavLink label="Portfolio" to="/me" icon={User} />
-            )}
-            {auth.isAuthed && (
-              <DesktopNavLink
-                label={userRoles.includes("client") && !userRoles.includes("admin") ? "Client Hub" : "Hub"}
-                to={userRoles.includes("client") && !userRoles.includes("admin") ? "/hub" : "/dashboard"}
-                icon={Shield}
-              />
-            )}
-            <DesktopNavLink label="Blog" to="/blog" icon={Lightbulb} />
-            <DesktopNavLink label="FAQ" to="/faq" icon={HelpCircle} />
-            <DesktopNavLink label="Pricing" to="/pricing" icon={DollarSign} />
-
+          {/* Desktop nav — 5 editorial items.
+             Cut from 8 in 2026-05 to reduce header clutter. Demoted:
+               • Home → logo click serves it
+               • About + FAQ → footer Quick Links + inline page links
+             Pulse (/live) is the public real-time activity feed of all
+             active client channels — distinct from Blog (articles), so
+             both stay. Authenticated surfaces (Portfolio /me, Hub
+             /dashboard, Client Hub /hub) live in the avatar dropdown,
+             not the top row. The dropdown is the single source of truth
+             for authenticated nav. */}
+          <div className="hidden md:flex items-center gap-10 relative">
+            <DesktopNavLink label="Work" to="/work" />
+            <DesktopNavLink label="Tools" to="/tools" />
+            <DesktopNavLink label="Pricing" to="/pricing" />
+            <DesktopNavLink label="Blog" to="/blog" />
+            <DesktopNavLink label="Pulse" to="/live" />
           </div>
 
           {/* right actions */}
@@ -902,6 +893,17 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                             <span>Settings</span>
                           </Link>
 
+                          {userRoles.includes("client") && !userRoles.includes("admin") && (
+                            <Link
+                              to="/hub"
+                              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium transition-colors duration-150"
+                              style={{ color: "var(--text)" }}
+                            >
+                              <Shield size={18} style={{ color: "var(--orange)" }} />
+                              <span>Client Hub</span>
+                            </Link>
+                          )}
+
                           {userRoles.some(r => ['admin', 'editor', 'artist'].includes(r)) && (
                             <Link
                               to="/dashboard"
@@ -1041,15 +1043,26 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   {/* Single-column on mobile so each tap target is a full
                       ~56px row. Two-column at sm: where 360px+ allows
                       proper 44×44 minimum. Past incident: grid-cols-2 on
-                      375px shrunk cards to ~58×56 — below WCAG. */}
+                      375px shrunk cards to ~58×56 — below WCAG.
+                      Mirrors the 5-item desktop nav at top, with
+                      demoted items grouped under "More" so direct-URL
+                      muscle memory still works. */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
                     <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
-                    <MobileCardLink to="/about" icon={User} title="About" subtitle="Who we are" />
-                    <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
-                    <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
-                    <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
+                    <MobileCardLink to="/tools" icon={Wand2} title="Tools" subtitle="Creator utilities" />
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
+                    <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
+                    <MobileCardLink to="/live" icon={Radio} title="Pulse" subtitle="Live metrics" />
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-[var(--border)] mt-2">
+                    <SectionHeader icon={HelpCircle} title="More" subtitle="Other pages" right={null} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <MobileCardLink to="/" icon={Home} title="Home" subtitle="Back to main" />
+                      <MobileCardLink to="/about" icon={User} title="About" subtitle="Who we are" />
+                      <MobileCardLink to="/faq" icon={HelpCircle} title="FAQ" subtitle="Common questions" />
+                      <MobileCardLink to="/contact" icon={Mail} title="Contact" subtitle="Reach the team" />
+                    </div>
                   </div>
 
                   {/* Authenticated User Links (Mobile) */}
