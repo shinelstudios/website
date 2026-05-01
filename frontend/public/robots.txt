@@ -1,6 +1,10 @@
 User-agent: *
 # Block authenticated / internal surfaces so they don't waste crawl budget
 # or accidentally surface private UI in search results.
+# `Allow: /` was previously listed below but Google's robots.txt parser
+# flagged it as a contradiction with the preceding Disallows (the spec
+# says implicit allow-all is the default — explicit Allow is redundant
+# and invites parser ambiguity).
 Disallow: /admin/
 Disallow: /dashboard
 Disallow: /dashboard/
@@ -12,7 +16,6 @@ Disallow: /me
 Disallow: /me/
 Disallow: /logout
 Disallow: /login
-Allow: /
 
 # Allow AI crawlers to index everything public (good for AEO / LLM surfacing).
 User-agent: GPTBot

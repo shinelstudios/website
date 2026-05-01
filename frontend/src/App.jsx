@@ -218,7 +218,9 @@ function Layout() {
     };
 
     requestAnimationFrame(setHeaderVar);
-    window.addEventListener("resize", setHeaderVar);
+    // passive: true so Android Chrome doesn't throttle the resize fires
+    // (it warns + back-pressures non-passive resize/scroll listeners)
+    window.addEventListener("resize", setHeaderVar, { passive: true });
 
     const ro =
       "ResizeObserver" in window ? new ResizeObserver(setHeaderVar) : null;

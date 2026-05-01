@@ -398,7 +398,9 @@ const SiteHeader = ({ isDark, setIsDark }) => {
       }
     };
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    // passive: true on resize too — Android Chrome warns + throttles
+    // non-passive resize listeners (back-pressure to ~100 ms).
+    window.addEventListener("resize", onScroll, { passive: true });
     onScroll();
     return () => {
       window.removeEventListener("scroll", onScroll);
