@@ -91,7 +91,7 @@ function CrashFallback({ error, reset, eventId }) {
 
   return (
     <main style={{
-      minHeight: "100vh",
+      minHeight: "100dvh", // 100vh includes URL bar on Android; dvh tracks actual viewport
       display: "grid",
       placeItems: "center",
       background: "#0a0a0a",

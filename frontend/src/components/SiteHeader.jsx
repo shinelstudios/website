@@ -985,12 +985,20 @@ const SiteHeader = ({ isDark, setIsDark }) => {
           </div>
         </nav>
 
-        {/* MOBILE MENU */}
+        {/* MOBILE MENU
+            Past behaviour: AnimatePresence wrapped two sibling motion.div
+            children (backdrop + menu content) inside a fragment, neither
+            with a `key` prop. On Android Chrome the tighter mount/unmount
+            scheduling could race and skip the mount callback for the
+            menu content — visible as "tapping the hamburger does
+            nothing." Each direct AnimatePresence child now has a stable
+            key so framer-motion can track entry/exit reliably. */}
         <AnimatePresence>
           {isMenuOpen && (
-            <>
+            <React.Fragment key="mobile-menu-open">
               {/* Backrop */}
               <motion.div
+                key="menu-backdrop"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -1002,6 +1010,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
               {/* Menu Content */}
               <motion.div
+                key="menu-content"
                 id="mobile-menu"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1166,7 +1175,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                   </div>
                 </nav>
               </motion.div>
-            </>
+            </React.Fragment>
           )}
         </AnimatePresence>
 

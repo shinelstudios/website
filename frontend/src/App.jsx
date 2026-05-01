@@ -305,6 +305,12 @@ function RedirectIfAuthed({ children }) {
 // Run logout side-effects synchronously (not inside useEffect) so that listeners
 // receive `auth:changed` BEFORE the Navigate unmounts this component. Previously
 // the effect fired after the redirect, which let subscribers miss the event.
+//
+// Now also returns a Promise so callers can wait for the server-side
+// revocation before navigating away — past behaviour was fire-and-forget,
+// which on slow Android networks meant the user reloaded with the
+// `ss_refresh` cookie still valid → /auth/refresh handed them a fresh
+// access token → they appeared "still logged in" after a logout.
 function performLogout() {
   try {
     clearAccessToken();
@@ -316,16 +322,67 @@ function performLogout() {
     for (const k of legacy) {
       try { localStorage.removeItem(k); } catch { /* */ }
     }
-    // Best-effort server-side revocation via httpOnly cookie — don't block UX on it.
-    fetch(`${AUTH_BASE}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+    // Best-effort cache invalidation so the SW doesn't keep serving
+    // authed-fetch responses (e.g. /thumbnails) to a logged-out user.
+    try {
+      if (typeof caches !== "undefined" && caches?.keys) {
+        caches.keys().then((names) =>
+          Promise.all(names.map((n) => caches.delete(n).catch(() => false)))
+        ).catch(() => { /* */ });
+      }
+    } catch { /* */ }
   } catch { /* */ }
   try { window.dispatchEvent(new Event("auth:changed")); } catch { /* */ }
+
+  // Server-side revocation. Race the fetch against a 1.5 s timeout so a
+  // slow network doesn't leave the user staring at /logout for 30 s, but
+  // the cookie clear at least gets a fair shot before we navigate away.
+  const revokePromise = fetch(`${AUTH_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    keepalive: true, // helps the request survive even if the page unloads first
+  }).catch(() => null);
+  const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+  return Promise.race([revokePromise, timeoutPromise]);
 }
 
 function Logout() {
-  // Synchronous on render; useMemo runs before the returned <Navigate> takes effect.
-  React.useMemo(() => { performLogout(); }, []);
-  return <Navigate to="/" replace />;
+  // Wait for the server-side cookie clear (or the 1.5 s timeout) before
+  // bouncing to /. Without the wait, the cookie often outlives the
+  // redirect, especially on mobile networks. Show a tiny "Logging out…"
+  // marker so the user knows something is happening.
+  const [done, setDone] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    performLogout().finally(() => { if (!cancelled) setDone(true); });
+    return () => { cancelled = true; };
+  }, []);
+  if (done) return <Navigate to="/" replace />;
+  return (
+    <main style={{
+      minHeight: "100dvh",
+      display: "grid",
+      placeItems: "center",
+      background: "var(--surface, #0a0a0a)",
+      color: "var(--text, #f5f5f5)",
+      fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
+    }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          width: 32,
+          height: 32,
+          margin: "0 auto 16px",
+          border: "3px solid rgba(232,80,2,0.2)",
+          borderTopColor: "#E85002",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--text-muted, #a3a3a3)" }}>
+          Logging out…
+        </div>
+      </div>
+    </main>
+  );
 }
 
 /* -------------------------------------------------------------------------- */

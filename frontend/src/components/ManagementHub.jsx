@@ -240,17 +240,28 @@ export default function ManagementHub() {
 
     return (
         <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] flex">
-            {/* --- MOBILE TOGGLE --- */}
+            {/* --- MOBILE TOGGLE ---
+                Past behaviour: z-[40] put the FAB at the same level as the
+                overlay; on Android the overlay could intercept the tap when
+                the sidebar was animating. Bumped to z-[55] so it always
+                wins over anything else (overlay z-40, sidebar z-50). Pad
+                widened so the entire button is a 56×56 tap target — was
+                ~48×48 with p-4 + size=24, borderline on small phones. */}
             <button
                 onClick={() => setSidebarOpen(true)}
-                className={`lg:hidden fixed bottom-6 right-6 z-[40] p-4 rounded-full bg-orange-600 text-white shadow-2xl shadow-orange-900/40 ${sidebarOpen ? "hidden" : "flex"}`}
+                aria-label="Open admin sidebar"
+                className={`lg:hidden fixed bottom-6 right-6 z-[55] p-4 min-h-[56px] min-w-[56px] rounded-full bg-orange-600 text-white shadow-2xl shadow-orange-900/40 ${sidebarOpen ? "hidden" : "flex"} items-center justify-center`}
             >
                 <Menu size={24} />
             </button>
 
-            {/* --- SIDEBAR --- */}
+            {/* --- SIDEBAR ---
+                100dvh instead of 100vh: Android Chrome's `100vh` includes
+                the URL bar, so when it collapses on scroll the sidebar
+                overflows the visible area. `dvh` tracks the actual
+                viewport. Safari 15.4+, Chrome 108+ — covers our analytics. */}
             <aside className={`
-                fixed inset-y-0 left-0 z-50 w-72 bg-[var(--surface)] border-r border-[var(--border)] transition-transform duration-300 lg:sticky lg:top-20 lg:h-[calc(100vh-80px)] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent
+                fixed inset-y-0 left-0 z-50 w-72 bg-[var(--surface)] border-r border-[var(--border)] transition-transform duration-300 lg:sticky lg:top-20 lg:h-[calc(100dvh-80px)] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent
                 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
             `}>
                 <div className="flex flex-col h-full p-6">
@@ -356,10 +367,14 @@ export default function ManagementHub() {
                 </div>
             </main>
 
-            {/* Overlay for mobile sidebar */}
+            {/* Overlay for mobile sidebar — `key` added so AnimatePresence
+                can track exit reliably on Android Chrome (mount/unmount race
+                without a key was the same class of bug as the public
+                hamburger drawer). */}
             <AnimatePresence>
                 {sidebarOpen && (
                     <motion.div
+                        key="admin-sidebar-overlay"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
