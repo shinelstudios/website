@@ -16,13 +16,28 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, ArrowRight, Clock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FESTIVAL_DATABASE } from "../../config/constants";
 
 const DISMISS_KEY = "shinel:festivalBanner:dismissed";
 
+// Routes where the banner should NOT render. Authenticated users on
+// admin/work surfaces don't need a sales banner crowding their viewport
+// — they're already inside the funnel. Marketing pages keep the banner.
+const HIDDEN_ROUTE_PREFIXES = [
+  "/dashboard",
+  "/admin",
+  "/studio",
+  "/hub",
+  "/me",
+  "/clients/me",
+  "/login",
+  "/logout",
+];
+
 const FestivalOfferBanner = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [timeLeft, setTimeLeft] = useState("");
   const [dismissedId, setDismissedId] = useState(() => {
     try { return sessionStorage.getItem(DISMISS_KEY) || null; } catch { return null; }
@@ -77,6 +92,19 @@ const FestivalOfferBanner = () => {
   if (!activeOffer) return null;
   if (dismissedId === activeOffer.id) return null;
 
+  // Hide on auth/admin surfaces — those visitors are working, not browsing.
+  // Marketing pages keep the banner. Match by prefix so /dashboard/* etc.
+  // are also covered.
+  const path = location?.pathname || "";
+  if (HIDDEN_ROUTE_PREFIXES.some((p) => path === p || path.startsWith(p + "/"))) {
+    return null;
+  }
+
+  // Always-on offers run year-round and don't deserve the same prime
+  // real estate as a real festival. Compact mobile layout: single tight
+  // row instead of the stacked icon + kicker + headline + CTA column.
+  const compact = !!activeOffer.alwaysOn;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -92,34 +120,47 @@ const FestivalOfferBanner = () => {
         role="region"
         aria-label="Festival offer"
       >
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-2.5 md:py-3">
-          {/* Mobile: stacked. Desktop: horizontal. */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4">
+        <div className={`max-w-7xl mx-auto px-4 md:px-6 ${compact ? "py-1.5 md:py-2" : "py-2.5 md:py-3"}`}>
+          {/* Compact (alwaysOn): always single-row, even on mobile.
+              Festival (windowed): stacked on mobile, row on desktop. */}
+          <div className={`flex ${compact ? "flex-row items-center justify-between" : "flex-col md:flex-row md:items-center md:justify-between"} gap-2 md:gap-4`}>
 
             {/* Headline */}
-            <div className="flex items-start md:items-center gap-3 flex-1">
+            <div className={`flex items-center gap-2 md:gap-3 flex-1 min-w-0`}>
               <span
-                className="hidden md:grid place-items-center w-9 h-9 rounded-lg shrink-0"
+                className={`${compact ? "grid w-7 h-7 md:w-9 md:h-9" : "hidden md:grid w-9 h-9"} place-items-center rounded-lg shrink-0`}
                 style={{ background: "rgba(0,0,0,0.08)", color: activeOffer.badgeColor }}
                 aria-hidden="true"
               >
-                <Sparkles size={16} />
+                <Sparkles size={compact ? 13 : 16} />
               </span>
               <div className="flex-1 min-w-0">
-                <p
-                  className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.18em] leading-tight"
-                  style={{ color: activeOffer.textColor, opacity: 0.85 }}
-                >
-                  <Sparkles size={11} className="inline md:hidden mr-1 -mt-0.5" aria-hidden="true" />
-                  {activeOffer.title}
-                </p>
-                <p
-                  className="text-base md:text-xl font-black leading-tight mt-0.5"
-                  style={{ color: activeOffer.textColor, fontFamily: "var(--font-display, 'Outfit Variable', 'Outfit', sans-serif)" }}
-                >
-                  Flat <span className="font-mono-num">{activeOffer.discount}%</span> off
-                  <span className="ml-2 text-xs md:text-sm font-bold opacity-75">on all services</span>
-                </p>
+                {compact ? (
+                  <p
+                    className="text-xs md:text-sm font-black leading-tight truncate"
+                    style={{ color: activeOffer.textColor, fontFamily: "var(--font-display, 'Outfit Variable', 'Outfit', sans-serif)" }}
+                  >
+                    <span className="font-mono-num">{activeOffer.discount}%</span> off ·{" "}
+                    <span className="opacity-80 font-bold">code {activeOffer.code}</span>
+                  </p>
+                ) : (
+                  <>
+                    <p
+                      className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.18em] leading-tight"
+                      style={{ color: activeOffer.textColor, opacity: 0.85 }}
+                    >
+                      <Sparkles size={11} className="inline md:hidden mr-1 -mt-0.5" aria-hidden="true" />
+                      {activeOffer.title}
+                    </p>
+                    <p
+                      className="text-base md:text-xl font-black leading-tight mt-0.5"
+                      style={{ color: activeOffer.textColor, fontFamily: "var(--font-display, 'Outfit Variable', 'Outfit', sans-serif)" }}
+                    >
+                      Flat <span className="font-mono-num">{activeOffer.discount}%</span> off
+                      <span className="ml-2 text-xs md:text-sm font-bold opacity-75">on all services</span>
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -144,29 +185,36 @@ const FestivalOfferBanner = () => {
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
               <button
                 type="button"
                 onClick={claim}
-                className="inline-flex items-center gap-1.5 px-4 md:px-5 py-2 rounded-full text-[11px] md:text-xs font-black uppercase tracking-widest transition-transform hover:-translate-y-0.5 active:translate-y-0"
+                className={`inline-flex items-center gap-1.5 rounded-full font-black uppercase tracking-widest transition-transform hover:-translate-y-0.5 active:translate-y-0 ${
+                  compact
+                    ? "px-3 md:px-4 py-1 md:py-1.5 text-[10px] md:text-xs"
+                    : "px-4 md:px-5 py-2 text-[11px] md:text-xs"
+                }`}
                 style={{
                   background: "#0F0F0F",
                   color: "#fff",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-                  minHeight: 36,
+                  minHeight: compact ? 28 : 36,
                 }}
               >
-                Claim · code {activeOffer.code}
-                <ArrowRight size={12} aria-hidden="true" />
+                {compact ? (
+                  <>Claim<ArrowRight size={11} aria-hidden="true" /></>
+                ) : (
+                  <>Claim · code {activeOffer.code}<ArrowRight size={12} aria-hidden="true" /></>
+                )}
               </button>
               <button
                 type="button"
                 onClick={dismiss}
                 aria-label="Dismiss festival offer"
-                className="grid place-items-center w-8 h-8 rounded-full transition-colors"
+                className={`grid place-items-center rounded-full transition-colors ${compact ? "w-6 h-6 md:w-8 md:h-8" : "w-8 h-8"}`}
                 style={{ color: activeOffer.textColor, opacity: 0.7 }}
               >
-                <X size={16} />
+                <X size={compact ? 14 : 16} />
               </button>
             </div>
           </div>
