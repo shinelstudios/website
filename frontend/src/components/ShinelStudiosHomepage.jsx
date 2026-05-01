@@ -15,7 +15,6 @@ import { useGlobalConfig } from "../context/GlobalConfigContext";
 
 // Component imports
 import StickyFloatingCTA from "./StickyFloatingCTA";
-import SocialProofNotifications from "./SocialProofNotifications";
 import ScrollProgressBar from "./ScrollProgressBar";
 import QuickQuoteBar from "./QuickQuoteBar";
 import FloatingWhatsApp from "./FloatingWhatsApp";
@@ -1193,11 +1192,6 @@ export default function ShinelStudiosHomepage() {
         {/* Sticky Floating CTA */}
         <ErrorBoundary>
           <StickyFloatingCTA onBook={() => setShowCalendly(true)} scrollThreshold={0.3} />
-        </ErrorBoundary>
-
-        {/* Social Proof Notifications */}
-        <ErrorBoundary>
-          <SocialProofNotifications interval={15000} enabled={true} />
         </ErrorBoundary>
 
         <ErrorBoundary>
