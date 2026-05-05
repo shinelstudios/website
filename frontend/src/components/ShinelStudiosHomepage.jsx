@@ -77,6 +77,7 @@ import EditorialBeforeAfterSection from "./home/EditorialBeforeAfterSection.jsx"
 import ResultsStrip from "./home/ResultsStrip.jsx";
 import EditorialTestimonialsSection from "./home/EditorialTestimonialsSection.jsx";
 import PricingTeaser from "./home/PricingTeaser.jsx";
+import EditorialAuditForm from "./home/EditorialAuditForm.jsx";
 import EditorialToolsCTA from "./home/EditorialToolsCTA.jsx";
 import FAQAccordion from "./home/FAQAccordion.jsx";
 
@@ -1140,6 +1141,13 @@ export default function ShinelStudiosHomepage() {
           {/* 11. Pricing teaser \u2014 3 tiers, middle highlighted */}
           <ErrorBoundary>
             <PricingTeaser />
+          </ErrorBoundary>
+
+          {/* 11.5. Free audit lead capture \u2014 for visitors who balked at pricing,
+              a low-commitment "send your last upload, we reply in 24h" path.
+              Channel URL \u2192 WhatsApp or Email deep-link. No backend write. */}
+          <ErrorBoundary>
+            <EditorialAuditForm />
           </ErrorBoundary>
 
           {/* 12. AI tools CTA */}
