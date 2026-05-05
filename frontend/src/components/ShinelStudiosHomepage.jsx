@@ -78,6 +78,7 @@ import ResultsStrip from "./home/ResultsStrip.jsx";
 import EditorialTestimonialsSection from "./home/EditorialTestimonialsSection.jsx";
 import PricingTeaser from "./home/PricingTeaser.jsx";
 import EditorialAuditForm from "./home/EditorialAuditForm.jsx";
+import EditorialFollowUs from "./home/EditorialFollowUs.jsx";
 import EditorialToolsCTA from "./home/EditorialToolsCTA.jsx";
 import FAQAccordion from "./home/FAQAccordion.jsx";
 
@@ -1148,6 +1149,13 @@ export default function ShinelStudiosHomepage() {
               Channel URL \u2192 WhatsApp or Email deep-link. No backend write. */}
           <ErrorBoundary>
             <EditorialAuditForm />
+          </ErrorBoundary>
+
+          {/* 11.7. Follow-the-studio strip \u2014 three Instagram accounts (main,
+              AI lab, creator help) as Follow CTAs. No live embed; lowest-
+              commitment exit point for visitors not ready to email/WhatsApp. */}
+          <ErrorBoundary>
+            <EditorialFollowUs />
           </ErrorBoundary>
 
           {/* 12. AI tools CTA */}

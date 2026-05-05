@@ -41,6 +41,37 @@ export const SOCIAL_LINKS = {
     linktree: 'https://linktr.ee/ShinelStudios',
 };
 
+// Three Instagram accounts surfaced on the homepage Follow-the-studio strip.
+// Source of truth — edit handles, descriptions, or `avatar` paths here.
+// `avatar` is optional; if omitted, the section renders the brand-orange
+// Instagram icon placeholder. Drop PNG files in
+// `frontend/src/assets/instagram/` and reference them via import to
+// override (e.g. `avatar: avatarMain` after `import avatarMain from
+// "../assets/instagram/shinel-studios.png"`).
+export const INSTAGRAM_ACCOUNTS = [
+    {
+        handle: 'shinel.studios',
+        url: 'https://www.instagram.com/shinel.studios/',
+        title: 'The studio',
+        description: 'Edits, thumbnails, SEO. The work itself, posted as it ships.',
+        accent: '#E85002',
+    },
+    {
+        handle: 'shinelstudios.ai',
+        url: 'https://www.instagram.com/shinelstudios.ai/',
+        title: 'AI video lab',
+        description: 'Automation experiments. Built for serious creators, powered by Higgsfield.',
+        accent: '#FF6A1A',
+    },
+    {
+        handle: 'shinel.creatorhelp',
+        url: 'https://www.instagram.com/shinel.creatorhelp/',
+        title: 'Creator help',
+        description: 'Tactics, mini-tutorials, and the "GROW" DM thread for hands-on growth.',
+        accent: '#E1306C',
+    },
+];
+
 // Brand Information
 export const BRAND = {
     name: 'Shinel Studios',
