@@ -226,9 +226,16 @@ const CreatorsWorkedWithMarquee = ({
       if (!seg || !cont || typeof window === 'undefined') return;
 
       const segmentWidth = seg.scrollWidth;
-      const containerWidth = cont.clientWidth;
-      const isOverflowing = segmentWidth > containerWidth;
-      setShouldAnimate(isOverflowing);
+      // Always animate when we have content. The original `segmentWidth >
+      // containerWidth` overflow check was meant as a graceful fallback,
+      // but it left the strip looking static whenever the visible roster
+      // fit in the viewport — which is most of the time on desktop, and
+      // visually reads as "broken auto-scroll". The seamless 2-segment
+      // loop (Segment A + cloned Segment B) works even when one segment
+      // is narrower than the container; users just see a small inter-
+      // segment gap during the cycle. Reduced-motion users still get
+      // the static centered layout via the `showStatic` branch below.
+      setShouldAnimate(true);
 
       gapPx.current = parseFloat(getComputedStyle(document.documentElement).fontSize) * gapRem;
 
