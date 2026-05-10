@@ -1,0 +1,695 @@
+{
+  "generated_at": "2026-05-10T09:25:02.107Z",
+  "guild_id": "1298972908193972255",
+  "guild_name": "Shinel Studios",
+  "counts": {
+    "channels": 85,
+    "categories": 14,
+    "roles": 22,
+    "members": 87,
+    "bots": 7,
+    "empty_categories": 0,
+    "duplicate_names": 0
+  },
+  "categories": [
+    {
+      "id": "1301902341804392490",
+      "name": "《🧃~Arrivals ~🧃 》",
+      "position": 0,
+      "children": [
+        {
+          "id": "1322497103443787808",
+          "name": "🧃┃invite-link",
+          "type": "text"
+        },
+        {
+          "id": "1298972908743561243",
+          "name": "🧃┃welcome",
+          "type": "text"
+        },
+        {
+          "id": "1298972908743561244",
+          "name": "🧃┃server-rules",
+          "type": "text"
+        },
+        {
+          "id": "1298972908743561245",
+          "name": "🧃┃server-roles",
+          "type": "text"
+        },
+        {
+          "id": "1301912274654597190",
+          "name": "🧃┃left",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1298972908743561242",
+      "name": "《📌~INFORMATION  ~📌 》",
+      "position": 1,
+      "children": [
+        {
+          "id": "1298972909003477056",
+          "name": "📌┃announcements",
+          "type": "news"
+        },
+        {
+          "id": "1298972908743561246",
+          "name": "📌┃contact",
+          "type": "text"
+        },
+        {
+          "id": "1298972909003477055",
+          "name": "📌┃content",
+          "type": "text"
+        },
+        {
+          "id": "1298972909003477057",
+          "name": "📌┃updates",
+          "type": "text"
+        },
+        {
+          "id": "1301911583005478943",
+          "name": "📌┃introduction",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301910261212647445",
+      "name": "《📍~Important~📍 》",
+      "position": 2,
+      "children": [
+        {
+          "id": "1301910926232129658",
+          "name": "📍┃tickets",
+          "type": "text"
+        },
+        {
+          "id": "1301911024345284779",
+          "name": "📍┃giveaways",
+          "type": "text"
+        },
+        {
+          "id": "1301911250732580915",
+          "name": "📍┃scammer-alert",
+          "type": "text"
+        },
+        {
+          "id": "1301923145686581289",
+          "name": "📍┃paid-promotions",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301913686037889107",
+      "name": "《🍁~General~🍁 》",
+      "position": 3,
+      "children": [
+        {
+          "id": "1301913751758442577",
+          "name": "🍁┃chit-chat",
+          "type": "text"
+        },
+        {
+          "id": "1304055201317130240",
+          "name": "🍁┃shinel-shorts",
+          "type": "text"
+        },
+        {
+          "id": "1301913797639798834",
+          "name": "🍁┃shinel-thumbnails",
+          "type": "text"
+        },
+        {
+          "id": "1304055359635324949",
+          "name": "🍁┃shinel-videos",
+          "type": "text"
+        },
+        {
+          "id": "1301913776458829916",
+          "name": "🍁┃memes",
+          "type": "text"
+        },
+        {
+          "id": "1301913873061777438",
+          "name": "🍁┃cmds",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301914035049992232",
+      "name": "《🎈~preferences~🎈 》",
+      "position": 4,
+      "children": [
+        {
+          "id": "1301914240650838046",
+          "name": "🎈┃for-you",
+          "type": "text"
+        },
+        {
+          "id": "1301914291976405064",
+          "name": "🎈┃gfx-packs",
+          "type": "text"
+        },
+        {
+          "id": "1301914343847366726",
+          "name": "🎈┃thumbnail-ideas",
+          "type": "text"
+        },
+        {
+          "id": "1301914472658505758",
+          "name": "🎈┃thumbnail-backgrounds",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301915458609479701",
+      "name": "《⛄~ Client Corner ~⛄ 》",
+      "position": 5,
+      "children": [
+        {
+          "id": "1301915543472705577",
+          "name": "⛄┃client-inquiries",
+          "type": "text"
+        },
+        {
+          "id": "1301915597726158870",
+          "name": "⛄┃project-discussions",
+          "type": "text"
+        },
+        {
+          "id": "1301915702998863933",
+          "name": "⛄┃reviews-reviews",
+          "type": "text"
+        },
+        {
+          "id": "1450416577475514444",
+          "name": "⛄┃kiaraa-gaming",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301914818428538982",
+      "name": "《💻~Editor's Lounge~💻 》",
+      "position": 6,
+      "children": [
+        {
+          "id": "1301922884326789120",
+          "name": "💻┃Editor's-vc",
+          "type": "voice"
+        },
+        {
+          "id": "1302093104349970483",
+          "name": "💻┃hire-an-editor",
+          "type": "forum"
+        },
+        {
+          "id": "1301914895918567484",
+          "name": "💻┃editor-discussions",
+          "type": "text"
+        },
+        {
+          "id": "1301915137782976512",
+          "name": "💻┃editor-infos",
+          "type": "text"
+        },
+        {
+          "id": "1301915377785241742",
+          "name": "💻┃tips-and-resources",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1502956817171611728",
+      "name": "🏢 SHINEL HQ",
+      "position": 7,
+      "children": [
+        {
+          "id": "1502956818937286688",
+          "name": "announcements",
+          "type": "text"
+        },
+        {
+          "id": "1502956820921319484",
+          "name": "wins",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1502956843595595797",
+      "name": "📁 CLIENT CORNER",
+      "position": 8,
+      "children": [
+        {
+          "id": "1502956845088637081",
+          "name": "aish-is-live",
+          "type": "text"
+        },
+        {
+          "id": "1502956847135719445",
+          "name": "ap-sports-arena",
+          "type": "text"
+        },
+        {
+          "id": "1502956848976756788",
+          "name": "gamify-with-anchit",
+          "type": "text"
+        },
+        {
+          "id": "1502956850717655144",
+          "name": "kamz-inkzone",
+          "type": "text"
+        },
+        {
+          "id": "1502956853418528852",
+          "name": "kiaraa-gaming",
+          "type": "text"
+        },
+        {
+          "id": "1502956855268347935",
+          "name": "kundan-parashar",
+          "type": "text"
+        },
+        {
+          "id": "1502956857340203101",
+          "name": "shinel-studios-int",
+          "type": "text"
+        },
+        {
+          "id": "1502956859420573706",
+          "name": "deadlox-gaming",
+          "type": "text"
+        },
+        {
+          "id": "1502956861303820368",
+          "name": "vib-n-ric",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1298979368907051028",
+      "name": "《🤝~  Collaboration Spaces ~🤝 》",
+      "position": 9,
+      "children": [
+        {
+          "id": "1298979554655735839",
+          "name": "collaboration-corner-🤝",
+          "type": "text"
+        },
+        {
+          "id": "1298979588658958357",
+          "name": "creator-showcase-🌟",
+          "type": "text"
+        },
+        {
+          "id": "1465652660794429546",
+          "name": "discord_talks",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301923274942316585",
+      "name": "《💠~  TEAM SHINEL ~💠 》",
+      "position": 10,
+      "children": [
+        {
+          "id": "1373684268840128684",
+          "name": "💠┃Team VC",
+          "type": "voice"
+        },
+        {
+          "id": "1450798878415913040",
+          "name": "💠┃shinel-projetcs",
+          "type": "voice"
+        },
+        {
+          "id": "1301923333905973268",
+          "name": "💠┃team-announcements",
+          "type": "text"
+        },
+        {
+          "id": "1301923375484108851",
+          "name": "💠┃team-alerts",
+          "type": "text"
+        },
+        {
+          "id": "1301923410431180952",
+          "name": "💠┃team-chat",
+          "type": "text"
+        },
+        {
+          "id": "1301923446699069450",
+          "name": "💠┃team-commands",
+          "type": "text"
+        },
+        {
+          "id": "1371313237437452358",
+          "name": "💠┃meeting-reminders",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1502956822280015943",
+      "name": "🤖 COCKPIT OPS",
+      "position": 11,
+      "children": [
+        {
+          "id": "1502956824742199416",
+          "name": "ops-pipeline",
+          "type": "text"
+        },
+        {
+          "id": "1502956830375149658",
+          "name": "finance",
+          "type": "text"
+        },
+        {
+          "id": "1502956836448501880",
+          "name": "alerts",
+          "type": "text"
+        },
+        {
+          "id": "1502956841859023018",
+          "name": "audit-log",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "id": "1301922499688267849",
+      "name": "《👻~  voice area ~👻 》",
+      "position": 12,
+      "children": [
+        {
+          "id": "1301922988891045888",
+          "name": "⛄┃Client vc",
+          "type": "voice"
+        },
+        {
+          "id": "1299657400818602014",
+          "name": "👻┃General VC",
+          "type": "voice"
+        },
+        {
+          "id": "1301922806061076605",
+          "name": "👻┃trio",
+          "type": "voice"
+        },
+        {
+          "id": "1301922738989961226",
+          "name": "👻┃duo",
+          "type": "voice"
+        },
+        {
+          "id": "1301922836667174934",
+          "name": "👻┃squad",
+          "type": "voice"
+        },
+        {
+          "id": "1301922860679430165",
+          "name": "👻┃private",
+          "type": "voice"
+        },
+        {
+          "id": "1301923996262076426",
+          "name": "👻┃Chill VC",
+          "type": "voice"
+        }
+      ]
+    },
+    {
+      "id": "1301923492442275863",
+      "name": "《🍡~  Logs  ~🍡 》",
+      "position": 13,
+      "children": [
+        {
+          "id": "1301923535425507348",
+          "name": "🍖┃mod-logs",
+          "type": "text"
+        },
+        {
+          "id": "1301923573144752222",
+          "name": "🍖┃all-logs",
+          "type": "text"
+        },
+        {
+          "id": "1301923616283426918",
+          "name": "🍖┃security-logs",
+          "type": "text"
+        },
+        {
+          "id": "1301923719693865040",
+          "name": "🍖┃vc-logs",
+          "type": "text"
+        },
+        {
+          "id": "1301923766766538844",
+          "name": "🍖┃mute-kick-ban",
+          "type": "text"
+        },
+        {
+          "id": "1301923907028258907",
+          "name": "🍖┃channel-role-updates",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "orphan_channels": [],
+  "duplicate_names": [],
+  "roles": [
+    {
+      "id": "1298972908223201325",
+      "name": "Owner",
+      "position": 18,
+      "managed": false,
+      "tags": null,
+      "member_count": 1
+    },
+    {
+      "id": "1298972908223201324",
+      "name": "Admin",
+      "position": 17,
+      "managed": false,
+      "tags": null,
+      "member_count": 1
+    },
+    {
+      "id": "1298972908223201323",
+      "name": "Manager",
+      "position": 16,
+      "managed": false,
+      "tags": null,
+      "member_count": 2
+    },
+    {
+      "id": "1371308305066229830",
+      "name": "TEAM SHINEL",
+      "position": 15,
+      "managed": false,
+      "tags": null,
+      "member_count": 7
+    },
+    {
+      "id": "1450416731997868115",
+      "name": "Kiaraa Gaming Team",
+      "position": 14,
+      "managed": false,
+      "tags": null,
+      "member_count": 3
+    },
+    {
+      "id": "1298972908193972263",
+      "name": "Youtuber",
+      "position": 13,
+      "managed": false,
+      "tags": null,
+      "member_count": 7
+    },
+    {
+      "id": "1302088262751617089",
+      "name": "carl-bot",
+      "position": 12,
+      "managed": true,
+      "tags": {
+        "bot_id": "235148962103951360"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1302088382113124394",
+      "name": "R.O.T.I",
+      "position": 11,
+      "managed": true,
+      "tags": {
+        "bot_id": "903690362114158632"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1302088559930511451",
+      "name": "ProBot ✨",
+      "position": 10,
+      "managed": true,
+      "tags": {
+        "bot_id": "282859044593598464"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1298972908193972261",
+      "name": "Member",
+      "position": 9,
+      "managed": false,
+      "tags": null,
+      "member_count": 70
+    },
+    {
+      "id": "1298972908193972264",
+      "name": "Bot",
+      "position": 8,
+      "managed": false,
+      "tags": null,
+      "member_count": 6
+    },
+    {
+      "id": "1302088437024686162",
+      "name": "ServerStats",
+      "position": 7,
+      "managed": true,
+      "tags": {
+        "bot_id": "458276816071950337"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1302088497552691252",
+      "name": "Statbot",
+      "position": 6,
+      "managed": true,
+      "tags": {
+        "bot_id": "491769129318088714"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1302088579979411560",
+      "name": "Dyno",
+      "position": 5,
+      "managed": true,
+      "tags": {
+        "bot_id": "155149108183695360"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1302316944443179132",
+      "name": "Male",
+      "position": 4,
+      "managed": false,
+      "tags": null,
+      "member_count": 5
+    },
+    {
+      "id": "1302316986172178603",
+      "name": "Female",
+      "position": 3,
+      "managed": false,
+      "tags": null,
+      "member_count": 1
+    },
+    {
+      "id": "1302317106385391766",
+      "name": "18+",
+      "position": 2,
+      "managed": false,
+      "tags": null,
+      "member_count": 66
+    },
+    {
+      "id": "1302317168968466484",
+      "name": "18-",
+      "position": 1,
+      "managed": false,
+      "tags": null,
+      "member_count": 12
+    },
+    {
+      "id": "1458525331525734575",
+      "name": "Server Booster",
+      "position": 1,
+      "managed": true,
+      "tags": {
+        "premium_subscriber": null
+      },
+      "member_count": 0
+    },
+    {
+      "id": "1502954853427576915",
+      "name": "Shinel Cockpit Bot",
+      "position": 1,
+      "managed": true,
+      "tags": {
+        "bot_id": "1502952662113587320"
+      },
+      "member_count": 1
+    },
+    {
+      "id": "1502956814566686863",
+      "name": "Team",
+      "position": 1,
+      "managed": false,
+      "tags": null,
+      "member_count": 1
+    },
+    {
+      "id": "1298972908193972255",
+      "name": "@everyone",
+      "position": 0,
+      "managed": false,
+      "tags": null,
+      "member_count": 0
+    }
+  ],
+  "bots": [
+    {
+      "id": "155149108183695360",
+      "username": "Dyno"
+    },
+    {
+      "id": "235148962103951360",
+      "username": "Carl-bot"
+    },
+    {
+      "id": "282859044593598464",
+      "username": "ProBot ✨"
+    },
+    {
+      "id": "458276816071950337",
+      "username": "ServerStats"
+    },
+    {
+      "id": "491769129318088714",
+      "username": "Statbot"
+    },
+    {
+      "id": "903690362114158632",
+      "username": "R.O.T.I"
+    },
+    {
+      "id": "1502952662113587320",
+      "username": "Shinel Cockpit Bot"
+    }
+  ]
+}

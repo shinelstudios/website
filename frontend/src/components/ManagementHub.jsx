@@ -26,7 +26,8 @@ import {
     Archive,
     BarChart3,
     Quote,
-    Bookmark
+    Bookmark,
+    Target
 } from "lucide-react";
 
 
@@ -72,18 +73,34 @@ export default function ManagementHub() {
 
     const tabs = [
         {
+            id: 'cockpit',
+            label: 'Cockpit',
+            path: '/dashboard/ops',
+            icon: Zap,
+            roles: ['admin']
+        },
+        {
+            id: 'projects',
+            label: 'Projects',
+            path: '/dashboard/projects',
+            icon: Target,
+            roles: ['admin']
+        },
+        {
             id: 'stats',
             label: 'Dashboard',
             path: '/dashboard',
             icon: LayoutDashboard,
-            roles: ['admin'] // Restricted to admin
+            roles: ['admin'],
+            hidden: true // Folded into Cockpit; reachable by direct URL
         },
         {
             id: 'client-overview',
             label: 'Client Overview',
             path: '/dashboard/overview',
             icon: LayoutDashboard,
-            roles: ['client', 'admin']
+            roles: ['client', 'admin'],
+            hidden: true // Folded into Cockpit
         },
         {
             id: 'users',
@@ -119,28 +136,32 @@ export default function ManagementHub() {
             label: 'Blog Manager',
             path: '/dashboard/blog',
             icon: FileText,
-            roles: ['admin', 'editor']
+            roles: ['admin', 'editor'],
+            hidden: true // rarely used; reachable via direct URL
         },
         {
             id: 'testimonials',
             label: 'Testimonials',
             path: '/dashboard/testimonials',
             icon: Quote,
-            roles: ['admin', 'editor']
+            roles: ['admin', 'editor'],
+            hidden: true
         },
         {
             id: 'landing-pages',
             label: 'Hidden landing pages',
             path: '/dashboard/landing-pages',
             icon: Bookmark,
-            roles: ['admin']
+            roles: ['admin'],
+            hidden: true
         },
         {
             id: 'live-templates',
             label: 'Live templates · thumbs',
             path: '/dashboard/live-templates',
             icon: ImageIcon,
-            roles: ['admin']
+            roles: ['admin'],
+            hidden: true
         },
         {
             id: 'settings',
@@ -154,14 +175,16 @@ export default function ManagementHub() {
             label: 'Weekly Audits',
             path: '/dashboard/audits',
             icon: FileText,
-            roles: ['admin']
+            roles: ['admin'],
+            hidden: true
         },
         {
             id: 'metrics',
             label: 'Web Vitals',
             path: '/dashboard/metrics',
             icon: BarChart3,
-            roles: ['admin']
+            roles: ['admin'],
+            hidden: true
         },
         {
             id: 'my-portfolio',
@@ -219,7 +242,13 @@ export default function ManagementHub() {
         },
     ];
 
-    const activeTabs = useMemo(() => tabs.filter(t => t.roles.some(r => userRoles.includes(r))), [tabs, userRoles]);
+    // Sidebar shows only tabs the user has roles for AND that aren't hidden.
+    // Hidden tabs (e.g. legacy /dashboard/blog) stay routable by direct URL —
+    // the role-redirect logic below uses the full `tabs` list, not activeTabs.
+    const activeTabs = useMemo(
+        () => tabs.filter(t => t.roles.some(r => userRoles.includes(r)) && !t.hidden),
+        [tabs, userRoles]
+    );
     const currentTab = activeTabs.find(t => t.path === location.pathname) || activeTabs[0];
 
     // Redirect if unauthorized for current path

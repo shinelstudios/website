@@ -24,6 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary } from "./agency-handlers.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -51,7 +52,7 @@ function makeCorsHeaders(origin, allowedOrigins) {
 
   const h = {
     "Access-Control-Allow-Headers": "content-type, authorization",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Max-Age": "86400",
     "Access-Control-Allow-Credentials": "true",
     "Vary": "Origin",
@@ -1333,6 +1334,15 @@ function computeHype(views = 0, lastViewUpdate = null, dateAdded = null, now = D
  * - Orchestrates deep sync for all creators (YouTube + Instagram)
  * - Can be called by manual trigger (fetch) or cron (scheduled)
  */
+
+// Pick the right Discord webhook URL for the upload feed channel.
+// Falls back to the default DISCORD_WEBHOOK_URL if the dedicated one isn't set.
+function pickUploadWebhookUrl(env, channel) {
+  if (channel === "shinel-uploads" && env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL) return env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL;
+  if (channel === "client-uploads" && env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL) return env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL;
+  return env.DISCORD_WEBHOOK_URL || "";
+}
+
 async function performClientSync(env, isForced = false, debug = false) {
   const lastSyncKey = "app:clients:last_sync_ts";
   const syncStateKey = "app:clients:sync_state";
@@ -1465,10 +1475,51 @@ async function performClientSync(env, isForced = false, debug = false) {
                   
                   if (env.DB) {
                     try {
-                      await env.DB.prepare(
+                      // .run() returns { meta: { changes } } — changes>0 means
+                      // it was a NEW row (vs INSERT OR IGNORE no-op on duplicates).
+                      // Use that as the trigger to fire the Discord upload feed.
+                      const insRes = await env.DB.prepare(
                         "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                       ).bind(act.id, result.id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
-                      
+
+                      // Fire Discord upload-feed webhook only on first sight of this video
+                      if (insRes?.meta?.changes > 0) {
+                        const isShinelOwn = (c.id === "c-2026-05-09-shinel-studios") || /^shinel\b/i.test(c.name || "");
+                        const channel = isShinelOwn ? "shinel-uploads" : "client-uploads";
+                        const isShort = /shorts?\b|#shorts/i.test(v.title || "");
+                        const tag = isShort ? "🎞 Short" : "🎬 Video";
+                        const embed = {
+                          title: v.title,
+                          url: act.url,
+                          description: `${tag} from **${c.name || result.title}**`,
+                          color: isShinelOwn ? 0xE85002 : 0xFF0000, // orange vs YT red
+                          image: v.thumbnail ? { url: v.thumbnail } : undefined,
+                          timestamp: v.publishedAt,
+                          footer: { text: isShinelOwn ? "Shinel Studios" : (c.name || "Client") },
+                        };
+                        const payload = {
+                          username: isShinelOwn ? "Shinel Uploads" : "Client Uploads",
+                          embeds: [embed],
+                        };
+                        // 1. Global feed channel (#shinel-uploads or #client-uploads)
+                        const globalUrl = pickUploadWebhookUrl(env, channel);
+                        if (globalUrl) {
+                          fetch(globalUrl, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                          }).catch((e) => console.error("upload webhook failed:", e?.message || e));
+                        }
+                        // 2. Per-client webhook (e.g. #aish-is-live) if configured
+                        if (c.discord_webhook_url) {
+                          fetch(c.discord_webhook_url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                          }).catch((e) => console.error("client upload webhook failed:", e?.message || e));
+                        }
+                      }
+
                       // Auto-Archive to Media Hub if it looks like a "Hype" video
                       // We'll tag it as 'AUTO_PULSE'
                       // Note: Status is pending_mirror for the Node backend to pick up
@@ -1735,6 +1786,12 @@ const handler = {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors });
     }
+    
+    // Agency platform routes — namespaced under /admin/agency/* so they
+    // never collide with existing /admin/* routes. Returns null if the
+    // request isn't for an agency route.
+    const agencyRes = await handleAgencyRoute(request, env, secret, url, requireTeamOrThrow, requireAuthOrThrow);
+    if (agencyRes) return agencyRes;
 
     // Health
     if (
@@ -6429,17 +6486,74 @@ const handler = {
 
   async scheduled(event, env, ctx) {
     console.log("CRON TRIGGER: Starting Automatic Pulse Sync...");
+    const cronStartTs = Date.now();
+    // Heartbeat — write a row so /admin/agency/diag/pulse can prove cron fires.
+    // Best-effort: if D1 fails for any reason, the rest of the cron still runs.
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind(
+          "cron.pulse.start",
+          "info",
+          `Pulse cron tick at ${new Date(cronStartTs).toISOString()}`,
+          JSON.stringify({ cron: event?.cron || "unknown", scheduledTime: event?.scheduledTime || null })
+        ).run();
+      } catch (e) { console.error("Heartbeat write failed:", e.message); }
+    }
     ctx.waitUntil((async () => {
       try {
         const result = await performClientSync(env, false, false);
         console.log(`CRON SUCCESS: Synced ${result.synced} creators.`);
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+            ).bind(
+              "cron.pulse.done",
+              "info",
+              `Pulse cron synced ${result.synced} creators`,
+              JSON.stringify({ duration_ms: Date.now() - cronStartTs, ...result })
+            ).run();
+          } catch (e) { console.error("Heartbeat done write failed:", e.message); }
+        }
       } catch (e) {
-        if (e.status === 429) {
+        const isCooldown = e.status === 429;
+        if (isCooldown) {
           console.log("CRON SKIP: Last sync too recent.");
         } else {
           console.error("CRON ERROR:", e.message);
         }
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+            ).bind(
+              isCooldown ? "cron.pulse.skip" : "cron.pulse.error",
+              isCooldown ? "info" : "error",
+              e.message || "unknown error",
+              JSON.stringify({ duration_ms: Date.now() - cronStartTs, status: e.status || null })
+            ).run();
+          } catch (logErr) { console.error("Cron error log write failed:", logErr.message); }
+        }
       }
+
+      // Piggy-back agency cron tasks onto the same 30-min tick. They run
+      // INDEPENDENTLY of pulse sync success — auto-promote scans only a
+      // handful of candidates, and weekly digest is KV-gated to fire at most
+      // once a week. Skipping them on pulse-sync 429 cooldown wasn't useful.
+      try {
+        const promo = await runAutoPromoteToWebsite(env);
+        if (promo.promoted > 0) console.log("CRON auto-promote-website:", JSON.stringify(promo));
+      } catch (e) { console.error("auto-promote-website failed:", e.message); }
+      try {
+        const dig = await runWeeklyDigest(env);
+        if (!dig.skipped) console.log("CRON weekly-digest:", JSON.stringify(dig));
+      } catch (e) { console.error("weekly-digest failed:", e.message); }
+      try {
+        const sum = await runEditorSummary(env);
+        if (!sum.skipped) console.log("CRON editor-summary:", JSON.stringify(sum));
+      } catch (e) { console.error("editor-summary failed:", e.message); }
     })());
   }
 };

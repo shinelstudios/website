@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-05-10T10:26:56.490Z",
+  "guild_id": "1298972908193972255",
+  "guild_name": "Shinel Studios",
+  "webhooks": {
+    "cockpit-ops": "https://discord.com/api/webhooks/1502956828500426917/jM45ZIiSTvwkzBHVip0paurHPh_wuov3bEOa7jXswP3CSvf5g9D0PTGbZXTX0_4r47vp",
+    "cockpit-finance": "https://discord.com/api/webhooks/1502956834602876998/kZ-jn8ZvHklKS9kUg4k_4Bcv2htm5lLZL5mQC3gNI7_8YjDm_WNQatLhzK6KuW-kGRNN",
+    "cockpit-alerts": "https://discord.com/api/webhooks/1502956839950880820/ceSD-Ctfaptf6QYkHWeybtW85VK64rA7XL-8sdzjwQ46zjjTw0XtQUepLYmPMo7xGxyg",
+    "shinel-uploads-feed": "https://discord.com/api/webhooks/1502972365536235520/78uJxL5cJXjJC_AvHqklF9MrCliwpWvCZm13MB2qMQM4p4FRZcSIBFbb5nRRzgNFG4YC",
+    "client-uploads-feed": "https://discord.com/api/webhooks/1502972372750176379/y6mN2PKrmi4KGm3t7Nea95VBtYs_CAVIq6I5jI6ixTOJWeJ3Lob6cOJxsILE8PXXH1RP"
+  },
+  "api_calls": 45,
+  "duration_seconds": "14.3"
+}

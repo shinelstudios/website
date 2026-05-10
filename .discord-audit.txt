@@ -1,0 +1,168 @@
+════════════════════════════════════════════════════════════════════════
+  DISCORD AUDIT — Shinel Studios
+  85 channels · 22 roles · 87 members · 7 bots
+  generated 2026-05-10T09:25:02.101Z
+════════════════════════════════════════════════════════════════════════
+
+─── CATEGORIES ───────────────────────────────────────────────────────
+
+📁 《🧃~Arrivals ~🧃 》
+   id=1301902341804392490 · 5 children
+   text     #🧃┃invite-link  (id=1322497103443787808)
+   text     #🧃┃welcome  (id=1298972908743561243)
+   text     #🧃┃server-rules  (id=1298972908743561244)
+   text     #🧃┃server-roles  (id=1298972908743561245)
+   text     #🧃┃left  (id=1301912274654597190)
+
+📁 《📌~INFORMATION  ~📌 》
+   id=1298972908743561242 · 5 children
+   news     #📌┃announcements  (id=1298972909003477056)
+   text     #📌┃contact  (id=1298972908743561246)
+   text     #📌┃content  (id=1298972909003477055)
+   text     #📌┃updates  (id=1298972909003477057)
+   text     #📌┃introduction  (id=1301911583005478943)
+
+📁 《📍~Important~📍 》
+   id=1301910261212647445 · 4 children
+   text     #📍┃tickets  (id=1301910926232129658)
+   text     #📍┃giveaways  (id=1301911024345284779)
+   text     #📍┃scammer-alert  (id=1301911250732580915)
+   text     #📍┃paid-promotions  (id=1301923145686581289)
+
+📁 《🍁~General~🍁 》
+   id=1301913686037889107 · 6 children
+   text     #🍁┃chit-chat  (id=1301913751758442577)
+   text     #🍁┃shinel-shorts  (id=1304055201317130240)
+   text     #🍁┃shinel-thumbnails  (id=1301913797639798834)
+   text     #🍁┃shinel-videos  (id=1304055359635324949)
+   text     #🍁┃memes  (id=1301913776458829916)
+   text     #🍁┃cmds  (id=1301913873061777438)
+
+📁 《🎈~preferences~🎈 》
+   id=1301914035049992232 · 4 children
+   text     #🎈┃for-you  (id=1301914240650838046)
+   text     #🎈┃gfx-packs  (id=1301914291976405064)
+   text     #🎈┃thumbnail-ideas  (id=1301914343847366726)
+   text     #🎈┃thumbnail-backgrounds  (id=1301914472658505758)
+
+📁 《⛄~ Client Corner ~⛄ 》
+   id=1301915458609479701 · 4 children
+   text     #⛄┃client-inquiries  (id=1301915543472705577)
+   text     #⛄┃project-discussions  (id=1301915597726158870)
+   text     #⛄┃reviews-reviews  (id=1301915702998863933)
+   text     #⛄┃kiaraa-gaming  (id=1450416577475514444)
+
+📁 《💻~Editor's Lounge~💻 》
+   id=1301914818428538982 · 5 children
+   voice    #💻┃Editor's-vc  (id=1301922884326789120)
+   forum    #💻┃hire-an-editor  (id=1302093104349970483)
+   text     #💻┃editor-discussions  (id=1301914895918567484)
+   text     #💻┃editor-infos  (id=1301915137782976512)
+   text     #💻┃tips-and-resources  (id=1301915377785241742)
+
+📁 🏢 SHINEL HQ  [NEW · keep]
+   id=1502956817171611728 · 2 children
+   text     #announcements [NEW]  (id=1502956818937286688)
+   text     #wins [NEW]  (id=1502956820921319484)
+
+📁 📁 CLIENT CORNER  [NEW · keep]
+   id=1502956843595595797 · 9 children
+   text     #aish-is-live [NEW]  (id=1502956845088637081)
+   text     #ap-sports-arena [NEW]  (id=1502956847135719445)
+   text     #gamify-with-anchit [NEW]  (id=1502956848976756788)
+   text     #kamz-inkzone [NEW]  (id=1502956850717655144)
+   text     #kiaraa-gaming [NEW]  (id=1502956853418528852)
+   text     #kundan-parashar [NEW]  (id=1502956855268347935)
+   text     #shinel-studios-int [NEW]  (id=1502956857340203101)
+   text     #deadlox-gaming [NEW]  (id=1502956859420573706)
+   text     #vib-n-ric [NEW]  (id=1502956861303820368)
+
+📁 《🤝~  Collaboration Spaces ~🤝 》
+   id=1298979368907051028 · 3 children
+   text     #collaboration-corner-🤝  (id=1298979554655735839)
+   text     #creator-showcase-🌟  (id=1298979588658958357)
+   text     #discord_talks  (id=1465652660794429546)
+
+📁 《💠~  TEAM SHINEL ~💠 》
+   id=1301923274942316585 · 7 children
+   voice    #💠┃Team VC  (id=1373684268840128684)
+   voice    #💠┃shinel-projetcs  (id=1450798878415913040)
+   text     #💠┃team-announcements  (id=1301923333905973268)
+   text     #💠┃team-alerts  (id=1301923375484108851)
+   text     #💠┃team-chat  (id=1301923410431180952)
+   text     #💠┃team-commands  (id=1301923446699069450)
+   text     #💠┃meeting-reminders  (id=1371313237437452358)
+
+📁 🤖 COCKPIT OPS  [NEW · keep]
+   id=1502956822280015943 · 4 children
+   text     #ops-pipeline [NEW]  (id=1502956824742199416)
+   text     #finance [NEW]  (id=1502956830375149658)
+   text     #alerts [NEW]  (id=1502956836448501880)
+   text     #audit-log [NEW]  (id=1502956841859023018)
+
+📁 《👻~  voice area ~👻 》
+   id=1301922499688267849 · 7 children
+   voice    #⛄┃Client vc  (id=1301922988891045888)
+   voice    #👻┃General VC  (id=1299657400818602014)
+   voice    #👻┃trio  (id=1301922806061076605)
+   voice    #👻┃duo  (id=1301922738989961226)
+   voice    #👻┃squad  (id=1301922836667174934)
+   voice    #👻┃private  (id=1301922860679430165)
+   voice    #👻┃Chill VC  (id=1301923996262076426)
+
+📁 《🍡~  Logs  ~🍡 》
+   id=1301923492442275863 · 6 children
+   text     #🍖┃mod-logs  (id=1301923535425507348)
+   text     #🍖┃all-logs  (id=1301923573144752222)
+   text     #🍖┃security-logs  (id=1301923616283426918)
+   text     #🍖┃vc-logs  (id=1301923719693865040)
+   text     #🍖┃mute-kick-ban  (id=1301923766766538844)
+   text     #🍖┃channel-role-updates  (id=1301923907028258907)
+
+─── ROLES ────────────────────────────────────────────────────────────
+   # 18  Owner                           1 members
+   # 17  Admin                           1 members
+   # 16  Manager                         2 members
+   # 15  TEAM SHINEL                     7 members
+   # 14  Kiaraa Gaming Team              3 members
+   # 13  Youtuber                        7 members
+   # 12  carl-bot                        1 members  [BOT-MANAGED, bot=235148962103951360]
+   # 11  R.O.T.I                         1 members  [BOT-MANAGED, bot=903690362114158632]
+   # 10  ProBot ✨                        1 members  [BOT-MANAGED, bot=282859044593598464]
+   #  9  Member                          70 members
+   #  8  Bot                             6 members
+   #  7  ServerStats                     1 members  [BOT-MANAGED, bot=458276816071950337]
+   #  6  Statbot                         1 members  [BOT-MANAGED, bot=491769129318088714]
+   #  5  Dyno                            1 members  [BOT-MANAGED, bot=155149108183695360]
+   #  4  Male                            5 members
+   #  3  Female                          1 members
+   #  2  18+                             66 members
+   #  1  18-                             12 members
+   #  1  Server Booster                  0 members  [BOT-MANAGED, BOOSTER]
+   #  1  Shinel Cockpit Bot              1 members  [BOT-MANAGED, bot=1502952662113587320]
+   #  1  Team                            1 members  [NEW · keep]
+   #  0  @everyone                       0 members  [EVERYONE]
+
+─── BOTS ─────────────────────────────────────────────────────────────
+   🤖 Dyno#3861  (id=155149108183695360)
+   🤖 Carl-bot#1536  (id=235148962103951360)
+   🤖 ProBot ✨#5803  (id=282859044593598464)
+   🤖 ServerStats#0197  (id=458276816071950337)
+   🤖 Statbot#3472  (id=491769129318088714)
+   🤖 R.O.T.I#4309  (id=903690362114158632)
+   🤖 Shinel Cockpit Bot#0048  (id=1502952662113587320)  [NEW · keep]
+
+─── CLEANUP RECOMMENDATIONS ──────────────────────────────────────────
+
+   Multiple moderation bots detected — usually you only need one:
+     - Dyno
+     - Carl-bot
+     - ProBot ✨
+     (Recommendation: keep one — Carl-bot is the most full-featured.)
+
+─── NEXT STEPS ───────────────────────────────────────────────────────
+
+   Reply with what to keep/delete using channel/role/category IDs above,
+   and I'll write a cleanup-discord.mjs that does the deletes safely.
+
+════════════════════════════════════════════════════════════════════════
