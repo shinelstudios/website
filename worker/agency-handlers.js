@@ -91,8 +91,10 @@ export const PROJECT_STATUSES = [
 // throws — failures get logged. Call from inside ctx.waitUntil for hot paths.
 // ---------------------------------------------------------------------------
 function pickWebhookUrl(env, channel) {
-  if (channel === "finance" && env.DISCORD_FINANCE_WEBHOOK_URL) return env.DISCORD_FINANCE_WEBHOOK_URL;
-  if (channel === "ops"     && env.DISCORD_OPS_WEBHOOK_URL)     return env.DISCORD_OPS_WEBHOOK_URL;
+  if (channel === "finance"          && env.DISCORD_FINANCE_WEBHOOK_URL)         return env.DISCORD_FINANCE_WEBHOOK_URL;
+  if (channel === "ops"              && env.DISCORD_OPS_WEBHOOK_URL)             return env.DISCORD_OPS_WEBHOOK_URL;
+  if (channel === "client-uploads"   && env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL)  return env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL;
+  if (channel === "shinel-uploads"   && env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL)  return env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL;
   return env.DISCORD_WEBHOOK_URL || "";
 }
 
@@ -808,7 +810,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // Body: { channel?: "default"|"ops"|"finance", message?: string }
     if (path === "/admin/agency/discord/test" && method === "POST") {
       const body = await request.json().catch(() => ({}));
-      const channel = ["default", "ops", "finance"].includes(body.channel) ? body.channel : "default";
+      const allowed = ["default", "ops", "finance", "client-uploads", "shinel-uploads"];
+      const channel = allowed.includes(body.channel) ? body.channel : "default";
       const msg = body.message || `🔔 Test ping (${channel}) from Shinel Cockpit · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`;
       const result = await postToDiscord(env, msg, channel);
       return ok({
@@ -817,6 +820,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           default: !!env.DISCORD_WEBHOOK_URL,
           ops: !!env.DISCORD_OPS_WEBHOOK_URL,
           finance: !!env.DISCORD_FINANCE_WEBHOOK_URL,
+          "client-uploads": !!env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL,
+          "shinel-uploads": !!env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL,
         },
       });
     }

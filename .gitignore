@@ -65,3 +65,4 @@ video_test.json
 videos_test_output.json
 worker/output.json
 worker/stats.json
+.discord-bot-token

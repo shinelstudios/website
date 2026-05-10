@@ -1334,6 +1334,15 @@ function computeHype(views = 0, lastViewUpdate = null, dateAdded = null, now = D
  * - Orchestrates deep sync for all creators (YouTube + Instagram)
  * - Can be called by manual trigger (fetch) or cron (scheduled)
  */
+
+// Pick the right Discord webhook URL for the upload feed channel.
+// Falls back to the default DISCORD_WEBHOOK_URL if the dedicated one isn't set.
+function pickUploadWebhookUrl(env, channel) {
+  if (channel === "shinel-uploads" && env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL) return env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL;
+  if (channel === "client-uploads" && env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL) return env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL;
+  return env.DISCORD_WEBHOOK_URL || "";
+}
+
 async function performClientSync(env, isForced = false, debug = false) {
   const lastSyncKey = "app:clients:last_sync_ts";
   const syncStateKey = "app:clients:sync_state";
@@ -1466,10 +1475,42 @@ async function performClientSync(env, isForced = false, debug = false) {
                   
                   if (env.DB) {
                     try {
-                      await env.DB.prepare(
+                      // .run() returns { meta: { changes } } — changes>0 means
+                      // it was a NEW row (vs INSERT OR IGNORE no-op on duplicates).
+                      // Use that as the trigger to fire the Discord upload feed.
+                      const insRes = await env.DB.prepare(
                         "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                       ).bind(act.id, result.id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
-                      
+
+                      // Fire Discord upload-feed webhook only on first sight of this video
+                      if (insRes?.meta?.changes > 0) {
+                        const isShinelOwn = (c.id === "c-2026-05-09-shinel-studios") || /^shinel\b/i.test(c.name || "");
+                        const channel = isShinelOwn ? "shinel-uploads" : "client-uploads";
+                        const url = pickUploadWebhookUrl(env, channel);
+                        if (url) {
+                          const isShort = /shorts?\b|#shorts/i.test(v.title || "");
+                          const tag = isShort ? "🎞 Short" : "🎬 Video";
+                          const embed = {
+                            title: v.title,
+                            url: act.url,
+                            description: `${tag} from **${c.name || result.title}**`,
+                            color: isShinelOwn ? 0xE85002 : 0xFF0000, // orange vs YT red
+                            image: v.thumbnail ? { url: v.thumbnail } : undefined,
+                            timestamp: v.publishedAt,
+                            footer: { text: isShinelOwn ? "Shinel Studios" : (c.name || "Client") },
+                          };
+                          // fire-and-forget; don't block sync
+                          fetch(url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              username: isShinelOwn ? "Shinel Uploads" : "Client Uploads",
+                              embeds: [embed],
+                            }),
+                          }).catch((e) => console.error("upload webhook failed:", e?.message || e));
+                        }
+                      }
+
                       // Auto-Archive to Media Hub if it looks like a "Hype" video
                       // We'll tag it as 'AUTO_PULSE'
                       // Note: Status is pending_mirror for the Node backend to pick up
