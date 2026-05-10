@@ -37,6 +37,7 @@ import { getAccessToken } from "../../utils/tokenStore";
 import PipelineKanban from "./PipelineKanban";
 import TeamPanel from "./TeamPanel";
 import FinancePanel from "./FinancePanel";
+import LaptopQueuePanel from "./LaptopQueuePanel";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -676,6 +677,8 @@ export default function OpsCockpit() {
           />
 
           <FinancePanel />
+
+          <LaptopQueuePanel clients={clients} />
 
           <TeamPanel onChange={fetchSnapshot} />
 

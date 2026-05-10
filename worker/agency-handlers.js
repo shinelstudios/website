@@ -205,6 +205,43 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     });
   }
 
+  // ---- GET /admin/agency/public/stats — homepage hero numbers (no auth) ----
+  // Aggregated reach across all managed clients. Cached 5 min at the edge.
+  if (path === "/admin/agency/public/stats" && method === "GET") {
+    const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
+    try {
+      const [agg, postedThisMonth] = await Promise.all([
+        env.DB.prepare(
+          `SELECT
+             COUNT(*) AS active_clients,
+             COALESCE(SUM(subscribers), 0) AS total_subs,
+             COALESCE(SUM(instagram_followers), 0) AS total_ig_followers
+           FROM clients
+           WHERE (status = 'active' OR status IS NULL)
+             AND COALESCE(managed_by_us, 1) = 1`
+        ).first(),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM projects
+           WHERE posted_at >= ?1 AND archived_at IS NULL`
+        ).bind(Math.floor(Date.now() / 1000) - 30 * 86400).first(),
+      ]);
+      const totalReach = (agg?.total_subs || 0) + (agg?.total_ig_followers || 0);
+      return new Response(JSON.stringify({
+        active_clients: agg?.active_clients || 0,
+        total_yt_subscribers: agg?.total_subs || 0,
+        total_ig_followers: agg?.total_ig_followers || 0,
+        total_reach: totalReach,
+        posted_last_30d: postedThisMonth?.n || 0,
+        generated_at: new Date().toISOString(),
+      }), {
+        status: 200,
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=300, s-maxage=300" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
+    }
+  }
+
   // ---- /admin/agency/editor-me — read-only view for the logged-in editor ----
   // Runs BEFORE the team-only auth gate so freelance editors (role='editor')
   // can hit it. Match by JWT email → editors.email.
@@ -1076,6 +1113,146 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         diagnostics_generated_at: new Date().toISOString(),
       });
     }
+
+    // ========================================================================
+    // LAPTOP TASK QUEUE — bridge between Cloudflare and the always-on laptop
+    // ========================================================================
+
+    // POST /admin/agency/laptop/enqueue
+    // Body: { type, client_id?, payload?, priority?, max_attempts?, scheduled_for? }
+    if (path === "/admin/agency/laptop/enqueue" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.type) return err("type required");
+      const id = body.id || crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, scheduled_for, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+      ).bind(
+        id,
+        body.type,
+        body.client_id || null,
+        body.payload ? JSON.stringify(body.payload) : null,
+        parseInt(body.priority || 0, 10),
+        parseInt(body.max_attempts || 3, 10),
+        body.scheduled_for || null,
+        body.created_by || "admin"
+      ).run();
+      return ok({ id, enqueued: true }, 201);
+    }
+
+    // GET /admin/agency/laptop/queue?status=pending&limit=50
+    if (path === "/admin/agency/laptop/queue" && method === "GET") {
+      const status = url.searchParams.get("status") || "pending";
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
+      const where = status === "all" ? "1=1" : "status = ?1";
+      const stmt = status === "all"
+        ? env.DB.prepare(`SELECT * FROM laptop_tasks WHERE ${where} ORDER BY priority DESC, created_at LIMIT ${limit}`)
+        : env.DB.prepare(`SELECT * FROM laptop_tasks WHERE ${where} ORDER BY priority DESC, created_at LIMIT ${limit}`).bind(status);
+      const { results } = await stmt.all();
+      return ok({ count: results.length, tasks: results });
+    }
+
+    // POST /admin/agency/laptop/claim
+    // Body: { laptop_id, count?: 1, types?: ["ig_followers_fetch"] }
+    // Atomically claim N pending tasks. Marks them as 'claimed' so other
+    // pollers don't double-pick. Returns the claimed task records.
+    if (path === "/admin/agency/laptop/claim" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const laptopId = String(body.laptop_id || "unknown");
+      const count = Math.min(parseInt(body.count || 1, 10), 10);
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      // Filter by allowed types, if specified, so a laptop only picks tasks
+      // it knows how to handle. Empty/missing = any type.
+      const types = Array.isArray(body.types) && body.types.length > 0 ? body.types : null;
+      let q = `SELECT * FROM laptop_tasks
+               WHERE status = 'pending'
+                 AND (scheduled_for IS NULL OR scheduled_for <= ?1)`;
+      const binds = [nowSec];
+      if (types) {
+        q += ` AND type IN (${types.map((_, i) => `?${i + 2}`).join(",")})`;
+        binds.push(...types);
+      }
+      q += ` ORDER BY priority DESC, created_at LIMIT ${count}`;
+      const { results: candidates } = await env.DB.prepare(q).bind(...binds).all();
+
+      const claimed = [];
+      for (const t of (candidates || [])) {
+        // CAS-like: only update if still pending (race-safe-ish for D1)
+        const r = await env.DB.prepare(
+          `UPDATE laptop_tasks
+           SET status='claimed', claimed_at=?1, attempts=attempts+1, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?2 AND status='pending'`
+        ).bind(nowSec, t.id).run();
+        if (r?.meta?.changes > 0) claimed.push({ ...t, status: "claimed", claimed_at: nowSec, attempts: (t.attempts || 0) + 1 });
+      }
+
+      // Record heartbeat so we know the laptop is alive.
+      await env.DB.prepare(
+        `INSERT INTO laptop_heartbeats (laptop_id, version, last_seen, pending_count, payload_json)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(laptop_id) DO UPDATE SET
+           version=excluded.version,
+           last_seen=excluded.last_seen,
+           pending_count=excluded.pending_count,
+           payload_json=excluded.payload_json`
+      ).bind(
+        laptopId,
+        body.version || null,
+        nowSec,
+        (candidates || []).length,
+        body.heartbeat ? JSON.stringify(body.heartbeat) : null
+      ).run();
+
+      return ok({ claimed_count: claimed.length, tasks: claimed });
+    }
+
+    // PATCH /admin/agency/laptop/tasks/:id
+    // Body: { status: 'done'|'failed', result?, error? }
+    const laptopTaskMatch = path.match(/^\/admin\/agency\/laptop\/tasks\/([^\/]+)$/);
+    if (laptopTaskMatch && method === "PATCH") {
+      const id = laptopTaskMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const newStatus = body.status;
+      if (!["done", "failed", "pending", "cancelled"].includes(newStatus)) {
+        return err("status must be one of: done, failed, pending, cancelled");
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      await env.DB.prepare(
+        `UPDATE laptop_tasks
+         SET status=?1, result_json=?2, error=?3, completed_at=?4, updated_at=CURRENT_TIMESTAMP
+         WHERE id=?5`
+      ).bind(
+        newStatus,
+        body.result ? JSON.stringify(body.result) : null,
+        body.error || null,
+        ["done", "failed", "cancelled"].includes(newStatus) ? nowSec : null,
+        id
+      ).run();
+      return ok({ id, status: newStatus });
+    }
+
+    // GET /admin/agency/laptop/heartbeat — see laptops + their last check-in
+    if (path === "/admin/agency/laptop/heartbeat" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM laptop_heartbeats ORDER BY last_seen DESC`
+      ).all();
+      const nowSec = Math.floor(Date.now() / 1000);
+      const enriched = (results || []).map((r) => ({
+        ...r,
+        seconds_ago: nowSec - (r.last_seen || 0),
+        online: (nowSec - (r.last_seen || 0)) < 600, // < 10 min = "online"
+      }));
+      return ok({ laptops: enriched });
+    }
+
+    // ========================================================================
+    // PUBLIC STATS — open endpoint, no auth, for the homepage hero
+    // ========================================================================
+    // Returns aggregated agency reach numbers. Cached for 5 min via Cache-Control.
+    // (handled BEFORE the team-only auth gate higher up in this file.)
+    // Note: gated below this line so we land here only if gate passed; we
+    // expose a separate path before the gate as well (see top).
 
     // ---- GET /admin/agency/clients/full
     // Returns clients with their channels. ?show_inactive=true includes archived.
