@@ -128,6 +128,7 @@ const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboar
 const OpsCockpit = React.lazy(() => import("./components/hub/OpsCockpit.jsx"));
 const ClientDeepDive = React.lazy(() => import("./components/hub/ClientDeepDive.jsx"));
 const ProjectsPage = React.lazy(() => import("./components/hub/ProjectsPage.jsx"));
+const EditorMe = React.lazy(() => import("./components/hub/EditorMe.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
 const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
 const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
@@ -626,6 +627,14 @@ export default function App() {
           <Route path="/leaderboard" element={
             <ProtectedRoute>
               <EditorLeaderboardPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Editor self-view — anyone authenticated; the worker matches their
+              email against editors.email and returns only their own queue. */}
+          <Route path="/editor/me" element={
+            <ProtectedRoute>
+              <EditorMe />
             </ProtectedRoute>
           } />
 

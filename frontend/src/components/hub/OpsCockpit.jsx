@@ -62,6 +62,57 @@ const fmtRelative = (isoStr) => {
 };
 
 // ---- subcomponents ---------------------------------------------------------
+// Test webhook dropdown — pings each configured Discord channel.
+function DiscordTestButton() {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const send = async (channel) => {
+    setBusy(true);
+    try {
+      const token = getAccessToken();
+      const r = await fetch(`${AUTH_BASE}/admin/agency/discord/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        credentials: "include",
+        body: JSON.stringify({ channel }),
+      });
+      const j = await r.json();
+      if (j?.result?.ok) alert(`Discord test sent to ${channel} channel ✓`);
+      else if (j?.result?.skipped) {
+        const setupCmd = channel === "ops"
+          ? "npx wrangler secret put DISCORD_OPS_WEBHOOK_URL"
+          : channel === "finance"
+          ? "npx wrangler secret put DISCORD_FINANCE_WEBHOOK_URL"
+          : "npx wrangler secret put DISCORD_WEBHOOK_URL";
+        alert(`No webhook for "${channel}" channel.\n\nSet one with:\n${setupCmd}\n\nOr it falls back to the default webhook.`);
+      } else alert("Discord test failed: " + JSON.stringify(j));
+    } catch (e) { alert("Discord test error: " + e.message); }
+    finally { setBusy(false); setOpen(false); }
+  };
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] disabled:opacity-50"
+        title="Send a test ping to a Discord webhook"
+      >
+        🔔 Test webhook ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 z-20 bg-[var(--surface-elev)] border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg min-w-[180px] overflow-hidden">
+            <button onClick={() => send("default")} className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--surface-alt)]">🔔 Default (catch-all)</button>
+            <button onClick={() => send("ops")}     className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--surface-alt)]">🎬 Ops (posted, on-website)</button>
+            <button onClick={() => send("finance")} className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--surface-alt)]">💰 Finance (paid, payouts)</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatTile({ icon: Icon, label, value, sub, accent = "neutral" }) {
   const accentClasses = {
     neutral: "border-neutral-200 dark:border-neutral-800",
@@ -246,27 +297,14 @@ export default function OpsCockpit() {
             <RefreshCw size={14} className={`inline mr-1 ${loading ? "animate-spin" : ""}`} />
             Refresh now
           </button>
-          <button
-            onClick={async () => {
-              try {
-                const token = getAccessToken();
-                const r = await fetch(`${AUTH_BASE}/admin/agency/discord/test`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  credentials: "include",
-                  body: JSON.stringify({}),
-                });
-                const j = await r.json();
-                if (j?.result?.ok) alert("Discord test sent ✓");
-                else if (j?.result?.skipped) alert("DISCORD_WEBHOOK_URL not set on the worker. Run:\nnpx wrangler secret put DISCORD_WEBHOOK_URL");
-                else alert("Discord test failed: " + JSON.stringify(j));
-              } catch (e) { alert("Discord test error: " + e.message); }
-            }}
-            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)]"
-            title="Send a test ping to the configured Discord webhook"
+          <DiscordTestButton />
+          <Link
+            to="/dashboard/projects"
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
+            title="Open the full Projects page (filters, list view, bulk actions)"
           >
-            🔔 Test webhook
-          </button>
+            <Target size={12} /> Projects
+          </Link>
         </div>
       </header>
 

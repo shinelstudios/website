@@ -80,13 +80,25 @@ export const PROJECT_STATUSES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Discord webhook — fire-and-forget alerts for status changes, spikes, etc.
-// Reads env.DISCORD_WEBHOOK_URL (set via `wrangler secret put`).
-// Never throws — failures only get logged. Call with await context.waitUntil().
+// Discord webhooks — fire-and-forget alerts. Multi-channel routing:
+//
+//   channel "finance" → DISCORD_FINANCE_WEBHOOK_URL  (paid events, payouts)
+//   channel "ops"     → DISCORD_OPS_WEBHOOK_URL      (posted, on-website, spikes)
+//   channel "default" → DISCORD_WEBHOOK_URL          (catch-all, test pings)
+//
+// Each channel falls back to DISCORD_WEBHOOK_URL when its dedicated URL is
+// not configured, so a single-webhook setup keeps working unchanged. Never
+// throws — failures get logged. Call from inside ctx.waitUntil for hot paths.
 // ---------------------------------------------------------------------------
-export async function postToDiscord(env, payload) {
-  const url = env.DISCORD_WEBHOOK_URL || "";
-  if (!url) return { ok: false, skipped: true, reason: "no DISCORD_WEBHOOK_URL" };
+function pickWebhookUrl(env, channel) {
+  if (channel === "finance" && env.DISCORD_FINANCE_WEBHOOK_URL) return env.DISCORD_FINANCE_WEBHOOK_URL;
+  if (channel === "ops"     && env.DISCORD_OPS_WEBHOOK_URL)     return env.DISCORD_OPS_WEBHOOK_URL;
+  return env.DISCORD_WEBHOOK_URL || "";
+}
+
+export async function postToDiscord(env, payload, channel = "default") {
+  const url = pickWebhookUrl(env, channel);
+  if (!url) return { ok: false, skipped: true, reason: `no webhook configured for channel=${channel}` };
   try {
     const body = typeof payload === "string"
       ? { content: payload, username: "Shinel Cockpit" }
@@ -96,17 +108,17 @@ export async function postToDiscord(env, payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return { ok: res.ok, status: res.status };
+    return { ok: res.ok, status: res.status, channel };
   } catch (e) {
-    console.error("[discord] post failed:", e);
-    return { ok: false, error: String(e) };
+    console.error(`[discord:${channel}] post failed:`, e);
+    return { ok: false, error: String(e), channel };
   }
 }
 
 /**
  * Main dispatcher. Returns a Response if it handled the URL, otherwise null.
  */
-export async function handleAgencyRoute(request, env, secret, url, requireTeamOrThrow) {
+export async function handleAgencyRoute(request, env, secret, url, requireTeamOrThrow, requireAuthOrThrow) {
   const path = url.pathname;
   const method = request.method;
 
@@ -189,6 +201,60 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         "Access-Control-Allow-Origin": "*",
       },
     });
+  }
+
+  // ---- /admin/agency/editor-me — read-only view for the logged-in editor ----
+  // Runs BEFORE the team-only auth gate so freelance editors (role='editor')
+  // can hit it. Match by JWT email → editors.email.
+  if (path === "/admin/agency/editor-me" && method === "GET") {
+    let me;
+    try { me = await requireAuthOrThrow(request, secret, env); }
+    catch (e) { return err(e?.message || "unauthorized", e?.status || 401); }
+    const email = String(me.email || "").trim().toLowerCase();
+    if (!email) return err("token has no email", 401);
+
+    const editor = await env.DB.prepare(
+      "SELECT * FROM editors WHERE LOWER(email) = ?1 AND active = 1"
+    ).bind(email).first();
+    if (!editor) {
+      return ok({
+        editor: null,
+        projects: [],
+        finance: { paid_total: 0, pending_total: 0, paid_count: 0, pending_count: 0 },
+        message: "No editor record found for this email. Ask the admin to add you.",
+      });
+    }
+
+    const [{ results: projects }, finance] = await Promise.all([
+      env.DB.prepare(
+        `SELECT p.*, c.name AS client_name
+         FROM projects p LEFT JOIN clients c ON p.client_id = c.id
+         WHERE p.assigned_editor_id = ?1 AND p.archived_at IS NULL
+         ORDER BY p.updated_at DESC LIMIT 200`
+      ).bind(editor.id).all(),
+      env.DB.prepare(
+        `SELECT
+           COUNT(CASE WHEN status='paid' THEN 1 END) AS paid_count,
+           COALESCE(SUM(CASE WHEN status='paid' THEN editor_payment_inr ELSE 0 END), 0) AS paid_total,
+           COUNT(CASE WHEN status IN ('completed','posted','added-to-website') AND editor_payment_inr > 0 THEN 1 END) AS pending_count,
+           COALESCE(SUM(CASE WHEN status IN ('completed','posted','added-to-website') AND editor_payment_inr > 0 THEN editor_payment_inr ELSE 0 END), 0) AS pending_total
+         FROM projects WHERE assigned_editor_id = ?1 AND archived_at IS NULL`
+      ).bind(editor.id).first(),
+    ]);
+
+    // Strip sensitive editor-internal fields from the response
+    const safeEditor = {
+      id: editor.id,
+      name: editor.name,
+      email: editor.email,
+      role: editor.role,
+      compensation_type: editor.compensation_type,
+      monthly_salary_inr: editor.monthly_salary_inr,
+      payment_rate_inr: editor.payment_rate_inr,
+      payment_per: editor.payment_per,
+    };
+
+    return ok({ editor: safeEditor, projects, finance });
   }
 
   // Auth gate (everything below requires admin/team JWT)
@@ -414,9 +480,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       await env.DB.prepare(`UPDATE projects SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
 
       // Fire Discord webhook for user-visible transitions (paid/posted/added-to-website)
+      // Route by event type: paid → finance channel; posted/added-to-website → ops.
       if (statusChanged && ["paid", "posted", "added-to-website"].includes(body.status)) {
         const emoji = body.status === "paid" ? "💰" : body.status === "posted" ? "🎬" : "🌐";
         const labels = { paid: "Paid", posted: "Posted", "added-to-website": "Added to website" };
+        const channel = body.status === "paid" ? "finance" : "ops";
         const lines = [
           `${emoji} **${labels[body.status]}** — ${old.title}`,
           `· Client: ${old.client_name || old.client_id}`,
@@ -429,7 +497,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           lines.push(`· https://youtu.be/${old.youtube_video_id}`);
         }
         // fire-and-forget — don't await on hot path
-        postToDiscord(env, { content: lines.join("\n") }).catch(() => {});
+        postToDiscord(env, { content: lines.join("\n") }, channel).catch(() => {});
       }
 
       return ok({ id, updated: true, status_changed: statusChanged });
@@ -715,12 +783,42 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id, deleted: true });
     }
 
+    // ---- POST /admin/agency/weekly-digest/run  — manual trigger (force=true)
+    if (path === "/admin/agency/weekly-digest/run" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await runWeeklyDigest(env, { force: !!body.force });
+      return ok(result);
+    }
+
+    // ---- POST /admin/agency/projects/auto-promote-website
+    //
+    // Promotes projects from status='posted' to 'added-to-website' when their
+    // youtube_video_id has been curated into media_library (i.e. category is
+    // anything OTHER than the auto-pulse default — the user's portfolio
+    // workflow tags videos with curated categories like 'WORK', 'PORTFOLIO',
+    // etc.). Idempotent: only flips projects that aren't already there.
+    //
+    // Returns the list of promoted project IDs so the cron can fire Discord.
+    if (path === "/admin/agency/projects/auto-promote-website" && method === "POST") {
+      const result = await runAutoPromoteToWebsite(env);
+      return ok(result);
+    }
+
     // ---- POST /admin/agency/discord/test  — manual webhook ping
+    // Body: { channel?: "default"|"ops"|"finance", message?: string }
     if (path === "/admin/agency/discord/test" && method === "POST") {
       const body = await request.json().catch(() => ({}));
-      const msg = body.message || `🔔 Test ping from Shinel Cockpit · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`;
-      const result = await postToDiscord(env, msg);
-      return ok({ result });
+      const channel = ["default", "ops", "finance"].includes(body.channel) ? body.channel : "default";
+      const msg = body.message || `🔔 Test ping (${channel}) from Shinel Cockpit · ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`;
+      const result = await postToDiscord(env, msg, channel);
+      return ok({
+        result,
+        configured_channels: {
+          default: !!env.DISCORD_WEBHOOK_URL,
+          ops: !!env.DISCORD_OPS_WEBHOOK_URL,
+          finance: !!env.DISCORD_FINANCE_WEBHOOK_URL,
+        },
+      });
     }
 
     // ---- GET /admin/agency/finance/summary  — monthly P&L view
@@ -1100,4 +1198,183 @@ async function opsSnapshot(env, opts = {}) {
 function safeJsonParse(s) {
   if (!s) return null;
   try { return JSON.parse(s); } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// runAutoPromoteToWebsite — find projects (status='posted') whose video has
+// been curated into media_library, and flip them to 'added-to-website'.
+//
+// "Curated" = the media_library row exists with a non-AUTO_PULSE category.
+// AUTO_PULSE rows are the cron's automatic mirror of every YouTube upload —
+// presence of a curated category is the user's signal that the asset is
+// portfolio-ready / on the public site.
+// ---------------------------------------------------------------------------
+export async function runAutoPromoteToWebsite(env) {
+  if (!env.DB) return { ok: false, reason: "no DB binding" };
+  // Find candidate projects (posted, has video_id, not yet on website)
+  const { results: candidates } = await env.DB.prepare(
+    `SELECT p.id, p.title, p.youtube_video_id, p.client_id, c.name AS client_name, e.name AS editor_name
+     FROM projects p
+     LEFT JOIN clients c ON p.client_id = c.id
+     LEFT JOIN editors e ON p.assigned_editor_id = e.id
+     WHERE p.status = 'posted'
+       AND p.youtube_video_id IS NOT NULL
+       AND p.archived_at IS NULL`
+  ).all();
+
+  if (!candidates || candidates.length === 0) {
+    return { ok: true, candidates: 0, promoted: 0 };
+  }
+
+  // Bulk-check media_library for matching curated entries. We pull all rows
+  // with a non-AUTO_PULSE category once and intersect in JS — single round trip.
+  const { results: curated } = await env.DB.prepare(
+    `SELECT source_url FROM media_library
+     WHERE source_url IS NOT NULL
+       AND (category IS NULL OR category != 'AUTO_PULSE')`
+  ).all();
+  const curatedVideoIds = new Set();
+  for (const row of (curated || [])) {
+    const m = String(row.source_url || "").match(/[?&]v=([\w-]{11})|youtu\.be\/([\w-]{11})|\/embed\/([\w-]{11})|\/shorts\/([\w-]{11})/);
+    const id = m && (m[1] || m[2] || m[3] || m[4]);
+    if (id) curatedVideoIds.add(id);
+  }
+
+  const promoted = [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const p of candidates) {
+    if (!curatedVideoIds.has(p.youtube_video_id)) continue;
+    try {
+      await env.DB.prepare(
+        `UPDATE projects SET status = 'added-to-website', added_to_website_at = ?1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?2 AND status = 'posted'`
+      ).bind(nowSec, p.id).run();
+      promoted.push(p);
+    } catch (e) { console.error("auto-promote failed for", p.id, e.message); }
+  }
+
+  // Audit + Discord (best-effort, only if anything moved)
+  if (promoted.length > 0) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+      ).bind(
+        "projects.auto_promote_website",
+        "info",
+        `Auto-promoted ${promoted.length} projects to added-to-website`,
+        JSON.stringify({ count: promoted.length, ids: promoted.map(p => p.id) })
+      ).run();
+    } catch {}
+    try {
+      const lines = [`🌐 **Auto-promoted to website** (${promoted.length})`];
+      for (const p of promoted.slice(0, 10)) {
+        lines.push(`· ${p.title} — ${p.client_name || "—"}`);
+      }
+      if (promoted.length > 10) lines.push(`… and ${promoted.length - 10} more`);
+      await postToDiscord(env, { content: lines.join("\n") }, "ops");
+    } catch {}
+  }
+
+  return { ok: true, candidates: candidates.length, promoted: promoted.length, promoted_ids: promoted.map(p => p.id) };
+}
+
+// ---------------------------------------------------------------------------
+// runWeeklyDigest — Sunday morning Discord recap. Posts "this week shipped"
+// summary: projects per status this week, ₹ paid, pending payouts,
+// posted-count per client.
+//
+// Gated by KV "app:weekly_digest:last_run_ts" so only one digest fires per
+// week even though the pulse cron ticks every 30 min.
+// ---------------------------------------------------------------------------
+export async function runWeeklyDigest(env, opts = {}) {
+  if (!env.DB) return { ok: false, reason: "no DB binding" };
+
+  // KV gate — fires at most once every 6.5 days. Day-of-week is intentionally
+  // NOT checked: UTC Sunday vs IST Sunday creates a 5.5-hour gap where the
+  // digest would either miss or double-fire. The KV gate alone keeps it
+  // ~weekly. Use opts.force=true to bypass.
+  const lastRunKey = "app:weekly_digest:last_run_ts";
+  const last = Number((env.SHINEL_AUDIT && await env.SHINEL_AUDIT.get(lastRunKey)) || "0");
+  const now = Date.now();
+  const minIntervalMs = 6.5 * 24 * 60 * 60 * 1000;
+  const force = !!opts.force;
+  if (!force && (now - last) < minIntervalMs) {
+    return { ok: true, skipped: true, reason: "ran less than 6.5 days ago", last_run_ts: last };
+  }
+  const today = new Date();
+
+  const weekStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const weekStartSec = Math.floor(weekStart.getTime() / 1000);
+  const weekStartIso = weekStart.toISOString();
+
+  const [postedThisWeek, paidThisWeek, pendingPayouts, postedByClient] = await Promise.all([
+    env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM projects WHERE posted_at >= ?1 AND archived_at IS NULL`
+    ).bind(weekStartSec).first(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(editor_payment_inr), 0) AS total
+       FROM projects WHERE paid_at >= ?1 AND status IN ('paid','posted','added-to-website')`
+    ).bind(weekStartSec).first(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(p.editor_payment_inr), 0) AS total
+       FROM projects p LEFT JOIN editors e ON p.assigned_editor_id = e.id
+       WHERE p.status IN ('completed', 'posted', 'added-to-website')
+         AND p.editor_payment_inr > 0
+         AND e.compensation_type = 'freelance'
+         AND p.archived_at IS NULL`
+    ).first(),
+    env.DB.prepare(
+      `SELECT c.name AS client_name, COUNT(*) AS n
+       FROM projects p LEFT JOIN clients c ON p.client_id = c.id
+       WHERE p.posted_at >= ?1 AND p.archived_at IS NULL
+       GROUP BY c.name ORDER BY n DESC LIMIT 10`
+    ).bind(weekStartSec).all(),
+  ]);
+
+  // Build a digest message
+  const lines = [
+    `📊 **Weekly digest — ${weekStart.toISOString().slice(0, 10)} → ${today.toISOString().slice(0, 10)}**`,
+    `· Shipped this week: **${postedThisWeek.n}** projects`,
+    `· Paid out this week: **₹${(paidThisWeek.total || 0).toLocaleString("en-IN")}** across ${paidThisWeek.n} payments`,
+    `· Pending payouts: **₹${(pendingPayouts.total || 0).toLocaleString("en-IN")}** across ${pendingPayouts.n} freelancers`,
+  ];
+  if ((postedByClient.results || []).length > 0) {
+    lines.push("");
+    lines.push("**By client (posted this week):**");
+    for (const r of postedByClient.results) {
+      lines.push(`· ${r.client_name || "—"}: ${r.n}`);
+    }
+  }
+
+  const result = await postToDiscord(env, { content: lines.join("\n") }, "default");
+
+  // Save run timestamp + audit log entry
+  try {
+    if (env.SHINEL_AUDIT) await env.SHINEL_AUDIT.put(lastRunKey, String(now));
+  } catch {}
+  try {
+    await env.DB.prepare(
+      `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+    ).bind(
+      "weekly_digest.posted",
+      "info",
+      "Weekly Discord digest posted",
+      JSON.stringify({
+        posted_count: postedThisWeek.n,
+        paid_total: paidThisWeek.total,
+        paid_count: paidThisWeek.n,
+        pending_total: pendingPayouts.total,
+        pending_count: pendingPayouts.n,
+        week_start: weekStartIso,
+      })
+    ).run();
+  } catch {}
+
+  return { ok: true, posted: result.ok, totals: {
+    posted_count: postedThisWeek.n,
+    paid_total: paidThisWeek.total,
+    paid_count: paidThisWeek.n,
+    pending_total: pendingPayouts.total,
+    pending_count: pendingPayouts.n,
+  } };
 }

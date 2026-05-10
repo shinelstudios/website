@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest } from "./agency-handlers.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -1740,7 +1740,7 @@ const handler = {
     // Agency platform routes — namespaced under /admin/agency/* so they
     // never collide with existing /admin/* routes. Returns null if the
     // request isn't for an agency route.
-    const agencyRes = await handleAgencyRoute(request, env, secret, url, requireTeamOrThrow);
+    const agencyRes = await handleAgencyRoute(request, env, secret, url, requireTeamOrThrow, requireAuthOrThrow);
     if (agencyRes) return agencyRes;
 
     // Health
@@ -6487,6 +6487,19 @@ const handler = {
           } catch (logErr) { console.error("Cron error log write failed:", logErr.message); }
         }
       }
+
+      // Piggy-back agency cron tasks onto the same 30-min tick. They run
+      // INDEPENDENTLY of pulse sync success — auto-promote scans only a
+      // handful of candidates, and weekly digest is KV-gated to fire at most
+      // once a week. Skipping them on pulse-sync 429 cooldown wasn't useful.
+      try {
+        const promo = await runAutoPromoteToWebsite(env);
+        if (promo.promoted > 0) console.log("CRON auto-promote-website:", JSON.stringify(promo));
+      } catch (e) { console.error("auto-promote-website failed:", e.message); }
+      try {
+        const dig = await runWeeklyDigest(env);
+        if (!dig.skipped) console.log("CRON weekly-digest:", JSON.stringify(dig));
+      } catch (e) { console.error("weekly-digest failed:", e.message); }
     })());
   }
 };
