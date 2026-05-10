@@ -15,7 +15,8 @@
  *   [Auto-import recent] → POSTs to /admin/agency/projects/auto-import-pulse
  */
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Plus, RefreshCw, Download, Target, X, ExternalLink, GripVertical } from "lucide-react";
+import { Plus, RefreshCw, Download, Target, X, ExternalLink, GripVertical, Maximize2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken } from "../../utils/tokenStore";
 
@@ -414,6 +415,13 @@ export default function PipelineKanban({ clients = [], onChange }) {
           >
             <Plus size={12} /> New
           </button>
+          <Link
+            to="/dashboard/projects"
+            className="text-xs px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-700 inline-flex items-center gap-1"
+            title="Open the full Projects page (filters, list view, bulk actions)"
+          >
+            <Maximize2 size={12} /> Full page
+          </Link>
         </div>
       </header>
 

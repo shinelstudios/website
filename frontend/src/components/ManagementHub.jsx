@@ -26,7 +26,8 @@ import {
     Archive,
     BarChart3,
     Quote,
-    Bookmark
+    Bookmark,
+    Target
 } from "lucide-react";
 
 
@@ -76,6 +77,13 @@ export default function ManagementHub() {
             label: 'Cockpit',
             path: '/dashboard/ops',
             icon: Zap,
+            roles: ['admin']
+        },
+        {
+            id: 'projects',
+            label: 'Projects',
+            path: '/dashboard/projects',
+            icon: Target,
             roles: ['admin']
         },
         {

@@ -127,6 +127,7 @@ const NotFound = React.lazy(() => import("./components/NotFound.jsx"));
 const ClientDashboard = React.lazy(() => import("./components/hub/ClientDashboard.jsx"));
 const OpsCockpit = React.lazy(() => import("./components/hub/OpsCockpit.jsx"));
 const ClientDeepDive = React.lazy(() => import("./components/hub/ClientDeepDive.jsx"));
+const ProjectsPage = React.lazy(() => import("./components/hub/ProjectsPage.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
 const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
 const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
@@ -646,6 +647,7 @@ export default function App() {
             <Route index element={<AdminStats />} />
             <Route path="overview" element={<ClientDashboard />} />
             <Route path="ops" element={<OpsCockpit />} />
+            <Route path="projects" element={<ProjectsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="clients" element={<AdminClientsPage />} />
             <Route path="clients/:id" element={<ClientDeepDive />} />

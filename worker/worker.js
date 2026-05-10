@@ -52,7 +52,7 @@ function makeCorsHeaders(origin, allowedOrigins) {
 
   const h = {
     "Access-Control-Allow-Headers": "content-type, authorization",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Max-Age": "86400",
     "Access-Control-Allow-Credentials": "true",
     "Vary": "Origin",
