@@ -298,6 +298,30 @@ export default function OpsCockpit() {
             Refresh now
           </button>
           <DiscordTestButton />
+          <button
+            onClick={async () => {
+              if (!window.confirm("Force-run the weekly digest now? It'll post to the default Discord channel and reset the 6.5-day timer.")) return;
+              try {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/weekly-digest/run`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  credentials: "include",
+                  body: JSON.stringify({ force: true }),
+                });
+                const j = await r.json();
+                if (j?.ok && j?.totals) {
+                  alert(`Digest sent ✓\n\nShipped: ${j.totals.posted_count}\nPaid: ₹${(j.totals.paid_total||0).toLocaleString("en-IN")} (${j.totals.paid_count} payments)\nPending: ₹${(j.totals.pending_total||0).toLocaleString("en-IN")} (${j.totals.pending_count})`);
+                } else {
+                  alert("Digest result: " + JSON.stringify(j, null, 2));
+                }
+              } catch (e) { alert("Digest error: " + e.message); }
+            }}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
+            title="Force-run the weekly digest now"
+          >
+            📊 Run digest
+          </button>
           <Link
             to="/dashboard/projects"
             className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
