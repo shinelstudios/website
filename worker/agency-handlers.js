@@ -296,6 +296,206 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     return ok({ editor: safeEditor, projects, finance });
   }
 
+  // ========================================================================
+  // LAPTOP-TOKEN ENDPOINTS — dual-auth: either X-Laptop-Token header (the
+  // simple shared secret stored on the always-on laptop) OR team JWT.
+  // The laptop never needs a user JWT; it just needs LAPTOP_API_TOKEN.
+  // ========================================================================
+  if (path.startsWith("/admin/agency/laptop/")) {
+    // Quick auth check
+    const laptopToken = request.headers.get("x-laptop-token") || "";
+    const expectedToken = env.LAPTOP_API_TOKEN || "";
+    let authed = false;
+    let authKind = null;
+    if (expectedToken && laptopToken && laptopToken === expectedToken) {
+      authed = true;
+      authKind = "laptop";
+    } else {
+      try { await requireTeamOrThrow(request, secret); authed = true; authKind = "team"; }
+      catch (e) { /* fall through; both auth paths failed */ }
+    }
+    if (!authed) {
+      return err("unauthorized — provide X-Laptop-Token header or team JWT", 401);
+    }
+
+    // ---- POST /admin/agency/laptop/claim — atomically claim N pending tasks
+    if (path === "/admin/agency/laptop/claim" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const laptopId = String(body.laptop_id || "unknown");
+      const count = Math.min(parseInt(body.count || 1, 10), 10);
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      const types = Array.isArray(body.types) && body.types.length > 0 ? body.types : null;
+      let q = `SELECT * FROM laptop_tasks
+               WHERE status = 'pending'
+                 AND (scheduled_for IS NULL OR scheduled_for <= ?1)`;
+      const binds = [nowSec];
+      if (types) {
+        q += ` AND type IN (${types.map((_, i) => `?${i + 2}`).join(",")})`;
+        binds.push(...types);
+      }
+      q += ` ORDER BY priority DESC, created_at LIMIT ${count}`;
+      const { results: candidates } = await env.DB.prepare(q).bind(...binds).all();
+
+      const claimed = [];
+      for (const t of (candidates || [])) {
+        const r = await env.DB.prepare(
+          `UPDATE laptop_tasks
+           SET status='claimed', claimed_at=?1, attempts=attempts+1, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?2 AND status='pending'`
+        ).bind(nowSec, t.id).run();
+        if (r?.meta?.changes > 0) claimed.push({ ...t, status: "claimed", claimed_at: nowSec, attempts: (t.attempts || 0) + 1 });
+      }
+
+      await env.DB.prepare(
+        `INSERT INTO laptop_heartbeats (laptop_id, version, last_seen, pending_count, payload_json)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(laptop_id) DO UPDATE SET
+           version=excluded.version,
+           last_seen=excluded.last_seen,
+           pending_count=excluded.pending_count,
+           payload_json=excluded.payload_json`
+      ).bind(
+        laptopId,
+        body.version || null,
+        nowSec,
+        (candidates || []).length,
+        body.heartbeat ? JSON.stringify(body.heartbeat) : null
+      ).run();
+
+      return ok({ claimed_count: claimed.length, tasks: claimed, auth_kind: authKind });
+    }
+
+    // ---- PATCH /admin/agency/laptop/tasks/:id — mark task done/failed
+    const laptopTaskMatch = path.match(/^\/admin\/agency\/laptop\/tasks\/([^\/]+)$/);
+    if (laptopTaskMatch && method === "PATCH") {
+      const id = laptopTaskMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const newStatus = body.status;
+      if (!["done", "failed", "pending", "cancelled"].includes(newStatus)) {
+        return err("status must be one of: done, failed, pending, cancelled");
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      // Pre-read the task to apply side-effects on success (e.g. ig_followers_fetch
+      // result writes back to clients.instagram_followers).
+      const task = await env.DB.prepare("SELECT * FROM laptop_tasks WHERE id = ?1").bind(id).first();
+      if (!task) return err("task not found", 404);
+
+      await env.DB.prepare(
+        `UPDATE laptop_tasks
+         SET status=?1, result_json=?2, error=?3, completed_at=?4, updated_at=CURRENT_TIMESTAMP
+         WHERE id=?5`
+      ).bind(
+        newStatus,
+        body.result ? JSON.stringify(body.result) : null,
+        body.error || null,
+        ["done", "failed", "cancelled"].includes(newStatus) ? nowSec : null,
+        id
+      ).run();
+
+      // Side-effects on successful task completion
+      if (newStatus === "done" && body.result) {
+        try {
+          if (task.type === "ig_followers_fetch" && task.client_id && body.result.followers != null) {
+            await env.DB.prepare(
+              "UPDATE clients SET instagram_followers = ?1 WHERE id = ?2"
+            ).bind(parseInt(body.result.followers, 10), task.client_id).run();
+          }
+          // milestone_check: enqueue follow-up milestone_story_create tasks
+          if (task.type === "milestone_check" && Array.isArray(body.result.candidates)) {
+            for (const cand of body.result.candidates) {
+              if (!cand.client_id || !cand.target) continue;
+              const followupId = crypto.randomUUID();
+              await env.DB.prepare(
+                `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, created_by)
+                 VALUES (?1, 'milestone_story_create', ?2, ?3, 5, 'milestone_check')`
+              ).bind(followupId, cand.client_id, JSON.stringify({ target: cand.target, current_subs: cand.subs })).run();
+            }
+          }
+        } catch (e) { console.error("post-complete side-effect failed:", e.message); }
+      }
+
+      return ok({ id, status: newStatus, auth_kind: authKind });
+    }
+
+    // ---- POST /admin/agency/laptop/enqueue — let the laptop self-enqueue
+    if (path === "/admin/agency/laptop/enqueue" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.type) return err("type required");
+      const id = body.id || crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, scheduled_for, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+      ).bind(
+        id,
+        body.type,
+        body.client_id || null,
+        body.payload ? JSON.stringify(body.payload) : null,
+        parseInt(body.priority || 0, 10),
+        parseInt(body.max_attempts || 3, 10),
+        body.scheduled_for || null,
+        body.created_by || authKind
+      ).run();
+      return ok({ id, enqueued: true }, 201);
+    }
+
+    // ---- GET /admin/agency/laptop/queue?status=pending&limit=50
+    if (path === "/admin/agency/laptop/queue" && method === "GET") {
+      const status = url.searchParams.get("status") || "pending";
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
+      const stmt = status === "all"
+        ? env.DB.prepare(`SELECT * FROM laptop_tasks ORDER BY priority DESC, created_at LIMIT ${limit}`)
+        : env.DB.prepare(`SELECT * FROM laptop_tasks WHERE status = ?1 ORDER BY priority DESC, created_at LIMIT ${limit}`).bind(status);
+      const { results } = await stmt.all();
+      return ok({ count: results.length, tasks: results });
+    }
+
+    // ---- GET /admin/agency/laptop/heartbeat — show all laptops + last seen
+    if (path === "/admin/agency/laptop/heartbeat" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM laptop_heartbeats ORDER BY last_seen DESC`
+      ).all();
+      const nowSec = Math.floor(Date.now() / 1000);
+      const enriched = (results || []).map((r) => ({
+        ...r,
+        seconds_ago: nowSec - (r.last_seen || 0),
+        online: (nowSec - (r.last_seen || 0)) < 600,
+      }));
+      return ok({ laptops: enriched });
+    }
+
+    // ---- GET /admin/agency/laptop/context — minimal client info for laptop tasks
+    // Returns active managed clients + their YT/IG handles. No sensitive fields.
+    // Lets the laptop look up "what's Kiaraa's IG handle" without needing the
+    // full clients/full endpoint (which is team-gated).
+    if (path === "/admin/agency/laptop/context" && method === "GET") {
+      const { results: clients } = await env.DB.prepare(
+        `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us,
+                youtube_id, subscribers, instagram_handle, instagram_followers,
+                niche_tag, retainer_tier
+         FROM clients
+         WHERE (status = 'active' OR status IS NULL)`
+      ).all();
+      const { results: igAccounts } = await env.DB.prepare(
+        `SELECT client_id, handle, role, managed_by_us, followers
+         FROM instagram_accounts
+         WHERE active = 1`
+      ).all();
+      const igByClient = {};
+      for (const ig of (igAccounts || [])) {
+        (igByClient[ig.client_id] ||= []).push(ig);
+      }
+      const enriched = (clients || []).map((c) => ({
+        ...c,
+        instagram_accounts: igByClient[c.id] || [],
+      }));
+      return ok({ count: enriched.length, clients: enriched });
+    }
+
+    return err("laptop endpoint not found", 404);
+  }
+
   // Auth gate (everything below requires admin/team JWT)
   try { await requireTeamOrThrow(request, secret); }
   catch (e) { return err(e?.message || "unauthorized", e?.status || 401); }
@@ -1114,145 +1314,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       });
     }
 
-    // ========================================================================
-    // LAPTOP TASK QUEUE — bridge between Cloudflare and the always-on laptop
-    // ========================================================================
-
-    // POST /admin/agency/laptop/enqueue
-    // Body: { type, client_id?, payload?, priority?, max_attempts?, scheduled_for? }
-    if (path === "/admin/agency/laptop/enqueue" && method === "POST") {
-      const body = await request.json().catch(() => ({}));
-      if (!body.type) return err("type required");
-      const id = body.id || crypto.randomUUID();
-      await env.DB.prepare(
-        `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, scheduled_for, created_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-      ).bind(
-        id,
-        body.type,
-        body.client_id || null,
-        body.payload ? JSON.stringify(body.payload) : null,
-        parseInt(body.priority || 0, 10),
-        parseInt(body.max_attempts || 3, 10),
-        body.scheduled_for || null,
-        body.created_by || "admin"
-      ).run();
-      return ok({ id, enqueued: true }, 201);
-    }
-
-    // GET /admin/agency/laptop/queue?status=pending&limit=50
-    if (path === "/admin/agency/laptop/queue" && method === "GET") {
-      const status = url.searchParams.get("status") || "pending";
-      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
-      const where = status === "all" ? "1=1" : "status = ?1";
-      const stmt = status === "all"
-        ? env.DB.prepare(`SELECT * FROM laptop_tasks WHERE ${where} ORDER BY priority DESC, created_at LIMIT ${limit}`)
-        : env.DB.prepare(`SELECT * FROM laptop_tasks WHERE ${where} ORDER BY priority DESC, created_at LIMIT ${limit}`).bind(status);
-      const { results } = await stmt.all();
-      return ok({ count: results.length, tasks: results });
-    }
-
-    // POST /admin/agency/laptop/claim
-    // Body: { laptop_id, count?: 1, types?: ["ig_followers_fetch"] }
-    // Atomically claim N pending tasks. Marks them as 'claimed' so other
-    // pollers don't double-pick. Returns the claimed task records.
-    if (path === "/admin/agency/laptop/claim" && method === "POST") {
-      const body = await request.json().catch(() => ({}));
-      const laptopId = String(body.laptop_id || "unknown");
-      const count = Math.min(parseInt(body.count || 1, 10), 10);
-      const nowSec = Math.floor(Date.now() / 1000);
-
-      // Filter by allowed types, if specified, so a laptop only picks tasks
-      // it knows how to handle. Empty/missing = any type.
-      const types = Array.isArray(body.types) && body.types.length > 0 ? body.types : null;
-      let q = `SELECT * FROM laptop_tasks
-               WHERE status = 'pending'
-                 AND (scheduled_for IS NULL OR scheduled_for <= ?1)`;
-      const binds = [nowSec];
-      if (types) {
-        q += ` AND type IN (${types.map((_, i) => `?${i + 2}`).join(",")})`;
-        binds.push(...types);
-      }
-      q += ` ORDER BY priority DESC, created_at LIMIT ${count}`;
-      const { results: candidates } = await env.DB.prepare(q).bind(...binds).all();
-
-      const claimed = [];
-      for (const t of (candidates || [])) {
-        // CAS-like: only update if still pending (race-safe-ish for D1)
-        const r = await env.DB.prepare(
-          `UPDATE laptop_tasks
-           SET status='claimed', claimed_at=?1, attempts=attempts+1, updated_at=CURRENT_TIMESTAMP
-           WHERE id=?2 AND status='pending'`
-        ).bind(nowSec, t.id).run();
-        if (r?.meta?.changes > 0) claimed.push({ ...t, status: "claimed", claimed_at: nowSec, attempts: (t.attempts || 0) + 1 });
-      }
-
-      // Record heartbeat so we know the laptop is alive.
-      await env.DB.prepare(
-        `INSERT INTO laptop_heartbeats (laptop_id, version, last_seen, pending_count, payload_json)
-         VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT(laptop_id) DO UPDATE SET
-           version=excluded.version,
-           last_seen=excluded.last_seen,
-           pending_count=excluded.pending_count,
-           payload_json=excluded.payload_json`
-      ).bind(
-        laptopId,
-        body.version || null,
-        nowSec,
-        (candidates || []).length,
-        body.heartbeat ? JSON.stringify(body.heartbeat) : null
-      ).run();
-
-      return ok({ claimed_count: claimed.length, tasks: claimed });
-    }
-
-    // PATCH /admin/agency/laptop/tasks/:id
-    // Body: { status: 'done'|'failed', result?, error? }
-    const laptopTaskMatch = path.match(/^\/admin\/agency\/laptop\/tasks\/([^\/]+)$/);
-    if (laptopTaskMatch && method === "PATCH") {
-      const id = laptopTaskMatch[1];
-      const body = await request.json().catch(() => ({}));
-      const newStatus = body.status;
-      if (!["done", "failed", "pending", "cancelled"].includes(newStatus)) {
-        return err("status must be one of: done, failed, pending, cancelled");
-      }
-      const nowSec = Math.floor(Date.now() / 1000);
-      await env.DB.prepare(
-        `UPDATE laptop_tasks
-         SET status=?1, result_json=?2, error=?3, completed_at=?4, updated_at=CURRENT_TIMESTAMP
-         WHERE id=?5`
-      ).bind(
-        newStatus,
-        body.result ? JSON.stringify(body.result) : null,
-        body.error || null,
-        ["done", "failed", "cancelled"].includes(newStatus) ? nowSec : null,
-        id
-      ).run();
-      return ok({ id, status: newStatus });
-    }
-
-    // GET /admin/agency/laptop/heartbeat — see laptops + their last check-in
-    if (path === "/admin/agency/laptop/heartbeat" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        `SELECT * FROM laptop_heartbeats ORDER BY last_seen DESC`
-      ).all();
-      const nowSec = Math.floor(Date.now() / 1000);
-      const enriched = (results || []).map((r) => ({
-        ...r,
-        seconds_ago: nowSec - (r.last_seen || 0),
-        online: (nowSec - (r.last_seen || 0)) < 600, // < 10 min = "online"
-      }));
-      return ok({ laptops: enriched });
-    }
-
-    // ========================================================================
-    // PUBLIC STATS — open endpoint, no auth, for the homepage hero
-    // ========================================================================
-    // Returns aggregated agency reach numbers. Cached for 5 min via Cache-Control.
-    // (handled BEFORE the team-only auth gate higher up in this file.)
-    // Note: gated below this line so we land here only if gate passed; we
-    // expose a separate path before the gate as well (see top).
+    // (Laptop queue endpoints + public stats are handled BEFORE the team auth
+    // gate higher up in this file — they have their own dual-auth path.)
 
     // ---- GET /admin/agency/clients/full
     // Returns clients with their channels. ?show_inactive=true includes archived.
