@@ -24,6 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
+import { handleAgencyRoute } from "./agency-handlers.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -1735,6 +1736,12 @@ const handler = {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: cors });
     }
+    
+    // Agency platform routes — namespaced under /admin/agency/* so they
+    // never collide with existing /admin/* routes. Returns null if the
+    // request isn't for an agency route.
+    const agencyRes = await handleAgencyRoute(request, env, secret, url, requireTeamOrThrow);
+    if (agencyRes) return agencyRes;
 
     // Health
     if (
@@ -6429,15 +6436,55 @@ const handler = {
 
   async scheduled(event, env, ctx) {
     console.log("CRON TRIGGER: Starting Automatic Pulse Sync...");
+    const cronStartTs = Date.now();
+    // Heartbeat — write a row so /admin/agency/diag/pulse can prove cron fires.
+    // Best-effort: if D1 fails for any reason, the rest of the cron still runs.
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind(
+          "cron.pulse.start",
+          "info",
+          `Pulse cron tick at ${new Date(cronStartTs).toISOString()}`,
+          JSON.stringify({ cron: event?.cron || "unknown", scheduledTime: event?.scheduledTime || null })
+        ).run();
+      } catch (e) { console.error("Heartbeat write failed:", e.message); }
+    }
     ctx.waitUntil((async () => {
       try {
         const result = await performClientSync(env, false, false);
         console.log(`CRON SUCCESS: Synced ${result.synced} creators.`);
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+            ).bind(
+              "cron.pulse.done",
+              "info",
+              `Pulse cron synced ${result.synced} creators`,
+              JSON.stringify({ duration_ms: Date.now() - cronStartTs, ...result })
+            ).run();
+          } catch (e) { console.error("Heartbeat done write failed:", e.message); }
+        }
       } catch (e) {
-        if (e.status === 429) {
+        const isCooldown = e.status === 429;
+        if (isCooldown) {
           console.log("CRON SKIP: Last sync too recent.");
         } else {
           console.error("CRON ERROR:", e.message);
+        }
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+            ).bind(
+              isCooldown ? "cron.pulse.skip" : "cron.pulse.error",
+              isCooldown ? "info" : "error",
+              e.message || "unknown error",
+              JSON.stringify({ duration_ms: Date.now() - cronStartTs, status: e.status || null })
+            ).run();
+          } catch (logErr) { console.error("Cron error log write failed:", logErr.message); }
         }
       }
     })());
