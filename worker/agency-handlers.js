@@ -454,7 +454,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
 
       // Pre-fetch old project for status diff + Discord context
       const old = await env.DB.prepare(
-        `SELECT p.*, c.name AS client_name, e.name AS editor_name
+        `SELECT p.*, c.name AS client_name, c.discord_webhook_url AS client_discord_webhook,
+                e.name AS editor_name
          FROM projects p
          LEFT JOIN clients c ON p.client_id = c.id
          LEFT JOIN editors e ON p.assigned_editor_id = e.id
@@ -498,8 +499,23 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         if (body.status === "posted" && old.youtube_video_id) {
           lines.push(`· https://youtu.be/${old.youtube_video_id}`);
         }
+        const payload = { content: lines.join("\n") };
         // fire-and-forget — don't await on hot path
-        postToDiscord(env, { content: lines.join("\n") }, channel).catch(() => {});
+        postToDiscord(env, payload, channel).catch(() => {});
+
+        // ALSO fire to the per-client webhook if the client has one configured.
+        // Lets you have a #aish-is-live channel that gets pinged for AiSH only,
+        // in addition to the global ops/finance feeds.
+        if (old.client_discord_webhook) {
+          fetch(old.client_discord_webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: `Shinel · ${old.client_name || "Client"}`,
+              ...payload,
+            }),
+          }).catch(() => {});
+        }
       }
 
       return ok({ id, updated: true, status_changed: statusChanged });
@@ -629,6 +645,27 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           "Access-Control-Allow-Origin": "*",
         },
       });
+    }
+
+    // ---- Set per-client Discord webhook URL ---------------------------------
+    // POST /admin/agency/clients/:id/discord  body: { discord_webhook_url: "..." }
+    // When set, status-change pings (paid/posted/on-website) AND new YouTube
+    // upload notifications fire to this URL too. Pass null to clear.
+    const discordMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)\/discord$/);
+    if (discordMatch && method === "POST") {
+      const id = discordMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const webhookUrl = body.discord_webhook_url || null;
+      if (webhookUrl && !/^https:\/\/discord\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(webhookUrl)) {
+        return err("discord_webhook_url must be a valid Discord webhook URL (https://discord.com/api/webhooks/...)");
+      }
+      await env.DB.prepare(
+        "UPDATE clients SET discord_webhook_url = ?1 WHERE id = ?2"
+      ).bind(webhookUrl, id).run();
+      await env.DB.prepare(
+        "INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)"
+      ).bind("client.discord_webhook", id, "info", webhookUrl ? "Discord webhook set" : "Discord webhook cleared", JSON.stringify({ has_url: !!webhookUrl })).run();
+      return ok({ id, discord_webhook_url: webhookUrl, updated: true });
     }
 
     // ---- Set per-client Drive folder URL ------------------------------------
@@ -789,6 +826,13 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     if (path === "/admin/agency/weekly-digest/run" && method === "POST") {
       const body = await request.json().catch(() => ({}));
       const result = await runWeeklyDigest(env, { force: !!body.force });
+      return ok(result);
+    }
+
+    // ---- POST /admin/agency/editor-summary/run  — manual trigger
+    if (path === "/admin/agency/editor-summary/run" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await runEditorSummary(env, { force: !!body.force });
       return ok(result);
     }
 
@@ -1382,4 +1426,148 @@ export async function runWeeklyDigest(env, opts = {}) {
     pending_total: pendingPayouts.total,
     pending_count: pendingPayouts.n,
   } };
+}
+
+// ---------------------------------------------------------------------------
+// runEditorSummary — per-editor weekly summary, posted to Discord.
+//
+// One message goes to #freelancers-only (with each freelancer's section);
+// another to #salaried-only (with each salaried/intern's section). Each
+// section lists: active queue, shipped this week, pending payouts.
+//
+// Both posts use the per-channel webhooks (DISCORD_FREELANCERS_WEBHOOK_URL
+// and DISCORD_SALARIED_WEBHOOK_URL). Falls back to default if not set.
+//
+// KV-gated to fire at most every 6 days. Recommended to manually trigger
+// with force=true on Friday morning, then let the cron keep it ~weekly.
+// ---------------------------------------------------------------------------
+export async function runEditorSummary(env, opts = {}) {
+  if (!env.DB) return { ok: false, reason: "no DB binding" };
+
+  const lastRunKey = "app:editor_summary:last_run_ts";
+  const last = Number((env.SHINEL_AUDIT && await env.SHINEL_AUDIT.get(lastRunKey)) || "0");
+  const now = Date.now();
+  const minIntervalMs = 6 * 24 * 60 * 60 * 1000;
+  const force = !!opts.force;
+  if (!force && (now - last) < minIntervalMs) {
+    return { ok: true, skipped: true, reason: "ran less than 6 days ago", last_run_ts: last };
+  }
+
+  const weekStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const weekStartSec = Math.floor(weekStart.getTime() / 1000);
+
+  // Active editors with their compensation type
+  const { results: editors } = await env.DB.prepare(
+    `SELECT id, name, email, role, compensation_type, monthly_salary_inr, payment_rate_inr, discord_user_id
+     FROM editors WHERE active = 1 ORDER BY compensation_type, name`
+  ).all();
+
+  if (!editors || editors.length === 0) {
+    return { ok: true, skipped: true, reason: "no active editors" };
+  }
+
+  // For each editor: active projects, shipped this week, pending payouts
+  const editorBlocks = await Promise.all(editors.map(async (e) => {
+    const [active, shippedThisWeek, pending] = await Promise.all([
+      env.DB.prepare(
+        `SELECT p.title, p.status, p.due_date, p.editor_payment_inr, c.name AS client_name
+         FROM projects p LEFT JOIN clients c ON p.client_id = c.id
+         WHERE p.assigned_editor_id = ?1 AND p.status IN ('planned','started','in-progress','completed')
+           AND p.archived_at IS NULL ORDER BY p.due_date NULLS LAST, p.updated_at DESC LIMIT 20`
+      ).bind(e.id).all(),
+      env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM projects
+         WHERE assigned_editor_id = ?1 AND posted_at >= ?2`
+      ).bind(e.id, weekStartSec).first(),
+      env.DB.prepare(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(editor_payment_inr), 0) AS total
+         FROM projects WHERE assigned_editor_id = ?1
+           AND status IN ('completed','posted','added-to-website')
+           AND editor_payment_inr > 0 AND archived_at IS NULL`
+      ).bind(e.id).first(),
+    ]);
+
+    return { editor: e, active: active.results || [], shipped: shippedThisWeek.n || 0, pending };
+  }));
+
+  // Group by compensation type
+  const freelance = editorBlocks.filter((b) => b.editor.compensation_type === "freelance");
+  const salaried = editorBlocks.filter((b) => b.editor.compensation_type === "salary" || b.editor.compensation_type === "intern" || !b.editor.compensation_type);
+
+  const fmtINR = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
+  const buildBlock = (b) => {
+    const lines = [];
+    const mention = b.editor.discord_user_id ? `<@${b.editor.discord_user_id}>` : `**${b.editor.name}**`;
+    const salaryNote = b.editor.compensation_type === "salary" ? ` · ${fmtINR(b.editor.monthly_salary_inr)}/mo salary` : "";
+    lines.push(`\n**${mention}**${salaryNote}`);
+    lines.push(`📦 ${b.active.length} active · 🎬 ${b.shipped} shipped this week${b.pending.total > 0 ? ` · 💰 ${fmtINR(b.pending.total)} pending` : ""}`);
+    if (b.active.length > 0) {
+      const topActive = b.active.slice(0, 5);
+      for (const p of topActive) {
+        const due = p.due_date ? ` · due ${new Date(p.due_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}` : "";
+        lines.push(`  · ${p.title} *(${p.status}, ${p.client_name || "—"})*${due}`);
+      }
+      if (b.active.length > 5) lines.push(`  … and ${b.active.length - 5} more`);
+    }
+    return lines.join("\n");
+  };
+
+  const headerLine = `📊 **Weekly editor summary — week of ${weekStart.toISOString().slice(0, 10)}**`;
+
+  // Post to freelancers channel
+  let freelanceResult = { ok: true, skipped: true };
+  if (freelance.length > 0) {
+    const freelanceMsg = [headerLine, ...freelance.map(buildBlock)].join("\n");
+    const url = env.DISCORD_FREELANCERS_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+    if (url) {
+      try {
+        const r = await fetch(url, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "Shinel · Freelancers", content: freelanceMsg.slice(0, 1990) }),
+        });
+        freelanceResult = { ok: r.ok, status: r.status };
+      } catch (e) { freelanceResult = { ok: false, error: String(e) }; }
+    } else {
+      freelanceResult = { ok: false, skipped: true, reason: "no webhook URL configured" };
+    }
+  }
+
+  // Post to salaried channel
+  let salariedResult = { ok: true, skipped: true };
+  if (salaried.length > 0) {
+    const salariedMsg = [headerLine, ...salaried.map(buildBlock)].join("\n");
+    const url = env.DISCORD_SALARIED_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+    if (url) {
+      try {
+        const r = await fetch(url, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "Shinel · Salaried Team", content: salariedMsg.slice(0, 1990) }),
+        });
+        salariedResult = { ok: r.ok, status: r.status };
+      } catch (e) { salariedResult = { ok: false, error: String(e) }; }
+    } else {
+      salariedResult = { ok: false, skipped: true, reason: "no webhook URL configured" };
+    }
+  }
+
+  // Save run timestamp + audit
+  try {
+    if (env.SHINEL_AUDIT) await env.SHINEL_AUDIT.put(lastRunKey, String(now));
+  } catch {}
+  try {
+    await env.DB.prepare(
+      `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+    ).bind(
+      "editor_summary.posted", "info",
+      `Editor summary: ${freelance.length} freelance + ${salaried.length} salaried`,
+      JSON.stringify({ freelance_count: freelance.length, salaried_count: salaried.length, freelanceResult, salariedResult })
+    ).run();
+  } catch {}
+
+  return {
+    ok: true,
+    counts: { freelance: freelance.length, salaried: salaried.length, total: editors.length },
+    freelance_post: freelanceResult,
+    salaried_post: salariedResult,
+  };
 }

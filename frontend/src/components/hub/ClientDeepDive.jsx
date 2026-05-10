@@ -20,7 +20,7 @@
  */
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, FolderOpen, Instagram, Youtube, RefreshCw, IndianRupee, TrendingUp, Activity, Target } from "lucide-react";
+import { ArrowLeft, ExternalLink, FolderOpen, Instagram, Youtube, RefreshCw, IndianRupee, TrendingUp, Activity, Target, Hash, Check, X } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken } from "../../utils/tokenStore";
 
@@ -187,6 +187,14 @@ export default function ClientDeepDive() {
         <StatCard icon={<IndianRupee size={14} />} label="Lifetime paid" value={fmtINR(finance?.paid_total)} />
         <StatCard icon={<Activity size={14} />} label="Pending payouts" value={fmtINR(finance?.pending_total)} />
       </div>
+
+      {/* Discord per-client routing */}
+      <DiscordWebhookCard
+        clientId={client.id}
+        clientName={client.name}
+        currentUrl={client.discord_webhook_url || ""}
+        onSaved={load}
+      />
 
       {/* Channels + IG */}
       <Section title={`YouTube channels · ${(channels || []).length}`} icon={<Youtube size={14} className="text-red-500" />} defaultOpen>
@@ -363,6 +371,114 @@ export default function ClientDeepDive() {
         )}
       </Section>
     </div>
+  );
+}
+
+// Per-client Discord webhook setter. When set, status-change pings + YT
+// upload notifications also fire to this URL (in addition to global feeds).
+function DiscordWebhookCard({ clientId, clientName, currentUrl, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(currentUrl);
+  const [busy, setBusy] = useState(false);
+  React.useEffect(() => { setVal(currentUrl); }, [currentUrl]);
+
+  const save = async (newVal) => {
+    setBusy(true);
+    try {
+      const res = await authedFetch(`/admin/agency/clients/${encodeURIComponent(clientId)}/discord`, {
+        method: "POST",
+        body: JSON.stringify({ discord_webhook_url: newVal || null }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `API ${res.status}`);
+      setEditing(false);
+      onSaved?.();
+    } catch (e) {
+      alert("Save failed: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    if (!currentUrl) { alert("No webhook saved yet — paste and Save first."); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(currentUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: `Shinel · ${clientName}`,
+          content: `🔔 Test ping — Shinel Cockpit can reach this channel.`,
+        }),
+      });
+      if (r.ok || r.status === 204) alert("Test ping sent ✓");
+      else alert(`Ping failed: ${r.status}`);
+    } catch (e) {
+      alert("Ping error: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-[var(--surface-elev)] p-4 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Hash size={13} className="text-indigo-500" />
+          <span className="font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Discord channel</span>
+          {currentUrl ? (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 inline-flex items-center gap-1">
+              <Check size={10} /> wired
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-neutral-200/50 text-neutral-500">not set</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {currentUrl && !editing && (
+            <button onClick={test} disabled={busy} className="text-[10px] px-2 py-1 rounded border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] disabled:opacity-50">🔔 Test</button>
+          )}
+          {!editing && (
+            <button onClick={() => setEditing(true)} className="text-[10px] px-2 py-1 rounded border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)]">
+              {currentUrl ? "Edit" : "+ Set webhook"}
+            </button>
+          )}
+          {currentUrl && !editing && (
+            <button onClick={() => { if (window.confirm("Remove the per-client webhook? Status pings will only go to global #ops-pipeline / #finance.")) save(""); }}
+              disabled={busy} className="text-[10px] px-2 py-1 rounded text-red-500 hover:bg-red-500/10 disabled:opacity-50">
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <input
+            type="url"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            placeholder="https://discord.com/api/webhooks/..."
+            className="w-full text-xs bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded px-2 py-1.5 font-mono"
+          />
+          <p className="text-[10px] text-neutral-500">
+            In Discord: open the client's channel (e.g. #{clientName.toLowerCase().replace(/\s+/g, "-")}) → ⚙ → Integrations → Webhooks → New Webhook → Copy URL → paste here.
+            Status pings (paid/posted/on-website) and YT upload notifications will then also fire to this channel.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setEditing(false); setVal(currentUrl); }} className="text-[10px] px-2 py-1 rounded border border-neutral-200 dark:border-neutral-800">Cancel</button>
+            <button onClick={() => save(val)} disabled={busy} className="text-[10px] px-3 py-1 rounded bg-[var(--orange)] text-white font-bold disabled:opacity-50">
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : currentUrl && (
+        <div className="mt-2 text-[10px] text-neutral-500 font-mono truncate" title={currentUrl}>
+          …/{currentUrl.split("/").slice(-2, -1)[0]}/<span className="opacity-30">…</span>
+        </div>
+      )}
+    </section>
   );
 }
 

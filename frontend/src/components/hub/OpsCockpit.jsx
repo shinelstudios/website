@@ -322,6 +322,30 @@ export default function OpsCockpit() {
           >
             📊 Run digest
           </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm("Force-run the editor weekly summary now? Posts per-editor breakdowns to #salaried-only and #freelancers-only.")) return;
+              try {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/editor-summary/run`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  credentials: "include",
+                  body: JSON.stringify({ force: true }),
+                });
+                const j = await r.json();
+                if (j?.ok && j?.counts) {
+                  alert(`Editor summary sent ✓\n\n${j.counts.salaried} salaried · ${j.counts.freelance} freelance\n\nFreelance post: ${j.freelance_post?.ok ? "✓" : (j.freelance_post?.skipped ? "skipped (no webhook)" : "failed")}\nSalaried post: ${j.salaried_post?.ok ? "✓" : (j.salaried_post?.skipped ? "skipped (no webhook)" : "failed")}`);
+                } else {
+                  alert("Result: " + JSON.stringify(j, null, 2));
+                }
+              } catch (e) { alert("Editor summary error: " + e.message); }
+            }}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
+            title="Force-run the per-editor weekly summary now"
+          >
+            👥 Editor summary
+          </button>
           <Link
             to="/dashboard/projects"
             className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"

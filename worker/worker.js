@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary } from "./agency-handlers.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -1486,28 +1486,37 @@ async function performClientSync(env, isForced = false, debug = false) {
                       if (insRes?.meta?.changes > 0) {
                         const isShinelOwn = (c.id === "c-2026-05-09-shinel-studios") || /^shinel\b/i.test(c.name || "");
                         const channel = isShinelOwn ? "shinel-uploads" : "client-uploads";
-                        const url = pickUploadWebhookUrl(env, channel);
-                        if (url) {
-                          const isShort = /shorts?\b|#shorts/i.test(v.title || "");
-                          const tag = isShort ? "🎞 Short" : "🎬 Video";
-                          const embed = {
-                            title: v.title,
-                            url: act.url,
-                            description: `${tag} from **${c.name || result.title}**`,
-                            color: isShinelOwn ? 0xE85002 : 0xFF0000, // orange vs YT red
-                            image: v.thumbnail ? { url: v.thumbnail } : undefined,
-                            timestamp: v.publishedAt,
-                            footer: { text: isShinelOwn ? "Shinel Studios" : (c.name || "Client") },
-                          };
-                          // fire-and-forget; don't block sync
-                          fetch(url, {
+                        const isShort = /shorts?\b|#shorts/i.test(v.title || "");
+                        const tag = isShort ? "🎞 Short" : "🎬 Video";
+                        const embed = {
+                          title: v.title,
+                          url: act.url,
+                          description: `${tag} from **${c.name || result.title}**`,
+                          color: isShinelOwn ? 0xE85002 : 0xFF0000, // orange vs YT red
+                          image: v.thumbnail ? { url: v.thumbnail } : undefined,
+                          timestamp: v.publishedAt,
+                          footer: { text: isShinelOwn ? "Shinel Studios" : (c.name || "Client") },
+                        };
+                        const payload = {
+                          username: isShinelOwn ? "Shinel Uploads" : "Client Uploads",
+                          embeds: [embed],
+                        };
+                        // 1. Global feed channel (#shinel-uploads or #client-uploads)
+                        const globalUrl = pickUploadWebhookUrl(env, channel);
+                        if (globalUrl) {
+                          fetch(globalUrl, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              username: isShinelOwn ? "Shinel Uploads" : "Client Uploads",
-                              embeds: [embed],
-                            }),
+                            body: JSON.stringify(payload),
                           }).catch((e) => console.error("upload webhook failed:", e?.message || e));
+                        }
+                        // 2. Per-client webhook (e.g. #aish-is-live) if configured
+                        if (c.discord_webhook_url) {
+                          fetch(c.discord_webhook_url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                          }).catch((e) => console.error("client upload webhook failed:", e?.message || e));
                         }
                       }
 
@@ -6541,6 +6550,10 @@ const handler = {
         const dig = await runWeeklyDigest(env);
         if (!dig.skipped) console.log("CRON weekly-digest:", JSON.stringify(dig));
       } catch (e) { console.error("weekly-digest failed:", e.message); }
+      try {
+        const sum = await runEditorSummary(env);
+        if (!sum.skipped) console.log("CRON editor-summary:", JSON.stringify(sum));
+      } catch (e) { console.error("editor-summary failed:", e.message); }
     })());
   }
 };
