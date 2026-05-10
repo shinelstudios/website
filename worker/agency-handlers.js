@@ -692,7 +692,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const includeInactive = url.searchParams.get("include_inactive") === "true";
       const where = includeInactive ? "" : "WHERE active = 1";
       const { results } = await env.DB.prepare(
-        `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, active, joined_at, notes FROM editors ${where} ORDER BY active DESC, name`
+        `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes FROM editors ${where} ORDER BY active DESC, name`
       ).all();
       return ok({ count: (results || []).length, editors: results });
     }
@@ -704,8 +704,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const id = body.id || crypto.randomUUID();
       try {
         await env.DB.prepare(
-          `INSERT INTO editors (id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, notes, active)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 1)`
+          `INSERT INTO editors (id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, notes, active)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1)`
         ).bind(
           id,
           body.name,
@@ -717,6 +717,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           body.payment_per || "video",
           body.compensation_type === "salary" ? "salary" : "freelance",
           parseInt(body.monthly_salary_inr || 0, 10),
+          body.discord_user_id ? String(body.discord_user_id).replace(/\D/g, "") : null,
           body.notes || null
         ).run();
         return ok({ id, created: true }, 201);
@@ -731,7 +732,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     if (editorMatch && method === "PATCH") {
       const id = editorMatch[1];
       const body = await request.json().catch(() => ({}));
-      const allowed = ["name", "email", "phone", "role", "payment_rate_inr", "payment_per", "compensation_type", "monthly_salary_inr", "active", "notes"];
+      const allowed = ["name", "email", "phone", "role", "payment_rate_inr", "payment_per", "compensation_type", "monthly_salary_inr", "discord_user_id", "active", "notes"];
       const sets = [];
       const binds = [];
       let i = 1;

@@ -158,6 +158,21 @@ function EditorModal({ editor, onClose, onSaved }) {
             </div>
           )}
           <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">
+              Discord User ID <span className="text-neutral-400 normal-case">(optional — for @-mentions in weekly summary)</span>
+            </label>
+            <input
+              value={form.discord_user_id || ""}
+              onChange={set("discord_user_id")}
+              placeholder="e.g. 282859044593598464"
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono"
+            />
+            <p className="text-[10px] text-neutral-500 mt-1">
+              In Discord: User Settings → Advanced → Developer Mode ON, then right-click the member → Copy User ID. Numeric.
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Notes</label>
             <textarea value={form.notes || ""} onChange={set("notes")} rows={2} placeholder="Specialties, availability, etc." className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
           </div>
