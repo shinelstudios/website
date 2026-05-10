@@ -298,6 +298,30 @@ export default function OpsCockpit() {
             <RefreshCw size={14} className={`inline mr-1 ${loading ? "animate-spin" : ""}`} />
             Refresh now
           </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm("Force-run the YouTube pulse sync now? Bypasses the 15-min cooldown. Updates subscriber counts.")) return;
+              try {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/clients/sync?force=1`, {
+                  method: "POST",
+                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  credentials: "include",
+                });
+                const j = await r.json();
+                if (j?.synced != null || j?.success) {
+                  alert(`Sync ✓\n\nSynced ${j.synced ?? "?"} creators.\nRefresh the cockpit to see updated subscriber counts.`);
+                  fetchSnapshot();
+                } else {
+                  alert("Result: " + JSON.stringify(j, null, 2));
+                }
+              } catch (e) { alert("Sync error: " + e.message); }
+            }}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
+            title="Force-run the YouTube pulse sync now (subscriber counts, latest uploads)"
+          >
+            ▶ Sync YT
+          </button>
           <DiscordTestButton />
           <button
             onClick={async () => {
