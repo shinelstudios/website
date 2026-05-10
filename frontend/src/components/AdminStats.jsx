@@ -343,23 +343,49 @@ export default function AdminStats() {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {trace.map((t, i) => (
-                                            <div key={i} className={`p-5 rounded-2xl border transition-all ${t.status === 'success' ? 'bg-white/[0.02] border-white/5' : 'bg-red-500/5 border-red-500/20 shadow-lg shadow-red-500/5'}`}>
+                                        {trace.map((t, i) => {
+                                            // Classify the error severity:
+                                            //  - success: green (good)
+                                            //  - warn:    yellow (transient — Instagram 429 rate limits, expected)
+                                            //  - error:   red (real failure that needs attention)
+                                            const errStr = String(t.error || '');
+                                            const isWarn = t.status !== 'success' && /\b429\b|HTTP 429|rate.?limit/i.test(errStr);
+                                            const tier = t.status === 'success' ? 'ok' : isWarn ? 'warn' : 'err';
+                                            const card = tier === 'ok'
+                                                ? 'bg-white/[0.02] border-white/5'
+                                                : tier === 'warn'
+                                                ? 'bg-yellow-500/5 border-yellow-500/20'
+                                                : 'bg-red-500/5 border-red-500/20 shadow-lg shadow-red-500/5';
+                                            const dot = tier === 'ok'
+                                                ? 'bg-green-500'
+                                                : tier === 'warn'
+                                                ? 'bg-yellow-500'
+                                                : 'bg-red-500 animate-pulse';
+                                            const textColor = tier === 'ok'
+                                                ? 'text-green-500'
+                                                : tier === 'warn'
+                                                ? 'text-yellow-500'
+                                                : 'text-red-500';
+                                            return (
+                                            <div key={i} className={`p-5 rounded-2xl border transition-all ${card}`}>
                                                 <div className="flex items-center justify-between mb-3">
                                                     <span className="text-xs font-black uppercase tracking-widest truncate mr-2 text-white">{t.name}</span>
-                                                    <div className={`w-2 h-2 rounded-full ${t.status === 'success' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                                                    <div className={`w-2 h-2 rounded-full ${dot}`} />
                                                 </div>
                                                 <div className="text-[9px] font-black text-gray-500 font-mono mb-4 truncate italic">{t.id}</div>
                                                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">Status</span>
-                                                    {t.status === 'success' ? (
-                                                        <span className="text-[10px] font-black text-green-500">{t.count} VIDS SYNCED</span>
+                                                    {tier === 'ok' ? (
+                                                        <span className={`text-[10px] font-black ${textColor}`}>{t.count} VIDS SYNCED</span>
                                                     ) : (
-                                                        <span className="text-[10px] font-black text-red-500 truncate max-w-[120px]" title={t.error}>{t.error || 'Fetch Error'}</span>
+                                                        <span className={`text-[10px] font-black truncate max-w-[160px] ${textColor}`} title={t.error}>
+                                                            {tier === 'warn' ? 'IG rate-limited (expected)' : (t.error || 'Fetch Error')}
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     <div className="mt-8 p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
