@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-10T09:56:44.593Z",
+  "generated_at": "2026-05-10T10:26:56.490Z",
   "guild_id": "1298972908193972255",
   "guild_name": "Shinel Studios",
   "webhooks": {
@@ -9,6 +9,6 @@
     "shinel-uploads-feed": "https://discord.com/api/webhooks/1502972365536235520/78uJxL5cJXjJC_AvHqklF9MrCliwpWvCZm13MB2qMQM4p4FRZcSIBFbb5nRRzgNFG4YC",
     "client-uploads-feed": "https://discord.com/api/webhooks/1502972372750176379/y6mN2PKrmi4KGm3t7Nea95VBtYs_CAVIq6I5jI6ixTOJWeJ3Lob6cOJxsILE8PXXH1RP"
   },
-  "api_calls": 127,
-  "duration_seconds": "71.1"
+  "api_calls": 45,
+  "duration_seconds": "14.3"
 }
