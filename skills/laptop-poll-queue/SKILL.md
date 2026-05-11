@@ -47,6 +47,55 @@ If only one cron slot is available in the schedule tool, use `*/20 * * * *` (eve
 
 The cache makes most runs (the "no work" ones) zero-context — heartbeat call only, ~200 bytes in/out, no JSON parsing.
 
+## WebSocket push (real-time mode) — optional, runs alongside polling
+
+The worker exposes a WebSocket endpoint that pushes a `task_available` message the instant a new `laptop_tasks` row is inserted (manual cockpit "▶ Sync IG" clicks, scheduled-task fires, milestone follow-ups). When you're listening, latency drops from "up to 20 min" to ~2 sec.
+
+**Endpoint:**
+```
+wss://shinel-auth.shinelstudioofficial.workers.dev/admin/agency/laptop/ws
+  ?laptop_id={LAPTOP_ID}&token={SHINEL_LAPTOP_TOKEN}&version=1.3
+```
+
+**Message shapes** (server → client):
+```json
+{ "type": "hello", "ts": 1715300000000, "laptop_id": "shinel-mainframe", "buffered": 0 }
+{ "type": "task_available", "task_id": "uuid", "task_type": "ig_followers_fetch",
+  "client_id": 7, "priority": 5, "source": "cockpit:user", "ts": 1715300000000 }
+{ "type": "pong", "ts": 1715300010000 }
+```
+
+Send `{ "type": "ping" }` once every 30 s to keep the connection warm.
+
+### Two ways to use the push channel
+
+**Mode A — Listen-tail (recommended, no daemon needed):**
+After running the polling loop above, if any tasks were claimed, open a WS connection and listen for up to 4 minutes for more `task_available` pushes. On each push, claim + execute + patch. Then close + exit. This means the laptop is responsive for ~4 minutes after every wake-up, giving most user-triggered tasks effectively-instant execution.
+
+**Mode B — Always-on bridge daemon (advanced, requires a separate process):**
+Run a tiny standalone bridge (Node.js or Python `websocket-client`) at Windows logon. The bridge keeps a WS open 24/7. When a push arrives, it writes a `trigger.txt` file in the Cowork workspace folder; a separate `*/1 * * * *` scheduled task checks for the file and, if present, runs the full claim/execute loop and deletes the marker.
+
+For Mode A, append this step to the end of the polling loop:
+
+```
+## Step 8 — Listen-tail (optional but cheap)
+
+If `claimed_count > 0` (you were already going to be alive for a few seconds anyway):
+  1. Open `WSS(/admin/agency/laptop/ws?laptop_id={LAPTOP_ID}&token={TOKEN}&version=1.3)`.
+  2. Set a 4-minute hard deadline. Also a 30 s ping interval.
+  3. On `task_available` message → claim 1 task by ID-or-priority, execute it, patch result.
+     (Use the same handler dispatch from earlier steps.)
+  4. On deadline reached OR 2 minutes of silence → close + exit.
+
+If `claimed_count === 0` (idle wake): skip listen-tail entirely. Save tokens.
+```
+
+The listen-tail makes ~80% of cockpit-clicks land within 2 seconds, without any extra daemon. Polling fills the gaps.
+
+### Diagnostic
+- `GET /admin/agency/laptop/ws/status?laptop_id=shinel-mainframe` → `{ ok, connections, conns: [...] }`
+- Use this from the cockpit (or curl) to verify your laptop is actually connected when you expect it to be.
+
 ## Step 1 — Claim
 
 POST `{WORKER}/admin/agency/laptop/claim` with body:

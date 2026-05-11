@@ -56,6 +56,8 @@ function CardModal({ project, clients, editors, onClose, onSaved }) {
   const [status, setStatus] = useState(project.status || "planned");
   const [editorId, setEditorId] = useState(project.assigned_editor_id || "");
   const [payment, setPayment] = useState(project.editor_payment_inr || 0);
+  const [clientCharge, setClientCharge] = useState(project.client_charge_inr || 0);
+  const [dueDate, setDueDate] = useState(project.due_date ? String(project.due_date).slice(0, 10) : "");
   const [busy, setBusy] = useState(false);
 
   const selectedEditor = editors.find((e) => e.id === editorId);
@@ -78,6 +80,8 @@ function CardModal({ project, clients, editors, onClose, onSaved }) {
         status,
         assigned_editor_id: editorId || null,
         editor_payment_inr: isFreelance ? parseInt(payment || 0, 10) : 0,
+        client_charge_inr: parseInt(clientCharge || 0, 10),
+        due_date: dueDate || null,
       };
       const res = await authedFetch(`/admin/agency/projects/${encodeURIComponent(project.id)}`, {
         method: "PATCH",
@@ -166,9 +170,44 @@ function CardModal({ project, clients, editors, onClose, onSaved }) {
               <strong>Salaried editor</strong> — no per-project payment. Covered by ₹{(selectedEditor.monthly_salary_inr || 0).toLocaleString("en-IN")}/month.
             </div>
           )}
-          {project.due_date && (
-            <div className="text-xs text-neutral-500">Due: {fmtDate(project.due_date)}</div>
-          )}
+
+          {/* Client charge — what we INVOICE the client for this project */}
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">
+              Client charge (₹) <span className="text-neutral-400 normal-case">— what we invoice the client</span>
+            </label>
+            <input
+              type="number"
+              value={clientCharge}
+              onChange={(e) => setClientCharge(e.target.value)}
+              placeholder="0"
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm"
+            />
+            {/* Live margin readout. Positive = profit, negative = loss. */}
+            {(parseInt(clientCharge || 0, 10) > 0 || parseInt(payment || 0, 10) > 0) && (() => {
+              const charge = parseInt(clientCharge || 0, 10);
+              const cost = isFreelance ? parseInt(payment || 0, 10) : 0;
+              const margin = charge - cost;
+              const marginPct = charge > 0 ? Math.round((margin / charge) * 100) : 0;
+              return (
+                <p className={`text-[10px] mt-1 ${margin > 0 ? "text-emerald-600" : margin < 0 ? "text-red-500" : "text-neutral-500"}`}>
+                  Margin: ₹{margin.toLocaleString("en-IN")} ({marginPct}%)
+                  {!isFreelance && cost === 0 && " · salaried editor, no per-project cost"}
+                </p>
+              );
+            })()}
+          </div>
+
+          {/* Due date — editable */}
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Due date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
           {project.brief_md && (
             <div className="text-sm bg-neutral-100 dark:bg-neutral-900 rounded-lg p-3 max-h-32 overflow-y-auto whitespace-pre-wrap">{project.brief_md}</div>
           )}
@@ -195,6 +234,7 @@ function NewProjectModal({ clients, onClose, onCreated }) {
     asset_type: "long-form",
     status: "planned",
     due_date: "",
+    client_charge_inr: 0,
   });
   const [busy, setBusy] = useState(false);
   const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -256,9 +296,15 @@ function NewProjectModal({ clients, onClose, onCreated }) {
               </select>
             </div>
           </div>
-          <div>
-            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Due date (optional)</label>
-            <input type="date" value={form.due_date} onChange={update("due_date")} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Due date (optional)</label>
+              <input type="date" value={form.due_date} onChange={update("due_date")} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Client charge ₹ (optional)</label>
+              <input type="number" value={form.client_charge_inr} onChange={update("client_charge_inr")} placeholder="0" className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">

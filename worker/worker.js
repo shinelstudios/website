@@ -24,7 +24,11 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings } from "./agency-handlers.js";
+// Re-export the Durable Object so the runtime can instantiate it. Without
+// this line, `wrangler.toml`'s `class_name = "TaskPushHub"` would fail to
+// resolve and the worker would 500 on any /admin/agency/laptop/ws hit.
+export { TaskPushHub } from "./task-push-hub.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -6670,6 +6674,14 @@ const handler = {
         const sched = await runScheduledTaskTick(env);
         if (sched.fired > 0) console.log("CRON scheduled-task-tick:", JSON.stringify(sched));
       } catch (e) { console.error("scheduled-task-tick failed:", e.message); }
+      try {
+        const health = await runHealthCheck(env);
+        if (health.overall !== "ok") console.log("CRON health:", JSON.stringify(health));
+      } catch (e) { console.error("health-check failed:", e.message); }
+      try {
+        const todos = await runPersonalTodoPings(env);
+        if (todos.pinged > 0) console.log("CRON todo-pings:", JSON.stringify(todos));
+      } catch (e) { console.error("todo-pings failed:", e.message); }
     })());
   }
 };

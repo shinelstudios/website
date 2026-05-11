@@ -1,0 +1,15 @@
+{
+  "name": "shinel-push-bridge",
+  "version": "1.0.0",
+  "description": "WebSocket bridge daemon for the always-on Shinel laptop. Listens for task pushes from the worker DO and writes trigger markers for the Cowork SKILL.",
+  "main": "push-bridge.js",
+  "scripts": {
+    "start": "node push-bridge.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

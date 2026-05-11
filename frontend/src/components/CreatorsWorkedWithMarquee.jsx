@@ -521,8 +521,9 @@ const CreatorsWorkedWithMarquee = ({
                 })}
               </ul>
 
-              {/* Segment B (clone) */}
-              {enableAnimation && (
+              {/* Segment B (clone) — ALWAYS rendered when scrolling could happen.
+                  Required for the -50% keyframe loop to wrap seamlessly. */}
+              {!showStatic && (
                 <ul
                   className="cw-segment"
                   aria-hidden="true" // Clone is decorative
@@ -735,26 +736,29 @@ const CreatorsWorkedWithMarquee = ({
           letter-spacing: 0.05em;
         }
 
-        /* RTL Direction */
+        /* RTL Direction — uses -50% which works WITHOUT JS measurement because
+           the track contains 2 identical segments. Translating -50% moves
+           exactly one segment-width left, then loops seamlessly. Previously
+           we used var(--neg-animation-distance) set by JS, which left the
+           strip static whenever the measurement was 0/NaN/late (hydration,
+           empty data, font-loading, iOS Safari, etc). */
         @keyframes cw-marquee-rtl {
           from { transform: translate3d(0, 0, 0); }
-          to { transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          to   { transform: translate3d(-50%, 0, 0); }
         }
-        
         @-webkit-keyframes cw-marquee-rtl {
           from { -webkit-transform: translate3d(0, 0, 0); }
-          to { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
+          to   { -webkit-transform: translate3d(-50%, 0, 0); }
         }
 
         /* LTR Direction */
         @keyframes cw-marquee-ltr {
-          from { transform: translate3d(var(--neg-animation-distance), 0, 0); }
-          to { transform: translate3d(0, 0, 0); }
+          from { transform: translate3d(-50%, 0, 0); }
+          to   { transform: translate3d(0, 0, 0); }
         }
-        
         @-webkit-keyframes cw-marquee-ltr {
-          from { -webkit-transform: translate3d(var(--neg-animation-distance), 0, 0); }
-          to { -webkit-transform: translate3d(0, 0, 0); }
+          from { -webkit-transform: translate3d(-50%, 0, 0); }
+          to   { -webkit-transform: translate3d(0, 0, 0); }
         }
 
       `}</style>

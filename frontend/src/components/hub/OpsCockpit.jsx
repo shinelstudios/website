@@ -40,6 +40,7 @@ import FinancePanel from "./FinancePanel";
 import LaptopQueuePanel from "./LaptopQueuePanel";
 import ScheduledTasksPanel from "./ScheduledTasksPanel";
 import AddSomethingButton from "./AddSomethingButton";
+import PersonalTodosPanel from "./PersonalTodosPanel";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -155,6 +156,23 @@ function ActionsMenu({ onAfterAction }) {
                 alert(`Pulse total: ${j.pulse_total} · keys: ${j.yt_api_keys_configured} · clients with YT: ${j.clients_with_youtube_id}`);
               })}
             >🩺 <span>Pulse diagnostics</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Health", async () => {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/health?alert=1`, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  credentials: "include",
+                });
+                const j = await r.json();
+                const lines = [`Health: ${j.overall.toUpperCase()}`, ""];
+                for (const c of (j.checks || [])) {
+                  const icon = c.status === "ok" ? "✓" : c.status === "warn" ? "⚠" : "✗";
+                  lines.push(`${icon} ${c.name}: ${c.message || c.status}`);
+                }
+                alert(lines.join("\n"));
+              })}
+            >❤ <span>System health check</span></button>
           </div>
         </>
       )}
@@ -191,27 +209,36 @@ function QuickActionsBanner({ snapshot }) {
 // Tab navigation for cockpit sections.
 const COCKPIT_TABS = [
   { key: "overview",   label: "Overview" },
+  { key: "todos",      label: "My Todos" },
   { key: "pipeline",   label: "Pipeline" },
   { key: "finance",    label: "Finance" },
   { key: "team",       label: "Team" },
   { key: "automation", label: "Automation" },
 ];
-function CockpitTabs({ active, onChange }) {
+function CockpitTabs({ active, onChange, badges = {} }) {
   return (
     <div className="mb-4 flex gap-1 overflow-x-auto -mx-1 px-1 border-b border-neutral-200 dark:border-neutral-800">
-      {COCKPIT_TABS.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`px-3 md:px-4 py-2 text-sm font-bold whitespace-nowrap transition-colors border-b-2 -mb-px ${
-            active === t.key
-              ? "border-[var(--orange)] text-[var(--orange)]"
-              : "border-transparent text-neutral-500 hover:text-neutral-700"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+      {COCKPIT_TABS.map((t) => {
+        const badge = badges[t.key];
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={`relative px-3 md:px-4 py-2 text-sm font-bold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+              active === t.key
+                ? "border-[var(--orange)] text-[var(--orange)]"
+                : "border-transparent text-neutral-500 hover:text-neutral-700"
+            }`}
+          >
+            {t.label}
+            {badge > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] px-1 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold align-middle">
+                {badge > 99 ? "99+" : badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -267,23 +294,45 @@ function DiscordTestButton() {
   );
 }
 
-function StatTile({ icon: Icon, label, value, sub, accent = "neutral" }) {
+function StatTile({ icon: Icon, label, value, sub, accent = "neutral", onClick, href, tooltip }) {
   const accentClasses = {
     neutral: "border-neutral-200 dark:border-neutral-800",
     orange: "border-[var(--orange)]/30",
     danger: "border-red-500/30",
     success: "border-green-500/30",
   };
-  return (
-    <div className={`rounded-xl border-2 ${accentClasses[accent]} p-4 bg-[var(--surface-elev)]`}>
+  const clickable = onClick || href;
+  const baseClasses = `rounded-xl border-2 ${accentClasses[accent]} p-4 bg-[var(--surface-elev)] transition-all ${
+    clickable
+      ? "cursor-pointer hover:scale-[1.02] hover:border-[var(--orange)]/60 hover:bg-[var(--surface-alt)] active:scale-[0.98]"
+      : ""
+  }`;
+  const content = (
+    <>
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-neutral-500 mb-2">
         <Icon size={14} />
         <span>{label}</span>
+        {clickable && <span className="ml-auto text-[9px] text-neutral-400">→</span>}
       </div>
       <div className="text-2xl font-bold tabular-nums">{value}</div>
       {sub && <div className="text-xs text-neutral-500 mt-1">{sub}</div>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link to={href} className={baseClasses} title={tooltip}>
+        {content}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button onClick={onClick} className={`text-left w-full ${baseClasses}`} title={tooltip}>
+        {content}
+      </button>
+    );
+  }
+  return <div className={baseClasses} title={tooltip}>{content}</div>;
 }
 
 function SectionCard({ title, icon: Icon, children, action }) {
@@ -323,6 +372,30 @@ export default function OpsCockpit() {
   const [busyClientId, setBusyClientId] = useState(null);
   const [igModalClient, setIgModalClient] = useState(null);
   const [driveModalClient, setDriveModalClient] = useState(null);
+  const [todoBadge, setTodoBadge] = useState(0);
+
+  // Background load of MY overdue+due-today todo count for the tab badge.
+  // Cheap call; reused across tab switches via the same endpoint.
+  useEffect(() => {
+    let cancelled = false;
+    const loadBadge = async () => {
+      try {
+        const token = getAccessToken();
+        if (!token) return;
+        const r = await fetch(`${AUTH_BASE}/admin/agency/todos`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        });
+        if (!r.ok || cancelled) return;
+        const j = await r.json();
+        const c = j?.counts || {};
+        if (!cancelled) setTodoBadge((c.overdue || 0) + (c.due_today || 0));
+      } catch {}
+    };
+    loadBadge();
+    const interval = setInterval(loadBadge, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [tab]); // re-fetch on tab change so the badge updates after mutations in the panel
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -476,7 +549,7 @@ export default function OpsCockpit() {
       </header>
 
       <QuickActionsBanner snapshot={d} />
-      <CockpitTabs active={tab} onChange={setTab} />
+      <CockpitTabs active={tab} onChange={setTab} badges={{ todos: todoBadge }} />
 
       {/* Stat tiles row — overview tab only; other tabs go straight to their panel */}
       {tab !== "overview" && (
@@ -488,22 +561,41 @@ export default function OpsCockpit() {
 
       {/* Top stat tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-        <StatTile icon={Users} label="Clients" value={clients.length} sub="Active fleet" />
+        <StatTile
+          icon={Users} label="Clients" value={clients.length} sub="Active fleet"
+          href="/dashboard/clients"
+          tooltip="View all clients"
+        />
         <StatTile
           icon={TrendingUp}
           label="Total reach"
           value={fmtNum(d.total_reach || 0)}
           sub="YT subs + IG followers"
           accent={d.total_reach > 0 ? "success" : "neutral"}
+          onClick={() => setTab("overview")}
+          tooltip="Aggregated across all managed YT channels + IG accounts"
         />
-        <StatTile icon={Eye} label="Videos" value={d.video_count ?? 0} sub="In media library" />
-        <StatTile icon={Activity} label="Thumbnails" value={d.thumbnail_count ?? 0} sub="Designed" />
+        <StatTile
+          icon={Eye} label="Videos" value={d.video_count ?? 0} sub="In media library"
+          href="/dashboard/media?tab=videos"
+          tooltip="Open Media Hub · Videos"
+        />
+        <StatTile
+          icon={Activity} label="Thumbnails" value={d.thumbnail_count ?? 0} sub="Designed"
+          href="/dashboard/media?tab=thumbnails"
+          tooltip="Open Media Hub · Thumbnails"
+        />
         <StatTile
           icon={Clock}
           label="Pending SEO"
           value={pendingSeo.length}
           sub={pendingSeo.length > 0 ? "Awaiting writeback" : "All applied"}
           accent={pendingSeo.length > 0 ? "orange" : "success"}
+          onClick={() => {
+            setTab("overview");
+            setTimeout(() => document.getElementById("pending-seo-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+          }}
+          tooltip="Jump to Pending SEO list"
         />
         <StatTile
           icon={Flame}
@@ -511,6 +603,11 @@ export default function OpsCockpit() {
           value={spikes.length}
           sub="Patch days · tournaments"
           accent={spikes.length > 0 ? "orange" : "neutral"}
+          onClick={() => {
+            setTab("overview");
+            setTimeout(() => document.getElementById("spikes-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+          }}
+          tooltip="Jump to Active News Spikes"
         />
         <StatTile
           icon={TrendingUp}
@@ -518,6 +615,11 @@ export default function OpsCockpit() {
           value={overperformers.length}
           sub="Competitor videos > 2× median"
           accent={overperformers.length > 0 ? "orange" : "neutral"}
+          onClick={() => {
+            setTab("overview");
+            setTimeout(() => document.getElementById("overperformers-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+          }}
+          tooltip="Jump to Competitor Overperformers"
         />
         <StatTile
           icon={CheckCircle2}
@@ -525,6 +627,11 @@ export default function OpsCockpit() {
           value={`${todayResearch.length}/${clients.length}`}
           sub="Per-client daily files"
           accent={todayResearch.length === clients.length ? "success" : "orange"}
+          onClick={() => {
+            setTab("overview");
+            setTimeout(() => document.getElementById("research-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+          }}
+          tooltip="Jump to Today's Research"
         />
       </div>
 
@@ -683,6 +790,7 @@ export default function OpsCockpit() {
             </div>
           </SectionCard>
 
+          <div id="pending-seo-card" className="scroll-mt-24">
           <SectionCard
             title="Pending SEO Queue"
             icon={Clock}
@@ -712,6 +820,7 @@ export default function OpsCockpit() {
               </ul>
             )}
           </SectionCard>
+          </div>
 
           <SectionCard title="Recently Applied SEO" icon={CheckCircle2}>
             {recentSeo.length === 0 ? (
@@ -733,6 +842,7 @@ export default function OpsCockpit() {
 
         {/* RIGHT — spikes + overperformers + research + agent log */}
         <div className="space-y-5">
+          <div id="spikes-card" className="scroll-mt-24">
           <SectionCard
             title="Active News Spikes"
             icon={Flame}
@@ -764,7 +874,9 @@ export default function OpsCockpit() {
               </ul>
             )}
           </SectionCard>
+          </div>
 
+          <div id="overperformers-card" className="scroll-mt-24">
           <SectionCard
             title="Competitor Overperformers"
             icon={TrendingUp}
@@ -796,7 +908,9 @@ export default function OpsCockpit() {
               </ul>
             )}
           </SectionCard>
+          </div>
 
+          <div id="research-card" className="scroll-mt-24">
           <SectionCard title="Today's Research" icon={Calendar}>
             <div className="grid grid-cols-2 gap-2">
               {clients.map((c) => {
@@ -826,6 +940,7 @@ export default function OpsCockpit() {
               })}
             </div>
           </SectionCard>
+          </div>
 
           {/* Overview-only: pipeline preview lives inside the right column. */}
           {tab === "overview" && (
@@ -890,6 +1005,7 @@ export default function OpsCockpit() {
       </div>
 
       {/* Tab-gated full-width panels — render BELOW the overview grid */}
+      {tab === "todos" && <PersonalTodosPanel />}
       {tab === "pipeline" && (
         <PipelineKanban clients={clients} projectStatus={projectStatus} onChange={fetchSnapshot} />
       )}

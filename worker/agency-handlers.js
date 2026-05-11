@@ -19,6 +19,8 @@
  * it handles a route.
  */
 
+import { notifyLaptopPush } from "./task-push-hub.js";
+
 const BASE_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store",
@@ -423,8 +425,10 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
   // The laptop never needs a user JWT; it just needs LAPTOP_API_TOKEN.
   // ========================================================================
   if (path.startsWith("/admin/agency/laptop/")) {
-    // Quick auth check
-    const laptopToken = request.headers.get("x-laptop-token") || "";
+    // Quick auth check. WS upgrade accepts the token via ?token= query because
+    // browser WebSocket clients can't set custom headers; native clients can
+    // still send the header. Either works for either endpoint.
+    const laptopToken = request.headers.get("x-laptop-token") || url.searchParams.get("token") || "";
     const expectedToken = env.LAPTOP_API_TOKEN || "";
     let authed = false;
     let authKind = null;
@@ -437,6 +441,40 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     }
     if (!authed) {
       return err("unauthorized — provide X-Laptop-Token header or team JWT", 401);
+    }
+
+    // ---- GET /admin/agency/laptop/ws — WebSocket upgrade to TaskPushHub DO
+    // Auth already validated above. Forward the request to the per-laptop DO
+    // instance and let it own the connection. Pushes from the worker reach
+    // this socket whenever a new laptop_tasks row is inserted.
+    if (path === "/admin/agency/laptop/ws" && method === "GET") {
+      if (!env.TASK_PUSH_HUB) {
+        return err("WebSocket push not configured on this worker (TASK_PUSH_HUB binding missing)", 501);
+      }
+      const upgrade = request.headers.get("Upgrade") || "";
+      if (upgrade.toLowerCase() !== "websocket") {
+        return err("Expected WebSocket upgrade. Connect with wss://", 426);
+      }
+      const laptopId = url.searchParams.get("laptop_id") || "shinel-mainframe";
+      const id = env.TASK_PUSH_HUB.idFromName(laptopId);
+      const stub = env.TASK_PUSH_HUB.get(id);
+      const doUrl = new URL("https://do/ws");
+      doUrl.searchParams.set("laptop_id", laptopId);
+      doUrl.searchParams.set("version", url.searchParams.get("version") || "1.3");
+      return stub.fetch(new Request(doUrl, {
+        method: "GET",
+        headers: request.headers,
+      }));
+    }
+
+    // ---- GET /admin/agency/laptop/ws/status — show current connections for a laptop
+    if (path === "/admin/agency/laptop/ws/status" && method === "GET") {
+      if (!env.TASK_PUSH_HUB) return ok({ ok: false, configured: false });
+      const laptopId = url.searchParams.get("laptop_id") || "shinel-mainframe";
+      const id = env.TASK_PUSH_HUB.idFromName(laptopId);
+      const stub = env.TASK_PUSH_HUB.get(id);
+      const r = await stub.fetch("https://do/status");
+      return new Response(r.body, { status: r.status, headers: { "Content-Type": "application/json", ...corsHeaders(request, env) } });
     }
 
     // ---- POST /admin/agency/laptop/claim — atomically claim N pending tasks
@@ -544,6 +582,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
                 `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, created_by)
                  VALUES (?1, 'milestone_story_create', ?2, ?3, 5, 'milestone_check')`
               ).bind(followupId, cand.client_id, JSON.stringify({ target: cand.target, current_subs: cand.subs })).run();
+              // Push to any listening laptop so the follow-up runs immediately
+              notifyLaptopPush(env, "shinel-mainframe", {
+                type: "task_available", task_id: followupId, task_type: "milestone_story_create",
+                client_id: cand.client_id, priority: 5, source: "milestone_check",
+              }).catch(() => {});
             }
           }
         } catch (e) { console.error("post-complete side-effect failed:", e.message); }
@@ -570,6 +613,13 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         body.scheduled_for || null,
         body.created_by || authKind
       ).run();
+      // Push to any listening laptop — fire-and-forget so a stuck DO never
+      // blocks the API response. Polling stays as the safety net.
+      notifyLaptopPush(env, "shinel-mainframe", {
+        type: "task_available", task_id: id, task_type: body.type,
+        client_id: body.client_id || null, priority: parseInt(body.priority || 0, 10),
+        source: body.created_by || authKind || "enqueue",
+      }).catch(() => {});
       return ok({ id, enqueued: true }, 201);
     }
 
@@ -730,9 +780,13 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     return err("laptop endpoint not found", 404);
   }
 
-  // Auth gate (everything below requires admin/team JWT)
-  try { await requireTeamOrThrow(request, secret); }
+  // Auth gate (everything below requires admin/team JWT). Capture the
+  // payload so handlers that scope by caller (e.g. personal todos) can
+  // read the email/role off the JWT instead of querying again.
+  let authPayload = null;
+  try { authPayload = await requireTeamOrThrow(request, secret, env); }
   catch (e) { return err(e?.message || "unauthorized", e?.status || 401); }
+  const callerEmail = String(authPayload?.email || "").trim().toLowerCase();
 
   try {
     // ---- /admin/agency/ops/snapshot — single call powering the cockpit dashboard
@@ -890,8 +944,8 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       if (!body.client_id || !body.title) return err("client_id and title required");
       const id = crypto.randomUUID();
       await env.DB.prepare(
-        `INSERT INTO projects (id, client_id, title, asset_type, status, brief_md, due_date, scheduled_publish_at, tags_json, metadata_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+        `INSERT INTO projects (id, client_id, title, asset_type, status, brief_md, due_date, scheduled_publish_at, tags_json, metadata_json, client_charge_inr, editor_payment_inr)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`
       ).bind(
         id,
         body.client_id,
@@ -902,7 +956,9 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         body.due_date || null,
         body.scheduled_publish_at || null,
         body.tags ? JSON.stringify(body.tags) : null,
-        body.metadata ? JSON.stringify(body.metadata) : null
+        body.metadata ? JSON.stringify(body.metadata) : null,
+        parseInt(body.client_charge_inr || 0, 10),
+        parseInt(body.editor_payment_inr || 0, 10)
       ).run();
       return ok({ id, created: true }, 201);
     }
@@ -916,7 +972,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     if (projectMatch && method === "PATCH") {
       const id = projectMatch[1];
       const body = await request.json().catch(() => ({}));
-      const allowed = ["title", "asset_type", "status", "assigned_editor_id", "brief_md", "due_date", "scheduled_publish_at", "youtube_video_id", "instagram_post_id", "editor_payment_inr"];
+      const allowed = ["title", "asset_type", "status", "assigned_editor_id", "brief_md", "due_date", "scheduled_publish_at", "youtube_video_id", "instagram_post_id", "editor_payment_inr", "client_charge_inr", "currency"];
 
       // Validate status if provided
       if (body.status !== undefined && !PROJECT_STATUSES.includes(body.status)) {
@@ -1479,6 +1535,217 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok(result);
     }
 
+    // ---- GET /admin/agency/health — full system health snapshot
+    if (path === "/admin/agency/health" && method === "GET") {
+      const force = url.searchParams.get("alert") === "1";
+      const result = await runHealthCheck(env, { force });
+      return ok(result);
+    }
+
+    // ========================================================================
+    // PERSONAL TODOS — owner-only list, scoped strictly to JWT email.
+    // Each user only ever sees / mutates their own todos. The cron pings their
+    // private Discord webhook (owner_webhooks table) when items go overdue.
+    // ========================================================================
+
+    // ---- GET /admin/agency/todos  — list MY todos
+    //   Query: ?status=open|done|all (default open+in_progress)
+    //          ?include_snoozed=1 (default: show all incl snoozed)
+    //          ?include_completed=1 (default: hide completed)
+    if (path === "/admin/agency/todos" && method === "GET") {
+      if (!callerEmail) return err("token has no email", 401);
+      const statusFilter = (url.searchParams.get("status") || "active").toLowerCase();
+      const includeDone = url.searchParams.get("include_completed") === "1" || statusFilter === "all" || statusFilter === "done";
+      const where = ["owner_email = ?1"];
+      const binds = [callerEmail];
+      if (!includeDone) where.push("status NOT IN ('done', 'cancelled')");
+      if (statusFilter === "done") { where.length = 1; where.push("status = 'done'"); }
+      const { results } = await env.DB.prepare(
+        `SELECT t.*, p.title AS linked_project_title, c.name AS linked_client_name
+         FROM personal_todos t
+         LEFT JOIN projects p ON t.linked_project_id = p.id
+         LEFT JOIN clients c ON t.linked_client_id = c.id
+         WHERE ${where.join(" AND ")}
+         ORDER BY
+           CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,
+           CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+           (due_date IS NULL),
+           due_date ASC,
+           id DESC
+         LIMIT 500`
+      ).bind(...binds).all();
+
+      // Pre-compute "bucket" for the UI (overdue | due_today | upcoming | someday | done)
+      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().slice(0, 10);
+      const todos = (results || []).map((t) => {
+        let bucket = "someday";
+        if (t.status === "done") bucket = "done";
+        else if (t.status === "cancelled") bucket = "cancelled";
+        else if (!t.due_date) bucket = "no_due_date";
+        else {
+          const d = String(t.due_date).slice(0, 10);
+          if (d < todayStr) bucket = "overdue";
+          else if (d === todayStr) bucket = "due_today";
+          else bucket = "upcoming";
+        }
+        return { ...t, bucket };
+      });
+
+      // Counts by bucket so the UI can render badges
+      const counts = todos.reduce((acc, t) => { acc[t.bucket] = (acc[t.bucket] || 0) + 1; return acc; }, {});
+      return ok({ count: todos.length, counts, todos });
+    }
+
+    // ---- POST /admin/agency/todos  — create MY todo
+    if (path === "/admin/agency/todos" && method === "POST") {
+      if (!callerEmail) return err("token has no email", 401);
+      const body = await request.json().catch(() => ({}));
+      if (!body.title) return err("title required");
+      const priority = ["low", "normal", "high", "urgent"].includes(body.priority) ? body.priority : "normal";
+      const recurring = ["daily", "weekdays", "weekly", "monthly"].includes(body.recurring_pattern) ? body.recurring_pattern : null;
+      const stmt = await env.DB.prepare(
+        `INSERT INTO personal_todos (owner_email, title, description, priority, status, due_date, recurring_pattern, recurring_anchor, linked_project_id, linked_client_id, tags)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
+      ).bind(
+        callerEmail,
+        String(body.title).trim().slice(0, 280),
+        String(body.description || "").slice(0, 4000),
+        priority,
+        body.status === "in_progress" ? "in_progress" : "open",
+        body.due_date || null,
+        recurring,
+        recurring ? new Date().toISOString() : null,
+        body.linked_project_id ? parseInt(body.linked_project_id, 10) : null,
+        body.linked_client_id ? parseInt(body.linked_client_id, 10) : null,
+        body.tags ? String(body.tags).slice(0, 200) : ""
+      ).run();
+      const id = stmt?.meta?.last_row_id || null;
+      return ok({ id, created: true }, 201);
+    }
+
+    // ---- Single-todo routes: PATCH / DELETE / complete / snooze
+    const todoMatch = path.match(/^\/admin\/agency\/todos\/(\d+)(?:\/(complete|snooze|reopen))?$/);
+    if (todoMatch) {
+      if (!callerEmail) return err("token has no email", 401);
+      const id = parseInt(todoMatch[1], 10);
+      const subaction = todoMatch[2] || null;
+
+      // Ownership check up front — never let one user touch another's todos.
+      const own = await env.DB.prepare(
+        "SELECT * FROM personal_todos WHERE id = ?1 AND owner_email = ?2"
+      ).bind(id, callerEmail).first();
+      if (!own) return err("todo not found", 404);
+
+      if (subaction === "complete" && method === "POST") {
+        const completedAt = new Date().toISOString();
+        await env.DB.prepare(
+          "UPDATE personal_todos SET status = 'done', completed_at = ?1, updated_at = ?1 WHERE id = ?2"
+        ).bind(completedAt, id).run();
+
+        // Spawn next instance if recurring
+        let nextId = null;
+        if (own.recurring_pattern) {
+          const nextDue = nextRecurringDate(own.due_date || completedAt, own.recurring_pattern);
+          const r = await env.DB.prepare(
+            `INSERT INTO personal_todos (owner_email, title, description, priority, status, due_date, recurring_pattern, recurring_anchor, linked_project_id, linked_client_id, tags)
+             VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?6, ?7, ?8, ?9, ?10)`
+          ).bind(
+            own.owner_email, own.title, own.description || "", own.priority,
+            nextDue, own.recurring_pattern, own.recurring_anchor || completedAt,
+            own.linked_project_id, own.linked_client_id, own.tags || ""
+          ).run();
+          nextId = r?.meta?.last_row_id || null;
+        }
+        return ok({ id, completed: true, next_id: nextId });
+      }
+
+      if (subaction === "snooze" && method === "POST") {
+        const body = await request.json().catch(() => ({}));
+        // Accept either { minutes: 60 } or { until: ISO }
+        let snoozeUntil;
+        if (body.until) snoozeUntil = new Date(body.until).toISOString();
+        else {
+          const mins = parseInt(body.minutes || 60, 10);
+          snoozeUntil = new Date(Date.now() + mins * 60_000).toISOString();
+        }
+        await env.DB.prepare(
+          "UPDATE personal_todos SET snooze_until = ?1, updated_at = datetime('now') WHERE id = ?2"
+        ).bind(snoozeUntil, id).run();
+        return ok({ id, snoozed_until: snoozeUntil });
+      }
+
+      if (subaction === "reopen" && method === "POST") {
+        await env.DB.prepare(
+          "UPDATE personal_todos SET status = 'open', completed_at = NULL, updated_at = datetime('now') WHERE id = ?1"
+        ).bind(id).run();
+        return ok({ id, reopened: true });
+      }
+
+      if (!subaction && method === "PATCH") {
+        const body = await request.json().catch(() => ({}));
+        const allowed = ["title", "description", "priority", "status", "due_date", "snooze_until", "recurring_pattern", "linked_project_id", "linked_client_id", "tags"];
+        const sets = [];
+        const binds = [];
+        let i = 1;
+        for (const k of allowed) if (body[k] !== undefined) {
+          sets.push(`${k} = ?${i++}`);
+          binds.push(body[k] === "" ? null : body[k]);
+        }
+        if (!sets.length) return err("no valid fields");
+        sets.push(`updated_at = datetime('now')`);
+        binds.push(id);
+        await env.DB.prepare(`UPDATE personal_todos SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+        return ok({ id, updated: true });
+      }
+
+      if (!subaction && method === "DELETE") {
+        await env.DB.prepare("DELETE FROM personal_todos WHERE id = ?1").bind(id).run();
+        return ok({ id, deleted: true });
+      }
+
+      return err("todo subroute not found", 404);
+    }
+
+    // ---- GET /admin/agency/todos-webhook  — read my private ping config
+    if (path === "/admin/agency/todos-webhook" && method === "GET") {
+      if (!callerEmail) return err("token has no email", 401);
+      const row = await env.DB.prepare(
+        "SELECT owner_email, discord_user_id, quiet_hours_start, quiet_hours_end, daily_digest_hour, enabled, CASE WHEN webhook_url IS NULL OR webhook_url = '' THEN 0 ELSE 1 END AS has_webhook FROM owner_webhooks WHERE owner_email = ?1"
+      ).bind(callerEmail).first();
+      const fallback = !!env.DISCORD_OWNER_WEBHOOK_URL;
+      return ok({ config: row || null, fallback_env_configured: fallback });
+    }
+
+    // ---- PUT /admin/agency/todos-webhook  — set my private ping config
+    if (path === "/admin/agency/todos-webhook" && method === "PUT") {
+      if (!callerEmail) return err("token has no email", 401);
+      const body = await request.json().catch(() => ({}));
+      if (!body.webhook_url) return err("webhook_url required");
+      const url2 = String(body.webhook_url).trim();
+      if (!/^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(url2)) {
+        return err("must be a https://discord.com/api/webhooks/... URL");
+      }
+      const userId = body.discord_user_id ? String(body.discord_user_id).replace(/\D/g, "") || null : null;
+      const qs = Math.max(0, Math.min(23, parseInt(body.quiet_hours_start ?? 23, 10)));
+      const qe = Math.max(0, Math.min(23, parseInt(body.quiet_hours_end ?? 7, 10)));
+      const dh = Math.max(0, Math.min(23, parseInt(body.daily_digest_hour ?? 8, 10)));
+      await env.DB.prepare(
+        `INSERT INTO owner_webhooks (owner_email, webhook_url, discord_user_id, quiet_hours_start, quiet_hours_end, daily_digest_hour, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1)
+         ON CONFLICT(owner_email) DO UPDATE SET webhook_url = excluded.webhook_url, discord_user_id = excluded.discord_user_id, quiet_hours_start = excluded.quiet_hours_start, quiet_hours_end = excluded.quiet_hours_end, daily_digest_hour = excluded.daily_digest_hour, enabled = 1`
+      ).bind(callerEmail, url2, userId, qs, qe, dh).run();
+      return ok({ saved: true });
+    }
+
+    // ---- POST /admin/agency/todos/ping-now  — manually trigger MY pings
+    if (path === "/admin/agency/todos/ping-now" && method === "POST") {
+      if (!callerEmail) return err("token has no email", 401);
+      const body = await request.json().catch(() => ({}));
+      const result = await runPersonalTodoPings(env, { only_owner: callerEmail, force: !!body.force, kind: body.kind || "auto" });
+      return ok(result);
+    }
+
     // ---- POST /admin/agency/editor-summary/run  — manual trigger
     if (path === "/admin/agency/editor-summary/run" && method === "POST") {
       const body = await request.json().catch(() => ({}));
@@ -1957,6 +2224,346 @@ function safeJsonParse(s) {
 }
 
 // ---------------------------------------------------------------------------
+// runHealthCheck — pings every layer of the system and flags any that's down.
+//
+// Layers checked:
+//  - D1 reachable (simple SELECT)
+//  - YT API keys present
+//  - Discord webhooks configured
+//  - Always-on laptop heartbeat recent (< 30 min)
+//  - Cron has fired recently (cron.pulse.start in last hour)
+//  - KV reachable
+//
+// On any failure: posts a single Discord alert to default channel + writes
+// agent_log. To avoid alert spam, uses a KV-stored "last_alert_ts" gate so
+// the SAME failure won't ping more than once every 30 minutes.
+// ---------------------------------------------------------------------------
+export async function runHealthCheck(env, opts = {}) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const checks = [];
+
+  // 1. D1 reachable
+  try {
+    await env.DB.prepare("SELECT 1 AS ok").first();
+    checks.push({ name: "d1", status: "ok" });
+  } catch (e) {
+    checks.push({ name: "d1", status: "error", message: e.message });
+  }
+
+  // 2. YT API keys present (any of the pool)
+  const ytKeys = ["YT_API_KEY", "YT_API_KEY_2", "YT_API_KEY_3", "YT_API_KEY_4", "YT_API_KEY_5"]
+    .filter((k) => env[k]).length;
+  checks.push({
+    name: "yt_api_keys",
+    status: ytKeys > 0 ? "ok" : "error",
+    message: ytKeys > 0 ? `${ytKeys} configured` : "no keys configured",
+    count: ytKeys,
+  });
+
+  // 3. Discord webhooks
+  const dWebhooks = {
+    default: !!env.DISCORD_WEBHOOK_URL,
+    ops: !!env.DISCORD_OPS_WEBHOOK_URL,
+    finance: !!env.DISCORD_FINANCE_WEBHOOK_URL,
+  };
+  checks.push({
+    name: "discord_webhooks",
+    status: dWebhooks.default ? "ok" : "error",
+    message: dWebhooks.default ? `default ${dWebhooks.ops ? "+ops " : ""}${dWebhooks.finance ? "+finance" : ""}`.trim() : "no default webhook",
+    detail: dWebhooks,
+  });
+
+  // 4. Laptop heartbeat recent
+  try {
+    const lap = await env.DB.prepare(
+      "SELECT laptop_id, last_seen FROM laptop_heartbeats ORDER BY last_seen DESC LIMIT 1"
+    ).first();
+    if (lap && (nowSec - lap.last_seen) < 1800) {
+      checks.push({ name: "laptop_heartbeat", status: "ok", message: `${lap.laptop_id} · ${Math.floor((nowSec - lap.last_seen)/60)}m ago` });
+    } else if (lap) {
+      const minsAgo = Math.floor((nowSec - lap.last_seen) / 60);
+      checks.push({ name: "laptop_heartbeat", status: "warn", message: `last seen ${minsAgo}m ago — Cowork may be closed`, last_seen: lap.last_seen });
+    } else {
+      checks.push({ name: "laptop_heartbeat", status: "warn", message: "no laptop registered yet" });
+    }
+  } catch (e) {
+    checks.push({ name: "laptop_heartbeat", status: "error", message: e.message });
+  }
+
+  // 5. Cron firing
+  try {
+    const cronHit = await env.DB.prepare(
+      "SELECT created_at FROM agent_log WHERE action = 'cron.pulse.start' ORDER BY created_at DESC LIMIT 1"
+    ).first();
+    if (cronHit) {
+      const last = Date.parse(cronHit.created_at + "Z");
+      const minsAgo = Math.floor((Date.now() - last) / 60_000);
+      if (minsAgo < 45) {
+        checks.push({ name: "cron", status: "ok", message: `last tick ${minsAgo}m ago` });
+      } else {
+        checks.push({ name: "cron", status: "error", message: `last tick ${minsAgo}m ago — cron may be broken` });
+      }
+    } else {
+      checks.push({ name: "cron", status: "error", message: "no cron heartbeats in agent_log" });
+    }
+  } catch (e) {
+    checks.push({ name: "cron", status: "error", message: e.message });
+  }
+
+  // 6. KV reachable
+  try {
+    await env.SHINEL_AUDIT.put("app:health:probe", String(nowSec), { expirationTtl: 60 });
+    const v = await env.SHINEL_AUDIT.get("app:health:probe");
+    checks.push({ name: "kv", status: v ? "ok" : "warn", message: v ? "rw ok" : "read returned null" });
+  } catch (e) {
+    checks.push({ name: "kv", status: "error", message: e.message });
+  }
+
+  const errors = checks.filter((c) => c.status === "error");
+  const warns  = checks.filter((c) => c.status === "warn");
+  const overall = errors.length > 0 ? "error" : warns.length > 0 ? "warn" : "ok";
+
+  // Alert gating — only post to Discord if state DEGRADED since last check.
+  // Persist last-known overall state in KV; alert when it transitions from ok→warn/error.
+  let alerted = false;
+  try {
+    const last = await env.SHINEL_AUDIT.get("app:health:last_state") || "ok";
+    const shouldAlert = (overall !== "ok" && last === "ok") || (overall === "error" && last !== "error") || opts.force;
+    if (shouldAlert) {
+      const lines = [`🩺 **Health: ${overall.toUpperCase()}**`];
+      for (const c of [...errors, ...warns]) {
+        const emoji = c.status === "error" ? "❌" : "⚠";
+        lines.push(`${emoji} ${c.name}: ${c.message || ""}`);
+      }
+      // Also show the OK ones briefly so it's clear what's still up
+      const okChecks = checks.filter((c) => c.status === "ok").map((c) => c.name);
+      if (okChecks.length > 0) lines.push(`\n✅ ${okChecks.join(", ")}`);
+      await postToDiscord(env, { content: lines.join("\n") }, "default");
+      alerted = true;
+    }
+    if (overall === "ok" && last !== "ok") {
+      // Recovery ping
+      await postToDiscord(env, { content: `✅ **Health recovered** — all checks passing again.` }, "default");
+      alerted = true;
+    }
+    await env.SHINEL_AUDIT.put("app:health:last_state", overall);
+  } catch (e) { console.error("health alert gate failed:", e.message); }
+
+  // Audit log
+  try {
+    await env.DB.prepare(
+      `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+    ).bind(
+      "health.check",
+      overall === "ok" ? "info" : overall,
+      `Health: ${overall} · ${errors.length} errors · ${warns.length} warns`,
+      JSON.stringify({ overall, checks })
+    ).run();
+  } catch {}
+
+  return { ok: true, overall, checks, errors_count: errors.length, warns_count: warns.length, alerted };
+}
+
+// ---------------------------------------------------------------------------
+// nextRecurringDate — given a base date and a recurring pattern, return the
+// next occurrence (ISO date YYYY-MM-DD). Used when a recurring todo is
+// completed to spawn the next instance.
+// ---------------------------------------------------------------------------
+export function nextRecurringDate(baseIso, pattern) {
+  const base = new Date(baseIso || Date.now());
+  if (Number.isNaN(base.getTime())) return null;
+  const d = new Date(base.getTime());
+  if (pattern === "daily") {
+    d.setUTCDate(d.getUTCDate() + 1);
+  } else if (pattern === "weekdays") {
+    do { d.setUTCDate(d.getUTCDate() + 1); } while ([0, 6].includes(d.getUTCDay()));
+  } else if (pattern === "weekly") {
+    d.setUTCDate(d.getUTCDate() + 7);
+  } else if (pattern === "monthly") {
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  } else {
+    return null;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// runPersonalTodoPings — checks every owner's open todos and posts a Discord
+// ping to their PRIVATE webhook for items that need attention.
+//
+// Categories of ping:
+//   - overdue       (due_date < today, status open/in_progress)
+//   - due_today     (due_date == today, status open/in_progress)
+//   - urgent_due_2h (due_date <= now+2h AND priority in high/urgent, status open/in_progress)
+//   - morning_digest (once per day at owner's daily_digest_hour IST)
+//
+// De-duplication rules:
+//   - One owner gets AT MOST one ping every 3 hours (overdue/urgent buckets)
+//   - One owner gets AT MOST one morning_digest per day
+//   - Snoozed todos (snooze_until > now) are excluded from ping content
+//   - Quiet hours suppress non-urgent pings (urgent items still ping)
+//
+// Webhook resolution (per owner):
+//   1. owner_webhooks.webhook_url for owner_email
+//   2. fallback to env.DISCORD_OWNER_WEBHOOK_URL
+//   3. if neither, skip silently for that owner
+//
+// Opts:
+//   - only_owner: limit to one owner email (manual trigger)
+//   - force:      bypass de-dup and quiet-hours
+//   - kind:       "auto" (default), "digest", "overdue" — narrow which pings to consider
+// ---------------------------------------------------------------------------
+export async function runPersonalTodoPings(env, opts = {}) {
+  const now = new Date();
+  const nowMs = now.getTime();
+  // IST = UTC+5:30
+  const istMs = nowMs + 330 * 60_000;
+  const ist = new Date(istMs);
+  const istHour = ist.getUTCHours();
+  const istDateStr = ist.toISOString().slice(0, 10);
+  const todayUtcStr = now.toISOString().slice(0, 10);
+
+  // Get distinct owners that have any open todos
+  const { results: owners } = await env.DB.prepare(
+    `SELECT DISTINCT owner_email FROM personal_todos WHERE status IN ('open', 'in_progress')`
+  ).all();
+  const ownerList = (owners || []).map((r) => r.owner_email);
+  if (opts.only_owner) ownerList.splice(0, ownerList.length, opts.only_owner);
+  if (!ownerList.length) return { ok: true, owners: 0, pinged: 0 };
+
+  let pingedCount = 0;
+  const detail = [];
+
+  for (const ownerEmail of ownerList) {
+    // Resolve webhook for owner
+    const cfg = await env.DB.prepare(
+      "SELECT webhook_url, discord_user_id, quiet_hours_start, quiet_hours_end, daily_digest_hour, enabled FROM owner_webhooks WHERE owner_email = ?1"
+    ).bind(ownerEmail).first();
+    const webhookUrl = (cfg?.webhook_url) || env.DISCORD_OWNER_WEBHOOK_URL || "";
+    if (!webhookUrl) { detail.push({ owner: ownerEmail, skipped: "no webhook" }); continue; }
+    if (cfg && cfg.enabled === 0) { detail.push({ owner: ownerEmail, skipped: "disabled" }); continue; }
+    const mention = cfg?.discord_user_id ? `<@${cfg.discord_user_id}>` : "";
+
+    const qStart = cfg?.quiet_hours_start ?? 23;
+    const qEnd = cfg?.quiet_hours_end ?? 7;
+    const digestHour = cfg?.daily_digest_hour ?? 8;
+    // Quiet hours wrap midnight: 23..7 means hour in {23,0,1,2,3,4,5,6}
+    const inQuietHours = qStart === qEnd
+      ? false
+      : (qStart > qEnd ? (istHour >= qStart || istHour < qEnd) : (istHour >= qStart && istHour < qEnd));
+
+    // De-dup state for this owner
+    const dedupKey = `todos:lastping:${ownerEmail}`;
+    const digestKey = `todos:lastdigest:${ownerEmail}`;
+    const lastPingIso = (await env.SHINEL_AUDIT.get(dedupKey)) || null;
+    const lastDigestDate = (await env.SHINEL_AUDIT.get(digestKey)) || null;
+
+    // Pull this owner's open todos
+    const { results: todos } = await env.DB.prepare(
+      `SELECT id, title, priority, due_date, snooze_until, status, linked_project_id, linked_client_id
+       FROM personal_todos
+       WHERE owner_email = ?1 AND status IN ('open', 'in_progress')`
+    ).bind(ownerEmail).all();
+
+    const notSnoozed = (todos || []).filter((t) => !t.snooze_until || new Date(t.snooze_until).getTime() <= nowMs);
+    const overdue = notSnoozed.filter((t) => t.due_date && String(t.due_date).slice(0, 10) < todayUtcStr);
+    const dueToday = notSnoozed.filter((t) => t.due_date && String(t.due_date).slice(0, 10) === todayUtcStr);
+    const urgentSoon = notSnoozed.filter((t) =>
+      (t.priority === "urgent" || t.priority === "high") &&
+      t.due_date && new Date(t.due_date).getTime() <= nowMs + 2 * 60 * 60_000 &&
+      new Date(t.due_date).getTime() > nowMs
+    );
+
+    // Decide which ping(s) to send
+    let sentAny = false;
+
+    // Morning digest — once per IST day at the configured hour, even in quiet hours.
+    // Sends a summary even if no overdue items (so owner gets "all clear" affirmation).
+    const wantDigest = (opts.kind === "auto" || opts.kind === "digest")
+      && (lastDigestDate !== istDateStr)
+      && (istHour === digestHour);
+    if (wantDigest || (opts.force && opts.kind === "digest")) {
+      const lines = [];
+      lines.push(`${mention} ☀️ **Good morning** — ${istDateStr} (IST)`);
+      lines.push(`You have **${notSnoozed.length}** open todo${notSnoozed.length === 1 ? "" : "s"}.`);
+      if (overdue.length) lines.push(`\n🔴 **Overdue (${overdue.length})**`);
+      for (const t of overdue.slice(0, 5)) lines.push(`• [#${t.id}] ${t.title}  _(due ${t.due_date})_`);
+      if (overdue.length > 5) lines.push(`…and ${overdue.length - 5} more`);
+      if (dueToday.length) lines.push(`\n🟡 **Due today (${dueToday.length})**`);
+      for (const t of dueToday.slice(0, 5)) lines.push(`• [#${t.id}] ${t.title}`);
+      if (dueToday.length > 5) lines.push(`…and ${dueToday.length - 5} more`);
+      if (!overdue.length && !dueToday.length) lines.push(`\n✅ Nothing overdue or due today. Pick up an upcoming item if you have time.`);
+
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "Shinel Cockpit · Todos", content: lines.join("\n") }),
+        });
+        await env.SHINEL_AUDIT.put(digestKey, istDateStr, { expirationTtl: 60 * 60 * 36 });
+        sentAny = true; pingedCount++;
+      } catch (e) { console.error("[todos] digest send failed:", e.message); }
+    }
+
+    // Overdue + urgent pings — gated by 3-hour de-dup and quiet hours (urgent overrides quiet).
+    const hasUrgent = urgentSoon.length > 0 || overdue.some((t) => t.priority === "urgent" || t.priority === "high");
+    const recentlyPinged = lastPingIso ? (nowMs - Date.parse(lastPingIso) < 3 * 60 * 60_000) : false;
+    const wantOverduePing = (opts.kind === "auto" || opts.kind === "overdue")
+      && (overdue.length > 0 || urgentSoon.length > 0)
+      && (!recentlyPinged || opts.force)
+      && (!inQuietHours || hasUrgent || opts.force);
+
+    if (wantOverduePing) {
+      const lines = [];
+      const head = overdue.length
+        ? `🔴 ${overdue.length} overdue todo${overdue.length === 1 ? "" : "s"}`
+        : `⏰ ${urgentSoon.length} urgent todo${urgentSoon.length === 1 ? "" : "s"} due soon`;
+      lines.push(`${mention} **${head}**`);
+      for (const t of overdue.slice(0, 7)) {
+        const p = t.priority === "urgent" ? "🚨" : t.priority === "high" ? "🔺" : "•";
+        lines.push(`${p} [#${t.id}] ${t.title}  _(due ${t.due_date})_`);
+      }
+      if (overdue.length > 7) lines.push(`…and ${overdue.length - 7} more`);
+      if (urgentSoon.length) {
+        lines.push(`\n**Due in the next 2h:**`);
+        for (const t of urgentSoon.slice(0, 5)) lines.push(`⏱ [#${t.id}] ${t.title}  _(due ${t.due_date})_`);
+      }
+      lines.push(`\n_Reply with /todos in cockpit to manage. Snooze any item to silence._`);
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "Shinel Cockpit · Todos", content: lines.join("\n") }),
+        });
+        await env.SHINEL_AUDIT.put(dedupKey, new Date().toISOString(), { expirationTtl: 60 * 60 * 12 });
+        // Stamp last_ping_at on the actual todos so the UI can show "pinged 5m ago"
+        const ids = [...overdue.map((t) => t.id), ...urgentSoon.map((t) => t.id)];
+        if (ids.length) {
+          const placeholders = ids.map((_, i) => `?${i + 2}`).join(",");
+          await env.DB.prepare(
+            `UPDATE personal_todos SET last_ping_at = ?1, last_ping_reason = CASE WHEN due_date < date('now') THEN 'overdue' ELSE 'urgent' END, ping_count = ping_count + 1 WHERE id IN (${placeholders})`
+          ).bind(new Date().toISOString(), ...ids).run();
+        }
+        sentAny = true; pingedCount++;
+      } catch (e) { console.error("[todos] overdue send failed:", e.message); }
+    }
+
+    detail.push({
+      owner: ownerEmail,
+      open: notSnoozed.length,
+      overdue: overdue.length,
+      due_today: dueToday.length,
+      urgent_soon: urgentSoon.length,
+      pinged: sentAny,
+      in_quiet_hours: inQuietHours,
+      recently_pinged: recentlyPinged,
+    });
+  }
+
+  return { ok: true, owners: ownerList.length, pinged: pingedCount, detail };
+}
+
+// ---------------------------------------------------------------------------
 // computeNextRunSec — given a 5-field cron expression evaluated in IST,
 // return the unix-second timestamp of the next firing.
 //
@@ -2039,6 +2646,12 @@ export async function fireScheduledTask(env, scheduledTaskId, source = "cron") {
     3,
     `scheduled:${st.id}`
   ).run();
+  // Push to any listening laptop — fire-and-forget, polling is the fallback.
+  notifyLaptopPush(env, "shinel-mainframe", {
+    type: "task_available", task_id: laptopTaskId,
+    task_type: st.task_type || "custom_prompt", client_id: st.client_id || null,
+    priority: 1, source: `scheduled:${st.id}`,
+  }).catch(() => {});
 
   const nowSec = Math.floor(Date.now() / 1000);
   const nextRun = computeNextRunSec(st.cron);

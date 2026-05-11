@@ -42,6 +42,19 @@ database_id = "907df36d-0254-4744-8473-bcfcc4aa8e0c"
 
 # --- R2 Buckets --- (Removed: using YouTube Mirror instead)
 
+# --- Durable Objects ---
+# TaskPushHub: brokers real-time WebSocket pushes from worker → always-on
+# laptop so manual cockpit actions (▶ Sync IG, etc.) hit the laptop in ~2s
+# instead of waiting for the next 20-min poll. Polling stays as the safety
+# net so push being offline never blocks work.
+[[durable_objects.bindings]]
+name = "TASK_PUSH_HUB"
+class_name = "TaskPushHub"
+
+[[migrations]]
+tag = "v1-task-push-hub"
+new_sqlite_classes = ["TaskPushHub"]
+
 # --- Cron Triggers ---
 [triggers]
 crons = ["*/30 * * * *"] # Every 30 mins
