@@ -1455,12 +1455,14 @@ async function performClientSync(env, isForced = false, debug = false) {
               const nowSec = Math.floor(Date.now() / 1000);
               await env.DB.prepare(
                 `UPDATE client_channels
-                 SET subscribers = ?1, view_count = ?2, video_count = ?3, last_synced_at = ?4
-                 WHERE channel_id = ?5`
+                 SET subscribers = ?1, view_count = ?2, video_count = ?3,
+                     avatar_url = COALESCE(?4, avatar_url), last_synced_at = ?5
+                 WHERE channel_id = ?6`
               ).bind(
                 Math.floor(result.subscribers),
                 Math.floor(result.viewCount || 0),
                 Math.floor(result.videoCount || 0),
+                result.logo || null,
                 nowSec,
                 result.id
               ).run();
@@ -1484,12 +1486,14 @@ async function performClientSync(env, isForced = false, debug = false) {
                     const nowSec = Math.floor(Date.now() / 1000);
                     await env.DB.prepare(
                       `UPDATE client_channels
-                       SET subscribers = ?1, view_count = ?2, video_count = ?3, last_synced_at = ?4
-                       WHERE channel_id = ?5`
+                       SET subscribers = ?1, view_count = ?2, video_count = ?3,
+                           avatar_url = COALESCE(?4, avatar_url), last_synced_at = ?5
+                       WHERE channel_id = ?6`
                     ).bind(
                       Math.floor(chInfo.subscribers),
                       Math.floor(chInfo.viewCount || 0),
                       Math.floor(chInfo.videoCount || 0),
+                      chInfo.logo || null,
                       nowSec,
                       ch.channel_id
                     ).run();

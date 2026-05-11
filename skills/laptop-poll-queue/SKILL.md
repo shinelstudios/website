@@ -167,18 +167,21 @@ Result: `{ candidates: [{ client_id, name, subs, target, gap_to_target }] }`
 The worker auto-spawns `milestone_story_create` tasks for each candidate when this PATCH lands. Don't enqueue them yourself.
 
 ### `ig_followers_fetch`
-Input: `task.client_id` → look up in context → get `instagram_handle` (or first `instagram_accounts[].handle`).
+Input: `task.client_id` (and optionally `task.payload_json.handle`). Look up the IG handle from context if not in payload.
 
-1. Open Chrome to `https://www.instagram.com/{handle}/` using the **Claude in Chrome** MCP (`mcp__Claude_in_Chrome__navigate`).
-2. Read the page — use `read_page` with depth 5 to get the meta description.
-3. The follower count is in:
-   - `<meta name="description" content="14k Followers, 432 Following, 200 Posts — ...">`
-   - Or in a `window.__additionalData` script block (less reliable)
-4. Parse the number. Handle suffixes: `12.5k` → 12500, `1.2M` → 1_200_000, `500` → 500.
+1. Open Chrome to `https://www.instagram.com/{handle}/` using **Claude in Chrome** (`mcp__Claude_in_Chrome__navigate`).
+2. `read_page` (depth 5) to get the meta description + JSON-LD.
+3. **Follower count** — appears in `<meta name="description" content="14k Followers, 432 Following, 200 Posts — ...">`. Parse digits, handle suffixes (`12.5k` → 12500, `1.2M` → 1_200_000).
+4. **Avatar URL** — also capture the profile picture. Look in `<meta property="og:image">` first (most reliable), otherwise the header `<img>` element with the round 150×150 picture. Get the full HTTPS URL.
 
-If you hit a login wall or CAPTCHA: PATCH `failed` with error `"ig_login_wall"` — don't try to scrape further this run.
+PATCH `done` with `{ handle, followers, raw, avatar_url }`. Worker auto-writes:
+- `clients.instagram_followers` ← the count
+- `instagram_accounts.followers` ← the count (matched by handle)
+- `instagram_accounts.avatar_url` ← the profile pic URL (preserves existing if scraper missed it)
 
-If you get the count: PATCH `done` with `{ handle, followers, raw }`. Worker auto-writes followers to `clients.instagram_followers`.
+Errors:
+- Login wall / CAPTCHA → PATCH `failed` with `"ig_login_wall"`. Don't retry this run.
+- HTTP 429 → PATCH `failed` with `"ig_rate_limited"`. **Stop further IG fetches this run** to avoid burning the IP. Other task types are fine.
 
 ### `ig_recent_posts_fetch`
 Same setup. After the page loads:

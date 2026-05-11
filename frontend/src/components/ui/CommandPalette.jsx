@@ -71,6 +71,23 @@ export default function CommandPalette() {
 
         if (isAdmin) {
             base.push(
+                // Cockpit shortcuts
+                { icon: Activity, label: "Ops Cockpit", path: "/dashboard/ops", category: "Cockpit", sublabel: "Live agency cockpit" },
+                { icon: Briefcase, label: "Projects", path: "/dashboard/projects", category: "Cockpit", sublabel: "Pipeline · kanban + list" },
+                { icon: Activity, label: "Cockpit: Pipeline tab", path: "/dashboard/ops?tab=pipeline", category: "Cockpit" },
+                { icon: Activity, label: "Cockpit: Finance tab", path: "/dashboard/ops?tab=finance", category: "Cockpit" },
+                { icon: Activity, label: "Cockpit: Team tab",    path: "/dashboard/ops?tab=team", category: "Cockpit" },
+                { icon: Activity, label: "Cockpit: Automation tab", path: "/dashboard/ops?tab=automation", category: "Cockpit" },
+                { icon: Users, label: "Editor self-view (me)",   path: "/editor/me", category: "Cockpit" },
+
+                // Quick actions — these run a worker call instead of navigating
+                { icon: Activity, label: "▶ Force-sync YouTube",  action: "sync_yt",       category: "Actions", sublabel: "Bypass 15-min cooldown" },
+                { icon: Activity, label: "🔔 Test Discord webhook", action: "test_webhook", category: "Actions", sublabel: "Ping #alerts" },
+                { icon: Activity, label: "📊 Run weekly digest now", action: "run_digest",  category: "Actions", sublabel: "Force the Sunday recap" },
+                { icon: Activity, label: "👥 Run editor summary now", action: "run_editor_summary", category: "Actions" },
+                { icon: Activity, label: "🌐 Auto-promote → website", action: "auto_promote", category: "Actions" },
+
+                // Legacy admin pages
                 { icon: LayoutDashboard, label: "Management Hub", path: "/dashboard", category: "Admin" },
                 { icon: Users, label: "Clients Manager", path: "/dashboard/clients", category: "Admin" },
                 { icon: FileText, label: "Leads & Requests", path: "/dashboard/leads", category: "Admin" },
@@ -143,10 +160,60 @@ export default function CommandPalette() {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [handleClose]);
 
+    const runAction = useCallback(async (actionKey) => {
+        const tok = getAccessToken();
+        const post = async (path, body) => {
+            const r = await fetch(`${AUTH_BASE}${path}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+                credentials: "include",
+                body: body ? JSON.stringify(body) : undefined,
+            });
+            return r.json().catch(() => ({}));
+        };
+        try {
+            switch (actionKey) {
+                case "sync_yt": {
+                    if (!window.confirm("Force-run YouTube sync now? Bypasses cooldown.")) return;
+                    const j = await post(`/clients/sync?force=1`);
+                    alert(j?.synced != null ? `Sync ✓ ${j.synced} creators` : `Result: ${JSON.stringify(j)}`);
+                    break;
+                }
+                case "test_webhook": {
+                    const j = await post(`/admin/agency/discord/test`, { channel: "default" });
+                    alert(j?.result?.ok ? "Discord ping ✓" : `Result: ${JSON.stringify(j)}`);
+                    break;
+                }
+                case "run_digest": {
+                    if (!window.confirm("Force-run weekly digest now?")) return;
+                    const j = await post(`/admin/agency/weekly-digest/run`, { force: true });
+                    alert(j?.totals ? `Digest sent ✓ ${j.totals.posted_count} shipped, ₹${(j.totals.paid_total||0).toLocaleString("en-IN")} paid` : `Result: ${JSON.stringify(j)}`);
+                    break;
+                }
+                case "run_editor_summary": {
+                    if (!window.confirm("Force-run per-editor summary now?")) return;
+                    const j = await post(`/admin/agency/editor-summary/run`, { force: true });
+                    alert(j?.counts ? `Editor summary sent ✓ ${j.counts.salaried} salaried · ${j.counts.freelance} freelance` : `Result: ${JSON.stringify(j)}`);
+                    break;
+                }
+                case "auto_promote": {
+                    const j = await post(`/admin/agency/projects/auto-promote-website`, {});
+                    alert(j?.promoted != null ? `Auto-promoted ${j.promoted} of ${j.candidates} candidates.` : `Result: ${JSON.stringify(j)}`);
+                    break;
+                }
+            }
+        } catch (e) { alert("Action error: " + e.message); }
+    }, []);
+
     const onSelect = useCallback((item) => {
+        if (item.action) {
+            handleClose();
+            runAction(item.action);
+            return;
+        }
         navigate(item.path);
         handleClose();
-    }, [navigate, handleClose]);
+    }, [navigate, handleClose, runAction]);
 
     const handleNav = (e) => {
         if (e.key === "ArrowDown") {

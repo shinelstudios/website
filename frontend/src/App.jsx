@@ -129,6 +129,7 @@ const OpsCockpit = React.lazy(() => import("./components/hub/OpsCockpit.jsx"));
 const ClientDeepDive = React.lazy(() => import("./components/hub/ClientDeepDive.jsx"));
 const ProjectsPage = React.lazy(() => import("./components/hub/ProjectsPage.jsx"));
 const EditorMe = React.lazy(() => import("./components/hub/EditorMe.jsx"));
+const MobileBottomNav = React.lazy(() => import("./components/hub/MobileBottomNav.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
 const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
 const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
@@ -280,6 +281,7 @@ function Layout() {
       <Toaster />
       <CookieConsent />
       <CommandPalette />
+      <MobileBottomNav />
     </>
   );
 }
@@ -653,7 +655,12 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<AdminStats />} />
+            {/* /dashboard root → cockpit (used to render AdminStats which is now
+                redundant with the cockpit). AdminStats stays available at
+                /dashboard/legacy-stats for the few diagnostics that haven't
+                been ported yet (Pulse X-Ray expanded, Recent Activity feed). */}
+            <Route index element={<Navigate to="/dashboard/ops" replace />} />
+            <Route path="legacy-stats" element={<AdminStats />} />
             <Route path="overview" element={<ClientDashboard />} />
             <Route path="ops" element={<OpsCockpit />} />
             <Route path="projects" element={<ProjectsPage />} />

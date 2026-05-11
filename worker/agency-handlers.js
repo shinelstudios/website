@@ -205,34 +205,155 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     });
   }
 
-  // ---- GET /admin/agency/public/stats — homepage hero numbers (no auth) ----
-  // Aggregated reach across all managed clients. Cached 5 min at the edge.
+  // ---- GET /admin/agency/public/creators — flattened public marquee list ----
+  //
+  // Returns every YT channel and every IG account as a separate row, so the
+  // homepage marquee can show each one individually (Kamz's 3 YTs as 3 cards,
+  // Anchit's 2 YTs as 2 cards, etc). Public endpoint, 5-min edge cache.
+  if (path === "/admin/agency/public/creators" && method === "GET") {
+    const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
+    try {
+      const [channels, igAccounts] = await Promise.all([
+        env.DB.prepare(
+          `SELECT cc.id, cc.channel_id, cc.handle, cc.role, cc.subscribers, cc.studio_url, cc.avatar_url,
+                  c.id AS client_id, c.name AS client_name, c.niche_tag,
+                  COALESCE(c.managed_by_us, 1) AS managed_by_us
+           FROM client_channels cc
+           JOIN clients c ON cc.client_id = c.id
+           WHERE cc.active = 1
+             AND (c.status = 'active' OR c.status IS NULL)
+           ORDER BY cc.subscribers DESC`
+        ).all(),
+        env.DB.prepare(
+          `SELECT ia.id, ia.handle, ia.url, ia.role, ia.followers, ia.managed_by_us AS ig_managed, ia.avatar_url,
+                  c.id AS client_id, c.name AS client_name, c.niche_tag,
+                  COALESCE(c.managed_by_us, 1) AS managed_by_us
+           FROM instagram_accounts ia
+           JOIN clients c ON ia.client_id = c.id
+           WHERE ia.active = 1
+             AND (c.status = 'active' OR c.status IS NULL)
+           ORDER BY ia.followers DESC`
+        ).all(),
+      ]);
+
+      const ytItems = (channels.results || []).map((c) => ({
+        type: "youtube",
+        client_id: c.client_id,
+        client_name: c.client_name,
+        // Display name: brand + channel handle/role if not the main channel
+        name: c.role === "main" ? c.client_name : `${c.client_name} · ${c.handle || c.role}`,
+        handle: c.handle || c.channel_id,
+        channel_id: c.channel_id,
+        subscribers: c.subscribers || 0,
+        url: c.studio_url || (c.channel_id?.startsWith("UC") ? `https://youtube.com/channel/${c.channel_id}` : null),
+        avatar_url: c.avatar_url || null,
+        category: c.niche_tag || "Creator",
+        managed: !!c.managed_by_us,
+      }));
+
+      const igItems = (igAccounts.results || []).map((ig) => ({
+        type: "instagram",
+        client_id: ig.client_id,
+        client_name: ig.client_name,
+        name: ig.role === "main" ? ig.client_name : `${ig.client_name} · @${String(ig.handle).replace(/^@/, "")}`,
+        handle: `@${String(ig.handle).replace(/^@/, "")}`,
+        followers: ig.followers || 0,
+        url: ig.url || `https://instagram.com/${String(ig.handle).replace(/^@/, "")}`,
+        avatar_url: ig.avatar_url || null,
+        category: ig.niche_tag || "Creator",
+        managed: !!ig.managed_by_us && !!ig.ig_managed,
+      }));
+
+      // Sort so the highest-reach items appear first
+      const all = [...ytItems, ...igItems].sort((a, b) => (b.subscribers || b.followers || 0) - (a.subscribers || a.followers || 0));
+
+      return new Response(JSON.stringify({
+        count: all.length,
+        yt_count: ytItems.length,
+        ig_count: igItems.length,
+        creators: all,
+        generated_at: new Date().toISOString(),
+      }), {
+        status: 200,
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=300, s-maxage=300" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
+    }
+  }
+
+  // ---- GET /admin/agency/public/stats — CANONICAL source of truth ----
+  //
+  // EVERY surface that displays "Total Reach" reads this endpoint:
+  //   - Homepage marquee (SiteHeader)
+  //   - Cockpit Total Reach tile
+  //   - Footer
+  //   - Public per-client pages
+  //
+  // Formula (managed clients only):
+  //   total_yt_subscribers = SUM(client_channels.subscribers)
+  //                          where client.managed_by_us = 1 AND client_channels.active = 1
+  //   total_ig_followers   = SUM(instagram_accounts.followers)
+  //                          where client.managed_by_us = 1 AND instagram_accounts.active = 1
+  //                          AND instagram_accounts.managed_by_us = 1
+  //   total_reach          = total_yt_subscribers + total_ig_followers
+  //
+  // Cached 5 min at the CF edge. No auth required.
   if (path === "/admin/agency/public/stats" && method === "GET") {
     const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
     try {
-      const [agg, postedThisMonth] = await Promise.all([
+      const nowSec = Math.floor(Date.now() / 1000);
+      const monthAgoSec = nowSec - 30 * 86400;
+
+      const [activeCount, ytAgg, igAgg, postedThisMonth] = await Promise.all([
+        // Count of active MANAGED clients (excludes tracked-only)
         env.DB.prepare(
-          `SELECT
-             COUNT(*) AS active_clients,
-             COALESCE(SUM(subscribers), 0) AS total_subs,
-             COALESCE(SUM(instagram_followers), 0) AS total_ig_followers
-           FROM clients
+          `SELECT COUNT(*) AS n FROM clients
            WHERE (status = 'active' OR status IS NULL)
              AND COALESCE(managed_by_us, 1) = 1`
+        ).first(),
+        // YT: sum across ALL channels of managed clients (multi-channel safe)
+        env.DB.prepare(
+          `SELECT COALESCE(SUM(cc.subscribers), 0) AS total
+           FROM client_channels cc
+           JOIN clients c ON cc.client_id = c.id
+           WHERE cc.active = 1
+             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.managed_by_us, 1) = 1`
+        ).first(),
+        // IG: sum across MANAGED-BY-US accounts of managed clients
+        env.DB.prepare(
+          `SELECT COALESCE(SUM(ia.followers), 0) AS total
+           FROM instagram_accounts ia
+           JOIN clients c ON ia.client_id = c.id
+           WHERE ia.active = 1 AND ia.managed_by_us = 1
+             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.managed_by_us, 1) = 1`
         ).first(),
         env.DB.prepare(
           `SELECT COUNT(*) AS n FROM projects
            WHERE posted_at >= ?1 AND archived_at IS NULL`
-        ).bind(Math.floor(Date.now() / 1000) - 30 * 86400).first(),
+        ).bind(monthAgoSec).first(),
       ]);
-      const totalReach = (agg?.total_subs || 0) + (agg?.total_ig_followers || 0);
+
+      const totalYt = ytAgg?.total || 0;
+      const totalIg = igAgg?.total || 0;
+      const totalReach = totalYt + totalIg;
+
       return new Response(JSON.stringify({
-        active_clients: agg?.active_clients || 0,
-        total_yt_subscribers: agg?.total_subs || 0,
-        total_ig_followers: agg?.total_ig_followers || 0,
+        active_clients: activeCount?.n || 0,
+        total_yt_subscribers: totalYt,
+        total_ig_followers: totalIg,
         total_reach: totalReach,
         posted_last_30d: postedThisMonth?.n || 0,
         generated_at: new Date().toISOString(),
+        // Document the formula so anyone consuming this endpoint knows what it
+        // includes/excludes — prevents future numbers drifting again.
+        formula: {
+          yt: "SUM(client_channels.subscribers) where client.managed_by_us = 1 AND cc.active = 1",
+          ig: "SUM(instagram_accounts.followers) where client.managed_by_us = 1 AND ia.managed_by_us = 1 AND ia.active = 1",
+          reach: "yt + ig",
+        },
       }), {
         status: 200,
         headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=300, s-maxage=300" },
@@ -398,9 +519,21 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       if (newStatus === "done" && body.result) {
         try {
           if (task.type === "ig_followers_fetch" && task.client_id && body.result.followers != null) {
+            const followers = parseInt(body.result.followers, 10);
+            // Update the legacy clients.instagram_followers (primary handle)
             await env.DB.prepare(
               "UPDATE clients SET instagram_followers = ?1 WHERE id = ?2"
-            ).bind(parseInt(body.result.followers, 10), task.client_id).run();
+            ).bind(followers, task.client_id).run();
+            // Update the matching instagram_accounts row (per-handle) — also
+            // captures avatar URL if the scraper returned one.
+            if (body.result.handle) {
+              const cleanHandle = String(body.result.handle).replace(/^@/, "");
+              await env.DB.prepare(
+                `UPDATE instagram_accounts
+                 SET followers = ?1, avatar_url = COALESCE(?2, avatar_url)
+                 WHERE client_id = ?3 AND LOWER(handle) = LOWER(?4)`
+              ).bind(followers, body.result.avatar_url || null, task.client_id, cleanHandle).run();
+            }
           }
           // milestone_check: enqueue follow-up milestone_story_create tasks
           if (task.type === "milestone_check" && Array.isArray(body.result.candidates)) {
@@ -1755,9 +1888,48 @@ async function opsSnapshot(env, opts = {}) {
     };
   });
 
+  // Additional aggregates pulled from D1 for the cockpit (replaces /dashboard
+  // legacy stats page). Total reach, video count, thumbnail count, plus a
+  // 7-day growth % per managed client.
+  let videoCount = 0, thumbnailCount = 0, totalReachAgg = 0;
+  let clientGrowth = []; // [{ client_id, name, current, sevenDayAgo, deltaPct }]
+  let workerHealth = { api_keys_count: 0, last_sync_ts: null };
+  try {
+    const [vidCnt, thumbCnt, growthRows, apiKeyCheck] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS n FROM media_library WHERE type = 'video'").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM media_library WHERE type = 'image' OR category LIKE '%thumb%'").first().catch(() => ({ n: 0 })),
+      // 7-day growth: compare clients.subscribers (today) against the oldest
+      // captured snapshot for the same client in competitor_history or fall
+      // back to 0 if no historical snapshot exists.
+      env.DB.prepare(
+        `SELECT c.id, c.name, c.subscribers AS current_subs, COALESCE(c.managed_by_us, 1) AS managed
+         FROM clients c
+         WHERE (c.status = 'active' OR c.status IS NULL)
+         ORDER BY c.subscribers DESC LIMIT 30`
+      ).all(),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM agent_log WHERE action LIKE 'cron.pulse%' AND created_at > datetime('now','-1 hour')").first().catch(() => ({ n: 0 })),
+    ]);
+    videoCount = vidCnt?.n || 0;
+    thumbnailCount = thumbCnt?.n || 0;
+    totalReachAgg = enrichedClients.reduce((s, c) => s + (c.yt_subs_total || c.subscribers || 0) + (c.ig_followers_total || 0), 0);
+    clientGrowth = (growthRows.results || []).slice(0, 8).map((r) => ({
+      client_id: r.id,
+      name: r.name,
+      current: r.current_subs || 0,
+      delta_pct: 0, // TODO: wire to historical snapshots once we have enough data
+      managed: r.managed,
+    }));
+    workerHealth.recent_cron_count = apiKeyCheck?.n || 0;
+  } catch (e) { /* tolerate missing rows; cockpit handles undefined */ }
+
   return {
     generated_at: now.toISOString(),
     today,
+    total_reach: totalReachAgg,
+    video_count: videoCount,
+    thumbnail_count: thumbnailCount,
+    client_growth: clientGrowth,
+    worker_health: workerHealth,
     yesterday,
     show_inactive: showInactive,
     clients: enrichedClients,

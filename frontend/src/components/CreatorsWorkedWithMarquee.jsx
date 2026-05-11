@@ -5,6 +5,7 @@ import { CheckCircle2, Users, TrendingUp, Youtube, Instagram } from "lucide-reac
 import { LazyImage } from "./ProgressiveImage";
 import { useClientStats } from "../context/ClientStatsContext";
 import { useGlobalConfig } from "../context/GlobalConfigContext";
+import { AUTH_BASE } from "../config/constants";
 
 /**
  * Reusable, responsive, auto-scrolling marquee for "Creators Worked With".
@@ -158,44 +159,68 @@ const CreatorsWorkedWithMarquee = ({
     setHoveredKey(null);
   }, []);
 
+  // Fetch the canonical "every channel + every IG account" list from the
+  // worker. Each YT channel of a multi-channel client gets its own card,
+  // each IG account gets its own card. Single source of truth — same
+  // numbers shown here are also what the public/stats endpoint aggregates.
+  const [allCreators, setAllCreators] = useState([]);
+  const [creatorsLoading, setCreatorsLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${AUTH_BASE}/admin/agency/public/creators`)
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((j) => { if (!cancelled) setAllCreators(j.creators || []); })
+      .catch(() => { /* keep empty; falls back to legacy stats below */ })
+      .finally(() => { if (!cancelled) setCreatorsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   // Determine the final list of creators
   const finalCreators = useMemo(() => {
     if (creatorsProp && creatorsProp.length) return creatorsProp;
-    if (loading) return [];
 
+    // PRIMARY: use the per-channel list from worker (each YT and IG separately).
+    if (allCreators.length > 0) {
+      return allCreators
+        .filter((c) => (c.type === "youtube" ? c.subscribers > 0 : c.followers > 0))
+        .map((c) => ({
+          name: c.name,
+          key: c.type === "youtube" ? `yt-${c.channel_id || c.client_id}-${c.handle || ""}` : `ig-${c.handle}`,
+          // Real avatar from D1 (YT API logo or laptop-scraped IG profile pic).
+          // Use the proxy so YT/IG CDN images don't get blocked.
+          url: c.avatar_url ? getProxiedImage(c.avatar_url) : null,
+          subs: c.type === "youtube" ? c.subscribers : 0,
+          igFollowers: c.type === "instagram" ? c.followers : 0,
+          category: c.category || "Creator",
+          handle: c.handle,
+          link: c.url,
+          color: "var(--orange)",
+        }));
+    }
+
+    // FALLBACK: legacy useClientStats path (one item per client).
+    if (loading || creatorsLoading) return [];
     return stats.flatMap(client => {
       const items = [];
       const primaryId = client.youtubeId || client.id;
-
-      // YouTube Card
       if (client.subscribers > 0) {
         items.push({
-          name: client.title,
-          key: `${primaryId}-yt`,
-          url: client.logo,
-          subs: client.subscribers,
-          igFollowers: 0,
-          category: client.category || "Creator",
-          color: "var(--orange)"
+          name: client.title, key: `${primaryId}-yt`, url: client.logo,
+          subs: client.subscribers, igFollowers: 0,
+          category: client.category || "Creator", color: "var(--orange)",
         });
       }
-
-      // Instagram Card
       if (client.instagramFollowers > 0) {
         items.push({
-          name: client.title,
-          key: `${client.instagramHandle || primaryId}-ig`,
-          url: client.instagramLogo || client.logo, // Prefer IG logo, fallback to main
-          subs: 0,
-          igFollowers: client.instagramFollowers,
-          category: client.category || "Creator",
-          color: "var(--orange)"
+          name: client.title, key: `${client.instagramHandle || primaryId}-ig`,
+          url: client.instagramLogo || client.logo,
+          subs: 0, igFollowers: client.instagramFollowers,
+          category: client.category || "Creator", color: "var(--orange)",
         });
       }
-
       return items;
     });
-  }, [creatorsProp, stats, loading]);
+  }, [creatorsProp, allCreators, stats, loading, creatorsLoading]);
 
   // Platform-specific reach calculations
   const ytReach = useMemo(() => {

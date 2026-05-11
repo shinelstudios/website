@@ -65,6 +65,157 @@ const fmtRelative = (isoStr) => {
 };
 
 // ---- subcomponents ---------------------------------------------------------
+
+// Consolidated Actions dropdown — combines all the manual-fire buttons.
+// Previously 5 buttons cluttered the header; now they're tucked behind one.
+function ActionsMenu({ onAfterAction }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(null);
+
+  const run = async (label, work) => {
+    setBusy(label);
+    try { await work(); }
+    catch (e) { alert(`${label}: ${e.message}`); }
+    finally { setBusy(null); setOpen(false); onAfterAction?.(); }
+  };
+
+  const post = async (path, body) => {
+    const token = getAccessToken();
+    const r = await fetch(`${AUTH_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      credentials: "include",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { ok: r.ok, status: r.status, json: await r.json().catch(() => ({})) };
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={!!busy}
+        className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] disabled:opacity-50 inline-flex items-center gap-1"
+        title="Manual actions"
+      >
+        ⋯ Actions ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 z-20 bg-[var(--surface-elev)] border border-neutral-200 dark:border-neutral-800 rounded-md shadow-lg min-w-[240px] overflow-hidden text-xs">
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Sync YT", async () => {
+                if (!window.confirm("Force-run YT sync? Bypasses cooldown.")) return;
+                const { json } = await post(`/clients/sync?force=1`);
+                alert(json?.synced != null ? `Sync ✓ Synced ${json.synced} creators.` : `Result: ${JSON.stringify(json)}`);
+              })}
+            >▶ <span>Sync YT now</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Test webhook", async () => {
+                const { json } = await post(`/admin/agency/discord/test`, { channel: "default" });
+                alert(json?.result?.ok ? "Discord ping ✓" : `Result: ${JSON.stringify(json)}`);
+              })}
+            >🔔 <span>Test Discord webhook</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Run digest", async () => {
+                if (!window.confirm("Force-run weekly digest now? Resets 6.5-day timer.")) return;
+                const { json } = await post(`/admin/agency/weekly-digest/run`, { force: true });
+                alert(json?.totals ? `Digest sent ✓\n${json.totals.posted_count} shipped · ₹${(json.totals.paid_total||0).toLocaleString("en-IN")} paid` : `Result: ${JSON.stringify(json)}`);
+              })}
+            >📊 <span>Run weekly digest</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Editor summary", async () => {
+                if (!window.confirm("Force-run per-editor summary now?")) return;
+                const { json } = await post(`/admin/agency/editor-summary/run`, { force: true });
+                alert(json?.counts ? `Editor summary sent ✓\n${json.counts.salaried} salaried · ${json.counts.freelance} freelance` : `Result: ${JSON.stringify(json)}`);
+              })}
+            >👥 <span>Run editor summary</span></button>
+            <div className="border-t border-neutral-100 dark:border-neutral-900 my-1" />
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Auto-promote", async () => {
+                const { json } = await post(`/admin/agency/projects/auto-promote-website`, {});
+                alert(json?.promoted != null ? `Auto-promoted ${json.promoted} of ${json.candidates} candidates.` : `Result: ${JSON.stringify(json)}`);
+              })}
+            >🌐 <span>Auto-promote → website</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Pulse diag", async () => {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/diag/pulse`, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  credentials: "include",
+                });
+                const j = await r.json();
+                alert(`Pulse total: ${j.pulse_total} · keys: ${j.yt_api_keys_configured} · clients with YT: ${j.clients_with_youtube_id}`);
+              })}
+            >🩺 <span>Pulse diagnostics</span></button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Compact quick-action banner — surfaces today's "to do" items derived from data.
+function QuickActionsBanner({ snapshot }) {
+  if (!snapshot) return null;
+  const pendingSeo = (snapshot.pending_seo || []).length;
+  const spikes = (snapshot.active_spikes || []).length;
+  const overperformers = (snapshot.competitor_overperformers || []).length;
+  const researchPending = (snapshot.clients || []).length - (snapshot.today_research || []).length;
+  const projectCount = Object.values(snapshot.projects_by_status || {}).reduce((a, b) => a + b, 0);
+  const items = [];
+  if (pendingSeo > 0)     items.push({ label: `${pendingSeo} SEO pending`,                color: "bg-yellow-500/10 text-yellow-600",  href: null });
+  if (spikes > 0)         items.push({ label: `${spikes} active spike${spikes>1?"s":""}`, color: "bg-red-500/10 text-red-500 animate-pulse", href: null });
+  if (overperformers > 0) items.push({ label: `${overperformers} competitor overperformer${overperformers>1?"s":""}`, color: "bg-orange-500/10 text-orange-500", href: null });
+  if (researchPending > 0 && researchPending !== (snapshot.clients||[]).length) items.push({ label: `${researchPending} research pending`, color: "bg-blue-500/10 text-blue-500", href: null });
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-[var(--surface-elev)]">
+      <span className="text-[10px] uppercase tracking-wider text-neutral-500">Needs attention:</span>
+      {items.map((it, i) => (
+        <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${it.color}`}>
+          {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Tab navigation for cockpit sections.
+const COCKPIT_TABS = [
+  { key: "overview",   label: "Overview" },
+  { key: "pipeline",   label: "Pipeline" },
+  { key: "finance",    label: "Finance" },
+  { key: "team",       label: "Team" },
+  { key: "automation", label: "Automation" },
+];
+function CockpitTabs({ active, onChange }) {
+  return (
+    <div className="mb-4 flex gap-1 overflow-x-auto -mx-1 px-1 border-b border-neutral-200 dark:border-neutral-800">
+      {COCKPIT_TABS.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-3 md:px-4 py-2 text-sm font-bold whitespace-nowrap transition-colors border-b-2 -mb-px ${
+            active === t.key
+              ? "border-[var(--orange)] text-[var(--orange)]"
+              : "border-transparent text-neutral-500 hover:text-neutral-700"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Test webhook dropdown — pings each configured Discord channel.
 function DiscordTestButton() {
   const [open, setOpen] = React.useState(false);
@@ -154,6 +305,18 @@ function SectionCard({ title, icon: Icon, children, action }) {
 export default function OpsCockpit() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState(() => {
+    // URL ?tab=... takes precedence (Cmd+K deep links), then localStorage, then default
+    try {
+      const urlTab = new URLSearchParams(window.location.search).get("tab");
+      if (urlTab && COCKPIT_TABS.some(t => t.key === urlTab)) return urlTab;
+      return localStorage.getItem("shinel_cockpit_tab") || "overview";
+    } catch { return "overview"; }
+  });
+  // Persist tab selection across page reloads
+  useEffect(() => {
+    try { localStorage.setItem("shinel_cockpit_tab", tab); } catch {}
+  }, [tab]);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [showInactive, setShowInactive] = useState(false);
@@ -298,95 +461,43 @@ export default function OpsCockpit() {
           </div>
           <button onClick={fetchSnapshot} className="btn-editorial-ghost text-sm">
             <RefreshCw size={14} className={`inline mr-1 ${loading ? "animate-spin" : ""}`} />
-            Refresh now
-          </button>
-          <button
-            onClick={async () => {
-              if (!window.confirm("Force-run the YouTube pulse sync now? Bypasses the 15-min cooldown. Updates subscriber counts.")) return;
-              try {
-                const token = getAccessToken();
-                const r = await fetch(`${AUTH_BASE}/clients/sync?force=1`, {
-                  method: "POST",
-                  headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  credentials: "include",
-                });
-                const j = await r.json();
-                if (j?.synced != null || j?.success) {
-                  alert(`Sync ✓\n\nSynced ${j.synced ?? "?"} creators.\nRefresh the cockpit to see updated subscriber counts.`);
-                  fetchSnapshot();
-                } else {
-                  alert("Result: " + JSON.stringify(j, null, 2));
-                }
-              } catch (e) { alert("Sync error: " + e.message); }
-            }}
-            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
-            title="Force-run the YouTube pulse sync now (subscriber counts, latest uploads)"
-          >
-            ▶ Sync YT
-          </button>
-          <DiscordTestButton />
-          <button
-            onClick={async () => {
-              if (!window.confirm("Force-run the weekly digest now? It'll post to the default Discord channel and reset the 6.5-day timer.")) return;
-              try {
-                const token = getAccessToken();
-                const r = await fetch(`${AUTH_BASE}/admin/agency/weekly-digest/run`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  credentials: "include",
-                  body: JSON.stringify({ force: true }),
-                });
-                const j = await r.json();
-                if (j?.ok && j?.totals) {
-                  alert(`Digest sent ✓\n\nShipped: ${j.totals.posted_count}\nPaid: ₹${(j.totals.paid_total||0).toLocaleString("en-IN")} (${j.totals.paid_count} payments)\nPending: ₹${(j.totals.pending_total||0).toLocaleString("en-IN")} (${j.totals.pending_count})`);
-                } else {
-                  alert("Digest result: " + JSON.stringify(j, null, 2));
-                }
-              } catch (e) { alert("Digest error: " + e.message); }
-            }}
-            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
-            title="Force-run the weekly digest now"
-          >
-            📊 Run digest
-          </button>
-          <button
-            onClick={async () => {
-              if (!window.confirm("Force-run the editor weekly summary now? Posts per-editor breakdowns to #salaried-only and #freelancers-only.")) return;
-              try {
-                const token = getAccessToken();
-                const r = await fetch(`${AUTH_BASE}/admin/agency/editor-summary/run`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                  credentials: "include",
-                  body: JSON.stringify({ force: true }),
-                });
-                const j = await r.json();
-                if (j?.ok && j?.counts) {
-                  alert(`Editor summary sent ✓\n\n${j.counts.salaried} salaried · ${j.counts.freelance} freelance\n\nFreelance post: ${j.freelance_post?.ok ? "✓" : (j.freelance_post?.skipped ? "skipped (no webhook)" : "failed")}\nSalaried post: ${j.salaried_post?.ok ? "✓" : (j.salaried_post?.skipped ? "skipped (no webhook)" : "failed")}`);
-                } else {
-                  alert("Result: " + JSON.stringify(j, null, 2));
-                }
-              } catch (e) { alert("Editor summary error: " + e.message); }
-            }}
-            className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
-            title="Force-run the per-editor weekly summary now"
-          >
-            👥 Editor summary
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <Link
             to="/dashboard/projects"
             className="text-xs px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--surface-alt)] inline-flex items-center gap-1"
-            title="Open the full Projects page (filters, list view, bulk actions)"
+            title="Open the full Projects page"
           >
-            <Target size={12} /> Projects
+            <Target size={12} /> <span className="hidden sm:inline">Projects</span>
           </Link>
+          <ActionsMenu onAfterAction={fetchSnapshot} />
           <AddSomethingButton clients={clients} onChange={fetchSnapshot} />
         </div>
       </header>
 
+      <QuickActionsBanner snapshot={d} />
+      <CockpitTabs active={tab} onChange={setTab} />
+
+      {/* Stat tiles row — overview tab only; other tabs go straight to their panel */}
+      {tab !== "overview" && (
+        <div className="mb-4 text-xs text-neutral-500">
+          Showing: <strong className="text-neutral-700 dark:text-neutral-300">{COCKPIT_TABS.find(t => t.key === tab)?.label}</strong>
+          {" · "}<button onClick={() => setTab("overview")} className="text-[var(--orange)] hover:underline">back to Overview</button>
+        </div>
+      )}
+
       {/* Top stat tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
         <StatTile icon={Users} label="Clients" value={clients.length} sub="Active fleet" />
+        <StatTile
+          icon={TrendingUp}
+          label="Total reach"
+          value={fmtNum(d.total_reach || 0)}
+          sub="YT subs + IG followers"
+          accent={d.total_reach > 0 ? "success" : "neutral"}
+        />
+        <StatTile icon={Eye} label="Videos" value={d.video_count ?? 0} sub="In media library" />
+        <StatTile icon={Activity} label="Thumbnails" value={d.thumbnail_count ?? 0} sub="Designed" />
         <StatTile
           icon={Clock}
           label="Pending SEO"
@@ -417,8 +528,9 @@ export default function OpsCockpit() {
         />
       </div>
 
-      {/* Two-column body */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* Two-column body — Overview tab shows clients/SEO/spikes/research grid.
+          Other tabs hide it and just render their dedicated panel below. */}
+      <div className={tab === "overview" ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : "hidden"}>
         {/* LEFT — clients + pending SEO */}
         <div className="space-y-5">
           <SectionCard title="Clients" icon={Users}>
@@ -715,22 +827,17 @@ export default function OpsCockpit() {
             </div>
           </SectionCard>
 
-          <PipelineKanban
-            clients={clients}
-            projectStatus={projectStatus}
-            onChange={fetchSnapshot}
-          />
-
-          <FinancePanel />
-
-          <ScheduledTasksPanel clients={clients} />
-
-          <LaptopQueuePanel clients={clients} />
-
-          <TeamPanel onChange={fetchSnapshot} />
+          {/* Overview-only: pipeline preview lives inside the right column. */}
+          {tab === "overview" && (
+            <PipelineKanban
+              clients={clients}
+              projectStatus={projectStatus}
+              onChange={fetchSnapshot}
+            />
+          )}
 
           {/* Inline collapsed status counts (compact) */}
-          {Object.keys(projectStatus).length > 0 && (
+          {tab === "overview" && Object.keys(projectStatus).length > 0 && (
             <SectionCard title="Status counts" icon={Target}>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                 {["planned", "started", "in-progress", "completed", "paid", "posted", "added-to-website", "archive"].map(
@@ -781,6 +888,19 @@ export default function OpsCockpit() {
           </SectionCard>
         </div>
       </div>
+
+      {/* Tab-gated full-width panels — render BELOW the overview grid */}
+      {tab === "pipeline" && (
+        <PipelineKanban clients={clients} projectStatus={projectStatus} onChange={fetchSnapshot} />
+      )}
+      {tab === "finance" && <FinancePanel />}
+      {tab === "team" && <TeamPanel onChange={fetchSnapshot} />}
+      {tab === "automation" && (
+        <div className="space-y-5">
+          <ScheduledTasksPanel clients={clients} />
+          <LaptopQueuePanel clients={clients} />
+        </div>
+      )}
 
       {/* Footer note */}
       <footer className="mt-6 text-xs text-neutral-500 text-center">
