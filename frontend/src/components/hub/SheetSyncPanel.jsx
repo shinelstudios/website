@@ -41,9 +41,10 @@ function fmtAgo(iso) {
 export default function SheetSyncPanel() {
   const [status, setStatus] = useState(null);
   const [connection, setConnection] = useState(null);
+  const [dropdowns, setDropdowns] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(null); // "connect" | "sync-all"
+  const [busy, setBusy] = useState(null); // "connect" | "sync-all" | "dropdowns"
   const [bulkResult, setBulkResult] = useState(null);
 
   const loadStatus = useCallback(async () => {
@@ -84,6 +85,17 @@ export default function SheetSyncPanel() {
     finally { setBusy(null); }
   };
 
+  const loadDropdowns = async () => {
+    setBusy("dropdowns"); setError(null);
+    try {
+      const r = await authedFetch("/admin/agency/sheets/dropdowns");
+      const j = await r.json();
+      if (!r.ok) { setError(j.error || "Failed to read dropdowns"); return; }
+      setDropdowns(j);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  };
+
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-[var(--surface-elev)]">
       <header className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-100 dark:border-neutral-900 flex-wrap gap-2">
@@ -107,6 +119,14 @@ export default function SheetSyncPanel() {
             className="text-xs px-3 py-1.5 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
           >
             {busy === "connect" ? "Testing…" : "Test connection"}
+          </button>
+          <button
+            onClick={loadDropdowns}
+            disabled={busy != null || !status?.configured}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+            title="Read the sheet's dropdown lists. Cockpit will auto-snap values to these on next sync."
+          >
+            {busy === "dropdowns" ? "Reading…" : "View dropdowns"}
           </button>
           <button
             onClick={syncAll}
@@ -160,6 +180,41 @@ npx wrangler deploy`}</pre>
           >
             Open sheet <ExternalLink size={10} />
           </a>
+        </div>
+      )}
+
+      {/* Dropdown rules from the sheet — confirms what values the cockpit
+          will snap to on next sync. Refreshed on demand. */}
+      {dropdowns && (
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-xs mb-3">
+          <div className="font-semibold text-blue-700 dark:text-blue-400 mb-2">
+            Sheet dropdowns on tab "{dropdowns.tab}" ({dropdowns.columns?.length || 0} columns with validation)
+          </div>
+          {dropdowns.columns?.length === 0 ? (
+            <div className="text-neutral-500">
+              No data-validation dropdowns detected on this tab. Cockpit will write raw values; Sheets won't complain unless you add dropdowns later.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dropdowns.columns.map((col) => (
+                <div key={col.column}>
+                  <div className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-1">
+                    {col.label} <span className="font-normal text-neutral-500">(column {col.column}, {col.values?.length} options)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {col.values?.map((v, i) => (
+                      <span key={i} className="px-2 py-0.5 rounded text-[10px] font-medium bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                        {v}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-neutral-500 mt-2 italic">
+            Cockpit auto-snaps its values to the closest match in these lists on every sync. If a cockpit status/type doesn't match any option, the row gets written anyway and Sheets flags it with a red triangle — edit the sheet's dropdown to accept the value, or rename the cockpit value to match.
+          </p>
         </div>
       )}
 

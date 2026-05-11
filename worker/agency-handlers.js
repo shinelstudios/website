@@ -26,7 +26,27 @@ import {
   updateRow as sheetUpdateRow,
   currentMonthTabName,
   projectToRow,
+  readDropdownRules,
 } from "./google-sheets.js";
+
+// In-memory cache of dropdown rules per tab. Refreshed every 10 min so the
+// founder's edits to the sheet's data validation flow into the cockpit
+// without a deploy. Per-isolate cache; warm starts only.
+const _dropdownCache = new Map();
+async function getDropdownRulesCached(env, spreadsheetId, tabName) {
+  const key = `${spreadsheetId}:${tabName}`;
+  const entry = _dropdownCache.get(key);
+  if (entry && Date.now() - entry.ts < 10 * 60_000) return entry.rules;
+  try {
+    const rules = await readDropdownRules(env, spreadsheetId, tabName);
+    _dropdownCache.set(key, { rules, ts: Date.now() });
+    return rules;
+  } catch (e) {
+    console.error("[sheets] readDropdownRules failed:", e.message);
+    // Use whatever cached version we have, even if stale, rather than nothing
+    return entry?.rules || null;
+  }
+}
 
 const BASE_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -141,7 +161,11 @@ export async function syncProjectToSheet(env, projectId) {
   ]);
 
   const tabName = env.SHEET_TAB_OVERRIDE || currentMonthTabName();
-  const row = projectToRow(project, client?.name, editor?.name);
+  // Read the sheet's dropdown rules (cached 10 min) and let projectToRow
+  // snap our values to the canonical dropdown form. This prevents
+  // red-triangle data-validation warnings on every synced row.
+  const dropdowns = await getDropdownRulesCached(env, env.MONTHLY_TRACKER_SHEET_ID, project.sheet_tab_name || tabName);
+  const row = projectToRow(project, client?.name, editor?.name, dropdowns);
 
   try {
     let action, rowIndex;
@@ -1869,6 +1893,33 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         else { summary.failed++; summary.errors.push({ id: r.id, error: res.error || res.skipped }); }
       }
       return ok(summary);
+    }
+
+    // GET /admin/agency/sheets/dropdowns — read sheet's data validation rules
+    // Force-refreshes the in-memory cache so the founder sees latest rules
+    // immediately after editing the sheet's dropdowns.
+    if (path === "/admin/agency/sheets/dropdowns" && method === "GET") {
+      if (!env.MONTHLY_TRACKER_SHEET_ID || !env.GOOGLE_SA_JSON) return err("not configured", 503);
+      const tab = url.searchParams.get("tab") || env.SHEET_TAB_OVERRIDE || currentMonthTabName();
+      const key = `${env.MONTHLY_TRACKER_SHEET_ID}:${tab}`;
+      _dropdownCache.delete(key); // force fresh read
+      try {
+        const rules = await readDropdownRules(env, env.MONTHLY_TRACKER_SHEET_ID, tab);
+        // Friendlier shape: array of { column, label, values }
+        const COLUMN_LABELS = {
+          A: "Client Name", B: "Project Name", C: "Project Type", D: "Project Sub Type",
+          E: "Status", F: "Start Date", G: "End Date", H: "Deadline Date",
+          I: "Days to Deadline", J: "Editor Assigned",
+          K: "Advance Editing Minutes", L: "Basic Editing Minutes",
+          M: "Total Minutes", N: "Client Amount", O: "Editor Amount",
+        };
+        const columns = Object.entries(rules).map(([col, values]) => ({
+          column: col, label: COLUMN_LABELS[col] || col, values,
+        }));
+        return ok({ tab, columns });
+      } catch (e) {
+        return err(`Sheets dropdown read: ${e.message}`, 502);
+      }
     }
 
     // GET /admin/agency/sheets/status — show last-sync status across all projects

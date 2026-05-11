@@ -209,6 +209,63 @@ export async function verifyConnection(env, spreadsheetId) {
 }
 
 /**
+ * Read the data validation rules for the header row + first data row of a tab.
+ * Returns a column-letter → array-of-allowed-values map, e.g.
+ *   { "C": ["Design", "Reel", "Video"], "E": ["Started", "In Progress", ...] }
+ * Used to discover the canonical dropdown values so cockpit writes match.
+ *
+ * Implementation: fetch the tab's structural data (includes dataValidation
+ * rules) via spreadsheets.get with `includeGridData=true`, then read the
+ * OneOfList rule for each cell in row 2 (the first data row — row 1 is
+ * headers without validation).
+ */
+export async function readDropdownRules(env, spreadsheetId, tabName) {
+  const token = await getAccessToken(env);
+  const range = `${encodeURIComponent(tabName)}!A2:Z2`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?ranges=${range}&includeGridData=true&fields=sheets(data(rowData(values(dataValidation,userEnteredValue))))`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Sheets readDropdownRules failed (${res.status}): ${txt}`);
+  }
+  const j = await res.json();
+  const values = j.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values || [];
+  const result = {};
+  values.forEach((cell, i) => {
+    const dv = cell?.dataValidation;
+    if (!dv) return;
+    const colLetter = String.fromCharCode(65 + i); // A,B,C…
+    const condition = dv.condition || {};
+    // ONE_OF_LIST: hard-coded list of allowed values
+    if (condition.type === "ONE_OF_LIST" && Array.isArray(condition.values)) {
+      result[colLetter] = condition.values.map((v) => v.userEnteredValue).filter(Boolean);
+    }
+    // ONE_OF_RANGE: dropdown sourced from another range — we'd have to read
+    // that range too. Skipping for now; user can switch to ONE_OF_LIST.
+    if (condition.type === "ONE_OF_RANGE") {
+      result[colLetter] = ["(dropdown sourced from another range — open the sheet to view)"];
+    }
+  });
+  return result;
+}
+
+/**
+ * Map a value (case-insensitive) to the closest match in an allowed list.
+ * If the input matches exactly (after lowercasing) → return the canonical
+ * form. Otherwise return the original value as-is so Sheets shows the
+ * red-triangle warning and the founder can decide what to do.
+ */
+export function matchToDropdown(value, allowedValues) {
+  if (!value || !Array.isArray(allowedValues) || allowedValues.length === 0) return value;
+  const v = String(value).trim().toLowerCase();
+  const match = allowedValues.find((a) => String(a).trim().toLowerCase() === v);
+  if (match) return match;
+  // Try partial / contains match: "reel" matches "Reel — vertical 9:16"
+  const partial = allowedValues.find((a) => String(a).trim().toLowerCase().startsWith(v) || v.startsWith(String(a).trim().toLowerCase()));
+  return partial || value;
+}
+
+/**
  * Compute the default tab name for "right now" — used when a project is
  * being synced without an explicit override. Format: "May 2026" (matches
  * the Monthly Tracker's existing tab naming convention).
@@ -243,9 +300,12 @@ export function currentMonthTabName() {
  *
  * If you reorder the sheet columns, update this function to match.
  */
-export function projectToRow(project, clientName, editorName) {
-  // Map cockpit statuses → human-friendly sheet statuses
-  const STATUS_MAP = {
+export function projectToRow(project, clientName, editorName, dropdownRules = null) {
+  // Cockpit-side label normalization. The sheet's dataValidation may use
+  // different capitalization (e.g. "In Progress" vs cockpit's "in_progress"),
+  // so we first normalize to a clean Title-Case label, then matchToDropdown
+  // snaps it to the actual sheet dropdown value when rules are provided.
+  const STATUS_LABELS = {
     "planned": "Planned",
     "in-progress": "In Progress",
     "in_progress": "In Progress",
@@ -255,8 +315,41 @@ export function projectToRow(project, clientName, editorName) {
     "added-to-website": "Added to Website",
     "paid": "Paid",
     "cancelled": "Cancelled",
+    "pending-payment": "Pending Payment",
+    "pending_payment": "Pending Payment",
   };
-  const status = STATUS_MAP[project.status] || project.status || "";
+  const ASSET_TYPE_LABELS = {
+    "reel": "Reel",
+    "short": "Short",
+    "shorts": "Shorts",
+    "video": "Video",
+    "long-form": "Long-form",
+    "stream": "Stream",
+    "thumbnail": "Thumbnail",
+    "design": "Design",
+    "edit": "Edit",
+  };
+  const titleCase = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const rawStatus = project.status || "";
+  const rawType = project.asset_type || project.project_type || "";
+  const rawSubtype = project.asset_subtype || "";
+
+  let statusLabel = STATUS_LABELS[rawStatus.toLowerCase()] || titleCase(rawStatus);
+  let typeLabel   = ASSET_TYPE_LABELS[rawType.toLowerCase()] || titleCase(rawType);
+  let subtypeLabel = titleCase(rawSubtype);
+
+  // If we know the sheet's dropdown rules, snap our values to the exact
+  // canonical form so Sheets accepts them without a red-triangle warning.
+  if (dropdownRules) {
+    if (dropdownRules.C) typeLabel    = matchToDropdown(typeLabel,    dropdownRules.C);
+    if (dropdownRules.D) subtypeLabel = matchToDropdown(subtypeLabel, dropdownRules.D);
+    if (dropdownRules.E) statusLabel  = matchToDropdown(statusLabel,  dropdownRules.E);
+    // Column J = Editor Assigned often has a dropdown too
+    if (dropdownRules.J && editorName) editorName = matchToDropdown(editorName, dropdownRules.J);
+    // Column A = Client Name might have a dropdown
+    if (dropdownRules.A && clientName) clientName = matchToDropdown(clientName, dropdownRules.A);
+  }
 
   // Dates: convert unix-sec or ISO to YYYY-MM-DD for Sheets parsing
   const dateStr = (v) => {
@@ -269,9 +362,9 @@ export function projectToRow(project, clientName, editorName) {
   return [
     clientName || project.client_id || "",          // A Client Name
     project.title || "",                            // B Project Name
-    project.asset_type || project.project_type || "", // C Project Type
-    project.asset_subtype || "",                    // D Project Sub Type
-    status,                                         // E Status
+    typeLabel,                                      // C Project Type
+    subtypeLabel,                                   // D Project Sub Type
+    statusLabel,                                    // E Status
     dateStr(project.start_date || project.created_at), // F Start Date
     dateStr(project.completed_at),                  // G End Date
     dateStr(project.due_date),                      // H Deadline Date
