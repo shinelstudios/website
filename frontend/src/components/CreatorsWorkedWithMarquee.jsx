@@ -30,9 +30,23 @@ function formatSubs(n) {
   return String(n);
 }
 
-// Creator badge component (pure component for better performance)
+// Creator badge — avatar + name + tiny platform glyph + count (when known).
+//
+// Per founder feedback (May 2026):
+//  - Drop the category pill — visual clutter, not relevant to visitors.
+//  - Keep sub/follower count BUT only when we actually have a real number
+//    (fetched from YouTube API or manually entered). A literal "0" reads as
+//    a dead channel, so we hide the count entirely if subs/followers is 0
+//    or null. Card still appears (the founder wants every client surface
+//    visible regardless of whether we manage it) — just without the count.
 const CreatorBadge = React.memo(({ creator, isHovered }) => {
   const [imageError, setImageError] = useState(false);
+  const isYT = creator.platform === "youtube" || creator.subs != null;
+  const isIG = creator.platform === "instagram" || creator.igFollowers != null;
+  const PlatformIcon = isIG ? Instagram : isYT ? Youtube : null;
+  const hasYtCount = creator.subs != null && creator.subs > 0;
+  const hasIgCount = creator.igFollowers != null && creator.igFollowers > 0;
+  const hasAnyCount = hasYtCount || hasIgCount;
 
   return (
     <>
@@ -51,41 +65,32 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
           <span className="relative z-10">{creator.name?.charAt(0) || 'C'}</span>
         )}
         <span className="cw-ring" style={{ borderColor: isHovered ? creator.color : "transparent" }} />
-        <span className="cw-badge" aria-label="Verified client">
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M20 6L9 17l-5-5"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </span>
+        {/* Small platform glyph in the bottom-right corner of the avatar */}
+        {PlatformIcon && (
+          <span className="cw-badge" aria-label={isIG ? "Instagram" : "YouTube"}>
+            <PlatformIcon size={10} color="white" strokeWidth={2.5} />
+          </span>
+        )}
       </span>
 
-      <span className="inline-flex flex-col gap-1 min-w-0">
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="cw-title truncate">{creator.name}</span>
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-            style={{ background: "var(--surface-alt)", color: "var(--text-muted)" }}
-          >
-            {creator.category}
+      <span className="inline-flex flex-col gap-0.5 min-w-0">
+        <span className="cw-title truncate">{creator.name}</span>
+        {hasAnyCount && (
+          <span className="cw-meta inline-flex items-center gap-1">
+            {hasYtCount && (
+              <>
+                <Youtube size={10} className="text-red-500" />
+                {formatSubs(creator.subs)}
+              </>
+            )}
+            {hasIgCount && (
+              <>
+                <Instagram size={10} className="text-pink-500" />
+                {formatSubs(creator.igFollowers)}
+              </>
+            )}
           </span>
-        </span>
-        <div className="flex flex-col gap-0">
-          {creator.subs != null && creator.subs > 0 && (
-            <span className="cw-meta flex items-center gap-1 text-[9px]">
-              <Youtube size={10} className="text-red-500" /> {formatSubs(creator.subs)}
-            </span>
-          )}
-          {creator.igFollowers != null && creator.igFollowers > 0 && (
-            <span className="cw-meta flex items-center gap-1 text-[9px]">
-              <Instagram size={10} className="text-pink-500" /> {formatSubs(creator.igFollowers)}
-            </span>
-          )}
-        </div>
+        )}
       </span>
     </>
   );
@@ -204,47 +209,65 @@ const CreatorsWorkedWithMarquee = ({
     return () => { cancelled = true; clearInterval(interval); window.removeEventListener("focus", onFocus); };
   }, []);
 
-  // Determine the final list of creators
+  // Determine the final list of creators.
+  // Per founder ask (May 2026): show EVERY active client's YT channels + IG
+  // accounts regardless of whether we manage that surface, and regardless of
+  // whether we have synced subscriber/follower numbers. A client we don't
+  // do social-work for is still a client — they belong on the page.
   const finalCreators = useMemo(() => {
     if (creatorsProp && creatorsProp.length) return creatorsProp;
 
     // PRIMARY: use the per-channel list from worker (each YT and IG separately).
     if (allCreators.length > 0) {
       return allCreators
-        .filter((c) => (c.type === "youtube" ? c.subscribers > 0 : c.followers > 0))
+        // Only require a name to exist (skip rows with completely empty data).
+        .filter((c) => !!c.name)
+        // Stable sort: cards with real numbers first (so they get visual
+        // priority on first impression), but everyone still shows up.
+        .slice()
+        .sort((a, b) => {
+          const av = a.type === "youtube" ? (a.subscribers || 0) : (a.followers || 0);
+          const bv = b.type === "youtube" ? (b.subscribers || 0) : (b.followers || 0);
+          return bv - av;
+        })
         .map((c) => ({
           name: c.name,
           key: c.type === "youtube" ? `yt-${c.channel_id || c.client_id}-${c.handle || ""}` : `ig-${c.handle}`,
+          platform: c.type,
           // Real avatar from D1 (YT API logo or laptop-scraped IG profile pic).
           // Use the proxy so YT/IG CDN images don't get blocked.
           url: c.avatar_url ? getProxiedImage(c.avatar_url) : null,
-          subs: c.type === "youtube" ? c.subscribers : 0,
-          igFollowers: c.type === "instagram" ? c.followers : 0,
-          category: c.category || "Creator",
+          subs: c.type === "youtube" ? (c.subscribers || 0) : null,
+          igFollowers: c.type === "instagram" ? (c.followers || 0) : null,
           handle: c.handle,
           link: c.url,
           color: "var(--orange)",
         }));
     }
 
-    // FALLBACK: legacy useClientStats path (one item per client).
+    // FALLBACK: legacy useClientStats path — one card per surface we know
+    // about, never gated on counts so unmanaged accounts still appear.
     if (loading || creatorsLoading) return [];
     return stats.flatMap(client => {
       const items = [];
       const primaryId = client.youtubeId || client.id;
-      if (client.subscribers > 0) {
+      // Always emit a YT card if we have any YT identifier
+      if (client.youtubeId || client.subscribers != null) {
         items.push({
           name: client.title, key: `${primaryId}-yt`, url: client.logo,
-          subs: client.subscribers, igFollowers: 0,
-          category: client.category || "Creator", color: "var(--orange)",
+          platform: "youtube",
+          subs: client.subscribers || 0, igFollowers: null,
+          color: "var(--orange)",
         });
       }
-      if (client.instagramFollowers > 0) {
+      // Always emit an IG card if we have any IG identifier
+      if (client.instagramHandle || client.instagramFollowers != null) {
         items.push({
           name: client.title, key: `${client.instagramHandle || primaryId}-ig`,
           url: client.instagramLogo || client.logo,
-          subs: 0, igFollowers: client.instagramFollowers,
-          category: client.category || "Creator", color: "var(--orange)",
+          platform: "instagram",
+          subs: null, igFollowers: client.instagramFollowers || 0,
+          color: "var(--orange)",
         });
       }
       return items;
@@ -278,9 +301,10 @@ const CreatorsWorkedWithMarquee = ({
     return stats?.length || 0;
   }, [publicStats, stats]);
 
-  // Channel + IG counts for the breakdown line.
-  const ytChannels = useMemo(() => allCreators.filter((c) => c.type === "youtube" && c.subscribers > 0).length, [allCreators]);
-  const igAccounts = useMemo(() => allCreators.filter((c) => c.type === "instagram" && c.followers > 0).length, [allCreators]);
+  // Channel + IG counts for the breakdown line — count EVERY active surface
+  // we know about (managed or not), matching what the marquee renders.
+  const ytChannels = useMemo(() => allCreators.filter((c) => c.type === "youtube").length, [allCreators]);
+  const igAccounts = useMemo(() => allCreators.filter((c) => c.type === "instagram").length, [allCreators]);
 
   const fmt = useCallback((n) => {
     if (n == null) return null;
@@ -746,8 +770,8 @@ const CreatorsWorkedWithMarquee = ({
           cursor: default;
           display: inline-flex;
           align-items: center;
-          gap: 1rem;
-          padding: 1rem 1.25rem;
+          gap: 0.75rem;
+          padding: 0.625rem 1rem 0.625rem 0.625rem;
           min-width: max-content;
           text-decoration: none;
           color: inherit;
@@ -757,9 +781,9 @@ const CreatorsWorkedWithMarquee = ({
 
         .cw-avatar {
           position: relative;
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
           overflow: hidden;
           flex-shrink: 0;
           background: #111;
@@ -786,11 +810,11 @@ const CreatorsWorkedWithMarquee = ({
         }
         .cw-badge {
           position: absolute;
-          bottom: -4px;
-          right: -4px;
-          width: 18px;
-          height: 18px;
-          border-radius: 6px;
+          bottom: -3px;
+          right: -3px;
+          width: 16px;
+          height: 16px;
+          border-radius: 5px;
           background: var(--orange);
           border: 2px solid #000;
           display: grid;
@@ -798,19 +822,20 @@ const CreatorsWorkedWithMarquee = ({
           z-index: 2;
         }
 
-        .cw-title { 
-          color: var(--text); 
-          font-weight: 800; 
-          font-size: 1rem; 
-          line-height: 1.2; 
+        .cw-title {
+          color: var(--text);
+          font-weight: 700;
+          font-size: 0.95rem;
+          line-height: 1.2;
           letter-spacing: -0.01em;
+          max-width: 240px;
         }
-        .cw-meta  { 
-          color: var(--text-muted); 
-          font-size: 0.75rem; 
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+        .cw-meta {
+          color: var(--text-muted);
+          font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+          line-height: 1;
         }
 
         /* RTL Direction — uses -50% which works WITHOUT JS measurement because
