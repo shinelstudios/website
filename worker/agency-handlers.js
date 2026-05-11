@@ -1556,10 +1556,14 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       if (!callerEmail) return err("token has no email", 401);
       const statusFilter = (url.searchParams.get("status") || "active").toLowerCase();
       const includeDone = url.searchParams.get("include_completed") === "1" || statusFilter === "all" || statusFilter === "done";
-      const where = ["owner_email = ?1"];
+      // Every column we reference must be table-qualified (t.) because the
+      // joined `projects` table also has status/priority/due_date columns,
+      // and `clients` has status too — SQLite throws SQLITE_ERROR for
+      // unqualified references in that case.
+      const where = ["t.owner_email = ?1"];
       const binds = [callerEmail];
-      if (!includeDone) where.push("status NOT IN ('done', 'cancelled')");
-      if (statusFilter === "done") { where.length = 1; where.push("status = 'done'"); }
+      if (!includeDone) where.push("t.status NOT IN ('done', 'cancelled')");
+      if (statusFilter === "done") { where.length = 1; where.push("t.owner_email = ?1"); where.push("t.status = 'done'"); }
       let results;
       try {
         const r = await env.DB.prepare(
@@ -1569,11 +1573,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
            LEFT JOIN clients c ON t.linked_client_id = c.id
            WHERE ${where.join(" AND ")}
            ORDER BY
-             CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,
-             CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
-             (due_date IS NULL),
-             due_date ASC,
-             id DESC
+             CASE t.status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,
+             CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+             (t.due_date IS NULL),
+             t.due_date ASC,
+             t.id DESC
            LIMIT 500`
         ).bind(...binds).all();
         results = r.results || [];
