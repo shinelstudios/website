@@ -30,6 +30,46 @@ function formatSubs(n) {
   return String(n);
 }
 
+// Deterministic color from a string — used to give the avatar fallback
+// (when no real image is available) a distinct gradient per channel, so
+// Kamz's 3 separate channels don't all render as the same dark "K" tile.
+function colorFromString(str) {
+  let hash = 0;
+  for (let i = 0; i < (str || "").length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+  const hue = Math.abs(hash) % 360;
+  return { from: `hsl(${hue} 65% 22%)`, to: `hsl(${(hue + 35) % 360} 70% 38%)` };
+}
+
+// Round-robin interleave: given a flat list sorted by reach, reorder so two
+// cards from the same client are never adjacent. Big channels still float
+// near the front; small ones still trail; but a multi-channel creator like
+// Kamz won't dominate a 4-card visual stretch anymore.
+function interleaveByClient(items) {
+  if (!items || items.length < 2) return items;
+  const buckets = new Map();
+  for (const it of items) {
+    const k = `${it.client_id ?? "x"}`;
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(it);
+  }
+  // Each bucket is already in reach-DESC order (input is pre-sorted).
+  const queues = Array.from(buckets.values());
+  // Order client-queues by their best-reach card so high-reach clients lead.
+  queues.sort((a, b) => {
+    const av = Math.max(...a.map((x) => x.subscribers || x.followers || 0));
+    const bv = Math.max(...b.map((x) => x.subscribers || x.followers || 0));
+    return bv - av;
+  });
+  const out = [];
+  let drained = 0;
+  while (drained < items.length) {
+    for (const q of queues) {
+      if (q.length) { out.push(q.shift()); drained++; }
+    }
+  }
+  return out;
+}
+
 // Creator badge — avatar + name + tiny platform glyph + count (when known).
 //
 // Per founder feedback (May 2026):
@@ -48,9 +88,27 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
   const hasIgCount = creator.igFollowers != null && creator.igFollowers > 0;
   const hasAnyCount = hasYtCount || hasIgCount;
 
+  // Per-channel deterministic gradient so when no real avatar is available,
+  // Kamz's @inkboymusik card visually differs from @kamzinkzonetattoosacademy.
+  // Color is derived from the channel handle when present, else the name.
+  const fallbackKey = creator.handle || creator.name || "";
+  const fallback = useMemo(() => colorFromString(fallbackKey), [fallbackKey]);
+  const fallbackStyle = {
+    background: `linear-gradient(135deg, ${fallback.from} 0%, ${fallback.to} 100%)`,
+  };
+  // Take initials from the handle if it exists (more distinctive), else
+  // first two letters of the name.
+  const initials = useMemo(() => {
+    const src = (creator.handle || creator.name || "C").replace(/^@/, "").replace(/[^a-zA-Z]/g, "");
+    return (src.slice(0, 2) || "C").toUpperCase();
+  }, [creator.handle, creator.name]);
+
   return (
     <>
-      <span className="cw-avatar flex items-center justify-center text-xs font-bold text-white bg-[var(--surface-alt)]">
+      <span
+        className="cw-avatar flex items-center justify-center text-sm font-extrabold text-white"
+        style={!creator.url || imageError ? fallbackStyle : undefined}
+      >
         {creator.url && !imageError ? (
           <LazyImage
             src={creator.url}
@@ -62,7 +120,7 @@ const CreatorBadge = React.memo(({ creator, isHovered }) => {
             onError={() => setImageError(true)}
           />
         ) : (
-          <span className="relative z-10">{creator.name?.charAt(0) || 'C'}</span>
+          <span className="relative z-10 tracking-tight">{initials}</span>
         )}
         <span className="cw-ring" style={{ borderColor: isHovered ? creator.color : "transparent" }} />
         {/* Small platform glyph in the bottom-right corner of the avatar */}
@@ -219,30 +277,44 @@ const CreatorsWorkedWithMarquee = ({
 
     // PRIMARY: use the per-channel list from worker (each YT and IG separately).
     if (allCreators.length > 0) {
-      return allCreators
-        // Only require a name to exist (skip rows with completely empty data).
+      // Step 1: build the mapped + filtered list (name required)
+      const mapped = allCreators
         .filter((c) => !!c.name)
-        // Stable sort: cards with real numbers first (so they get visual
-        // priority on first impression), but everyone still shows up.
-        .slice()
-        .sort((a, b) => {
-          const av = a.type === "youtube" ? (a.subscribers || 0) : (a.followers || 0);
-          const bv = b.type === "youtube" ? (b.subscribers || 0) : (b.followers || 0);
-          return bv - av;
-        })
         .map((c) => ({
           name: c.name,
-          key: c.type === "youtube" ? `yt-${c.channel_id || c.client_id}-${c.handle || ""}` : `ig-${c.handle}`,
+          key: c.type === "youtube"
+            ? `yt-${c.channel_id || c.client_id}-${(c.handle || "").toLowerCase()}`
+            : `ig-${(c.handle || "").toLowerCase()}-${c.client_id}`,
+          client_id: c.client_id,
           platform: c.type,
           // Real avatar from D1 (YT API logo or laptop-scraped IG profile pic).
           // Use the proxy so YT/IG CDN images don't get blocked.
           url: c.avatar_url ? getProxiedImage(c.avatar_url) : null,
           subs: c.type === "youtube" ? (c.subscribers || 0) : null,
           igFollowers: c.type === "instagram" ? (c.followers || 0) : null,
+          subscribers: c.type === "youtube" ? (c.subscribers || 0) : 0,
+          followers: c.type === "instagram" ? (c.followers || 0) : 0,
           handle: c.handle,
           link: c.url,
           color: "var(--orange)",
         }));
+
+      // Step 2: belt-and-suspenders frontend dedup by key (in case backend
+      // returns dupes from any future migration error).
+      const seen = new Set();
+      const unique = [];
+      for (const m of mapped) {
+        if (seen.has(m.key)) continue;
+        seen.add(m.key);
+        unique.push(m);
+      }
+
+      // Step 3: sort by reach DESC so highest-impact channels lead.
+      unique.sort((a, b) => (b.subscribers + b.followers) - (a.subscribers + a.followers));
+
+      // Step 4: round-robin interleave by client so Kamz's 3 channels are
+      // spaced out across the strip rather than appearing back-to-back.
+      return interleaveByClient(unique);
     }
 
     // FALLBACK: legacy useClientStats path — one card per surface we know

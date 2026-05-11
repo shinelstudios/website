@@ -215,26 +215,37 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
   if (path === "/admin/agency/public/creators" && method === "GET") {
     const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
     try {
+      // Defensive dedup at SQL level: GROUP BY the natural key
+      // (channel_id for YT, lowercase handle for IG). If a seeding bug or a
+      // duplicate sync ever inserted two rows for the same channel/handle,
+      // the marquee won't surface both. We pick MAX(subscribers/followers)
+      // and MAX(avatar_url) so we keep the most-recent data we have.
       const [channels, igAccounts] = await Promise.all([
         env.DB.prepare(
-          `SELECT cc.id, cc.channel_id, cc.handle, cc.role, cc.subscribers, cc.studio_url, cc.avatar_url,
+          `SELECT MIN(cc.id) AS id, cc.channel_id, MIN(cc.handle) AS handle,
+                  MIN(cc.role) AS role, MAX(cc.subscribers) AS subscribers,
+                  MIN(cc.studio_url) AS studio_url, MAX(cc.avatar_url) AS avatar_url,
                   c.id AS client_id, c.name AS client_name, c.niche_tag,
                   COALESCE(c.managed_by_us, 1) AS managed_by_us
            FROM client_channels cc
            JOIN clients c ON cc.client_id = c.id
            WHERE cc.active = 1
              AND (c.status = 'active' OR c.status IS NULL)
-           ORDER BY cc.subscribers DESC`
+           GROUP BY cc.channel_id, c.id
+           ORDER BY MAX(cc.subscribers) DESC`
         ).all(),
         env.DB.prepare(
-          `SELECT ia.id, ia.handle, ia.url, ia.role, ia.followers, ia.managed_by_us AS ig_managed, ia.avatar_url,
+          `SELECT MIN(ia.id) AS id, LOWER(ia.handle) AS handle, MIN(ia.url) AS url,
+                  MIN(ia.role) AS role, MAX(ia.followers) AS followers,
+                  MAX(ia.managed_by_us) AS ig_managed, MAX(ia.avatar_url) AS avatar_url,
                   c.id AS client_id, c.name AS client_name, c.niche_tag,
                   COALESCE(c.managed_by_us, 1) AS managed_by_us
            FROM instagram_accounts ia
            JOIN clients c ON ia.client_id = c.id
            WHERE ia.active = 1
              AND (c.status = 'active' OR c.status IS NULL)
-           ORDER BY ia.followers DESC`
+           GROUP BY LOWER(ia.handle), c.id
+           ORDER BY MAX(ia.followers) DESC`
         ).all(),
       ]);
 
