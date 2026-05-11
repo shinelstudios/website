@@ -6,7 +6,7 @@
  * the laptop's last heartbeat so you know whether it's online.
  */
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { Cpu, RefreshCw, Plus, Check, AlertCircle, Clock, Loader, X } from "lucide-react";
+import { Cpu, RefreshCw, Plus, Check, AlertCircle, Clock, Loader, X, Zap, Edit2, Trash2 } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken } from "../../utils/tokenStore";
 
@@ -53,6 +53,114 @@ function fmtAgo(secAgo) {
   if (secAgo < 3600) return `${Math.floor(secAgo / 60)}m ago`;
   if (secAgo < 86400) return `${Math.floor(secAgo / 3600)}h ago`;
   return `${Math.floor(secAgo / 86400)}d ago`;
+}
+
+// =====================================================================
+// EditTaskModal — edit a pending task: type, client, priority, payload, scheduled_for
+// =====================================================================
+function EditTaskModal({ task, clients, onClose, onSaved }) {
+  const [type, setType] = useState(task.type);
+  const [clientId, setClientId] = useState(task.client_id || "");
+  const [priority, setPriority] = useState(task.priority ?? 0);
+  const [scheduledFor, setScheduledFor] = useState(task.scheduled_for || "");
+  const [payloadText, setPayloadText] = useState(() => {
+    try { return task.payload_json ? JSON.stringify(JSON.parse(task.payload_json), null, 2) : ""; }
+    catch { return task.payload_json || ""; }
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const save = async () => {
+    setBusy(true); setErr(null);
+    // Validate JSON if provided
+    let payload = null;
+    if (payloadText.trim()) {
+      try { payload = JSON.parse(payloadText); }
+      catch (e) { setErr(`Payload must be valid JSON: ${e.message}`); setBusy(false); return; }
+    }
+    try {
+      const res = await authedFetch(`/admin/agency/laptop/queue/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          type,
+          client_id: clientId || null,
+          priority: parseInt(priority || 0, 10),
+          scheduled_for: scheduledFor || null,
+          payload,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `API ${res.status}`);
+      onSaved?.();
+      onClose();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="bg-[var(--surface-elev)] rounded-xl border border-neutral-200 dark:border-neutral-800 max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <h3 className="text-lg font-bold">Edit task</h3>
+            <p className="text-[10px] text-neutral-500 font-mono">#{task.id}</p>
+          </div>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Task type</label>
+            <select value={type} onChange={(e) => setType(e.target.value)} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm">
+              {TASK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              {!TASK_TYPES.some((t) => t.key === type) && <option value={type}>{type} (custom)</option>}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Client</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm">
+              <option value="">— All clients —</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Priority</label>
+              <input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
+              <p className="text-[10px] text-neutral-500 mt-1">99 = top of queue · 0 = default</p>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Run not before</label>
+              <input
+                type="datetime-local"
+                value={scheduledFor ? new Date(scheduledFor).toISOString().slice(0, 16) : ""}
+                onChange={(e) => setScheduledFor(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-[10px] text-neutral-500 mt-1">Blank = ASAP</p>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Payload (JSON)</label>
+            <textarea
+              value={payloadText}
+              onChange={(e) => setPayloadText(e.target.value)}
+              rows={5}
+              spellCheck={false}
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-xs font-mono"
+              placeholder='e.g. { "prompt": "...", "limit": 12 }'
+            />
+          </div>
+          {err && <div className="text-xs text-red-500 bg-red-500/10 px-3 py-2 rounded">{err}</div>}
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800">Cancel</button>
+          <button onClick={save} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-[var(--orange)] text-white font-bold disabled:opacity-50">
+            {busy ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function EnqueueModal({ clients, onClose, onEnqueued }) {
@@ -124,6 +232,34 @@ export default function LaptopQueuePanel({ clients = [] }) {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [busyTaskId, setBusyTaskId] = useState(null);
+
+  // Run-now: bump priority + push to laptop
+  const runNow = async (task) => {
+    setBusyTaskId(task.id);
+    try {
+      const r = await authedFetch(`/admin/agency/laptop/queue/${task.id}/run-now`, { method: "POST", body: "{}" });
+      const j = await r.json();
+      if (!r.ok) { alert(j.error || "Run-now failed"); return; }
+      await refresh();
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setBusyTaskId(null); }
+  };
+
+  // Cancel/delete depending on status
+  const cancelTask = async (task) => {
+    const verb = task.status === "claimed" ? "cancel" : "delete";
+    if (!window.confirm(`${verb === "cancel" ? "Cancel" : "Delete"} this ${task.type} task?`)) return;
+    setBusyTaskId(task.id);
+    try {
+      const r = await authedFetch(`/admin/agency/laptop/queue/${task.id}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok) { alert(j.error || "Delete failed"); return; }
+      await refresh();
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setBusyTaskId(null); }
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -230,20 +366,75 @@ export default function LaptopQueuePanel({ clients = [] }) {
           {tasks.map((t) => {
             const def = STATUS_STYLE[t.status] || STATUS_STYLE.pending;
             const clientName = clients.find((c) => c.id === t.client_id)?.name;
+            const isPending = t.status === "pending";
+            const isClaimed = t.status === "claimed";
+            const isBusy = busyTaskId === t.id;
+            const isHighPriority = (t.priority ?? 0) >= 90;
+            const scheduledLater = t.scheduled_for && new Date(t.scheduled_for).getTime() > Date.now();
             return (
-              <div key={t.id} className="flex items-center justify-between gap-3 text-xs bg-[var(--surface)] rounded-md px-3 py-2 border border-neutral-100 dark:border-neutral-900">
+              <div key={t.id} className={`group flex items-center justify-between gap-3 text-xs rounded-md px-3 py-2 border transition-colors ${
+                isHighPriority
+                  ? "bg-orange-500/5 border-orange-500/30"
+                  : "bg-[var(--surface)] border-neutral-100 dark:border-neutral-900"
+              }`}>
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[11px] font-semibold">{t.type}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-mono text-[11px] font-semibold">{t.type}</div>
+                    {isHighPriority && (
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500 text-white">⚡ priority {t.priority}</span>
+                    )}
+                    {scheduledLater && (
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-300" title={`Scheduled for ${fmtTs(t.scheduled_for)}`}>
+                        ⏰ scheduled
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-neutral-500">
                     {clientName ? `${clientName} · ` : ""}
                     enqueued {fmtTs(t.created_at)}
+                    {scheduledLater ? ` · runs ${fmtTs(t.scheduled_for)}` : ""}
                     {t.attempts > 0 ? ` · ${t.attempts} attempt${t.attempts > 1 ? "s" : ""}` : ""}
                     {t.error ? ` · ${t.error.slice(0, 80)}` : ""}
                   </div>
                 </div>
-                <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${def}`}>
-                  {t.status}
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Row actions — only show for pending (run-now, edit) or claimed (cancel) */}
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {isPending && (
+                      <button
+                        onClick={() => runNow(t)}
+                        disabled={isBusy}
+                        title="Run now — bumps priority to 99 + pushes to laptop"
+                        className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-orange-500/10 hover:bg-orange-500 hover:text-white text-orange-600 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <Zap size={10} /> Run now
+                      </button>
+                    )}
+                    {isPending && (
+                      <button
+                        onClick={() => setEditingTask(t)}
+                        disabled={isBusy}
+                        title="Edit"
+                        className="p-1 rounded text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-50"
+                      >
+                        <Edit2 size={11} />
+                      </button>
+                    )}
+                    {(isPending || isClaimed || t.status === "done" || t.status === "failed") && (
+                      <button
+                        onClick={() => cancelTask(t)}
+                        disabled={isBusy}
+                        title={isClaimed ? "Cancel (mark cancelled)" : "Delete"}
+                        className="p-1 rounded text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${def}`}>
+                    {t.status}
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -251,6 +442,14 @@ export default function LaptopQueuePanel({ clients = [] }) {
       )}
 
       {showNew && <EnqueueModal clients={clients} onClose={() => setShowNew(false)} onEnqueued={refresh} />}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          clients={clients}
+          onClose={() => setEditingTask(null)}
+          onSaved={refresh}
+        />
+      )}
     </section>
   );
 }

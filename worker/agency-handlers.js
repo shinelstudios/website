@@ -634,6 +634,86 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ count: results.length, tasks: results });
     }
 
+    // ---- Single-laptop-task routes: edit / cancel / run-now ----
+    // Only pending tasks are mutable; once claimed they belong to the laptop.
+    const queueMatch = path.match(/^\/admin\/agency\/laptop\/queue\/([^\/]+)(?:\/(run-now))?$/);
+    if (queueMatch) {
+      const id = queueMatch[1];
+      const subaction = queueMatch[2] || null;
+
+      // Ownership/existence check up front
+      const task = await env.DB.prepare("SELECT * FROM laptop_tasks WHERE id = ?1").bind(id).first();
+      if (!task) return err("task not found", 404);
+
+      // ---- POST /admin/agency/laptop/queue/:id/run-now
+      //   Bumps priority to max so the next claim picks it first, clears any
+      //   scheduled_for delay, and fires a WebSocket push so a listening
+      //   laptop picks it up immediately.
+      if (subaction === "run-now" && method === "POST") {
+        if (task.status !== "pending") {
+          return err(`task is '${task.status}', only pending tasks can be run-now'd`, 409);
+        }
+        await env.DB.prepare(
+          "UPDATE laptop_tasks SET priority = 99, scheduled_for = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?1"
+        ).bind(id).run();
+        // Fire-and-forget push
+        notifyLaptopPush(env, "shinel-mainframe", {
+          type: "task_available", task_id: id, task_type: task.type,
+          client_id: task.client_id, priority: 99, source: "run_now",
+        }).catch(() => {});
+        return ok({ id, ran_now: true, priority: 99 });
+      }
+
+      // ---- PATCH /admin/agency/laptop/queue/:id  — edit a pending task
+      //   Allowed fields: priority, payload_json (object or string), scheduled_for, client_id, type
+      if (!subaction && method === "PATCH") {
+        if (task.status !== "pending") {
+          return err(`task is '${task.status}', only pending tasks can be edited`, 409);
+        }
+        const body = await request.json().catch(() => ({}));
+        const sets = [];
+        const binds = [];
+        let i = 1;
+        if (body.priority !== undefined) {
+          sets.push(`priority = ?${i++}`); binds.push(parseInt(body.priority, 10));
+        }
+        if (body.scheduled_for !== undefined) {
+          sets.push(`scheduled_for = ?${i++}`); binds.push(body.scheduled_for || null);
+        }
+        if (body.client_id !== undefined) {
+          sets.push(`client_id = ?${i++}`); binds.push(body.client_id || null);
+        }
+        if (body.type !== undefined) {
+          sets.push(`type = ?${i++}`); binds.push(body.type);
+        }
+        if (body.payload !== undefined || body.payload_json !== undefined) {
+          const pl = body.payload_json !== undefined ? body.payload_json : body.payload;
+          const serialized = typeof pl === "string" ? pl : JSON.stringify(pl || {});
+          sets.push(`payload_json = ?${i++}`); binds.push(serialized);
+        }
+        if (!sets.length) return err("no valid fields");
+        sets.push(`updated_at = CURRENT_TIMESTAMP`);
+        binds.push(id);
+        await env.DB.prepare(`UPDATE laptop_tasks SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+        return ok({ id, updated: true });
+      }
+
+      // ---- DELETE /admin/agency/laptop/queue/:id  — cancel (or hard-delete if pending)
+      //   Pending → hard delete (cheap, no history value).
+      //   Claimed → mark cancelled (laptop will skip on patch attempt).
+      //   Done/failed → hard delete (cleanup).
+      if (!subaction && method === "DELETE") {
+        if (task.status === "claimed") {
+          await env.DB.prepare("UPDATE laptop_tasks SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?1").bind(id).run();
+          return ok({ id, cancelled: true });
+        }
+        await env.DB.prepare("DELETE FROM laptop_tasks WHERE id = ?1").bind(id).run();
+        return ok({ id, deleted: true });
+      }
+
+      return err("queue subroute not found", 404);
+    }
+
     // ---- GET /admin/agency/laptop/heartbeat — show all laptops + last seen
     if (path === "/admin/agency/laptop/heartbeat" && method === "GET") {
       const { results } = await env.DB.prepare(
