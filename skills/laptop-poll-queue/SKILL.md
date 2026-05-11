@@ -1,6 +1,6 @@
 ---
 name: laptop-poll-queue
-description: Polls the Shinel Cockpit task queue and executes any pending laptop-side tasks (IG follower fetch, RESEO sweeps, Higgsfield generation, milestone story creation, etc). Runs every 5 minutes on the always-on machine. Heartbeats so the cockpit knows the laptop is online. Authenticates with a simple X-Laptop-Token header — no user JWT needed.
+description: Polls the Shinel Cockpit task queue every 5 minutes and executes pending laptop-side tasks (IG follower fetch, RESEO sweeps, Higgsfield generation, milestone story creation, scheduled stream SEO audits, etc). Authenticates with X-Laptop-Token. Self-contained — no source code sync needed.
 ---
 
 # laptop-poll-queue
@@ -9,46 +9,37 @@ You are running on the **always-on laptop** as a scheduled Cowork task. Your job
 
 ## Setup (one-time)
 
-**1. The user generates a `LAPTOP_API_TOKEN`** — any long random string. They set it on the worker with:
-```
-npx wrangler secret put LAPTOP_API_TOKEN
-```
-And paste it on the laptop side as the env var below.
-
-**2. Set the env vars** in your memory at the start of every run:
+**Set these env vars** at the start of every run:
 
 ```
 SHINEL_WORKER_URL = https://shinel-auth.shinelstudioofficial.workers.dev
-SHINEL_LAPTOP_ID  = shinel-mainframe
-SHINEL_LAPTOP_TOKEN = <the LAPTOP_API_TOKEN>
+SHINEL_LAPTOP_ID = shinel-mainframe
+SHINEL_LAPTOP_TOKEN = <the LAPTOP_API_TOKEN secret value>
 ```
 
-**3. Schedule this skill** to run every 5 minutes. Use the `schedule` skill:
-
-```
-/schedule create laptop-poll-queue cron='*/5 * * * *'
-```
-
-## Auth header
-
-All requests to `/admin/agency/laptop/*` endpoints must include:
+**Auth:** every request to `/admin/agency/laptop/*` must include header:
 ```
 X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}
 ```
 
-(No user JWT needed — the X-Laptop-Token is enough for laptop endpoints.)
+**Schedule:** `/schedule create laptop-poll-queue cron='*/5 * * * *'`
 
-## Each run
+## Each run (high-level loop)
 
-### 1. Heartbeat + claim
+1. **Claim** up to 3 pending tasks
+2. **Fetch context** (clients + handles + competitors + scheduled streams + spikes) — single call, cache for the rest of the run
+3. **Execute** each claimed task using the handler below
+4. **Patch** each task with `done` + result, or `failed` + error
+5. **Log** a single-line summary
+6. **Exit** — next cron tick handles new work
 
-POST to `{SHINEL_WORKER_URL}/admin/agency/laptop/claim` with:
-- Headers: `X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}`, `Content-Type: application/json`
-- Body:
+## Step 1 — Claim
+
+POST `{WORKER}/admin/agency/laptop/claim` with body:
 ```json
 {
-  "laptop_id": "{SHINEL_LAPTOP_ID}",
-  "version": "1.0",
+  "laptop_id": "{LAPTOP_ID}",
+  "version": "1.1",
   "count": 3,
   "types": [
     "ig_followers_fetch",
@@ -62,101 +53,142 @@ POST to `{SHINEL_WORKER_URL}/admin/agency/laptop/claim` with:
 }
 ```
 
-Response: `{ claimed_count: N, tasks: [...] }`. Each task has `id`, `type`, `client_id`, `payload_json`.
+Response: `{ claimed_count: N, tasks: [...] }`. Each task: `{ id, type, client_id, payload_json, attempts }`.
 
-If `claimed_count === 0`, log "no work" and exit. The heartbeat alone tells the cockpit you're online.
+If `claimed_count === 0`, log `[laptop-poll] heartbeat ok · no work` and exit.
 
-### 2. Get client context (if needed)
+## Step 2 — Fetch context
 
-For tasks that reference a `client_id`, look up the handle/details by calling:
+GET `{WORKER}/admin/agency/laptop/context` (with X-Laptop-Token header).
+
+Returns one bundle:
+- `clients[]` — each with: `id`, `name`, `youtube_id`, `subscribers`, `instagram_handle`, `instagram_followers`, `instagram_accounts[]`, `channels[]`, `competitors[]`, `recent_uploads[]`, `scheduled_projects[]`, `brand_kit`, `drive_folder_url`, `discord_webhook_url`
+- `active_spikes[]` — niche-level news spikes the cockpit detected
+
+Cache the response in working memory; reuse for all tasks this run.
+
+## Step 3 — Handlers
+
+### `homepage_stats_refresh`
+GET `{WORKER}/admin/agency/public/stats` (no auth header needed — it's open).
+Result: `{ refreshed: true, stats: <response> }`.
+
+### `milestone_check`
+Pure math, no external calls. From the cached context:
+- For each managed client (`managed_by_us === 1`), look at `subscribers`
+- Targets: 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000
+- A client is a "candidate" if their subs is within 3% **below** any target (e.g. 9700-10000 for 10K)
+
+Result: `{ candidates: [{ client_id, name, subs, target, gap_to_target }] }`
+
+The worker auto-spawns `milestone_story_create` tasks for each candidate when this PATCH lands. Don't enqueue them yourself.
+
+### `ig_followers_fetch`
+Input: `task.client_id` → look up in context → get `instagram_handle` (or first `instagram_accounts[].handle`).
+
+1. Open Chrome to `https://www.instagram.com/{handle}/` using the **Claude in Chrome** MCP (`mcp__Claude_in_Chrome__navigate`).
+2. Read the page — use `read_page` with depth 5 to get the meta description.
+3. The follower count is in:
+   - `<meta name="description" content="14k Followers, 432 Following, 200 Posts — ...">`
+   - Or in a `window.__additionalData` script block (less reliable)
+4. Parse the number. Handle suffixes: `12.5k` → 12500, `1.2M` → 1_200_000, `500` → 500.
+
+If you hit a login wall or CAPTCHA: PATCH `failed` with error `"ig_login_wall"` — don't try to scrape further this run.
+
+If you get the count: PATCH `done` with `{ handle, followers, raw }`. Worker auto-writes followers to `clients.instagram_followers`.
+
+### `ig_recent_posts_fetch`
+Same setup. After the page loads:
+1. `find` element matching "post grid" or "first post in profile"
+2. Read the first 12 grid items: `href` (post URL), `alt` (post caption preview), thumbnail src
+3. Result: `{ posts: [{ url, thumbnail, caption_alt }] }`
+
+### `yt_stream_seo_check`
+Input: `task.client_id` (or null = sweep all managed clients).
+
+For each scheduled stream in context's `scheduled_projects` filtered by `asset_type='live'` or `status='planned'`:
+1. If it has a `youtube_video_id`, open `https://studio.youtube.com/video/{video_id}/edit`
+2. Read the page — title, description, tags, thumbnail
+3. Score against the playbook:
+   - Title length 50-70 chars
+   - Description 200+ chars, has timestamps if it's a long stream
+   - Has at least 8 tags
+   - Has custom thumbnail (not auto-generated)
+4. For each issue, log to result.
+
+Result: `{ checked: N, warnings: [{ video_id, project_id, issues: ["title_too_short", "no_tags"] }] }`.
+
+Don't write — this is read-only audit. The cockpit team reviews warnings and decides whether to enqueue `yt_video_reseo`.
+
+### `yt_video_reseo`
+Input: `task.payload_json` parsed as `{ video_id, new_title?, new_description?, new_tags? }`.
+
+⚠ **This writes to YouTube — be careful.** Only run if all three fields are non-null in the payload.
+
+1. Open `https://studio.youtube.com/video/{video_id}/edit`
+2. For title: clear field, type new_title
+3. For description: clear field, type new_description
+4. For tags: clear, add each tag
+5. Click "Save" button (top-right)
+6. Wait for "Saved" confirmation toast
+
+Result: `{ video_id, applied: true, fields_updated: [...] }` or PATCH failed if save didn't confirm.
+
+### `milestone_story_create`
+Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs }`.
+
+1. Look up client in context for `name` and `brand_kit`. If `brand_kit.colors` exists use those, else default `["#E85002", "#0F0F0F"]`.
+2. Use Higgsfield (`mcp__53090553-...__generate_image`) with prompt:
+   > "Cinematic celebration milestone card. Bold typography reading '{name} hits {target_human}!' (e.g. '50K SUBSCRIBERS!'). Brand colors: {colors}. Vertical 1080x1920 portrait. Modern gaming/creator aesthetic. Confetti, lights, sub count badge. Premium quality."
+3. Wait for the image, capture URL.
+4. Post to Discord using the worker's per-client webhook (from `client.discord_webhook_url`) **OR** `DISCORD_CLIENT_UPLOADS_WEBHOOK_URL` if no per-client. Embed:
+   - Title: "🎉 {name} hit {target_human}!"
+   - Image: the Higgsfield URL
+   - Footer: "Generated milestone card — review + post to IG Story"
+5. (Future) If team has IG poster credentials: auto-post as IG Story.
+
+Result: `{ image_url, target, posted_to: ["discord"] }`.
+
+### Unknown / not-yet-implemented type
+PATCH `failed` with error `"handler not implemented yet"`. Move on — don't crash the run.
+
+## Step 4 — PATCH each task
+
 ```
-GET {SHINEL_WORKER_URL}/admin/agency/laptop/context
-Headers: X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}
+PATCH {WORKER}/admin/agency/laptop/tasks/{task.id}
+Headers: X-Laptop-Token: {TOKEN}, Content-Type: application/json
+Body: { "status": "done"|"failed", "result": {...}, "error": "..." }
 ```
 
-Returns `{ count, clients: [{ id, name, instagram_handle, instagram_followers, youtube_id, subscribers, instagram_accounts: [...] }] }`. Cache this result in memory for the rest of the run.
+The worker has post-completion side-effects:
+- `ig_followers_fetch` done → writes `clients.instagram_followers` automatically
+- `milestone_check` done → enqueues a `milestone_story_create` for each candidate
 
-### 3. Execute each claimed task
+You don't need to do those side-effects yourself.
 
-Loop over `tasks`. For each, run the matching handler below. On success, PATCH with `{ status: "done", result: {...} }`. On error, PATCH with `{ status: "failed", error: "message" }`.
+## Step 5 — Log + exit
 
-PATCH URL: `{SHINEL_WORKER_URL}/admin/agency/laptop/tasks/{task.id}`
-Headers: `X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}`, `Content-Type: application/json`
-
-### Task handlers
-
-#### `ig_followers_fetch`
-- Input: `task.client_id` — find the client in your context map → get `instagram_handle`.
-- Open Chrome to `https://www.instagram.com/{handle}/`.
-- Read the page; the follower count appears in:
-  - A `<meta name="description">` tag like "14k Followers, 432 Following, 200 Posts — ..."
-  - Or a JSON-LD `<script type="application/ld+json">` block
-- Parse the number, handling K/M suffixes (e.g. "14k" → 14000, "1.2M" → 1200000).
-- Result: `{ handle, followers, raw }` — worker auto-writes followers back to `clients.instagram_followers`.
-- If you hit a 429 or login wall, fail with `error: "ig_rate_limited"` and the worker won't auto-retry until next cron tick.
-
-#### `ig_recent_posts_fetch`
-- Same setup. Read first 12 grid items (`href`, `alt`, image src).
-- Result: `{ posts: [{ url, thumbnail, caption_alt }] }`.
-
-#### `yt_stream_seo_check`
-- Input: `task.client_id` (or null = all managed clients).
-- For each client's scheduled streams (planned status), open YT Studio.
-- Check: title length 50-70 chars, description length 200+, has tags, has thumbnail.
-- Result: `{ checked: N, warnings: [{ video_id, issue }] }`.
-
-#### `yt_video_reseo`
-- Input: `task.payload_json` parsed as `{ video_id, new_title?, new_description?, new_tags? }`.
-- Open `https://studio.youtube.com/video/{video_id}/edit`.
-- Update fields, save.
-- Result: `{ video_id, applied: true, fields_updated: [...] }`.
-
-#### `milestone_check`
-- No input — call `/admin/agency/laptop/context` for clients.
-- Find any whose `subscribers` is within 3% of: 10000, 50000, 100000, 250000, 500000, 1000000.
-- Result: `{ candidates: [{ client_id, name, subs, target }] }`.
-- **Worker auto-enqueues `milestone_story_create` for each candidate** when this task completes — you don't need to do it.
-
-#### `milestone_story_create`
-- Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs }`.
-- Use Higgsfield (`mcp__53090553-...__generate_image`) to render a 1080×1920 portrait celebration card. Prompt:
-  > "Cinematic celebration card for [client name] reaching [target] subscribers on YouTube. Brand colors: orange (#E85002) and black. Bold typography. 1080x1920 portrait."
-- Save to client's Drive folder (if you have Drive access set up, otherwise just keep the URL).
-- Post the image URL to Discord `#client-uploads` webhook (env var `DISCORD_CLIENT_UPLOADS_WEBHOOK_URL` if you have it; otherwise call the worker which has it).
-- Result: `{ image_url, target, posted_to: ["discord"] }`.
-
-#### `homepage_stats_refresh`
-- No input — GET `/admin/agency/public/stats` (no auth needed, it's open).
-- Just pings to warm Cloudflare's edge cache so the homepage loads fresh numbers fast.
-- Result: `{ refreshed: true, stats: {...} }`.
-
-### 4. Errors
-
-- **401 with "X-Laptop-Token"**: token is wrong. Print: "LAPTOP_API_TOKEN mismatch — please verify the env var matches the wrangler secret." Stop loop.
-- **Network**: retry once with 30s backoff. If still failing, exit (next tick retries).
-- **Per-task error**: catch, PATCH the task with `status='failed'` and the error message. Don't fail the whole run.
-
-### 5. Logging
-
-Log each run as a single line:
+Single-line summary:
 ```
-[laptop-poll] heartbeat ok · claimed=2 · pending_in_queue=5 · run_time=12s
+[laptop-poll] heartbeat ok · claimed=2 · processed=2 · failed=0 · run_time=14s
 ```
 
-If tasks were processed, also log:
+If anything failed, also log the per-task line:
 ```
-[laptop-poll] task=ig_followers_fetch client=Kiaraa Gaming → done · followers=14200
-[laptop-poll] task=milestone_check → done · candidates=1 (Kiaraa@10K)
+[laptop-poll] task=ig_followers_fetch client=Kiaraa → done · followers=14200
+[laptop-poll] task=yt_stream_seo_check → done · warnings=3
 ```
 
-## Why this design
+## Errors
 
-- **Cloudflare can't run browsers.** Anything needing Instagram session, YouTube Studio, or image generation has to live on a machine.
-- **D1 is the source of truth.** The laptop is a worker (in the queue-worker sense), not the brain. State stays on Cloudflare.
-- **Idempotent.** Tasks claim atomically (only one laptop wins per task). Re-runs are safe because completed tasks don't get re-claimed.
-- **Heartbeat-aware.** The cockpit knows whether to enqueue user-blocking tasks based on whether the laptop is online.
-- **Simple auth.** A single shared secret in the worker + on the laptop. No user JWT to refresh.
+- **401 with X-Laptop-Token**: token wrong. Stop loop. Print: "LAPTOP_API_TOKEN mismatch — verify the env var matches the wrangler secret on the worker."
+- **Network**: retry once with 30s backoff. If still failing, exit. Next cron tick retries.
+- **Per-task error**: catch, PATCH the task `failed`, continue with the next task. Don't crash the run.
+- **Higgsfield credit exhausted**: PATCH the milestone_story_create task `failed` with that error. The team will be alerted via the cockpit's failed-task list.
 
-## When you're done
+## Important constraints
 
-Report counts only — don't dump full task payloads to chat. The user just wants to know "5 tasks done, 0 failed".
+- **Never write to YouTube without explicit `yt_video_reseo` payload.** SEO audits are read-only.
+- **Don't enqueue follow-up tasks yourself** — let the worker's post-complete side-effects handle that.
+- **Don't dump full task results to chat** — just log the summary line. Full results are in D1.
+- **Respect rate limits.** If IG returns 429, PATCH the task failed with `"ig_rate_limited"` and do NOT retry on the same run.

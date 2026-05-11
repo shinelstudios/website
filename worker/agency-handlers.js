@@ -465,32 +465,95 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ laptops: enriched });
     }
 
-    // ---- GET /admin/agency/laptop/context — minimal client info for laptop tasks
-    // Returns active managed clients + their YT/IG handles. No sensitive fields.
-    // Lets the laptop look up "what's Kiaraa's IG handle" without needing the
-    // full clients/full endpoint (which is team-gated).
+    // ---- GET /admin/agency/laptop/context — everything the laptop needs to do work
+    // Bundles in one call: clients, IG accounts, YT channels, competitors,
+    // scheduled streams (planned projects), recent uploads, active news spikes,
+    // brand kit (for Higgsfield image gen). Cached client-side; refresh per run.
     if (path === "/admin/agency/laptop/context" && method === "GET") {
-      const { results: clients } = await env.DB.prepare(
-        `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us,
-                youtube_id, subscribers, instagram_handle, instagram_followers,
-                niche_tag, retainer_tier
-         FROM clients
-         WHERE (status = 'active' OR status IS NULL)`
-      ).all();
-      const { results: igAccounts } = await env.DB.prepare(
-        `SELECT client_id, handle, role, managed_by_us, followers
-         FROM instagram_accounts
-         WHERE active = 1`
-      ).all();
-      const igByClient = {};
-      for (const ig of (igAccounts || [])) {
-        (igByClient[ig.client_id] ||= []).push(ig);
-      }
-      const enriched = (clients || []).map((c) => ({
-        ...c,
-        instagram_accounts: igByClient[c.id] || [],
-      }));
-      return ok({ count: enriched.length, clients: enriched });
+      const clientId = url.searchParams.get("clientId"); // optional: scope to one client
+      const clientFilter = clientId ? "AND id = ?1" : "";
+      const binds = clientId ? [clientId] : [];
+
+      const [clients, channels, igAccounts, competitors, scheduledStreams, recentUploads, activeSpikes] = await Promise.all([
+        env.DB.prepare(
+          `SELECT id, name, slug, status, COALESCE(managed_by_us, 1) AS managed_by_us,
+                  youtube_id, subscribers, instagram_handle, instagram_followers,
+                  niche_tag, secondary_niche_tag, retainer_tier, soul_id, brand_kit_json,
+                  drive_folder_url, drive_folder_id, discord_webhook_url
+           FROM clients
+           WHERE (status = 'active' OR status IS NULL) ${clientFilter}
+           ORDER BY managed_by_us DESC, name`
+        ).bind(...binds).all(),
+
+        env.DB.prepare(
+          `SELECT client_id, channel_id, handle, role, language, niche_tag_override, studio_url
+           FROM client_channels WHERE active = 1`
+        ).all(),
+
+        env.DB.prepare(
+          `SELECT client_id, handle, url, role, managed_by_us, followers
+           FROM instagram_accounts WHERE active = 1`
+        ).all(),
+
+        env.DB.prepare(
+          `SELECT client_id, name, channel_id, url, niche_tag, notes
+           FROM competitors WHERE active = 1`
+        ).all().catch(() => ({ results: [] })),
+
+        env.DB.prepare(
+          `SELECT id, client_id, title, asset_type, status, due_date, scheduled_publish_at, youtube_video_id, brief_md
+           FROM projects
+           WHERE status IN ('planned', 'started', 'in-progress')
+             AND archived_at IS NULL
+           ORDER BY scheduled_publish_at NULLS LAST, due_date NULLS LAST LIMIT 200`
+        ).all(),
+
+        env.DB.prepare(
+          `SELECT client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp
+           FROM pulse_activities
+           WHERE timestamp >= ?1
+           ORDER BY timestamp DESC LIMIT 200`
+        ).bind(Date.now() - 14 * 86400_000).all(),
+
+        env.DB.prepare(
+          `SELECT id, niche_tag, title, spike_score, trend_window_end, detected_at
+           FROM news_spikes WHERE status = 'active' ORDER BY detected_at DESC LIMIT 50`
+        ).all().catch(() => ({ results: [] })),
+      ]);
+
+      // Group child rows by client_id for O(1) lookup
+      const byClient = (rows, key = "client_id") => {
+        const m = {};
+        for (const r of (rows.results || rows || [])) (m[r[key]] ||= []).push(r);
+        return m;
+      };
+      const channelsByClient   = byClient(channels);
+      const igByClient         = byClient(igAccounts);
+      const competitorsByClient = byClient(competitors);
+      const recentByYtChannel  = byClient(recentUploads, "client_id"); // pulse uses YT channel id
+
+      // For each client, attach: their channels, IGs, competitors, recent uploads (matched via youtube_id), scheduled streams (matched via clients.id)
+      const enriched = (clients.results || []).map((c) => {
+        let brandKit = null;
+        try { brandKit = c.brand_kit_json ? JSON.parse(c.brand_kit_json) : null; } catch {}
+        return {
+          ...c,
+          brand_kit: brandKit,
+          brand_kit_json: undefined, // hide raw, expose parsed
+          channels: channelsByClient[c.id] || [],
+          instagram_accounts: igByClient[c.id] || [],
+          competitors: competitorsByClient[c.id] || [],
+          recent_uploads: c.youtube_id ? (recentByYtChannel[c.youtube_id] || []) : [],
+          scheduled_projects: ((scheduledStreams.results || []).filter((p) => p.client_id === c.id)),
+        };
+      });
+
+      return ok({
+        count: enriched.length,
+        clients: enriched,
+        active_spikes: activeSpikes.results || [],
+        generated_at: new Date().toISOString(),
+      });
     }
 
     return err("laptop endpoint not found", 404);
