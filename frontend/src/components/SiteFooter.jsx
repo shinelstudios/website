@@ -109,12 +109,15 @@ const SiteFooter = ({
 
   const { config } = useGlobalConfig();
 
-  const FEATURES = useMemo(() => ([
-    { icon: Users, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Clients` },
-    { icon: TrendingUp, text: `${config?.stats?.totalReach || "7M+"} Views Driven` },
-    { icon: Award, text: `+${config?.stats?.ctrBoostMax || "40"}% CTR Boost` },
-    { icon: Clock, text: "48–72 hr Turnaround" },
-  ]), [config]);
+  // Footer features — numeric items only render if backed by real data
+  // (no hyped / hardcoded fallbacks). "Turnaround" is operational, stays.
+  const FEATURES = useMemo(() => {
+    const items = [];
+    if (config?.stats?.creatorsImpacted) items.push({ icon: Users, text: `${config.stats.creatorsImpacted} Active Clients` });
+    if (config?.stats?.totalReach) items.push({ icon: TrendingUp, text: `${config.stats.totalReach} Views Driven` });
+    items.push({ icon: Clock, text: "48–72 hr Turnaround" });
+    return items;
+  }, [config]);
 
   // [IMPROVED] Newsletter submission logic
   const onSubscribe = async (e) => {

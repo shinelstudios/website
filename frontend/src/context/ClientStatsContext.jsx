@@ -73,8 +73,10 @@ export const ClientStatsProvider = ({ children }) => {
         return `${AUTH_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
-    // Hardcoded fallbacks for production resilience (if stats API defaults)
-    const HARDCODED_FALLBACKS = {
+    // No hardcoded fallbacks — public site shows REAL numbers only. Empty
+    // object means: if the API returns 0 / fails, we show 0 (not a stub).
+    const HARDCODED_FALLBACKS = {};
+    const _UNUSED_FALLBACKS_KEEP_FOR_REF = {
         'UC_N0eSX2RI_ah-6MjJIAyzA': { title: 'Kamz Inkzone', subscribers: 1530000, logo: 'https://yt3.ggpht.com/zImn10b3yqjY1uQQkvXa1AKA3My4lIa8MEDbvCyp4S9ycDApOkRN2A8BhvkWKTgECr5NQYDRPQ=s88-c-k-c0x00ffffff-no-rj' },
         'UCi88JinGRWdVWQPFscNUgOw': { title: 'Deadlox Gaming', subscribers: 2110000, viewCount: 456789123, logo: 'https://yt3.googleusercontent.com/UCDLYqESVrBFdTDE8s-3jGg/s176-c-k-c0x00ffffff-no-rj' },
         'UCj-L_n7qM9cO67bYkFzQyQ': { title: 'Gamer Mummy', subscribers: 450000, logo: 'https://yt3.googleusercontent.com/ytc/AIdro_mC-8P_A1f2Y_g_M_S_4_J_Z_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T_B_T' }

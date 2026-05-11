@@ -498,20 +498,22 @@ const SiteHeader = ({ isDark, setIsDark }) => {
 
   const trustItems = useMemo(
     () => {
-      const totalReach = (config?.stats?.totalReach || totalSubscribers || 0) + (totalInstagramFollowers || 0);
+      // ALWAYS use real numbers (sum of YT + IG). The admin's config.stats.totalReach
+      // override is intentionally ignored — we don't want any path that lets us
+      // accidentally publish an inflated number on the homepage.
+      const totalReach = (totalSubscribers || 0) + (totalInstagramFollowers || 0);
 
+      // Marquee items: only show numeric stats that come from REAL data
+      // (computed from D1 via useClientStats). No hyped/unverifiable claims.
+      // Capability items below are non-numeric, so they're safe to keep.
+      const creatorCount = config?.stats?.creatorsImpacted; // null if not explicitly set
       const items = [
         { icon: Wand2, text: "AI-First Studio • Human-Directed Quality" },
-        { icon: UserCog, text: `${config?.stats?.creatorsImpacted || "20"}+ Active Creators Across Niches` },
-        { icon: BarChart3, text: `Thumbnails Delivering +${config?.stats?.ctrBoostMax || "60"}% CTR Lift` },
-        { icon: Zap, text: "Edits Driving 2× Average Watch Time" },
-        {
-          icon: Youtube,
-          text: `${formatFmt(totalReach)}+ Total Managed Reach`,
-          // Note: SiteHeader trustItems only supports one icon, we'll use Youtube as primary or just one.
-        },
       ];
+      if (creatorCount) items.push({ icon: UserCog, text: `${creatorCount} Active Creators Across Niches` });
+      if (totalReach > 0) items.push({ icon: Youtube, text: `${formatFmt(totalReach)} Total Managed Reach` });
 
+      // Capability items (descriptive, no numeric claims):
       items.push(
         { icon: Shield, text: "Consent-First Face & Voice AI Features" },
         { icon: Lightbulb, text: "Hook Scoring & Title Testing" },

@@ -1451,7 +1451,52 @@ async function performClientSync(env, isForced = false, debug = false) {
               await env.DB.prepare(
                 "UPDATE clients SET subscribers = ? WHERE id = ?"
               ).bind(Math.floor(result.subscribers), c.id).run();
+              // Also update the matching client_channels row for the primary channel
+              const nowSec = Math.floor(Date.now() / 1000);
+              await env.DB.prepare(
+                `UPDATE client_channels
+                 SET subscribers = ?1, view_count = ?2, video_count = ?3, last_synced_at = ?4
+                 WHERE channel_id = ?5`
+              ).bind(
+                Math.floor(result.subscribers),
+                Math.floor(result.viewCount || 0),
+                Math.floor(result.videoCount || 0),
+                nowSec,
+                result.id
+              ).run();
             } catch (e) { console.error("D1 subscribers update error:", e.message); }
+          }
+
+          // ALSO sync the client's other channels (multi-channel clients like
+          // Kamz with 3 YTs, Anchit with 2). The primary channel is already
+          // handled above via clients.youtube_id; here we iterate any
+          // additional rows in client_channels and fetch+write each one.
+          if (env.DB) {
+            try {
+              const { results: extraChannels } = await env.DB.prepare(
+                `SELECT channel_id FROM client_channels
+                 WHERE client_id = ?1 AND active = 1 AND channel_id != ?2`
+              ).bind(c.id, result.id).all();
+              for (const ch of (extraChannels || [])) {
+                try {
+                  const chInfo = await fetchYouTubeChannelInfo(env, ch.channel_id);
+                  if (chInfo && !chInfo.error && typeof chInfo.subscribers === "number") {
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    await env.DB.prepare(
+                      `UPDATE client_channels
+                       SET subscribers = ?1, view_count = ?2, video_count = ?3, last_synced_at = ?4
+                       WHERE channel_id = ?5`
+                    ).bind(
+                      Math.floor(chInfo.subscribers),
+                      Math.floor(chInfo.viewCount || 0),
+                      Math.floor(chInfo.videoCount || 0),
+                      nowSec,
+                      ch.channel_id
+                    ).run();
+                  }
+                } catch (chErr) { console.error(`extra channel sync failed for ${ch.channel_id}:`, chErr.message); }
+              }
+            } catch (e) { console.error("Extra channels sync error:", e.message); }
           }
 
           if (c.status !== "old") {

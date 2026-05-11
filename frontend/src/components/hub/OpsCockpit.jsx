@@ -39,6 +39,7 @@ import TeamPanel from "./TeamPanel";
 import FinancePanel from "./FinancePanel";
 import LaptopQueuePanel from "./LaptopQueuePanel";
 import ScheduledTasksPanel from "./ScheduledTasksPanel";
+import AddSomethingButton from "./AddSomethingButton";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -379,6 +380,7 @@ export default function OpsCockpit() {
           >
             <Target size={12} /> Projects
           </Link>
+          <AddSomethingButton clients={clients} onChange={fetchSnapshot} />
         </div>
       </header>
 
@@ -486,9 +488,27 @@ export default function OpsCockpit() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* YT + IG counts shown separately. Falls back to single 'subs'
+                          field for legacy rows that don't have aggregated totals. */}
                       <div className="text-right">
-                        <div className="text-mono-num text-sm font-semibold">{fmtNum(c.subscribers)}</div>
-                        <div className="text-[10px] uppercase tracking-wider text-neutral-500">subs</div>
+                        {(c.yt_subs_total > 0 || c.yt_channel_count > 0) && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-mono-num text-sm font-semibold">{fmtNum(c.yt_subs_total || c.subscribers || 0)}</span>
+                            <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-red-500/10 text-red-500">YT</span>
+                          </div>
+                        )}
+                        {(c.ig_followers_total > 0 || c.ig_account_count > 0) && (
+                          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                            <span className="text-mono-num text-sm font-semibold">{fmtNum(c.ig_followers_total || 0)}</span>
+                            <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-pink-500/10 text-pink-500">IG</span>
+                          </div>
+                        )}
+                        {(!c.yt_subs_total && !c.subscribers && !c.ig_followers_total && !c.ig_account_count) && (
+                          <>
+                            <div className="text-mono-num text-sm font-semibold">—</div>
+                            <div className="text-[10px] uppercase tracking-wider text-neutral-500">no socials</div>
+                          </>
+                        )}
                       </div>
                       {/* Drive shortcut — visible if folder set; click goes to folder */}
                       {c.drive_folder_url && (

@@ -22,7 +22,18 @@ SHINEL_LAPTOP_TOKEN = <the LAPTOP_API_TOKEN secret value>
 X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}
 ```
 
-**Schedule:** `/schedule create laptop-poll-queue cron='*/5 * * * *'`
+**Schedule** — time-aware cadence (saves Claude tokens during quiet hours):
+
+Run it every 20 min during the day, every 90 min late night. Cron uses LOCAL time (IST on this machine):
+
+```
+/schedule create laptop-poll-queue cron='*/20 8-23 * * *'     # every 20 min, 8 AM-11 PM IST
+/schedule create laptop-poll-queue-night cron='0 */2 0-7 * * *'  # every 2 hours, midnight-7 AM IST
+```
+
+That's two schedules of the same skill. Wakes 51 times/day total (47 day + 4 night) vs 288 if running every 5 min — **~83% reduction in token spend**.
+
+If only one cron slot is available in the schedule tool, use `*/20 * * * *` (every 20 min, always) — still 5× cheaper than the old `*/5 * * * *`.
 
 ## Each run (high-level loop) — optimized for token efficiency
 

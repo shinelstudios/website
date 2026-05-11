@@ -197,48 +197,84 @@ export default function ClientDeepDive() {
       />
 
       {/* Channels + IG */}
-      <Section title={`YouTube channels · ${(channels || []).length}`} icon={<Youtube size={14} className="text-red-500" />} defaultOpen>
-        {(channels || []).length === 0 ? (
-          <p className="text-xs text-neutral-500">No channels mapped yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {channels.map((ch) => (
-              <div key={ch.channel_id || ch.id} className="flex items-center justify-between text-xs bg-[var(--surface)] rounded-md px-3 py-2 border border-neutral-100 dark:border-neutral-900">
-                <div className="min-w-0">
-                  <div className="font-semibold">{ch.handle || ch.channel_id} <span className="text-[10px] text-neutral-500 uppercase tracking-wider">{ch.role}</span></div>
-                  <div className="text-[10px] text-neutral-500">{ch.language || "—"}{ch.niche_tag_override ? ` · ${ch.niche_tag_override}` : ""}</div>
-                </div>
-                {ch.studio_url && (
-                  <a href={ch.studio_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--orange)] hover:underline inline-flex items-center gap-1">
-                    Studio <ExternalLink size={10} />
-                  </a>
-                )}
+      {(() => {
+        const ytTotal = channels.reduce((s, ch) => s + (ch.subscribers || 0), 0);
+        return (
+          <Section title={`YouTube channels · ${(channels || []).length}${ytTotal ? ` · ${fmtINR(ytTotal).replace('₹', '')} subs total` : ""}`} icon={<Youtube size={14} className="text-red-500" />} defaultOpen>
+            {(channels || []).length === 0 ? (
+              <p className="text-xs text-neutral-500">No channels mapped yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {channels.map((ch) => (
+                  <div key={ch.channel_id || ch.id} className="flex items-center justify-between text-xs bg-[var(--surface)] rounded-md px-3 py-2 border border-neutral-100 dark:border-neutral-900">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold flex items-center gap-2 flex-wrap">
+                        <a href={`https://youtube.com/channel/${ch.channel_id}`} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--orange)] hover:underline">
+                          {ch.handle || ch.channel_id}
+                        </a>
+                        <span className="text-[9px] text-neutral-500 uppercase tracking-wider px-1 rounded bg-neutral-200/50">{ch.role || "main"}</span>
+                      </div>
+                      <div className="text-[10px] text-neutral-500">
+                        {ch.language || "—"}{ch.niche_tag_override ? ` · ${ch.niche_tag_override}` : ""}
+                        {ch.video_count ? ` · ${ch.video_count} videos` : ""}
+                        {ch.last_synced_at ? ` · synced ${fmtTs(ch.last_synced_at)}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {ch.subscribers != null && (
+                        <div className="text-right">
+                          <div className="text-sm font-bold tabular-nums">{ch.subscribers.toLocaleString("en-IN")}</div>
+                          <div className="text-[9px] uppercase tracking-wider text-red-500">subs</div>
+                        </div>
+                      )}
+                      {ch.studio_url && (
+                        <a href={ch.studio_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--orange)] hover:underline inline-flex items-center gap-1">
+                          Studio <ExternalLink size={10} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </Section>
+            )}
+          </Section>
+        );
+      })()}
 
-      <Section title={`Instagram accounts · ${(instagram_accounts || []).length}`} icon={<Instagram size={14} className="text-pink-500" />} defaultOpen>
-        {(instagram_accounts || []).length === 0 ? (
-          <p className="text-xs text-neutral-500">No IG accounts mapped yet.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {instagram_accounts.map((ig) => (
-              <a key={ig.id} href={ig.url || `https://instagram.com/${String(ig.handle).replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-between text-xs bg-[var(--surface)] rounded-md px-3 py-2 border border-neutral-100 dark:border-neutral-900 hover:bg-[var(--surface-alt)]">
-                <div className="min-w-0">
-                  <div className="font-semibold">@{String(ig.handle).replace(/^@/, "")}</div>
-                  <div className="text-[10px] text-neutral-500">{ig.role || "—"}{ig.followers ? ` · ${ig.followers.toLocaleString("en-IN")} followers` : ""}</div>
-                </div>
-                {ig.managed_by_us ? (
-                  <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600">managed</span>
-                ) : null}
-              </a>
-            ))}
-          </div>
-        )}
-      </Section>
+      {(() => {
+        const igTotal = instagram_accounts.reduce((s, ig) => s + (ig.followers || 0), 0);
+        const managedCount = instagram_accounts.filter((ig) => ig.managed_by_us).length;
+        return (
+          <Section title={`Instagram accounts · ${(instagram_accounts || []).length}${igTotal ? ` · ${fmtINR(igTotal).replace('₹', '')} followers total` : ""}${managedCount ? ` · ${managedCount} managed` : ""}`} icon={<Instagram size={14} className="text-pink-500" />} defaultOpen>
+            {(instagram_accounts || []).length === 0 ? (
+              <p className="text-xs text-neutral-500">No IG accounts mapped yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {instagram_accounts.map((ig) => (
+                  <a key={ig.id} href={ig.url || `https://instagram.com/${String(ig.handle).replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between text-xs bg-[var(--surface)] rounded-md px-3 py-2 border border-neutral-100 dark:border-neutral-900 hover:bg-[var(--surface-alt)]">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">@{String(ig.handle).replace(/^@/, "")}</div>
+                      <div className="text-[10px] text-neutral-500">{ig.role || "—"}</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {ig.followers != null && ig.followers > 0 && (
+                        <div className="text-right">
+                          <div className="text-sm font-bold tabular-nums">{ig.followers.toLocaleString("en-IN")}</div>
+                          <div className="text-[9px] uppercase tracking-wider text-pink-500">followers</div>
+                        </div>
+                      )}
+                      {ig.managed_by_us ? (
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600">managed</span>
+                      ) : null}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </Section>
+        );
+      })()}
 
       {/* Mini kanban */}
       <Section title={`Projects · ${(projects || []).length}`} icon={<Target size={14} className="text-[var(--orange)]" />} defaultOpen>

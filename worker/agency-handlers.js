@@ -890,6 +890,109 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ logged: true }, 201);
     }
 
+    // ---- POST /admin/agency/clients  (create new client)
+    // Body: { name, niche_tag?, instagram_handle?, youtube_id?, retainer_tier?, managed_by_us? }
+    // Onboards a brand new client. Optional auto-create of a client_channels
+    // row if youtube_id is provided.
+    if (path === "/admin/agency/clients" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.name) return err("name required");
+      const id = body.id || `c-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const slug = body.slug || String(body.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      try {
+        await env.DB.prepare(
+          `INSERT INTO clients (id, name, slug, niche_tag, secondary_niche_tag, retainer_tier, instagram_handle, youtube_id, managed_by_us, status, onboarded_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'active', CURRENT_TIMESTAMP)`
+        ).bind(
+          id,
+          body.name,
+          slug,
+          body.niche_tag || null,
+          body.secondary_niche_tag || null,
+          body.retainer_tier || null,
+          body.instagram_handle || null,
+          body.youtube_id || null,
+          body.managed_by_us === false ? 0 : 1
+        ).run();
+
+        // Auto-create client_channels row if a YT id was given
+        if (body.youtube_id) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO client_channels (id, client_id, channel_id, handle, role, language, active)
+               VALUES (?1, ?2, ?3, ?4, 'main', ?5, 1)`
+            ).bind(`cc-${id}-main`, id, body.youtube_id, body.youtube_handle || null, body.language || null).run();
+          } catch (chErr) { console.error("auto-create client_channels failed:", chErr.message); }
+        }
+
+        // Auto-create instagram_accounts row if an IG handle was given
+        if (body.instagram_handle) {
+          try {
+            const cleanHandle = String(body.instagram_handle).replace(/^@/, "");
+            await env.DB.prepare(
+              `INSERT INTO instagram_accounts (id, client_id, handle, url, role, managed_by_us, active)
+               VALUES (?1, ?2, ?3, ?4, 'main', ?5, 1)`
+            ).bind(
+              `ig-${id}-main`,
+              id,
+              cleanHandle,
+              `https://instagram.com/${cleanHandle}`,
+              body.managed_by_us === false ? 0 : 1
+            ).run();
+          } catch (igErr) { console.error("auto-create instagram_accounts failed:", igErr.message); }
+        }
+
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind("client.created", id, "info", `Onboarded new client: ${body.name}`, JSON.stringify(body)).run();
+
+        return ok({ id, created: true, slug }, 201);
+      } catch (e) {
+        if (String(e.message || "").includes("UNIQUE")) return err(`Client "${body.name}" already exists`, 409);
+        throw e;
+      }
+    }
+
+    // ---- POST /admin/agency/clients/:id/channels  (add YT channel)
+    // Body: { channel_id, handle?, role?, language?, niche_tag_override?, studio_url? }
+    const clientChannelMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)\/channels$/);
+    if (clientChannelMatch && method === "POST") {
+      const clientId = clientChannelMatch[1];
+      const body = await request.json().catch(() => ({}));
+      if (!body.channel_id) return err("channel_id required (UCxxx or @handle)");
+      const id = body.id || `cc-${clientId}-${crypto.randomUUID().slice(0, 6)}`;
+      try {
+        await env.DB.prepare(
+          `INSERT INTO client_channels (id, client_id, channel_id, handle, role, language, niche_tag_override, studio_url, active)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)`
+        ).bind(
+          id,
+          clientId,
+          body.channel_id,
+          body.handle || null,
+          body.role || "secondary",
+          body.language || null,
+          body.niche_tag_override || null,
+          body.studio_url || null
+        ).run();
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind("client.channel_added", clientId, "info", `Added channel ${body.channel_id}`, JSON.stringify(body)).run();
+        return ok({ id, created: true }, 201);
+      } catch (e) {
+        if (String(e.message || "").includes("UNIQUE")) return err(`Channel ${body.channel_id} already tracked`, 409);
+        throw e;
+      }
+    }
+
+    // DELETE /admin/agency/clients/:cid/channels/:chid — soft-delete (active=0)
+    const chDeleteMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)\/channels\/([^\/]+)$/);
+    if (chDeleteMatch && method === "DELETE") {
+      const chid = chDeleteMatch[2];
+      await env.DB.prepare("UPDATE client_channels SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?1").bind(chid).run();
+      return ok({ id: chid, deleted: true });
+    }
+
     // ---- POST /admin/agency/clients/:id/status   (mark active/inactive/paused)
     const clientStatusMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)\/status$/);
     if (clientStatusMatch && method === "POST") {
@@ -1609,14 +1712,20 @@ async function opsSnapshot(env, opts = {}) {
       "SELECT COALESCE(status, 'active') AS status, COUNT(*) AS n FROM clients GROUP BY COALESCE(status, 'active')"
     ).all(),
 
-    // YT channel counts per client (for the per-row "3 YT" badge)
+    // YT channel counts + aggregated subscribers per client (multi-channel safe)
     env.DB.prepare(
-      "SELECT client_id, COUNT(*) AS n, SUM(CASE WHEN role = 'main' THEN 0 ELSE 1 END) AS extras FROM client_channels WHERE active = 1 GROUP BY client_id"
+      `SELECT client_id, COUNT(*) AS n,
+              SUM(CASE WHEN role = 'main' THEN 0 ELSE 1 END) AS extras,
+              COALESCE(SUM(subscribers), 0) AS subs_total
+       FROM client_channels WHERE active = 1 GROUP BY client_id`
     ).all(),
 
-    // IG account counts per client (for the per-row "2 IG" badge)
+    // IG account counts + aggregated followers per client
     env.DB.prepare(
-      "SELECT client_id, COUNT(*) AS n, SUM(managed_by_us) AS managed FROM instagram_accounts WHERE active = 1 GROUP BY client_id"
+      `SELECT client_id, COUNT(*) AS n,
+              SUM(managed_by_us) AS managed,
+              COALESCE(SUM(followers), 0) AS followers_total
+       FROM instagram_accounts WHERE active = 1 GROUP BY client_id`
     ).all(),
   ]);
 
@@ -1624,18 +1733,27 @@ async function opsSnapshot(env, opts = {}) {
   // (note: variable names below come from destructuring above)
   const ytCountsByClient = {};
   for (const r of (typeof ytChannelCounts !== "undefined" && ytChannelCounts?.results) || []) {
-    ytCountsByClient[r.client_id] = { n: r.n, extras: r.extras };
+    ytCountsByClient[r.client_id] = { n: r.n, extras: r.extras, subs_total: r.subs_total || 0 };
   }
   const igCountsByClient = {};
   for (const r of (typeof igAccountCounts !== "undefined" && igAccountCounts?.results) || []) {
-    igCountsByClient[r.client_id] = { n: r.n, managed: r.managed };
+    igCountsByClient[r.client_id] = { n: r.n, managed: r.managed, followers_total: r.followers_total || 0 };
   }
-  const enrichedClients = (clients.results || []).map((c) => ({
-    ...c,
-    yt_channel_count: ytCountsByClient[c.id]?.n || 0,
-    ig_account_count: igCountsByClient[c.id]?.n || 0,
-    ig_managed_count: igCountsByClient[c.id]?.managed || 0,
-  }));
+  const enrichedClients = (clients.results || []).map((c) => {
+    // Prefer aggregated total from client_channels (sums all channels' subs).
+    // Fall back to clients.subscribers (primary YT only) if no client_channels rows yet.
+    const ytTotal = (ytCountsByClient[c.id]?.subs_total || 0) || (c.subscribers || 0);
+    const igTotal = igCountsByClient[c.id]?.followers_total || c.instagram_followers || 0;
+    return {
+      ...c,
+      yt_channel_count: ytCountsByClient[c.id]?.n || 0,
+      ig_account_count: igCountsByClient[c.id]?.n || 0,
+      ig_managed_count: igCountsByClient[c.id]?.managed || 0,
+      yt_subs_total: ytTotal,
+      ig_followers_total: igTotal,
+      total_reach: ytTotal + igTotal,
+    };
+  });
 
   return {
     generated_at: now.toISOString(),
