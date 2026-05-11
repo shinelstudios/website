@@ -42,6 +42,7 @@ import ScheduledTasksPanel from "./ScheduledTasksPanel";
 import AddSomethingButton from "./AddSomethingButton";
 import PersonalTodosPanel from "./PersonalTodosPanel";
 import SeoActionModal from "./SeoActionModal";
+import SheetSyncPanel from "./SheetSyncPanel";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -485,6 +486,21 @@ export default function OpsCockpit() {
   const clients = d.clients || [];
   const pendingSeo = d.pending_seo || [];
   const recentSeo = d.recent_seo || [];
+  // Helper to resolve a client_id (string) to a human name.
+  // SEO rows have IDs like c-1769802499809-xwapop8353; the cockpit user
+  // shouldn't have to read those. Falls back to the raw id when no match.
+  const clientName = (id) => clients.find((c) => c.id === id)?.name || id;
+  // Human label for a SEO action row. "(batch)" / null titles become
+  // descriptive strings like "Back-catalog batch · 23 videos" pulled from
+  // changes_summary when available; otherwise we show the action verb.
+  const seoLabel = (s) => {
+    if (s.new_title && s.new_title !== "(batch)") return s.new_title;
+    if (s.action === "backcatalog_batch") return "Back-catalog batch RESEO";
+    if (s.action === "stream") return "Stream RESEO";
+    if (s.action === "reseo") return "Video RESEO";
+    if (s.action) return s.action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return "(no title)";
+  };
   const spikes = d.active_spikes || [];
   const overperformers = d.competitor_overperformers || [];
   const todayResearch = d.today_research || [];
@@ -818,10 +834,13 @@ export default function OpsCockpit() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold truncate" title={s.new_title}>
-                          {s.new_title || "(no title)"}
+                          {seoLabel(s)}
                         </div>
                         <div className="text-neutral-500 mt-0.5">
-                          {s.client_id} · {s.asset_type} · {s.action} · {fmtRelative(s.created_at)}
+                          <span className="font-medium text-neutral-700 dark:text-neutral-300">{clientName(s.client_id)}</span>
+                          {" · "}{s.asset_type}
+                          {" · "}{s.action}
+                          {" · "}{fmtRelative(s.created_at)}
                         </div>
                       </div>
                       <span className="text-[var(--orange)] text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold flex-shrink-0">
@@ -839,13 +858,32 @@ export default function OpsCockpit() {
             {recentSeo.length === 0 ? (
               <div className="text-sm text-neutral-500 py-4 text-center">No applied actions yet.</div>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-1">
                 {recentSeo.slice(0, 6).map((s) => (
-                  <li key={s.id} className="text-xs border-l-2 border-green-500 pl-3 py-1">
-                    <div className="font-semibold truncate">{s.new_title || "(batch)"}</div>
-                    <div className="text-neutral-500 mt-0.5">
-                      {s.client_id} · {s.asset_type} · ✓ applied {fmtRelative(s.applied_at)}
-                    </div>
+                  <li key={s.id}>
+                    <button
+                      onClick={() => setOpenSeoId(s.id)}
+                      className="w-full text-left text-xs border-l-2 border-green-500 pl-3 pr-2 py-2 rounded-r hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors group flex items-center gap-2"
+                      title="Click to view what was applied"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold truncate">
+                          {seoLabel(s)}
+                        </div>
+                        <div className="text-neutral-500 mt-0.5 flex items-center gap-1 flex-wrap">
+                          <span className="font-medium text-neutral-700 dark:text-neutral-300">{clientName(s.client_id)}</span>
+                          <span>·</span>
+                          <span className="font-mono">{s.asset_type}</span>
+                          <span>·</span>
+                          <span className="text-green-600 dark:text-green-400">
+                            ✓ applied {s.applied_at ? fmtRelative(s.applied_at) : "earlier"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-green-600 text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold flex-shrink-0">
+                        View →
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -1026,6 +1064,7 @@ export default function OpsCockpit() {
       {tab === "team" && <TeamPanel onChange={fetchSnapshot} />}
       {tab === "automation" && (
         <div className="space-y-5">
+          <SheetSyncPanel />
           <ScheduledTasksPanel clients={clients} />
           <LaptopQueuePanel clients={clients} />
         </div>

@@ -68,7 +68,7 @@ export default function SeoActionModal({ seoId, onClose, onChanged }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[var(--surface-elev)] rounded-xl border border-neutral-200 dark:border-neutral-800 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+        className="bg-[var(--surface-elev)] rounded-xl border border-neutral-200 dark:border-neutral-800 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -128,27 +128,43 @@ export default function SeoActionModal({ seoId, onClose, onChanged }) {
                 </div>
               )}
 
-              {/* Diff: old vs new */}
-              <div className="space-y-3">
-                <DiffBlock
-                  label="Title"
-                  oldVal={seo.old_title}
-                  newVal={seo.new_title}
-                />
-                <DiffBlock
-                  label="Description (first line)"
-                  oldVal={seo.old_description_first_line}
-                  newVal={seo.new_description_first_line}
-                  multiline
-                />
-                <DiffBlock
-                  label="Tags"
-                  oldVal={seo.old_tags_count != null ? `${seo.old_tags_count} tags · ${seo.old_tags_chars || 0} chars` : null}
-                  newVal={seo.new_tags_count != null ? `${seo.new_tags_count} tags · ${seo.new_tags_chars || 0} chars` : null}
-                />
-              </div>
+              {/* Full diff — pulls full description + tags from payload_json
+                  when the summary columns only contain the first line / counts.
+                  Tries a list of common payload key names so this works across
+                  different RESEO workflow versions. */}
+              {(() => {
+                const p = data?.payload || {};
+                // Common variants we've used across workflow versions
+                const fullOldTitle = seo.old_title || p.old_title || p.previous?.title;
+                const fullNewTitle = seo.new_title || p.new_title || p.proposed?.title || p.title;
+                const fullOldDesc =
+                  p.old_description || p.previous?.description ||
+                  p.old_description_full || seo.old_description_first_line;
+                const fullNewDesc =
+                  p.new_description || p.proposed?.description ||
+                  p.new_description_full || seo.new_description_first_line;
+                const oldTagsRaw = p.old_tags ?? p.previous?.tags ?? p.tags_before;
+                const newTagsRaw = p.new_tags ?? p.proposed?.tags ?? p.tags ?? p.tags_after;
+                const toArr = (t) => Array.isArray(t) ? t : (typeof t === "string" ? t.split(",").map(s => s.trim()).filter(Boolean) : []);
+                const oldTags = toArr(oldTagsRaw);
+                const newTags = toArr(newTagsRaw);
+                return (
+                  <div className="space-y-4">
+                    <DiffBlock label="Title" oldVal={fullOldTitle} newVal={fullNewTitle} />
+                    <DescriptionDiff oldDesc={fullOldDesc} newDesc={fullNewDesc} />
+                    <TagsDiff
+                      oldTags={oldTags}
+                      newTags={newTags}
+                      oldCount={seo.old_tags_count}
+                      oldChars={seo.old_tags_chars}
+                      newCount={seo.new_tags_count}
+                      newChars={seo.new_tags_chars}
+                    />
+                  </div>
+                );
+              })()}
 
-              {/* Changes summary if available */}
+              {/* Changes summary — the human-readable "what changed and why" */}
               {seo.changes_summary && (
                 <div className="bg-neutral-100 dark:bg-neutral-900 rounded-lg p-3">
                   <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1">What changes</div>
@@ -164,11 +180,11 @@ export default function SeoActionModal({ seoId, onClose, onChanged }) {
                 </details>
               )}
 
-              {/* Payload preview */}
+              {/* Raw payload (debug only) */}
               {data?.payload && Object.keys(data.payload).length > 0 && (
                 <details className="text-xs">
-                  <summary className="cursor-pointer text-neutral-500 hover:text-neutral-700">Raw payload</summary>
-                  <pre className="mt-2 p-2 bg-neutral-100 dark:bg-neutral-900 rounded text-[10px] whitespace-pre-wrap font-mono text-neutral-600">{JSON.stringify(data.payload, null, 2)}</pre>
+                  <summary className="cursor-pointer text-neutral-500 hover:text-neutral-700">Raw payload (debug)</summary>
+                  <pre className="mt-2 p-2 bg-neutral-100 dark:bg-neutral-900 rounded text-[10px] whitespace-pre-wrap font-mono text-neutral-600 max-h-[300px] overflow-y-auto">{JSON.stringify(data.payload, null, 2)}</pre>
                 </details>
               )}
             </>
@@ -279,6 +295,149 @@ function DiffBlock({ label, oldVal, newVal, multiline = false }) {
         <div className={`p-2 rounded-lg border bg-green-50/30 dark:bg-green-950/20 border-green-200/40 dark:border-green-900/40 ${multiline ? "text-xs" : "text-sm font-medium"}`}>
           <span className="text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mr-2">NEW</span>
           <span>{newVal || "(unchanged)"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Description diff — scrollable old vs new, side-by-side on wide screens,
+// stacked on narrow. Lets the founder read the full description before
+// dispatching the proposal, not just the first line.
+function DescriptionDiff({ oldDesc, newDesc }) {
+  if (!oldDesc && !newDesc) return null;
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1 flex items-center justify-between">
+        <span>Description</span>
+        {newDesc && (
+          <span className="text-[9px] text-neutral-400 font-normal normal-case tracking-normal">
+            {(newDesc || "").length} chars · {(newDesc || "").split("\n").length} lines
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {oldDesc && (
+          <div className="rounded-lg border bg-red-50/30 dark:bg-red-950/20 border-red-200/40 dark:border-red-900/40 overflow-hidden">
+            <div className="px-2 py-1 bg-red-100/30 dark:bg-red-950/40 text-[9px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider">OLD</div>
+            <pre className="p-2 text-xs whitespace-pre-wrap font-sans max-h-[260px] overflow-y-auto text-neutral-500 dark:text-neutral-400">
+              {oldDesc}
+            </pre>
+          </div>
+        )}
+        {newDesc && (
+          <div className={`rounded-lg border bg-green-50/30 dark:bg-green-950/20 border-green-200/40 dark:border-green-900/40 overflow-hidden ${oldDesc ? "" : "md:col-span-2"}`}>
+            <div className="px-2 py-1 bg-green-100/30 dark:bg-green-950/40 text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">NEW</div>
+            <pre className="p-2 text-xs whitespace-pre-wrap font-sans max-h-[260px] overflow-y-auto">
+              {newDesc}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Tags diff — render each tag as a chip. Tags present in both lists are
+// neutral; added tags are green; removed tags are red strike. Click a chip
+// to copy it. Shows all tags so the founder doesn't have to guess.
+function TagsDiff({ oldTags = [], newTags = [], oldCount, oldChars, newCount, newChars }) {
+  const oldSet = new Set(oldTags.map((t) => String(t).toLowerCase()));
+  const newSet = new Set(newTags.map((t) => String(t).toLowerCase()));
+  const removed = oldTags.filter((t) => !newSet.has(String(t).toLowerCase()));
+  const added = newTags.filter((t) => !oldSet.has(String(t).toLowerCase()));
+  const kept = newTags.filter((t) => oldSet.has(String(t).toLowerCase()));
+
+  // Fallback when payload didn't include the actual tag arrays — show counts only
+  if (!oldTags.length && !newTags.length) {
+    return (
+      <div>
+        <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1">Tags</div>
+        <div className="space-y-1.5 text-sm">
+          {oldCount != null && (
+            <div className="p-2 rounded-lg border bg-red-50/30 dark:bg-red-950/20 border-red-200/40 dark:border-red-900/40 line-through opacity-60">
+              <span className="text-[9px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider mr-2">OLD</span>
+              {oldCount} tags · {oldChars || 0} chars
+            </div>
+          )}
+          <div className="p-2 rounded-lg border bg-green-50/30 dark:bg-green-950/20 border-green-200/40 dark:border-green-900/40">
+            <span className="text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mr-2">NEW</span>
+            {newCount ?? 0} tags · {newChars ?? 0} chars
+          </div>
+          <p className="text-[10px] text-neutral-500 italic">Full tag list not stored on this proposal — open the "Raw payload" section below if you need to inspect.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-1 flex items-center justify-between">
+        <span>Tags ({newTags.length})</span>
+        <span className="text-[9px] text-neutral-400 font-normal normal-case tracking-normal">
+          {newChars ?? newTags.join(", ").length} / 500 chars
+        </span>
+      </div>
+      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-2 space-y-2">
+        {added.length > 0 && (
+          <div>
+            <div className="text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider mb-1">Added ({added.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {added.map((t, i) => (
+                <button
+                  key={`a-${i}`}
+                  onClick={() => navigator.clipboard?.writeText(String(t))}
+                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300 border border-green-300 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-900 transition-colors"
+                  title="Click to copy"
+                >
+                  + {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {kept.length > 0 && (
+          <div>
+            <div className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider mb-1">Kept ({kept.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {kept.map((t, i) => (
+                <button
+                  key={`k-${i}`}
+                  onClick={() => navigator.clipboard?.writeText(String(t))}
+                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                  title="Click to copy"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {removed.length > 0 && (
+          <div>
+            <div className="text-[9px] text-red-600 dark:text-red-400 font-bold uppercase tracking-wider mb-1">Removed ({removed.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {removed.map((t, i) => (
+                <button
+                  key={`r-${i}`}
+                  onClick={() => navigator.clipboard?.writeText(String(t))}
+                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-red-100/40 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-300/50 dark:border-red-900/50 line-through opacity-60 hover:opacity-100 transition-opacity"
+                  title="Click to copy"
+                >
+                  − {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="pt-1 border-t border-neutral-200 dark:border-neutral-800">
+          <button
+            onClick={() => navigator.clipboard?.writeText(newTags.join(", "))}
+            className="text-[10px] text-[var(--orange)] hover:underline font-medium"
+            title="Copy all new tags as a comma-separated list (paste into YT Studio)"
+          >
+            📋 Copy all new tags as comma-separated
+          </button>
         </div>
       </div>
     </div>

@@ -20,6 +20,13 @@
  */
 
 import { notifyLaptopPush } from "./task-push-hub.js";
+import {
+  verifyConnection as sheetVerifyConnection,
+  appendRow as sheetAppendRow,
+  updateRow as sheetUpdateRow,
+  currentMonthTabName,
+  projectToRow,
+} from "./google-sheets.js";
 
 const BASE_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -98,6 +105,67 @@ function pickWebhookUrl(env, channel) {
   if (channel === "client-uploads"   && env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL)  return env.DISCORD_CLIENT_UPLOADS_WEBHOOK_URL;
   if (channel === "shinel-uploads"   && env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL)  return env.DISCORD_SHINEL_UPLOADS_WEBHOOK_URL;
   return env.DISCORD_WEBHOOK_URL || "";
+}
+
+// ---------------------------------------------------------------------------
+// syncProjectToSheet — append or update a project's row in the Monthly Tracker.
+//
+// IDEMPOTENCY:
+//   - First call appends a NEW row, stores the row index on the project.
+//   - Subsequent calls UPDATE that specific row (never touching others).
+//   - Founder's manual rows have NULL sheet_row_index and are never touched.
+//
+// Returns { ok, action: "appended"|"updated"|"skipped", row, tab }.
+// Never throws — failures are stamped on the project's sheet_sync_error field
+// so the cockpit can surface them.
+// ---------------------------------------------------------------------------
+export async function syncProjectToSheet(env, projectId) {
+  if (!env.MONTHLY_TRACKER_SHEET_ID) {
+    return { ok: false, skipped: "MONTHLY_TRACKER_SHEET_ID not configured" };
+  }
+  if (!env.GOOGLE_SA_JSON) {
+    return { ok: false, skipped: "GOOGLE_SA_JSON not configured" };
+  }
+
+  const project = await env.DB.prepare("SELECT * FROM projects WHERE id = ?1").bind(projectId).first();
+  if (!project) return { ok: false, error: "project not found" };
+
+  // Resolve human names — sheet expects readable strings, not D1 IDs
+  const [client, editor] = await Promise.all([
+    project.client_id
+      ? env.DB.prepare("SELECT name FROM clients WHERE id = ?1").bind(project.client_id).first()
+      : Promise.resolve(null),
+    project.assigned_editor_id
+      ? env.DB.prepare("SELECT name FROM editors WHERE id = ?1").bind(project.assigned_editor_id).first()
+      : Promise.resolve(null),
+  ]);
+
+  const tabName = env.SHEET_TAB_OVERRIDE || currentMonthTabName();
+  const row = projectToRow(project, client?.name, editor?.name);
+
+  try {
+    let action, rowIndex;
+    if (project.sheet_row_index && project.sheet_tab_name) {
+      // Update the row we previously wrote (safe — we own it)
+      await sheetUpdateRow(env, env.MONTHLY_TRACKER_SHEET_ID, project.sheet_tab_name, project.sheet_row_index, row);
+      action = "updated";
+      rowIndex = project.sheet_row_index;
+    } else {
+      // First sync — append a new row, stamp the index back onto the project
+      rowIndex = await sheetAppendRow(env, env.MONTHLY_TRACKER_SHEET_ID, tabName, row);
+      action = "appended";
+    }
+    await env.DB.prepare(
+      "UPDATE projects SET sheet_row_index = ?1, sheet_tab_name = ?2, sheet_synced_at = CURRENT_TIMESTAMP, sheet_sync_error = NULL WHERE id = ?3"
+    ).bind(rowIndex, project.sheet_tab_name || tabName, projectId).run();
+    return { ok: true, action, row: rowIndex, tab: project.sheet_tab_name || tabName };
+  } catch (e) {
+    const msg = String(e.message || e).slice(0, 500);
+    await env.DB.prepare(
+      "UPDATE projects SET sheet_sync_error = ?1 WHERE id = ?2"
+    ).bind(msg, projectId).run();
+    return { ok: false, error: msg };
+  }
 }
 
 export async function postToDiscord(env, payload, channel = "default") {
@@ -1158,6 +1226,9 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         parseInt(body.client_charge_inr || 0, 10),
         parseInt(body.editor_payment_inr || 0, 10)
       ).run();
+      // Auto-sync to Monthly Tracker sheet (fire-and-forget — never blocks
+      // project creation if Sheets API is down or unconfigured)
+      syncProjectToSheet(env, id).catch(() => {});
       return ok({ id, created: true }, 201);
     }
 
@@ -1242,6 +1313,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           }).catch(() => {});
         }
       }
+
+      // Auto-sync the updated project to Monthly Tracker (idempotent: updates
+      // the row we previously appended, or appends a new one on first sync).
+      // Fire-and-forget so a Sheets API blip never blocks a PATCH.
+      syncProjectToSheet(env, id).catch(() => {});
 
       return ok({ id, updated: true, status_changed: statusChanged });
     }
@@ -1738,6 +1814,83 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const force = url.searchParams.get("alert") === "1";
       const result = await runHealthCheck(env, { force });
       return ok(result);
+    }
+
+    // ========================================================================
+    // GOOGLE SHEETS SYNC — Option B (append-only)
+    //
+    // Append a new row when a cockpit project is created/updated, never touch
+    // any row we didn't write. The founder's manual rows in Monthly Tracker
+    // are permanently safe — we only modify rows tracked via projects.sheet_row_index.
+    // ========================================================================
+
+    // GET /admin/agency/sheets/connect — verify creds + list tabs
+    if (path === "/admin/agency/sheets/connect" && method === "GET") {
+      if (!env.MONTHLY_TRACKER_SHEET_ID) return err("MONTHLY_TRACKER_SHEET_ID secret not set on worker", 503);
+      if (!env.GOOGLE_SA_JSON) return err("GOOGLE_SA_JSON secret not set on worker", 503);
+      try {
+        const info = await sheetVerifyConnection(env, env.MONTHLY_TRACKER_SHEET_ID);
+        const todayTab = currentMonthTabName();
+        info.target_tab = env.SHEET_TAB_OVERRIDE || todayTab;
+        info.target_tab_exists = info.tabs.some((t) => t.title === info.target_tab);
+        return ok(info);
+      } catch (e) {
+        return err(`Sheets API: ${e.message}`, 502);
+      }
+    }
+
+    // POST /admin/agency/sheets/sync-project/:id — push one project
+    const syncOne = path.match(/^\/admin\/agency\/sheets\/sync-project\/(\d+)$/);
+    if (syncOne && method === "POST") {
+      const result = await syncProjectToSheet(env, parseInt(syncOne[1], 10));
+      return ok(result);
+    }
+
+    // POST /admin/agency/sheets/sync-all — bulk push all unsynced active projects
+    //   Body: { only_unsynced?: true, status_filter?: [...] }
+    //   Defaults: only_unsynced=true, status_filter=null (active projects)
+    if (path === "/admin/agency/sheets/sync-all" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const onlyUnsynced = body.only_unsynced !== false;
+      const where = ["archived_at IS NULL"];
+      if (onlyUnsynced) where.push("sheet_synced_at IS NULL");
+      if (Array.isArray(body.status_filter) && body.status_filter.length) {
+        const placeholders = body.status_filter.map((_, i) => `?${i + 1}`).join(",");
+        where.push(`status IN (${placeholders})`);
+      }
+      const stmt = env.DB.prepare(`SELECT id FROM projects WHERE ${where.join(" AND ")} ORDER BY created_at DESC LIMIT 100`);
+      const binds = Array.isArray(body.status_filter) ? body.status_filter : [];
+      const { results } = await (binds.length ? stmt.bind(...binds).all() : stmt.all());
+      const summary = { attempted: 0, appended: 0, updated: 0, failed: 0, errors: [] };
+      for (const r of results || []) {
+        summary.attempted++;
+        const res = await syncProjectToSheet(env, r.id);
+        if (res.ok) summary[res.action === "appended" ? "appended" : "updated"]++;
+        else { summary.failed++; summary.errors.push({ id: r.id, error: res.error || res.skipped }); }
+      }
+      return ok(summary);
+    }
+
+    // GET /admin/agency/sheets/status — show last-sync status across all projects
+    if (path === "/admin/agency/sheets/status" && method === "GET") {
+      const stats = await env.DB.prepare(
+        `SELECT
+           COUNT(*) AS total,
+           COUNT(sheet_synced_at) AS synced,
+           COUNT(sheet_sync_error) AS errored,
+           MAX(sheet_synced_at) AS last_sync_at
+         FROM projects WHERE archived_at IS NULL`
+      ).first();
+      const recentErrors = await env.DB.prepare(
+        `SELECT id, title, sheet_sync_error FROM projects WHERE sheet_sync_error IS NOT NULL ORDER BY id DESC LIMIT 10`
+      ).all();
+      return ok({
+        configured: !!(env.MONTHLY_TRACKER_SHEET_ID && env.GOOGLE_SA_JSON),
+        sheet_id: env.MONTHLY_TRACKER_SHEET_ID || null,
+        target_tab: env.SHEET_TAB_OVERRIDE || currentMonthTabName(),
+        stats,
+        recent_errors: recentErrors.results || [],
+      });
     }
 
     // ========================================================================
