@@ -41,6 +41,7 @@ import LaptopQueuePanel from "./LaptopQueuePanel";
 import ScheduledTasksPanel from "./ScheduledTasksPanel";
 import AddSomethingButton from "./AddSomethingButton";
 import PersonalTodosPanel from "./PersonalTodosPanel";
+import SeoActionModal from "./SeoActionModal";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -373,6 +374,7 @@ export default function OpsCockpit() {
   const [igModalClient, setIgModalClient] = useState(null);
   const [driveModalClient, setDriveModalClient] = useState(null);
   const [todoBadge, setTodoBadge] = useState(0);
+  const [openSeoId, setOpenSeoId] = useState(null);
 
   // Background load of MY overdue+due-today todo count for the tab badge.
   // Cheap call; reused across tab switches via the same endpoint.
@@ -806,15 +808,26 @@ export default function OpsCockpit() {
                 All RESEO actions applied
               </div>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-1">
                 {pendingSeo.slice(0, 8).map((s) => (
-                  <li key={s.id} className="text-xs border-l-2 border-[var(--orange)] pl-3 py-1">
-                    <div className="font-semibold truncate" title={s.new_title}>
-                      {s.new_title || "(no title)"}
-                    </div>
-                    <div className="text-neutral-500 mt-0.5">
-                      {s.client_id} · {s.asset_type} · {s.action} · {fmtRelative(s.created_at)}
-                    </div>
+                  <li key={s.id}>
+                    <button
+                      onClick={() => setOpenSeoId(s.id)}
+                      className="w-full text-left text-xs border-l-2 border-[var(--orange)] pl-3 pr-2 py-2 rounded-r hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors group flex items-center gap-2"
+                      title="Click to view + process this proposal"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold truncate" title={s.new_title}>
+                          {s.new_title || "(no title)"}
+                        </div>
+                        <div className="text-neutral-500 mt-0.5">
+                          {s.client_id} · {s.asset_type} · {s.action} · {fmtRelative(s.created_at)}
+                        </div>
+                      </div>
+                      <span className="text-[var(--orange)] text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold flex-shrink-0">
+                        Process →
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -1041,6 +1054,14 @@ export default function OpsCockpit() {
           client={driveModalClient}
           onClose={() => setDriveModalClient(null)}
           onSaved={() => { setDriveModalClient(null); fetchSnapshot(); }}
+        />
+      )}
+      {/* SEO proposal action modal — opened by clicking a pending SEO row */}
+      {openSeoId && (
+        <SeoActionModal
+          seoId={openSeoId}
+          onClose={() => setOpenSeoId(null)}
+          onChanged={() => { setOpenSeoId(null); fetchSnapshot(); }}
         />
       )}
     </div>

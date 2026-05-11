@@ -921,6 +921,113 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ count: results.length, history: results });
     }
 
+    // ---- Single SEO row: details + action endpoints
+    //   GET /admin/agency/seo/:id                  — full row for the modal
+    //   POST /admin/agency/seo/:id/dispatch        — enqueue laptop task + WS push
+    //   POST /admin/agency/seo/:id/mark-applied    — set applied=1 manually
+    //   POST /admin/agency/seo/:id/dismiss         — soft-cancel (applied=2 = dismissed)
+    const seoMatch = path.match(/^\/admin\/agency\/seo\/(\d+)(?:\/(dispatch|mark-applied|dismiss))?$/);
+    if (seoMatch) {
+      const id = parseInt(seoMatch[1], 10);
+      const subaction = seoMatch[2] || null;
+      const row = await env.DB.prepare("SELECT * FROM seo_history WHERE id = ?1").bind(id).first();
+      if (!row) return err("SEO row not found", 404);
+
+      // GET details (includes joined client name + parsed payload for the UI)
+      if (!subaction && method === "GET") {
+        const client = row.client_id
+          ? await env.DB.prepare("SELECT id, name, drive_folder_url FROM clients WHERE id = ?1").bind(row.client_id).first()
+          : null;
+        const studioUrl = row.video_id
+          ? `https://studio.youtube.com/video/${row.video_id}/edit`
+          : null;
+        const watchUrl = row.video_id
+          ? `https://youtube.com/watch?v=${row.video_id}`
+          : null;
+        return ok({
+          seo: row,
+          client,
+          studio_url: studioUrl,
+          watch_url: watchUrl,
+          payload: safeJsonParse(row.payload_json),
+        });
+      }
+
+      // POST /dispatch — queue a laptop task to actually apply this RESEO
+      if (subaction === "dispatch" && method === "POST") {
+        if (row.applied === 1) return err("already applied", 409);
+        const body = await request.json().catch(() => ({}));
+        const taskId = crypto.randomUUID();
+        const payload = {
+          seo_id: row.id,
+          video_id: row.video_id,
+          asset_type: row.asset_type,
+          action: row.action,
+          new_title: row.new_title,
+          new_description_first_line: row.new_description_first_line,
+          source_payload: safeJsonParse(row.payload_json),
+          dispatched_from: "cockpit:seo-queue",
+        };
+        await env.DB.prepare(
+          `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+           VALUES (?1, 'yt_video_reseo', ?2, ?3, ?4, 3, 'seo-queue')`
+        ).bind(
+          taskId,
+          row.client_id,
+          JSON.stringify(payload),
+          body.priority ?? 50  // mid-priority — above normal, below run-now
+        ).run();
+        // Stamp the SEO row so the UI shows "dispatched" state
+        await env.DB.prepare(
+          "UPDATE seo_history SET applied_method = 'laptop_queued', notes = COALESCE(notes, '') || ?1 WHERE id = ?2"
+        ).bind(`\n[${new Date().toISOString()}] Dispatched to laptop (task ${taskId})`, id).run();
+        // Push to laptop (fire-and-forget)
+        notifyLaptopPush(env, "shinel-mainframe", {
+          type: "task_available", task_id: taskId, task_type: "yt_video_reseo",
+          client_id: row.client_id, priority: body.priority ?? 50, source: "seo-queue",
+        }).catch(() => {});
+        return ok({ id, dispatched: true, task_id: taskId });
+      }
+
+      // POST /mark-applied — user applied it themselves (in YT Studio etc.)
+      if (subaction === "mark-applied" && method === "POST") {
+        if (row.applied === 1) return err("already applied", 409);
+        const body = await request.json().catch(() => ({}));
+        await env.DB.prepare(
+          `UPDATE seo_history
+           SET applied = 1, applied_at = CURRENT_TIMESTAMP,
+               applied_method = ?1, approved_by = ?2,
+               notes = COALESCE(notes, '') || ?3
+           WHERE id = ?4`
+        ).bind(
+          body.method || "manual",
+          callerEmail || "unknown",
+          `\n[${new Date().toISOString()}] Marked applied by ${callerEmail || "unknown"}`,
+          id
+        ).run();
+        return ok({ id, applied: true });
+      }
+
+      // POST /dismiss — skip this RESEO (set applied=2 as the "dismissed" sentinel)
+      if (subaction === "dismiss" && method === "POST") {
+        if (row.applied === 1) return err("already applied — can't dismiss", 409);
+        const body = await request.json().catch(() => ({}));
+        await env.DB.prepare(
+          `UPDATE seo_history
+           SET applied = 2, applied_at = CURRENT_TIMESTAMP,
+               applied_method = 'dismissed',
+               notes = COALESCE(notes, '') || ?1
+           WHERE id = ?2`
+        ).bind(
+          `\n[${new Date().toISOString()}] Dismissed by ${callerEmail || "unknown"}: ${body.reason || "no reason"}`,
+          id
+        ).run();
+        return ok({ id, dismissed: true });
+      }
+
+      return err("seo subroute not found", 404);
+    }
+
     // ---- /admin/agency/research/:clientId   (latest)
     // ---- /admin/agency/research/:clientId/:date  (specific date)
     const researchMatch = path.match(/^\/admin\/agency\/research\/([^\/]+)(?:\/(\d{4}-\d{2}-\d{2}))?$/);
