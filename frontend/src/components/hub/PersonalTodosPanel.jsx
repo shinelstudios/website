@@ -507,6 +507,7 @@ export default function PersonalTodosPanel() {
   const [filterBucket, setFilterBucket] = useState(null);
   const [webhookCfg, setWebhookCfg] = useState(null);
 
+  const [warning, setWarning] = useState(null);
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -516,6 +517,7 @@ export default function PersonalTodosPanel() {
       const j = await r.json();
       setTodos(j.todos || []);
       setCounts(j.counts || {});
+      setWarning(j.warning || null);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }, [showCompleted]);
@@ -642,6 +644,11 @@ export default function PersonalTodosPanel() {
 
       {loading && <div className="text-sm text-neutral-500 text-center py-6">Loading todos…</div>}
       {error && <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950 p-3 rounded">{error}</div>}
+      {warning && (
+        <div className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-300 dark:border-yellow-800 p-3 rounded">
+          <strong>⚠ Database setup needed:</strong> {warning}
+        </div>
+      )}
 
       {!loading && todos.length === 0 && (
         <div className="text-center py-10 text-neutral-500 border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl">

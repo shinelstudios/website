@@ -1560,20 +1560,35 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const binds = [callerEmail];
       if (!includeDone) where.push("status NOT IN ('done', 'cancelled')");
       if (statusFilter === "done") { where.length = 1; where.push("status = 'done'"); }
-      const { results } = await env.DB.prepare(
-        `SELECT t.*, p.title AS linked_project_title, c.name AS linked_client_name
-         FROM personal_todos t
-         LEFT JOIN projects p ON t.linked_project_id = p.id
-         LEFT JOIN clients c ON t.linked_client_id = c.id
-         WHERE ${where.join(" AND ")}
-         ORDER BY
-           CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,
-           CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
-           (due_date IS NULL),
-           due_date ASC,
-           id DESC
-         LIMIT 500`
-      ).bind(...binds).all();
+      let results;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT t.*, p.title AS linked_project_title, c.name AS linked_client_name
+           FROM personal_todos t
+           LEFT JOIN projects p ON t.linked_project_id = p.id
+           LEFT JOIN clients c ON t.linked_client_id = c.id
+           WHERE ${where.join(" AND ")}
+           ORDER BY
+             CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 WHEN 'done' THEN 2 ELSE 3 END,
+             CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+             (due_date IS NULL),
+             due_date ASC,
+             id DESC
+           LIMIT 500`
+        ).bind(...binds).all();
+        results = r.results || [];
+      } catch (e) {
+        const msg = String(e.message || "");
+        // Friendly error if migration hasn't been applied yet
+        if (/no such table|personal_todos/i.test(msg)) {
+          return ok({
+            count: 0, counts: {}, todos: [],
+            warning: "personal_todos table not found — run: npx wrangler d1 execute shinel-db --remote --file=migrations/personal-todos-2026-05-11.sql",
+            migration_needed: true,
+          });
+        }
+        throw e;
+      }
 
       // Pre-compute "bucket" for the UI (overdue | due_today | upcoming | someday | done)
       const today = new Date(); today.setUTCHours(0, 0, 0, 0);
@@ -1710,9 +1725,23 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // ---- GET /admin/agency/todos-webhook  — read my private ping config
     if (path === "/admin/agency/todos-webhook" && method === "GET") {
       if (!callerEmail) return err("token has no email", 401);
-      const row = await env.DB.prepare(
-        "SELECT owner_email, discord_user_id, quiet_hours_start, quiet_hours_end, daily_digest_hour, enabled, CASE WHEN webhook_url IS NULL OR webhook_url = '' THEN 0 ELSE 1 END AS has_webhook FROM owner_webhooks WHERE owner_email = ?1"
-      ).bind(callerEmail).first();
+      let row = null;
+      try {
+        row = await env.DB.prepare(
+          "SELECT owner_email, discord_user_id, quiet_hours_start, quiet_hours_end, daily_digest_hour, enabled, CASE WHEN webhook_url IS NULL OR webhook_url = '' THEN 0 ELSE 1 END AS has_webhook FROM owner_webhooks WHERE owner_email = ?1"
+        ).bind(callerEmail).first();
+      } catch (e) {
+        const msg = String(e.message || "");
+        if (/no such table|owner_webhooks/i.test(msg)) {
+          return ok({
+            config: null,
+            fallback_env_configured: !!env.DISCORD_OWNER_WEBHOOK_URL,
+            warning: "owner_webhooks table not found — run: npx wrangler d1 execute shinel-db --remote --file=migrations/personal-todos-2026-05-11.sql",
+            migration_needed: true,
+          });
+        }
+        throw e;
+      }
       const fallback = !!env.DISCORD_OWNER_WEBHOOK_URL;
       return ok({ config: row || null, fallback_env_configured: fallback });
     }
