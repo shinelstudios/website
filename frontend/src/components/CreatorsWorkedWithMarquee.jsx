@@ -139,7 +139,13 @@ const CreatorsWorkedWithMarquee = ({
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredKey, setHoveredKey] = useState(null);
   const [isVisible, setIsVisible] = useState(true);
-  const [shouldAnimate, setShouldAnimate] = useState(false);
+  // Default to TRUE: the keyframes use `-50%` (not a JS-measured pixel value),
+  // so animation works without prior measurement. Defaulting to false caused a
+  // race where the initial render fell through to the `cw-static` class (which
+  // has `flex-wrap: wrap`) and stacked Segment A + Segment B vertically into
+  // two visible duplicate rows. updateMarqueeMetrics keeps this true once it
+  // confirms refs are attached; it never needs to flip it false.
+  const [shouldAnimate, setShouldAnimate] = useState(true);
 
   // Refs
   const containerRef = useRef(null);
@@ -165,6 +171,10 @@ const CreatorsWorkedWithMarquee = ({
   // numbers shown here are also what the public/stats endpoint aggregates.
   const [allCreators, setAllCreators] = useState([]);
   const [creatorsLoading, setCreatorsLoading] = useState(true);
+  // Public canonical stats (active_clients, total_yt_subscribers,
+  // total_ig_followers, total_reach). Refreshed periodically + on focus so
+  // the homepage badge bar reflects real-time numbers from D1.
+  const [publicStats, setPublicStats] = useState(null);
   useEffect(() => {
     let cancelled = false;
     fetch(`${AUTH_BASE}/admin/agency/public/creators`)
@@ -173,6 +183,25 @@ const CreatorsWorkedWithMarquee = ({
       .catch(() => { /* keep empty; falls back to legacy stats below */ })
       .finally(() => { if (!cancelled) setCreatorsLoading(false); });
     return () => { cancelled = true; };
+  }, []);
+
+  // Canonical public stats — auto-refresh every 90s + on window focus, so
+  // the badge bar shows live numbers without page reload.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const r = await fetch(`${AUTH_BASE}/admin/agency/public/stats`);
+        if (!r.ok || cancelled) return;
+        const j = await r.json();
+        if (!cancelled) setPublicStats(j);
+      } catch {}
+    };
+    load();
+    const interval = setInterval(load, 90_000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener("focus", onFocus); };
   }, []);
 
   // Determine the final list of creators
@@ -222,14 +251,36 @@ const CreatorsWorkedWithMarquee = ({
     });
   }, [creatorsProp, allCreators, stats, loading, creatorsLoading]);
 
-  // Platform-specific reach calculations
+  // Canonical numbers — prefer the live public stats endpoint (refreshed
+  // every 90s + on focus). Fall back to the legacy useClientStats data on
+  // initial load to avoid a flash of stale or empty UI.
   const ytReach = useMemo(() => {
-    return config?.stats?.totalReach || totalSubscribers;
-  }, [totalSubscribers, config]);
+    if (publicStats?.total_yt_subscribers != null) return publicStats.total_yt_subscribers;
+    return totalSubscribers || 0;
+  }, [publicStats, totalSubscribers]);
 
   const igReach = useMemo(() => {
+    if (publicStats?.total_ig_followers != null) return publicStats.total_ig_followers;
     return totalInstagramFollowers || 0;
-  }, [totalInstagramFollowers]);
+  }, [publicStats, totalInstagramFollowers]);
+
+  // Combined reach — primary headline number. Matches the cockpit Total Reach
+  // tile exactly (same SUM(client_channels.subscribers) + SUM(instagram_accounts.followers)).
+  const totalReach = useMemo(() => {
+    if (publicStats?.total_reach != null) return publicStats.total_reach;
+    return (ytReach || 0) + (igReach || 0);
+  }, [publicStats, ytReach, igReach]);
+
+  // Actual creator count = managed active clients (NOT cards — Kamz with 3
+  // channels + 1 IG would otherwise inflate this to 4).
+  const creatorCount = useMemo(() => {
+    if (publicStats?.active_clients != null) return publicStats.active_clients;
+    return stats?.length || 0;
+  }, [publicStats, stats]);
+
+  // Channel + IG counts for the breakdown line.
+  const ytChannels = useMemo(() => allCreators.filter((c) => c.type === "youtube" && c.subscribers > 0).length, [allCreators]);
+  const igAccounts = useMemo(() => allCreators.filter((c) => c.type === "instagram" && c.followers > 0).length, [allCreators]);
 
   const fmt = useCallback((n) => {
     if (n == null) return null;
@@ -334,53 +385,76 @@ const CreatorsWorkedWithMarquee = ({
           variants={headerVariants}
           viewport={{ once: true }}
         >
-          {/* [MODIFIED] Social proof pills - More Professional/Branded */}
+          {/* Stat bar — single source of truth, live-updating every 90s + on focus.
+              Layout: 3 equal-weight pills.
+                ① Creators (active managed clients)
+                ② Total Reach (YT subs + IG followers — combined, matches cockpit)
+                ③ Live Activity (channels + IG accounts breakdown)
+              The combined Total Reach is the hero number; the breakdown stays
+              available as a small subline so visitors can verify the math. */}
           <motion.div
-            className="inline-flex flex-wrap justify-center items-center gap-6 px-8 py-3 rounded-2xl mb-8"
+            className="inline-flex flex-wrap justify-center items-stretch gap-2 sm:gap-3 p-2 rounded-2xl mb-8"
             style={{
               background: "rgba(255, 255, 255, 0.03)",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.06)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
               boxShadow: "0 10px 30px -10px rgba(0,0,0,0.5)"
             }}
             variants={itemVariant}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center">
-                <CheckCircle2 size={16} className="text-[var(--orange)]" />
+            {/* Pill 1 — Creators */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02]">
+              <div className="w-10 h-10 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center flex-shrink-0">
+                <Users size={18} className="text-[var(--orange)]" />
               </div>
-              <span className="text-sm font-black uppercase tracking-widest text-white">
-                Proven Results
-              </span>
-            </div>
-
-            <span className="h-4 w-px bg-white/10 hidden sm:block" />
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center">
-                <Users size={16} className="text-[var(--orange)]" />
-              </div>
-              <span className="text-sm font-black uppercase tracking-widest text-white">
-                {config?.stats?.creatorsImpacted || finalCreators.length}+ Creators
-              </span>
-            </div>
-
-            <span className="h-4 w-px bg-white/10 hidden sm:block" />
-
-            <div className="flex items-center gap-2.5 group cursor-default">
-              <div className="w-8 h-8 rounded-lg bg-[var(--orange)]/10 flex items-center justify-center group-hover:bg-[var(--orange)] transition-colors duration-300">
-                <TrendingUp size={16} className="text-[var(--orange)] group-hover:text-white transition-colors duration-300" />
-              </div>
-              <div className="flex flex-col items-start justify-center">
-                <span className="text-sm font-black uppercase tracking-widest text-[var(--orange)] leading-none">
-                  {fmt(ytReach)}+ Network Reach
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-2xl font-black leading-none text-white tracking-tight">
+                  {creatorCount}<span className="text-[var(--orange)]">+</span>
                 </span>
-                {igReach > 0 && (
-                  <span className="text-[10px] font-black uppercase tracking-widest text-pink-500 leading-none mt-1 opacity-90">
-                    {fmt(igReach)}+ Instagram Reach
-                  </span>
-                )}
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 leading-none mt-1">
+                  Active creators
+                </span>
+              </div>
+            </div>
+
+            {/* Pill 2 — Total reach (the hero) */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-br from-[var(--orange)]/10 to-pink-500/5 border border-[var(--orange)]/20">
+              <div className="w-10 h-10 rounded-lg bg-[var(--orange)] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[var(--orange)]/30">
+                <TrendingUp size={18} className="text-white" />
+              </div>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-2xl font-black leading-none text-[var(--orange)] tracking-tight">
+                  {fmt(totalReach)}<span className="text-white">+</span>
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-300 leading-none mt-1">
+                  Total reach
+                </span>
+                <span className="text-[9px] text-neutral-500 leading-none mt-1.5 font-medium">
+                  <Youtube size={9} className="inline -mt-px text-red-500" /> {fmt(ytReach)}
+                  <span className="mx-1 text-neutral-700">·</span>
+                  <Instagram size={9} className="inline -mt-px text-pink-500" /> {fmt(igReach)}
+                </span>
+              </div>
+            </div>
+
+            {/* Pill 3 — Live activity (channels + IG handles) */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02]">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0 relative">
+                <CheckCircle2 size={18} className="text-emerald-500" />
+                {/* Live dot — confirms numbers are fresh */}
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-2xl font-black leading-none text-white tracking-tight">
+                  {(ytChannels || 0) + (igAccounts || 0)}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 leading-none mt-1">
+                  Live channels
+                </span>
+                <span className="text-[9px] text-neutral-500 leading-none mt-1.5 font-medium">
+                  {ytChannels} YT · {igAccounts} IG
+                </span>
               </div>
             </div>
           </motion.div>
@@ -521,9 +595,12 @@ const CreatorsWorkedWithMarquee = ({
                 })}
               </ul>
 
-              {/* Segment B (clone) — ALWAYS rendered when scrolling could happen.
-                  Required for the -50% keyframe loop to wrap seamlessly. */}
-              {!showStatic && (
+              {/* Segment B (clone) — only when the animated track is active.
+                  Required for the -50% keyframe loop to wrap seamlessly.
+                  Belt-and-suspenders: gating on `enableAnimation` (not just
+                  `!showStatic`) guarantees we never render two static copies
+                  if a race condition keeps the track in `cw-static` mode. */}
+              {enableAnimation && (
                 <ul
                   className="cw-segment"
                   aria-hidden="true" // Clone is decorative
