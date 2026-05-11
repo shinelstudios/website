@@ -42,19 +42,12 @@ POST `{WORKER}/admin/agency/laptop/claim` with body:
 ```json
 {
   "laptop_id": "{LAPTOP_ID}",
-  "version": "1.1",
-  "count": 3,
-  "types": [
-    "ig_followers_fetch",
-    "ig_recent_posts_fetch",
-    "yt_stream_seo_check",
-    "yt_video_reseo",
-    "milestone_check",
-    "milestone_story_create",
-    "homepage_stats_refresh"
-  ]
+  "version": "1.2",
+  "count": 3
 }
 ```
+
+(Don't filter by `types` — claim anything pending. The handler dispatch below figures out what to do for each type; unknown types just fail-and-skip without crashing the run. This avoids the type-list-vs-scheduler-seeds drift problem.)
 
 Response: `{ claimed_count: N, tasks: [...] }`. Each task: `{ id, type, client_id, payload_json, attempts }`.
 
@@ -228,15 +221,19 @@ Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs 
 
 Result: `{ image_url, target, posted_to: ["discord"] }`.
 
-### `custom_prompt` — scheduled tasks from the cockpit
+### `custom_prompt` AND any cockpit-scheduled task type
 
-This is the catch-all for any scheduled task created in the cockpit's Scheduled Tasks panel.
+This is the catch-all for **any task whose `payload_json.prompt` field is set**. That includes:
+- `custom_prompt` itself
+- Cockpit-scheduled types like `daily_research_run`, `news_spike_scan`, `content_pipeline_review`, `weekly_client_report`, etc — these all carry their prompt in the payload
 
-**Input:** `task.payload_json` parsed as `{ prompt, scheduled_task_id, scheduled_task_name, source, ...extra_args }`
+**Dispatch rule:** If `task.type` doesn't match one of the hard-coded handlers above (ig_followers_fetch, milestone_check, etc.) **AND** `task.payload_json.prompt` is a non-empty string, treat it as a prompt-driven task.
+
+**Input:** `task.payload_json` parsed as `{ prompt, scheduled_task_id?, scheduled_task_name?, source?, ...extra_args }`
 
 **Execution:**
-1. Read the `prompt` field — that's the human-language description of what to do
-2. Look up additional context via `/admin/agency/laptop/context` if the prompt needs client data
+1. Read the `prompt` field — that's the human-language description of what to do.
+2. Look up additional context via `/admin/agency/laptop/context` (or `?clientId=` if scoped) if the prompt needs client data.
 3. Execute the prompt — could be:
    - Browser automation (open YT Studio, IG, Drive, etc.)
    - Higgsfield image generation
@@ -248,13 +245,9 @@ This is the catch-all for any scheduled task created in the cockpit's Scheduled 
 
 The `summary` field shows in the cockpit's Schedule panel under "last run". Keep it under 200 chars.
 
-**Example task types you'll see** (the prompt describes the work):
-- `daily_research_run` — research workflow per client
-- `news_spike_scan` — news monitoring + spike detection
-- `content_pipeline_review` — daily blocker/overdue report
-- `weekly_client_report` — per-client weekly recap
+**Trust the prompt.** Don't over-interpret. If it says "post to Discord #ops-pipeline", do exactly that. If it says "save to client Drive folder", use the client's `drive_folder_url` from context.
 
-For each of these, the `payload_json.prompt` field describes EXACTLY what to do. Trust the prompt; don't over-interpret. If the prompt says "post to Discord #ops-pipeline", do exactly that.
+**If both prompt is missing AND the type doesn't match a known handler:** PATCH `failed` with `"handler not implemented yet — no prompt in payload"`.
 
 ### Unknown / not-yet-implemented type
 PATCH `failed` with error `"handler not implemented yet"`. Move on — don't crash the run.
