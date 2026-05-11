@@ -457,11 +457,19 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         `SELECT * FROM laptop_heartbeats ORDER BY last_seen DESC`
       ).all();
       const nowSec = Math.floor(Date.now() / 1000);
-      const enriched = (results || []).map((r) => ({
-        ...r,
-        seconds_ago: nowSec - (r.last_seen || 0),
-        online: (nowSec - (r.last_seen || 0)) < 600,
-      }));
+      const enriched = (results || []).map((r) => {
+        const sa = nowSec - (r.last_seen || 0);
+        return {
+          ...r,
+          seconds_ago: sa,
+          // Online status tiers:
+          //   < 8 min  → online (just polled)
+          //   8-15 min → idle (between ticks; expected on a 5-min cron with Cowork cold-starts)
+          //   > 15 min → offline (something's wrong — Cowork closed, machine asleep, etc.)
+          online: sa < 480,
+          status: sa < 480 ? "online" : sa < 900 ? "idle" : "offline",
+        };
+      });
       return ok({ laptops: enriched });
     }
 

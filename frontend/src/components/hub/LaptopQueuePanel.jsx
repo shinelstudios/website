@@ -152,7 +152,9 @@ export default function LaptopQueuePanel({ clients = [] }) {
     return c;
   }, [tasks]);
 
-  const onlineLaptop = heartbeats.find((h) => h.online);
+  const onlineLaptop = heartbeats.find((h) => h.status === "online" || h.online);
+  const idleLaptop = heartbeats.find((h) => h.status === "idle");
+  const anyLaptop = onlineLaptop || idleLaptop || heartbeats[0];
 
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-[var(--surface-elev)]">
@@ -168,9 +170,18 @@ export default function LaptopQueuePanel({ clients = [] }) {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               {onlineLaptop.laptop_id} online · {fmtAgo(onlineLaptop.seconds_ago)}
             </span>
+          ) : idleLaptop ? (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600 inline-flex items-center gap-1" title="Between scheduled ticks. Cowork wakes on cron — next poll soon.">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+              {idleLaptop.laptop_id} idle · {fmtAgo(idleLaptop.seconds_ago)}
+            </span>
+          ) : anyLaptop ? (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 text-red-500" title={`Last seen ${fmtAgo(anyLaptop.seconds_ago)}. Check Cowork is open + machine isn't sleeping.`}>
+              {anyLaptop.laptop_id} offline · {fmtAgo(anyLaptop.seconds_ago)}
+            </span>
           ) : (
             <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">
-              No laptop online
+              No laptop registered
             </span>
           )}
         </h3>
@@ -198,10 +209,15 @@ export default function LaptopQueuePanel({ clients = [] }) {
         </div>
       </header>
 
-      {!onlineLaptop && (
+      {!onlineLaptop && !idleLaptop && anyLaptop && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 text-red-600 p-3 text-xs mb-3">
+          <strong>Laptop offline ({fmtAgo(anyLaptop.seconds_ago)}).</strong> Tasks will queue but won't run until <code>{anyLaptop.laptop_id}</code> polls again.
+          Check: (1) Cowork app is open on that machine, (2) it's not asleep (Windows Power → "Never sleep when plugged in"), (3) the <code>laptop-poll-queue</code> scheduled task is still enabled.
+        </div>
+      )}
+      {!anyLaptop && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 text-yellow-700 p-3 text-xs mb-3">
-          <strong>No laptop online.</strong> Tasks will queue up and run when the always-on laptop polls next.
-          To set up: install the <code>laptop-poll-queue</code> Cowork skill on the always-on machine.
+          <strong>No laptop registered yet.</strong> Install the <code>laptop-poll-queue</code> Cowork skill on your always-on machine so it can start picking up tasks.
         </div>
       )}
 

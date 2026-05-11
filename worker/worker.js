@@ -1442,6 +1442,18 @@ async function performClientSync(env, isForced = false, debug = false) {
             registryMutated = true;
           }
 
+          // Write fresh subscriber/view counts back to D1 so the cockpit
+          // (which reads clients.subscribers from D1) shows live numbers.
+          // Previously these only landed in KV's app:clients:stats, leaving
+          // the D1 row stuck at whatever was manually set last.
+          if (env.DB && typeof result.subscribers === "number" && result.subscribers >= 0) {
+            try {
+              await env.DB.prepare(
+                "UPDATE clients SET subscribers = ? WHERE id = ?"
+              ).bind(Math.floor(result.subscribers), c.id).run();
+            } catch (e) { console.error("D1 subscribers update error:", e.message); }
+          }
+
           if (c.status !== "old") {
             const resultPulse = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
             const videos = resultPulse.items || [];
