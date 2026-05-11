@@ -548,11 +548,41 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         };
       });
 
-      return ok({
+      // Build the response, then compute an ETag-style hash. If the client
+      // sent If-None-Match matching the hash, return 304 — saves bandwidth
+      // AND parsing tokens on the laptop. This is the textbook HTTP cache
+      // pattern, but with our own JSON-payload hash since CF doesn't auto-ETag.
+      const body = {
         count: enriched.length,
         clients: enriched,
         active_spikes: activeSpikes.results || [],
         generated_at: new Date().toISOString(),
+      };
+      // Hash a stable subset (excludes generated_at so the ETag is content-only,
+      // not time-stamp based — so identical data keeps the same ETag).
+      const stableJson = JSON.stringify({
+        c: enriched.map(c => ({ ...c, _r: undefined })),
+        s: activeSpikes.results || [],
+      });
+      const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(stableJson));
+      const etag = '"' + Array.from(new Uint8Array(hashBuf)).slice(0, 16).map(b => b.toString(16).padStart(2, "0")).join("") + '"';
+
+      const ifNoneMatch = request.headers.get("If-None-Match");
+      const corsLap = corsHeaders(request, env);
+      if (ifNoneMatch && ifNoneMatch === etag) {
+        return new Response(null, {
+          status: 304,
+          headers: { ETag: etag, "Cache-Control": "private, max-age=60", ...corsLap },
+        });
+      }
+      return new Response(JSON.stringify(body, null, 2), {
+        status: 200,
+        headers: {
+          ...BASE_HEADERS,
+          ...corsLap,
+          ETag: etag,
+          "Cache-Control": "private, max-age=60",
+        },
       });
     }
 
@@ -1123,6 +1153,81 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id, deleted: true });
     }
 
+    // ========================================================================
+    // SCHEDULED TASKS — one place to manage all recurring work
+    // ========================================================================
+    // GET /admin/agency/scheduled-tasks — list all
+    if (path === "/admin/agency/scheduled-tasks" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM scheduled_tasks ORDER BY enabled DESC, name`
+      ).all();
+      const nowSec = Math.floor(Date.now() / 1000);
+      const enriched = (results || []).map((t) => ({
+        ...t,
+        due_now: t.enabled && t.next_run_ts && t.next_run_ts <= nowSec,
+      }));
+      return ok({ count: enriched.length, tasks: enriched });
+    }
+
+    // POST /admin/agency/scheduled-tasks — create
+    if (path === "/admin/agency/scheduled-tasks" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.name || !body.cron) return err("name and cron required");
+      const id = body.id || `st-${crypto.randomUUID().slice(0, 8)}`;
+      const nextRun = computeNextRunSec(body.cron);
+      await env.DB.prepare(
+        `INSERT INTO scheduled_tasks (id, name, description, cron, task_type, payload_json, client_id, enabled, next_run_ts, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+      ).bind(
+        id,
+        body.name,
+        body.description || null,
+        body.cron,
+        body.task_type || "custom_prompt",
+        body.payload ? JSON.stringify(body.payload) : null,
+        body.client_id || null,
+        body.enabled === false ? 0 : 1,
+        nextRun,
+        body.created_by || "admin"
+      ).run();
+      return ok({ id, created: true, next_run_ts: nextRun }, 201);
+    }
+
+    // PATCH /admin/agency/scheduled-tasks/:id
+    const stMatch = path.match(/^\/admin\/agency\/scheduled-tasks\/([^\/]+)$/);
+    if (stMatch && method === "PATCH") {
+      const id = stMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const allowed = ["name", "description", "cron", "task_type", "client_id", "enabled"];
+      const sets = []; const binds = []; let i = 1;
+      for (const k of allowed) if (body[k] !== undefined) {
+        sets.push(`${k} = ?${i++}`);
+        binds.push(typeof body[k] === "boolean" ? (body[k] ? 1 : 0) : body[k]);
+      }
+      if (body.payload !== undefined) { sets.push(`payload_json = ?${i++}`); binds.push(body.payload ? JSON.stringify(body.payload) : null); }
+      if (body.cron) { sets.push(`next_run_ts = ?${i++}`); binds.push(computeNextRunSec(body.cron)); }
+      if (!sets.length) return err("no valid fields");
+      sets.push(`updated_at = CURRENT_TIMESTAMP`);
+      binds.push(id);
+      await env.DB.prepare(`UPDATE scheduled_tasks SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      return ok({ id, updated: true });
+    }
+
+    // DELETE /admin/agency/scheduled-tasks/:id
+    if (stMatch && method === "DELETE") {
+      const id = stMatch[1];
+      await env.DB.prepare("DELETE FROM scheduled_tasks WHERE id = ?1").bind(id).run();
+      return ok({ id, deleted: true });
+    }
+
+    // POST /admin/agency/scheduled-tasks/:id/run — manual fire
+    const stRunMatch = path.match(/^\/admin\/agency\/scheduled-tasks\/([^\/]+)\/run$/);
+    if (stRunMatch && method === "POST") {
+      const id = stRunMatch[1];
+      const result = await fireScheduledTask(env, id, "manual");
+      return ok(result);
+    }
+
     // ---- POST /admin/agency/weekly-digest/run  — manual trigger (force=true)
     if (path === "/admin/agency/weekly-digest/run" && method === "POST") {
       const body = await request.json().catch(() => ({}));
@@ -1551,6 +1656,134 @@ async function opsSnapshot(env, opts = {}) {
 function safeJsonParse(s) {
   if (!s) return null;
   try { return JSON.parse(s); } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// computeNextRunSec — given a 5-field cron expression evaluated in IST,
+// return the unix-second timestamp of the next firing.
+//
+// Cron format: minute hour day month dayOfWeek
+//   Supports: *, N, N,N, N-N, */N
+// IST = UTC+5:30. Always compute in IST then convert.
+// ---------------------------------------------------------------------------
+export function computeNextRunSec(cronExpr) {
+  if (!cronExpr) return null;
+  const parts = String(cronExpr).trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [minPart, hourPart, domPart, monPart, dowPart] = parts;
+
+  const matchField = (val, expr, max, min = 0) => {
+    if (expr === "*") return true;
+    for (const piece of expr.split(",")) {
+      if (piece.startsWith("*/")) {
+        const step = parseInt(piece.slice(2), 10);
+        if (step > 0 && (val - min) % step === 0) return true;
+        continue;
+      }
+      if (piece.includes("-")) {
+        const [a, b] = piece.split("-").map((n) => parseInt(n, 10));
+        if (val >= a && val <= b) return true;
+        continue;
+      }
+      if (parseInt(piece, 10) === val) return true;
+    }
+    return false;
+  };
+
+  // Start from "now in IST" minute-bucket + 1
+  const IST_OFFSET_MIN = 330; // 5h30m
+  const nowSec = Math.floor(Date.now() / 1000);
+  const nowIstMs = (nowSec + IST_OFFSET_MIN * 60) * 1000;
+
+  for (let step = 1; step <= 60 * 24 * 366; step++) {
+    const t = new Date(nowIstMs + step * 60 * 1000);
+    const min = t.getUTCMinutes();
+    const hr  = t.getUTCHours();
+    const dom = t.getUTCDate();
+    const mon = t.getUTCMonth() + 1;
+    const dow = t.getUTCDay(); // 0 = Sunday
+    if (matchField(min, minPart, 59) &&
+        matchField(hr, hourPart, 23) &&
+        matchField(dom, domPart, 31, 1) &&
+        matchField(mon, monPart, 12, 1) &&
+        matchField(dow, dowPart, 6)) {
+      // Convert this IST minute back to UTC unix seconds
+      return Math.floor(t.getTime() / 1000) - IST_OFFSET_MIN * 60;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// fireScheduledTask — enqueue a laptop_task for this scheduled task and
+// advance its next_run_ts. Returns { ok, enqueued_task_id }.
+// ---------------------------------------------------------------------------
+export async function fireScheduledTask(env, scheduledTaskId, source = "cron") {
+  const st = await env.DB.prepare("SELECT * FROM scheduled_tasks WHERE id = ?1").bind(scheduledTaskId).first();
+  if (!st) return { ok: false, error: "scheduled task not found" };
+
+  // Build the laptop_task payload
+  const payload = safeJsonParse(st.payload_json) || {};
+  payload.scheduled_task_id = st.id;
+  payload.scheduled_task_name = st.name;
+  payload.source = source;
+
+  const laptopTaskId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+  ).bind(
+    laptopTaskId,
+    st.task_type || "custom_prompt",
+    st.client_id || null,
+    JSON.stringify(payload),
+    1, // scheduled tasks default priority
+    3,
+    `scheduled:${st.id}`
+  ).run();
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const nextRun = computeNextRunSec(st.cron);
+  await env.DB.prepare(
+    `UPDATE scheduled_tasks
+     SET last_run_ts = ?1, last_run_status = 'enqueued', last_run_task_id = ?2,
+         next_run_ts = ?3, run_count = run_count + 1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?4`
+  ).bind(nowSec, laptopTaskId, nextRun, st.id).run();
+
+  return { ok: true, scheduled_task_id: st.id, enqueued_task_id: laptopTaskId, next_run_ts: nextRun };
+}
+
+// ---------------------------------------------------------------------------
+// runScheduledTaskTick — called from the worker cron every 30 min.
+// Finds all enabled scheduled tasks whose next_run_ts has passed and fires
+// each one. Returns a small summary.
+// ---------------------------------------------------------------------------
+export async function runScheduledTaskTick(env) {
+  if (!env.DB) return { ok: false, reason: "no DB binding" };
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // First-time tasks have next_run_ts=NULL — compute it now so they fire on schedule, not immediately.
+  await env.DB.prepare(
+    `UPDATE scheduled_tasks SET next_run_ts = ?1
+     WHERE enabled = 1 AND next_run_ts IS NULL`
+  ).bind(nowSec + 60).run();  // arm to fire ~1 min from now if their cron says so
+
+  // Find due tasks (enabled + next_run_ts in the past)
+  const { results: due } = await env.DB.prepare(
+    `SELECT id FROM scheduled_tasks WHERE enabled = 1 AND next_run_ts IS NOT NULL AND next_run_ts <= ?1`
+  ).bind(nowSec).all();
+
+  if (!due || due.length === 0) return { ok: true, fired: 0 };
+
+  let fired = 0;
+  for (const row of due) {
+    try {
+      const r = await fireScheduledTask(env, row.id, "cron");
+      if (r.ok) fired++;
+    } catch (e) { console.error("fireScheduledTask failed for", row.id, e.message); }
+  }
+  return { ok: true, fired, due_count: due.length };
 }
 
 // ---------------------------------------------------------------------------

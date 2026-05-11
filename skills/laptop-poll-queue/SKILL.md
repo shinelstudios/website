@@ -24,14 +24,17 @@ X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}
 
 **Schedule:** `/schedule create laptop-poll-queue cron='*/5 * * * *'`
 
-## Each run (high-level loop)
+## Each run (high-level loop) — optimized for token efficiency
 
 1. **Claim** up to 3 pending tasks
-2. **Fetch context** (clients + handles + competitors + scheduled streams + spikes) — single call, cache for the rest of the run
-3. **Execute** each claimed task using the handler below
-4. **Patch** each task with `done` + result, or `failed` + error
-5. **Log** a single-line summary
-6. **Exit** — next cron tick handles new work
+2. **If claimed_count === 0** → log heartbeat + exit immediately. **DO NOT FETCH CONTEXT.**
+3. **If claimed_count > 0** → load context from local cache (or refresh if stale/missing)
+4. **Execute** each claimed task using the handler below
+5. **Patch** each task with `done` + result, or `failed` + error
+6. **Log** a single-line summary
+7. **Exit**
+
+The cache makes most runs (the "no work" ones) zero-context — heartbeat call only, ~200 bytes in/out, no JSON parsing.
 
 ## Step 1 — Claim
 
@@ -57,15 +60,91 @@ Response: `{ claimed_count: N, tasks: [...] }`. Each task: `{ id, type, client_i
 
 If `claimed_count === 0`, log `[laptop-poll] heartbeat ok · no work` and exit.
 
-## Step 2 — Fetch context
+## Step 2 — Get context (cached)
 
-GET `{WORKER}/admin/agency/laptop/context` (with X-Laptop-Token header).
+**Skip this entire step if `claimed_count === 0` from step 1.** Log "[laptop-poll] heartbeat ok · no work" and exit. Save tokens.
 
-Returns one bundle:
-- `clients[]` — each with: `id`, `name`, `youtube_id`, `subscribers`, `instagram_handle`, `instagram_followers`, `instagram_accounts[]`, `channels[]`, `competitors[]`, `recent_uploads[]`, `scheduled_projects[]`, `brand_kit`, `drive_folder_url`, `discord_webhook_url`
-- `active_spikes[]` — niche-level news spikes the cockpit detected
+### Cache layout
 
-Cache the response in working memory; reuse for all tasks this run.
+In your Cowork workspace folder, maintain:
+- `cache/context.json` — last successful context response
+- `cache/context.etag` — the ETag returned with that response
+
+### Loading order — scoped by the tasks claimed
+
+For each claimed task, decide what context you actually need:
+
+**Group A — single-client tasks** (`ig_followers_fetch`, `ig_recent_posts_fetch`, `milestone_story_create`, `yt_video_reseo` if payload has video_id):
+- Only need data for `task.client_id`.
+- Use scoped endpoint: `GET {WORKER}/admin/agency/laptop/context?clientId={task.client_id}`
+- Cache per-client: `cache/context-{client_id}.json` + `cache/context-{client_id}.etag`
+- Payload is ~5KB instead of ~50KB for full context.
+
+**Group B — multi-client tasks** (`milestone_check`, `yt_stream_seo_check` when no client_id, `homepage_stats_refresh`):
+- Need all clients.
+- Use full endpoint: `GET {WORKER}/admin/agency/laptop/context` (no params)
+- Cache: `cache/context.json` + `cache/context.etag`
+
+### Loading procedure (apply per task)
+
+1. Decide group A or B. Pick cache file paths accordingly.
+2. **Read the saved ETag** (if file exists).
+3. **GET** the appropriate URL with headers:
+   ```
+   X-Laptop-Token: {TOKEN}
+   If-None-Match: <saved etag, if any>
+   ```
+4. **Response handling:**
+   - `304 Not Modified` → use cached `cache/context*.json`
+   - `200 OK` → save body to `cache/context*.json` and `ETag` header to `cache/context*.etag`, then use it
+   - `401` → token wrong, stop loop
+   - Network error → fall back to cached file if it exists; else fail this run
+
+### Smart batching
+
+If multiple claimed tasks share the same client_id, only fetch that client's context once per run, then reuse it for all those tasks.
+
+If you have BOTH group-A tasks (specific clients) AND group-B tasks (all clients) claimed in the same run, you can skip the per-client fetches — the all-clients response already contains them. Use full context.
+
+### Context shape (cache it as-is)
+
+```json
+{
+  "count": 9,
+  "clients": [
+    {
+      "id": "c-...",
+      "name": "Kiaraa Gaming",
+      "youtube_id": "UC...",
+      "subscribers": 14200,
+      "instagram_handle": "kiaraa.gaming",
+      "instagram_followers": 8400,
+      "instagram_accounts": [...],
+      "channels": [...],
+      "competitors": [...],
+      "recent_uploads": [...],
+      "scheduled_projects": [...],
+      "brand_kit": {...},
+      "drive_folder_url": "...",
+      "discord_webhook_url": "..."
+    }
+  ],
+  "active_spikes": [...]
+}
+```
+
+### When NOT to use the cache
+
+- If a task explicitly says `"force_refresh": true` in its payload_json
+- If the cached context is >24 hours old (sanity check — read its mtime)
+
+### Why this matters
+
+- ~90% of runs have 0 claimed tasks → no context fetch at all → ~200 bytes per heartbeat
+- The other ~10% with tasks usually hit ETag-304 → still no JSON parsing
+- Only when the cockpit team makes real changes (new client, new competitor) does the laptop actually re-parse the full context
+
+Net result: each cron tick costs roughly one HTTP round trip + a few hundred bytes of LLM context, instead of fetching + parsing 50KB of JSON every 5 minutes forever.
 
 ## Step 3 — Handlers
 
@@ -148,6 +227,34 @@ Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs 
 5. (Future) If team has IG poster credentials: auto-post as IG Story.
 
 Result: `{ image_url, target, posted_to: ["discord"] }`.
+
+### `custom_prompt` — scheduled tasks from the cockpit
+
+This is the catch-all for any scheduled task created in the cockpit's Scheduled Tasks panel.
+
+**Input:** `task.payload_json` parsed as `{ prompt, scheduled_task_id, scheduled_task_name, source, ...extra_args }`
+
+**Execution:**
+1. Read the `prompt` field — that's the human-language description of what to do
+2. Look up additional context via `/admin/agency/laptop/context` if the prompt needs client data
+3. Execute the prompt — could be:
+   - Browser automation (open YT Studio, IG, Drive, etc.)
+   - Higgsfield image generation
+   - File writes / Discord posts
+   - Multi-step workflow
+4. Capture results as a brief summary
+
+**Result shape:** `{ scheduled_task_id, summary, artifacts: [...], ran_at: <iso> }`
+
+The `summary` field shows in the cockpit's Schedule panel under "last run". Keep it under 200 chars.
+
+**Example task types you'll see** (the prompt describes the work):
+- `daily_research_run` — research workflow per client
+- `news_spike_scan` — news monitoring + spike detection
+- `content_pipeline_review` — daily blocker/overdue report
+- `weekly_client_report` — per-client weekly recap
+
+For each of these, the `payload_json.prompt` field describes EXACTLY what to do. Trust the prompt; don't over-interpret. If the prompt says "post to Discord #ops-pipeline", do exactly that.
 
 ### Unknown / not-yet-implemented type
 PATCH `failed` with error `"handler not implemented yet"`. Move on — don't crash the run.

@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick } from "./agency-handlers.js";
 
 /* ============================== tiny helpers ============================== */
 const json = (obj, status = 200, headers = {}) =>
@@ -95,6 +95,16 @@ let _adminUsersCache = null;
 let _adminUsersCacheExpiry = 0;
 const ADMIN_USERS_TTL_MS = 60_000;
 function invalidateAdminUsersCache() { _adminUsersCacheExpiry = 0; _adminUsersCache = null; }
+
+// Module-scope caches for the two public KV-list endpoints we MUST throttle —
+// without these the free-tier KV list quota (1000/day) burns out from public
+// homepage/team page views. 10-min TTL + edge Cache-Control gives ~99% reuse.
+let _clientsHistoryCache = null;
+let _clientsHistoryCacheTs = 0;
+let _publicTeamCache = null;
+let _publicTeamCacheTs = 0;
+function invalidatePublicTeamCache() { _publicTeamCacheTs = 0; _publicTeamCache = null; }
+function invalidateClientsHistoryCache() { _clientsHistoryCacheTs = 0; _clientsHistoryCache = null; }
 
 async function getUserFromKV(env, email) {
   const key = `user:${String(email || "").trim().toLowerCase()}`;
@@ -2259,9 +2269,19 @@ const handler = {
     /* =============================== /team + /profiles (team portfolio redesign) =============================== */
 
     // GET /team - Public directory of team members (editors/artists/team roles).
-    // Only returns members with profilePublic !== false. Never leaks email/password.
+    // PUBLIC endpoint — same throttling concern as /clients/history. Module
+    // cache + edge Cache-Control keep KV.list usage minimal.
     if (url.pathname === "/team" && request.method === "GET") {
       try {
+        const TEAM_TTL_MS = 10 * 60 * 1000;
+        const now = Date.now();
+        if (_publicTeamCache && (now - _publicTeamCacheTs) < TEAM_TTL_MS) {
+          return json(_publicTeamCache, 200, {
+            ...cors,
+            "Cache-Control": "public, max-age=600, s-maxage=600",
+          });
+        }
+
         const list = [];
         let cursor = undefined;
         for (let i = 0; i < 50; i++) {
@@ -2270,6 +2290,10 @@ const handler = {
             page = await env.SHINEL_USERS.list(cursor ? { prefix: "user:", cursor } : { prefix: "user:" });
           } catch (listErr) {
             console.error("GET /team SHINEL_USERS.list failed:", listErr?.message || listErr);
+            // Return stale cache on KV list failure (e.g. quota exceeded)
+            if (_publicTeamCache) {
+              return json(_publicTeamCache, 200, { ...cors, "Cache-Control": "public, max-age=600" });
+            }
             break;
           }
           const { keys = [], list_complete = true, cursor: nextCursor } = page || {};
@@ -2307,7 +2331,13 @@ const handler = {
         }
         // Prioritize members that have a slug (complete profile) first.
         list.sort((a, b) => (b.slug ? 1 : 0) - (a.slug ? 1 : 0));
-        return json({ team: list }, 200, cors);
+        const result = { team: list };
+        _publicTeamCache = result;
+        _publicTeamCacheTs = Date.now();
+        return json(result, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=600, s-maxage=600",
+        });
       } catch (e) {
         console.error("GET /team failed:", e?.stack || e?.message || e);
         return json({ team: [] }, 200, cors);
@@ -2720,16 +2750,30 @@ const handler = {
 
 
     // GET /clients/history - Activity history (30-day window).
-    // A single malformed record shouldn't 500 the whole endpoint; we skip
-    // bad entries and return whatever we can parse. Public endpoint.
+    // PUBLIC endpoint — gets hit by every homepage/pulse pageview, so we
+    // aggressively cache to avoid burning the KV list quota (free tier:
+    // 1000 list ops/day). Module-scope cache + 10-min TTL + CF edge cache.
     if (url.pathname === "/clients/history" && request.method === "GET") {
       try {
+        const HISTORY_TTL_MS = 10 * 60 * 1000;
+        const now = Date.now();
+        if (_clientsHistoryCache && (now - _clientsHistoryCacheTs) < HISTORY_TTL_MS) {
+          return json(_clientsHistoryCache, 200, {
+            ...cors,
+            "Cache-Control": "public, max-age=600, s-maxage=600",
+          });
+        }
+
         const historyData = {};
         let listResult;
         try {
           listResult = await env.SHINEL_AUDIT.list({ prefix: "history:" });
         } catch (listErr) {
           console.error("GET /clients/history list failed:", listErr?.message || listErr);
+          // If we have stale cache, return it on list-quota errors
+          if (_clientsHistoryCache) {
+            return json(_clientsHistoryCache, 200, { ...cors, "Cache-Control": "public, max-age=600" });
+          }
           return json({ ok: true, history: {} }, 200, cors);
         }
         const keys = listResult?.keys || [];
@@ -2752,7 +2796,14 @@ const handler = {
           }
         }
 
-        return json({ ok: true, history: historyData }, 200, cors);
+        const result = { ok: true, history: historyData };
+        // Cache for future requests within this isolate
+        _clientsHistoryCache = result;
+        _clientsHistoryCacheTs = now;
+        return json(result, 200, {
+          ...cors,
+          "Cache-Control": "public, max-age=600, s-maxage=600",
+        });
       } catch (e) {
         console.error("GET /clients/history failed:", e?.stack || e?.message || e);
         return json({ ok: true, history: {} }, 200, cors);
@@ -6554,6 +6605,10 @@ const handler = {
         const sum = await runEditorSummary(env);
         if (!sum.skipped) console.log("CRON editor-summary:", JSON.stringify(sum));
       } catch (e) { console.error("editor-summary failed:", e.message); }
+      try {
+        const sched = await runScheduledTaskTick(env);
+        if (sched.fired > 0) console.log("CRON scheduled-task-tick:", JSON.stringify(sched));
+      } catch (e) { console.error("scheduled-task-tick failed:", e.message); }
     })());
   }
 };

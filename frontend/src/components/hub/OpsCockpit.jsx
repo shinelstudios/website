@@ -38,6 +38,7 @@ import PipelineKanban from "./PipelineKanban";
 import TeamPanel from "./TeamPanel";
 import FinancePanel from "./FinancePanel";
 import LaptopQueuePanel from "./LaptopQueuePanel";
+import ScheduledTasksPanel from "./ScheduledTasksPanel";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -701,6 +702,8 @@ export default function OpsCockpit() {
           />
 
           <FinancePanel />
+
+          <ScheduledTasksPanel clients={clients} />
 
           <LaptopQueuePanel clients={clients} />
 
