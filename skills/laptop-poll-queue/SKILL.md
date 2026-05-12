@@ -366,6 +366,36 @@ unlisted detected → transcribe (you) → fetch context (worker)
 
 ⚠ youtubetotranscript.com only works for videos with captions enabled. If the unlisted video has captions off, Step A fails — `unlisted_uploads.transcript_status='failed'`. A human can paste a transcript later via the manual endpoint and the SEO proposal will be regenerated.
 
+### `seo_generate_only`  (NEW — manual on-demand SEO from cockpit)
+Input: `task.payload_json` parsed as `{ video_id, asset_type, title?, is_short?, source }`.
+
+This task type runs when the founder has manually requested SEO for a specific video from the cockpit AND already provided a transcript (pasted into the modal). The transcript is already in `unlisted_uploads.transcript_text` — you just need to do Steps B → D from the `transcribe_video` handler:
+
+1. Pull the transcript from the worker:
+   ```
+   GET {WORKER}/admin/agency/seo/request/{video_id}
+   ```
+   The response includes `transcript_text` directly.
+
+2. Fetch personalization context:
+   ```
+   GET {WORKER}/admin/agency/seo/context/{task.client_id}
+   ```
+
+3. Generate the SEO proposal in this same SKILL run (your native Claude session). Use the same JSON shape from the `transcribe_video` handler: `{ new_title, new_description, new_tags, reasoning }`.
+
+4. POST the proposal back:
+   ```
+   POST {WORKER}/admin/agency/seo/proposal
+   Body: { video_id, client_id: task.client_id, new_title, new_description,
+           new_tags, reasoning, isShort: task.payload_json.is_short,
+           source: "laptop:cowork-claude-manual" }
+   ```
+
+PATCH this task `done` with `{ video_id, seo_history_id: <the id returned from /seo/proposal> }`.
+
+This is identical to `transcribe_video` minus the transcript-fetch step. Same constraints (don't reproduce >15 words verbatim; match the creator's voice from their top_performers; etc).
+
 ### `milestone_story_create`
 Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs }`.
 

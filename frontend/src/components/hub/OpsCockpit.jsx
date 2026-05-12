@@ -42,6 +42,7 @@ import ScheduledTasksPanel from "./ScheduledTasksPanel";
 import AddSomethingButton from "./AddSomethingButton";
 import PersonalTodosPanel from "./PersonalTodosPanel";
 import SeoActionModal from "./SeoActionModal";
+import SeoRequestModal from "./SeoRequestModal";
 import SheetSyncPanel from "./SheetSyncPanel";
 
 // ---- helpers ---------------------------------------------------------------
@@ -376,6 +377,10 @@ export default function OpsCockpit() {
   const [driveModalClient, setDriveModalClient] = useState(null);
   const [todoBadge, setTodoBadge] = useState(0);
   const [openSeoId, setOpenSeoId] = useState(null);
+  const [seoRequestModalOpen, setSeoRequestModalOpen] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("seo-request") === "1"; }
+    catch { return false; }
+  });
 
   // Background load of MY overdue+due-today todo count for the tab badge.
   // Cheap call; reused across tab switches via the same endpoint.
@@ -813,9 +818,18 @@ export default function OpsCockpit() {
             title="Pending SEO Queue"
             icon={Clock}
             action={
-              pendingSeo.length > 0 ? (
-                <span className="text-xs text-[var(--orange)] font-bold">{pendingSeo.length} awaiting</span>
-              ) : null
+              <div className="flex items-center gap-2">
+                {pendingSeo.length > 0 && (
+                  <span className="text-xs text-[var(--orange)] font-bold">{pendingSeo.length} awaiting</span>
+                )}
+                <button
+                  onClick={() => setSeoRequestModalOpen(true)}
+                  className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded bg-[var(--orange)] text-white hover:opacity-90 inline-flex items-center gap-1"
+                  title="Point at any video and have Cowork Claude generate SEO for it"
+                >
+                  ✨ New
+                </button>
+              </div>
             }
           >
             {pendingSeo.length === 0 ? (
@@ -1101,6 +1115,18 @@ export default function OpsCockpit() {
           seoId={openSeoId}
           onClose={() => setOpenSeoId(null)}
           onChanged={() => { setOpenSeoId(null); fetchSnapshot(); }}
+        />
+      )}
+      {/* On-demand SEO request modal — manual "point at any video" flow */}
+      {seoRequestModalOpen && (
+        <SeoRequestModal
+          clients={clients}
+          onClose={() => setSeoRequestModalOpen(false)}
+          onProposalReady={(seoId) => {
+            setSeoRequestModalOpen(false);
+            fetchSnapshot();
+            if (seoId) setOpenSeoId(seoId);
+          }}
         />
       )}
     </div>

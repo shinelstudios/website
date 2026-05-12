@@ -2171,6 +2171,341 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok(result);
     }
 
+    // ---- POST /admin/agency/seo/request — manual on-demand SEO generation
+    //
+    // Founder points at ANY video (any privacy state, any age, even competitor
+    // videos for analysis) and Claude generates an SEO/RESEO proposal.
+    //
+    // Body: {
+    //   video_id: "abc123" | "https://youtube.com/watch?v=abc123" | "https://youtu.be/abc123",
+    //   client_id: "c-xxx",
+    //   asset_type?: "video" | "short" | "stream",
+    //   title?: "current title" (if known),
+    //   transcript?: "pre-pasted transcript text" (skips the fetch step),
+    //   priority?: 5 (default; can bump to 99 for "do it right now")
+    // }
+    //
+    // Flow:
+    //   - If `transcript` provided: store directly, then enqueue an
+    //     "seo_generate_only" task for the laptop to do the LLM step.
+    //   - If no `transcript`: enqueue transcribe_video which fetches the
+    //     transcript AND generates SEO in the same SKILL run.
+    //
+    // Either way, the proposal ends up in seo_history as applied=0 and
+    // appears in the cockpit Pending SEO queue.
+    if (path === "/admin/agency/seo/request" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.client_id) return err("client_id required");
+
+      // Accept full URLs or bare IDs
+      const rawVid = String(body.video_id || "");
+      const idMatch = rawVid.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,15})/);
+      const videoId = idMatch ? idMatch[1] : rawVid.trim();
+      if (!videoId || !/^[a-zA-Z0-9_-]{6,15}$/.test(videoId)) {
+        return err("video_id must be a YouTube video ID or a valid YT/Shorts/youtu.be URL");
+      }
+
+      const assetType = ["video", "short", "stream"].includes(body.asset_type) ? body.asset_type : "video";
+      const priority = parseInt(body.priority || 5, 10);
+
+      // Track the request in unlisted_uploads so the cockpit can poll status
+      // (the table is named "unlisted_uploads" historically; it now tracks
+      // ANY video in the SEO-generation pipeline, not just unlisted ones).
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO unlisted_uploads
+           (video_id, channel_id, client_id, title, privacy_status,
+            transcript_status, seo_status)
+         VALUES (?1, ?2, ?3, ?4, 'manual', ?5, 'pending')`
+      ).bind(
+        videoId,
+        body.channel_id || null,
+        body.client_id,
+        body.title || `Manual SEO request for ${videoId}`,
+        body.transcript ? "done" : "pending"
+      ).run();
+
+      if (body.transcript) {
+        // ── Path A — Transcript provided directly. Store + queue gen.
+        await env.DB.prepare(
+          `UPDATE unlisted_uploads
+           SET transcript_text = ?1,
+               transcript_status = 'done',
+               transcript_fetched_at = CURRENT_TIMESTAMP,
+               transcript_source = 'manual_paste'
+           WHERE video_id = ?2`
+        ).bind(String(body.transcript).slice(0, 50_000), videoId).run();
+
+        // Enqueue an "seo_generate_only" task — laptop reads transcript from
+        // unlisted_uploads, fetches context, generates, POSTs proposal back.
+        const taskId = crypto.randomUUID();
+        await env.DB.prepare(
+          `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+           VALUES (?1, 'seo_generate_only', ?2, ?3, ?4, 2, 'cockpit-manual')`
+        ).bind(
+          taskId,
+          body.client_id,
+          JSON.stringify({
+            video_id: videoId,
+            asset_type: assetType,
+            title: body.title || null,
+            is_short: assetType === "short",
+            source: "manual:transcript-provided",
+          }),
+          priority
+        ).run();
+        notifyLaptopPush(env, "shinel-mainframe", {
+          type: "task_available", task_id: taskId, task_type: "seo_generate_only",
+          client_id: body.client_id, priority, source: "cockpit-manual",
+        }).catch(() => {});
+        return ok({
+          video_id: videoId,
+          status: "queued",
+          step: "generating_seo",
+          task_id: taskId,
+          message: "Transcript stored. Laptop will generate the proposal next poll (~5–20 min).",
+        }, 202);
+      }
+
+      // ── Path B — No transcript. Enqueue full transcribe + generate flow.
+      const taskId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+         VALUES (?1, 'transcribe_video', ?2, ?3, ?4, 2, 'cockpit-manual')`
+      ).bind(
+        taskId,
+        body.client_id,
+        JSON.stringify({
+          video_id: videoId,
+          asset_type: assetType,
+          title: body.title || null,
+          is_short: assetType === "short",
+          source: "manual:cockpit",
+        }),
+        priority
+      ).run();
+      notifyLaptopPush(env, "shinel-mainframe", {
+        type: "task_available", task_id: taskId, task_type: "transcribe_video",
+        client_id: body.client_id, priority, source: "cockpit-manual",
+      }).catch(() => {});
+      return ok({
+        video_id: videoId,
+        status: "queued",
+        step: "fetching_transcript",
+        task_id: taskId,
+        message: "Queued. Laptop will fetch transcript + generate SEO next poll.",
+      }, 202);
+    }
+
+    // ---- GET /admin/agency/seo/request/:videoId — poll status for a manual request
+    const seoStatusMatch = path.match(/^\/admin\/agency\/seo\/request\/([a-zA-Z0-9_-]{6,15})$/);
+    if (seoStatusMatch && method === "GET") {
+      const videoId = seoStatusMatch[1];
+      const row = await env.DB.prepare(
+        `SELECT u.*, c.name AS client_name, sh.applied AS seo_applied
+         FROM unlisted_uploads u
+         LEFT JOIN clients c ON u.client_id = c.id
+         LEFT JOIN seo_history sh ON u.seo_history_id = sh.id
+         WHERE u.video_id = ?1`
+      ).bind(videoId).first();
+      if (!row) return err("no pipeline record found for that video", 404);
+      // Compute friendly status step
+      let step = "pending";
+      if (row.transcript_status === "done" && row.seo_status === "generated") step = "proposal_ready";
+      else if (row.transcript_status === "done" && row.seo_status === "pending") step = "generating_seo";
+      else if (row.transcript_status === "pending") step = "fetching_transcript";
+      else if (row.transcript_status === "failed") step = "transcript_failed";
+      else if (row.seo_status === "failed") step = "generation_failed";
+      else if (row.seo_status === "applied") step = "applied_to_youtube";
+      return ok({
+        video_id: videoId,
+        step,
+        ...row,
+      });
+    }
+
+    // ---- GET /admin/agency/ig/diagnostic
+    //
+    // For every active client, list every IG identifier we know about,
+    // tell you exactly why the follower count is 0 (or non-zero), and
+    // surface which tasks are queued / done / failed. Helps explain
+    // "why are these still 0?" with precise evidence.
+    if (path === "/admin/agency/ig/diagnostic" && method === "GET") {
+      // 1. All active clients + their legacy IG handle from clients.instagram_handle
+      const { results: clients } = await env.DB.prepare(
+        `SELECT id, name, instagram_handle, instagram_followers, COALESCE(managed_by_us, 1) AS managed_by_us, status
+         FROM clients
+         WHERE (status = 'active' OR status IS NULL)
+         ORDER BY name`
+      ).all();
+
+      // 2. All active instagram_accounts rows
+      const { results: igRows } = await env.DB.prepare(
+        `SELECT ia.id, ia.client_id, ia.handle, ia.role, ia.followers, ia.managed_by_us, ia.last_synced_at, ia.avatar_url
+         FROM instagram_accounts ia
+         WHERE ia.active = 1`
+      ).all();
+
+      // 3. Last task per (client_id, handle) — group queued + done + failed
+      const { results: recentTasks } = await env.DB.prepare(
+        `SELECT id, client_id, status, error, payload_json, created_at, completed_at
+         FROM laptop_tasks
+         WHERE type = 'ig_followers_fetch'
+           AND created_at > datetime('now', '-7 days')
+         ORDER BY created_at DESC`
+      ).all();
+
+      // Index recent tasks by client+handle
+      const taskIdx = new Map();
+      for (const t of recentTasks || []) {
+        let h = "";
+        try { h = (JSON.parse(t.payload_json || "{}").handle || "").toLowerCase(); } catch {}
+        const key = `${t.client_id}|${h}`;
+        if (!taskIdx.has(key)) taskIdx.set(key, []);
+        taskIdx.get(key).push(t);
+      }
+
+      // Build per-client report
+      const report = clients.map((c) => {
+        const igForClient = (igRows || []).filter((r) => r.client_id === c.id);
+        // Build handle set: instagram_accounts rows + legacy clients.instagram_handle
+        const handlesSeen = new Set(igForClient.map((r) => String(r.handle || "").replace(/^@/, "").toLowerCase()));
+        const legacyHandle = c.instagram_handle ? String(c.instagram_handle).replace(/^@/, "").toLowerCase() : null;
+        const allHandles = new Set([...handlesSeen]);
+        if (legacyHandle) allHandles.add(legacyHandle);
+
+        const igDetail = [...allHandles].map((h) => {
+          const row = igForClient.find((r) => String(r.handle || "").replace(/^@/, "").toLowerCase() === h);
+          const tasks = taskIdx.get(`${c.id}|${h}`) || [];
+          const latestTask = tasks[0];
+          const pendingTasks = tasks.filter((t) => t.status === "pending" || t.status === "claimed");
+          const failedTasks = tasks.filter((t) => t.status === "failed");
+          const doneTasks = tasks.filter((t) => t.status === "done");
+
+          let reason = "ok";
+          let advice = null;
+          if (!row && legacyHandle === h) {
+            reason = "legacy_only";
+            advice = `Handle "@${h}" exists in clients.instagram_handle but NOT in instagram_accounts. Add it via cockpit "+ IG" button so the sweep can find it.`;
+          } else if (!row) {
+            reason = "missing_row";
+            advice = `No row in instagram_accounts for "@${h}". Add via cockpit "+ IG".`;
+          } else if (!row.followers || row.followers === 0) {
+            if (pendingTasks.length) {
+              reason = "pending_fetch";
+              advice = `Task queued — waiting for laptop to poll (next poll in ≤20 min). Confirm laptop is online.`;
+            } else if (failedTasks.length && !doneTasks.length) {
+              reason = "fetch_failed";
+              advice = `Latest fetch failed: ${(failedTasks[0].error || "unknown").slice(0, 120)}. Common: login wall, rate limit, private account.`;
+            } else if (!tasks.length) {
+              reason = "never_queued";
+              advice = `No ig_followers_fetch task in the last 7 days. Use POST /admin/agency/ig/diagnostic/resweep to enqueue one.`;
+            } else if (doneTasks.length) {
+              reason = "fetched_zero";
+              advice = `Last fetch returned 0 followers. Likely a private/new account or scraper limitation. Verify on instagram.com manually.`;
+            }
+          }
+
+          return {
+            handle: h,
+            row_id: row?.id ?? null,
+            in_instagram_accounts: !!row,
+            in_legacy_clients_field: legacyHandle === h,
+            role: row?.role || null,
+            managed_by_us: row?.managed_by_us ?? null,
+            followers: row?.followers ?? 0,
+            last_synced_at: row?.last_synced_at ?? null,
+            has_avatar: !!row?.avatar_url,
+            pending_tasks: pendingTasks.length,
+            failed_tasks: failedTasks.length,
+            done_tasks: doneTasks.length,
+            latest_task: latestTask ? {
+              id: latestTask.id,
+              status: latestTask.status,
+              error: latestTask.error,
+              created_at: latestTask.created_at,
+              completed_at: latestTask.completed_at,
+            } : null,
+            reason,
+            advice,
+          };
+        });
+
+        return {
+          client_id: c.id,
+          name: c.name,
+          managed_by_us: !!c.managed_by_us,
+          status: c.status || "active",
+          legacy_instagram_handle: legacyHandle,
+          legacy_followers: c.instagram_followers || 0,
+          ig_count: igDetail.length,
+          ig_total_followers: igDetail.reduce((s, x) => s + (x.followers || 0), 0),
+          igs: igDetail,
+        };
+      });
+
+      // Summary across all clients
+      const summary = {
+        total_clients: report.length,
+        total_ig_handles: report.reduce((s, r) => s + r.ig_count, 0),
+        handles_with_zero: report.reduce((s, r) => s + r.igs.filter((x) => x.followers === 0).length, 0),
+        handles_pending_fetch: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "pending_fetch").length, 0),
+        handles_fetch_failed: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "fetch_failed").length, 0),
+        handles_never_queued: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "never_queued").length, 0),
+        handles_legacy_only: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "legacy_only").length, 0),
+        handles_fetched_zero: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "fetched_zero").length, 0),
+        handles_ok: report.reduce((s, r) => s + r.igs.filter((x) => x.reason === "ok").length, 0),
+      };
+
+      return ok({ summary, report });
+    }
+
+    // ---- POST /admin/agency/ig/diagnostic/resweep
+    //
+    // Re-enqueue ig_followers_fetch for every handle currently at 0 followers
+    // or with no pending task. Lets you "fix all the zero rows" in one click
+    // without leaving the cockpit.
+    if (path === "/admin/agency/ig/diagnostic/resweep" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const onlyClientId = body.client_id || null;
+
+      // Find every IG that's currently at 0 followers (and active)
+      const stmt = onlyClientId
+        ? env.DB.prepare(
+            `SELECT ia.client_id, ia.handle FROM instagram_accounts ia
+             JOIN clients c ON ia.client_id = c.id
+             WHERE ia.active = 1 AND COALESCE(ia.followers, 0) = 0
+               AND (c.status = 'active' OR c.status IS NULL)
+               AND ia.client_id = ?1`
+          ).bind(onlyClientId)
+        : env.DB.prepare(
+            `SELECT ia.client_id, ia.handle FROM instagram_accounts ia
+             JOIN clients c ON ia.client_id = c.id
+             WHERE ia.active = 1 AND COALESCE(ia.followers, 0) = 0
+               AND (c.status = 'active' OR c.status IS NULL)`
+          );
+      const { results: zeros } = await stmt.all();
+
+      const enqueued = [];
+      for (const row of zeros || []) {
+        const clean = String(row.handle).replace(/^@/, "").toLowerCase();
+        const taskId = `igfetch-resweep-${row.client_id}-${clean}-${Math.floor(Date.now()/1000)}`;
+        await env.DB.prepare(
+          `INSERT OR IGNORE INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+           VALUES (?1, 'ig_followers_fetch', ?2, ?3, 5, 3, 'diagnostic-resweep')`
+        ).bind(
+          taskId,
+          row.client_id,
+          JSON.stringify({ handle: clean, source: "diagnostic-resweep" })
+        ).run();
+        enqueued.push({ client_id: row.client_id, handle: clean, task_id: taskId });
+        notifyLaptopPush(env, "shinel-mainframe", {
+          type: "task_available", task_id: taskId, task_type: "ig_followers_fetch",
+          client_id: row.client_id, priority: 5, source: "diagnostic-resweep",
+        }).catch(() => {});
+      }
+      return ok({ enqueued_count: enqueued.length, enqueued });
+    }
+
     // ---- POST /admin/agency/unlisted-uploads/scan — enqueue Studio audit
     // For one channel or all managed channels.
     if (path === "/admin/agency/unlisted-uploads/scan" && method === "POST") {

@@ -75,6 +75,7 @@ export default function CommandPalette() {
                 { icon: Activity, label: "Ops Cockpit", path: "/dashboard/ops", category: "Cockpit", sublabel: "Live agency cockpit" },
                 { icon: Briefcase, label: "Projects", path: "/dashboard/projects", category: "Cockpit", sublabel: "Pipeline · kanban + list" },
                 { icon: Activity, label: "Cockpit: My Todos", path: "/dashboard/ops?tab=todos", category: "Cockpit", sublabel: "Private list + Discord pings" },
+                { icon: Activity, label: "✨ Generate SEO for a video", path: "/dashboard/ops?seo-request=1", category: "Cockpit", sublabel: "Point at any video → Cowork Claude proposes" },
                 { icon: Activity, label: "Cockpit: Pipeline tab", path: "/dashboard/ops?tab=pipeline", category: "Cockpit" },
                 { icon: Activity, label: "Cockpit: Finance tab", path: "/dashboard/ops?tab=finance", category: "Cockpit" },
                 { icon: Activity, label: "Cockpit: Team tab",    path: "/dashboard/ops?tab=team", category: "Cockpit" },
