@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings, runCompetitorResearch, runUnderperformerDetector, captureChannelVideoStats } from "./agency-handlers.js";
 // Re-export the Durable Object so the runtime can instantiate it. Without
 // this line, `wrangler.toml`'s `class_name = "TaskPushHub"` would fail to
 // resolve and the worker would 500 on any /admin/agency/laptop/ws hit.
@@ -1424,6 +1424,26 @@ async function performClientSync(env, isForced = false, debug = false) {
     try {
       const ytIdentifier = c.youtubeId || c.handle;
 
+      // Surface silently-misconfigured clients (no YT identifier AND no
+      // Instagram handle) so they show up in the agent_log instead of
+      // being invisibly skipped. Many real-world bugs traced back to a
+      // forgotten youtube_id field on a client row.
+      if (!ytIdentifier && !c.instagramHandle && !c.instagram_handle) {
+        if (env.DB) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+            ).bind(
+              "client.misconfigured",
+              "warn",
+              `Client "${c.name || c.id}" has no YT or IG identifier — skipped in pulse sync`,
+              c.id,
+              JSON.stringify({ has_youtube_id: !!c.youtubeId, has_handle: !!c.handle, has_instagram: !!(c.instagramHandle || c.instagram_handle) })
+            ).run();
+          } catch {}
+        }
+      }
+
       // 1. YouTube Stats
       if (ytIdentifier) {
         const result = await fetchYouTubeChannelInfo(env, ytIdentifier);
@@ -1501,6 +1521,54 @@ async function performClientSync(env, isForced = false, debug = false) {
                       nowSec,
                       ch.channel_id
                     ).run();
+
+                    // Capture per-video stats for this secondary channel too
+                    // (daily, KV-gated). Same purpose as the main-channel
+                    // block above — feeds the underperformer detector.
+                    if (chInfo.uploadsPlaylistId && c.status !== "old") {
+                      try {
+                        const dailyGate = `app:vstats:${ch.channel_id}:${new Date().toISOString().slice(0, 10)}`;
+                        if (!(await env.SHINEL_AUDIT.get(dailyGate))) {
+                          const apiKey = await getYoutubeKey(env);
+                          if (apiKey) {
+                            await captureChannelVideoStats(env, ch.channel_id, chInfo.uploadsPlaylistId, c.id, apiKey, 20);
+                            await env.SHINEL_AUDIT.put(dailyGate, "1", { expirationTtl: 90_000 });
+                          }
+                        }
+                      } catch (vErr) { console.error("video stats capture failed (secondary):", vErr.message); }
+                    }
+
+                    // ALSO fetch upload pulse for this secondary channel.
+                    // Previously only the main channel had its uploads
+                    // captured in pulse_activities, so multi-channel
+                    // creators (Kamz, Anchit, AiSH with sub-channels) had
+                    // their secondary uploads invisible on /live page.
+                    if (chInfo.uploadsPlaylistId && c.status !== "old") {
+                      try {
+                        const subPulse = await fetchYouTubePulse(env, ch.channel_id, chInfo.uploadsPlaylistId);
+                        const subVideos = subPulse.items || [];
+                        const windowLimit = now - (72 * 60 * 60 * 1000); // 72h forgives cron outages
+                        for (const v of subVideos) {
+                          const ts = new Date(v.publishedAt).getTime();
+                          if (ts < windowLimit) continue;
+                          const act = {
+                            id: `act-${v.id}-${ts}`,
+                            clientName: result.title,
+                            channelId: ch.channel_id,
+                            title: v.title,
+                            thumbnail: v.thumbnail,
+                            url: `https://youtube.com/watch?v=${v.id}`,
+                            type: "VIDEO",
+                            timestamp: ts,
+                            publishedAt: v.publishedAt,
+                          };
+                          pulseActivities.push(act);
+                          await env.DB.prepare(
+                            "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                          ).bind(act.id, ch.channel_id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
+                        }
+                      } catch (subErr) { console.error(`secondary pulse fetch failed for ${ch.channel_id}:`, subErr.message); }
+                    }
                   }
                 } catch (chErr) { console.error(`extra channel sync failed for ${ch.channel_id}:`, chErr.message); }
               }
@@ -1508,11 +1576,26 @@ async function performClientSync(env, isForced = false, debug = false) {
           }
 
           if (c.status !== "old") {
+            // Once-per-day per channel: capture per-video stats so the
+            // underperformer detector has a time-series to compute medians
+            // against. Self-throttled via a KV key so the every-30-min
+            // pulse cron only does the work once.
+            try {
+              const dailyGate = `app:vstats:${result.id}:${new Date().toISOString().slice(0, 10)}`;
+              if (!(await env.SHINEL_AUDIT.get(dailyGate))) {
+                const apiKey = await getYoutubeKey(env);
+                if (apiKey) {
+                  await captureChannelVideoStats(env, result.id, result.uploadsPlaylistId, c.id, apiKey, 20);
+                  await env.SHINEL_AUDIT.put(dailyGate, "1", { expirationTtl: 90_000 });
+                }
+              }
+            } catch (vErr) { console.error("video stats capture failed (main):", vErr.message); }
+
             const resultPulse = await fetchYouTubePulse(env, result.id, result.uploadsPlaylistId);
             const videos = resultPulse.items || [];
             if (resultPulse.error) ytError = resultPulse.error;
 
-            const windowLimit = now - (24 * 60 * 60 * 1000);
+            const windowLimit = now - (72 * 60 * 60 * 1000); // 72h forgives cron outages
 
             if (resultPulse.error || (videos.length === 0 && ytError)) {
               const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
@@ -2612,10 +2695,31 @@ const handler = {
       let feed = { activities: [], meta: {}, ts: Date.now() };
 
       // 1. Try D1 (Source of Truth for activities)
+      //
+      // The JOIN has to handle TWO cases:
+      //   (a) Legacy / single-channel clients: pulse_activities.client_id ==
+      //       clients.youtube_id (the channel ID was written there directly)
+      //   (b) Multi-channel clients (Kamz, Anchit): each channel lives in
+      //       client_channels.channel_id and links back to clients via client_id.
+      //
+      // The original JOIN only handled (a), so secondary channels for any
+      // multi-channel creator never surfaced on the pulse page. The new
+      // LEFT JOIN covers both with COALESCE picking whichever match found
+      // a real client row.
       if (env.DB) {
         try {
           const { results: activities } = await env.DB.prepare(
-            "SELECT p.*, c.name as clientName FROM pulse_activities p JOIN clients c ON p.client_id = c.youtube_id WHERE COALESCE(c.status, 'active') != 'old' ORDER BY p.timestamp DESC LIMIT 50"
+            `SELECT p.*,
+                    COALESCE(c1.name, c2.name) AS clientName,
+                    COALESCE(c1.id, c2.id) AS resolved_client_id
+             FROM pulse_activities p
+             LEFT JOIN clients c1 ON p.client_id = c1.youtube_id
+             LEFT JOIN client_channels cc ON p.client_id = cc.channel_id
+             LEFT JOIN clients c2 ON cc.client_id = c2.id
+             WHERE COALESCE(COALESCE(c1.status, c2.status), 'active') != 'old'
+               AND (c1.id IS NOT NULL OR c2.id IS NOT NULL)
+             ORDER BY p.timestamp DESC
+             LIMIT 50`
           ).all();
 
           if (activities && activities.length > 0) {
@@ -6682,6 +6786,18 @@ const handler = {
         const todos = await runPersonalTodoPings(env);
         if (todos.pinged > 0) console.log("CRON todo-pings:", JSON.stringify(todos));
       } catch (e) { console.error("todo-pings failed:", e.message); }
+      try {
+        // Self-gated to once-per-day via KV lastrun_date — harmless to call
+        // every 30 min, only does real work after UTC midnight.
+        const comp = await runCompetitorResearch(env);
+        if (!comp.skipped) console.log("CRON competitor-research:", JSON.stringify(comp));
+      } catch (e) { console.error("competitor-research failed:", e.message); }
+      try {
+        // Also self-gated to once-per-day. Depends on video_stats having
+        // fresh rows — runs AFTER performClientSync which populates them.
+        const under = await runUnderperformerDetector(env);
+        if (!under.skipped) console.log("CRON underperformer-detector:", JSON.stringify(under));
+      } catch (e) { console.error("underperformer-detector failed:", e.message); }
     })());
   }
 };

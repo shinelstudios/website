@@ -28,6 +28,7 @@ import {
   projectToRow,
   readDropdownRules,
 } from "./google-sheets.js";
+import { generateAndStoreSeoProposal } from "./seo-generator.js";
 
 // In-memory cache of dropdown rules per tab. Refreshed every 10 min so the
 // founder's edits to the sheet's data validation flow into the cockpit
@@ -426,12 +427,17 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
              AND (c.status = 'active' OR c.status IS NULL)
              AND COALESCE(c.managed_by_us, 1) = 1`
         ).first(),
-        // IG: sum across MANAGED-BY-US accounts of managed clients
+        // IG: sum across ALL active accounts of active managed clients.
+        // Previously gated by ia.managed_by_us=1 which excluded "tracked-only"
+        // accounts (e.g. Kamz's @kamzinkzoneclothing). Per founder policy
+        // (May 2026): track follower count for every client surface in our
+        // DB; the managed_by_us flag only governs whether WE do SEO/posting
+        // work on it, not whether we count its reach.
         env.DB.prepare(
           `SELECT COALESCE(SUM(ia.followers), 0) AS total
            FROM instagram_accounts ia
            JOIN clients c ON ia.client_id = c.id
-           WHERE ia.active = 1 AND ia.managed_by_us = 1
+           WHERE ia.active = 1
              AND (c.status = 'active' OR c.status IS NULL)
              AND COALESCE(c.managed_by_us, 1) = 1`
         ).first(),
@@ -517,6 +523,16 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       monthly_salary_inr: editor.monthly_salary_inr,
       payment_rate_inr: editor.payment_rate_inr,
       payment_per: editor.payment_per,
+      // Portfolio fields (added by editor-portfolio migration) so the
+      // /editor/me page can render the "View public page" link and the
+      // portfolio self-edit panel.
+      slug: editor.slug || null,
+      public_enabled: editor.public_enabled ? 1 : 0,
+      bio: editor.bio || "",
+      avatar_url: editor.avatar_url || null,
+      cover_url: editor.cover_url || null,
+      portfolio_color: editor.portfolio_color || "#E85002",
+      socials_json: editor.socials_json || "{}",
     };
 
     return ok({ editor: safeEditor, projects, finance });
@@ -676,6 +692,122 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
               ).bind(followers, body.result.avatar_url || null, task.client_id, cleanHandle).run();
             }
           }
+          // yt_video_reseo: close the loop on the SEO proposal.
+          // The dispatched payload carried seo_id; on a successful laptop
+          // apply we flip seo_history.applied=1 + applied_method='laptop',
+          // append a note, write an audit log, and fire a Discord ping
+          // (per-client webhook if available, else ops channel).
+          if (task.type === "yt_video_reseo") {
+            const taskPayload = safeJsonParse(task.payload_json) || {};
+            const seoId = taskPayload.seo_id;
+            if (seoId) {
+              await env.DB.prepare(
+                `UPDATE seo_history
+                 SET applied = 1, applied_at = CURRENT_TIMESTAMP,
+                     applied_method = 'laptop',
+                     verified_via = ?1,
+                     notes = COALESCE(notes, '') || ?2
+                 WHERE id = ?3`
+              ).bind(
+                body.result?.verified_via || "studio_dom",
+                `\n[${new Date().toISOString()}] Applied by laptop (task ${task.id}); changes: ${JSON.stringify(body.result?.changes || {}).slice(0, 400)}`,
+                seoId
+              ).run();
+              // Audit log so the Recently Applied feed has a real entry
+              try {
+                await env.DB.prepare(
+                  `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+                ).bind(
+                  "seo.applied",
+                  "info",
+                  `RESEO applied on video ${taskPayload.video_id}`,
+                  task.client_id,
+                  JSON.stringify({ seo_id: seoId, task_id: task.id, result: body.result || {} })
+                ).run();
+              } catch {}
+              // Discord notification (per-client webhook + ops fallback)
+              const client = task.client_id
+                ? await env.DB.prepare(
+                    "SELECT name, discord_webhook_url FROM clients WHERE id = ?1"
+                  ).bind(task.client_id).first()
+                : null;
+              const embed = {
+                content: `✏ **RESEO applied** — ${taskPayload.new_title?.slice(0, 80) || `video ${taskPayload.video_id}`}\n· Client: ${client?.name || task.client_id}\n· https://youtu.be/${taskPayload.video_id}`,
+              };
+              postToDiscord(env, embed, "ops").catch(() => {});
+              if (client?.discord_webhook_url) {
+                fetch(client.discord_webhook_url, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ username: `Shinel · ${client.name}`, ...embed }),
+                }).catch(() => {});
+              }
+            }
+          }
+
+          // unlisted_video_audit: laptop browsed a managed channel's Studio
+          // page and returned a list of unlisted videos. For each new one
+          // we haven't seen, INSERT a row in unlisted_uploads and enqueue
+          // a transcribe_video task.
+          if (task.type === "unlisted_video_audit" && Array.isArray(body.result.videos)) {
+            const taskPayload = safeJsonParse(task.payload_json) || {};
+            for (const v of body.result.videos) {
+              if (!v.video_id) continue;
+              // Upsert (skip if we already track this video)
+              const existing = await env.DB.prepare(
+                "SELECT video_id, transcript_status, seo_status FROM unlisted_uploads WHERE video_id = ?1"
+              ).bind(v.video_id).first();
+              if (existing) continue; // already tracked; ignore
+
+              await env.DB.prepare(
+                `INSERT INTO unlisted_uploads
+                   (video_id, channel_id, client_id, title, privacy_status, scheduled_publish_at)
+                 VALUES (?1, ?2, ?3, ?4, 'unlisted', ?5)`
+              ).bind(
+                v.video_id,
+                taskPayload.channel_id || task.client_id || null,
+                task.client_id || null,
+                v.title || null,
+                v.scheduled_publish_at || null
+              ).run();
+
+              // Enqueue transcription task
+              const tId = crypto.randomUUID();
+              await env.DB.prepare(
+                `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+                 VALUES (?1, 'transcribe_video', ?2, ?3, 4, 2, 'unlisted-audit')`
+              ).bind(
+                tId,
+                task.client_id || null,
+                JSON.stringify({ video_id: v.video_id, source: "unlisted-audit", title: v.title, is_short: !!v.is_short })
+              ).run();
+              notifyLaptopPush(env, "shinel-mainframe", {
+                type: "task_available", task_id: tId, task_type: "transcribe_video",
+                client_id: task.client_id || null, priority: 4, source: "unlisted-audit",
+              }).catch(() => {});
+            }
+          }
+
+          // transcribe_video: laptop fetched a transcript via youtubetotranscript.
+          // Save it. The SEO generation happens IN THE LAPTOP SKILL itself
+          // (using Cowork's native Claude session — no API key, no extra cost).
+          // The laptop POSTs the finished proposal back via POST /admin/agency/seo/proposal.
+          if (task.type === "transcribe_video" && body.result?.transcript) {
+            const taskPayload = safeJsonParse(task.payload_json) || {};
+            const videoId = taskPayload.video_id || body.result.video_id;
+            const transcript = String(body.result.transcript).slice(0, 50_000);
+            if (videoId) {
+              await env.DB.prepare(
+                `UPDATE unlisted_uploads
+                 SET transcript_status = 'done',
+                     transcript_text = ?1,
+                     transcript_fetched_at = CURRENT_TIMESTAMP,
+                     transcript_source = ?2
+                 WHERE video_id = ?3`
+              ).bind(transcript, body.result.source || "youtubetotranscript", videoId).run();
+            }
+          }
+
           // milestone_check: enqueue follow-up milestone_story_create tasks
           if (task.type === "milestone_check" && Array.isArray(body.result.candidates)) {
             for (const cand of body.result.candidates) {
@@ -693,6 +825,36 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
             }
           }
         } catch (e) { console.error("post-complete side-effect failed:", e.message); }
+      }
+
+      // Failure side-effects — stamp the SEO row with the error so the
+      // founder can see what went wrong in the cockpit modal.
+      if (newStatus === "failed" && task.type === "yt_video_reseo") {
+        try {
+          const taskPayload = safeJsonParse(task.payload_json) || {};
+          const seoId = taskPayload.seo_id;
+          if (seoId) {
+            await env.DB.prepare(
+              `UPDATE seo_history
+               SET notes = COALESCE(notes, '') || ?1
+               WHERE id = ?2`
+            ).bind(
+              `\n[${new Date().toISOString()}] Laptop apply FAILED (task ${task.id}): ${(body.error || "unknown").slice(0, 300)}`,
+              seoId
+            ).run();
+            try {
+              await env.DB.prepare(
+                `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+              ).bind(
+                "seo.apply_failed",
+                "error",
+                `RESEO apply failed: ${(body.error || "unknown").slice(0, 200)}`,
+                task.client_id,
+                JSON.stringify({ seo_id: seoId, task_id: task.id, error: body.error })
+              ).run();
+            } catch {}
+          }
+        } catch (e) { console.error("seo failure stamp failed:", e.message); }
       }
 
       return ok({ id, status: newStatus, auth_kind: authKind });
@@ -1050,14 +1212,34 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         if (row.applied === 1) return err("already applied", 409);
         const body = await request.json().catch(() => ({}));
         const taskId = crypto.randomUUID();
+        // The laptop SKILL handler refuses to apply unless ALL of
+        // new_title / new_description / new_tags are present in the payload.
+        // We have to pull the full values out of payload_json (which is
+        // where the original RESEO proposal stored them in detail) since
+        // the summary columns on seo_history only have title + first-line desc.
+        const fullPayload = safeJsonParse(row.payload_json) || {};
+        const fullNewDescription =
+          fullPayload.new_description ||
+          fullPayload.proposed?.description ||
+          fullPayload.new_description_full ||
+          row.new_description_first_line ||
+          "";
+        const toArr = (t) => Array.isArray(t)
+          ? t
+          : (typeof t === "string" ? t.split(",").map(s => s.trim()).filter(Boolean) : []);
+        const fullNewTags = toArr(
+          fullPayload.new_tags ?? fullPayload.proposed?.tags ?? fullPayload.tags ?? fullPayload.tags_after
+        );
         const payload = {
           seo_id: row.id,
           video_id: row.video_id,
           asset_type: row.asset_type,
           action: row.action,
           new_title: row.new_title,
+          new_description: fullNewDescription,    // <- laptop expects this key
           new_description_first_line: row.new_description_first_line,
-          source_payload: safeJsonParse(row.payload_json),
+          new_tags: fullNewTags,                   // <- laptop expects this key
+          source_payload: fullPayload,
           dispatched_from: "cockpit:seo-queue",
         };
         await env.DB.prepare(
@@ -1838,6 +2020,193 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const force = url.searchParams.get("alert") === "1";
       const result = await runHealthCheck(env, { force });
       return ok(result);
+    }
+
+    // ---- POST /admin/agency/competitor-research/run — manual trigger
+    // Bypasses the once-per-day KV gate when ?force=1 is passed.
+    if (path === "/admin/agency/competitor-research/run" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await runCompetitorResearch(env, { force: !!body.force });
+      return ok(result);
+    }
+
+    // ---- POST /admin/agency/underperformer-detector/run — manual trigger
+    if (path === "/admin/agency/underperformer-detector/run" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const result = await runUnderperformerDetector(env, { force: !!body.force });
+      return ok(result);
+    }
+
+    // ---- GET /admin/agency/seo/context/:clientId
+    // Returns the personalization bundle the LAPTOP'S Claude session reads
+    // when generating an SEO proposal in-skill. Cheaper than calling
+    // Anthropic API server-side — the laptop already has Claude via Cowork.
+    const seoCtxMatch = path.match(/^\/admin\/agency\/seo\/context\/([^\/]+)$/);
+    if (seoCtxMatch && method === "GET") {
+      const clientId = seoCtxMatch[1];
+      const { gatherClientContext } = await import("./seo-generator.js");
+      const ctx = await gatherClientContext(env, clientId);
+      return ok({ context: ctx });
+    }
+
+    // ---- POST /admin/agency/seo/proposal
+    // Laptop's Cowork-Claude generated this in-skill. Worker just stores it.
+    // Body: { video_id, client_id, asset_type?, new_title, new_description,
+    //         new_tags: [...], reasoning?, source?, isShort? }
+    if (path === "/admin/agency/seo/proposal" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.video_id || !body.client_id || !body.new_title || !Array.isArray(body.new_tags)) {
+        return err("video_id, client_id, new_title, and new_tags[] required");
+      }
+      const tagsStr = body.new_tags.join(", ");
+      const descFirstLine = String(body.new_description || "").split("\n")[0].slice(0, 280);
+      const payloadJson = JSON.stringify({
+        auto_generated: true,
+        source: body.source || "laptop:cowork-claude",
+        new_title: body.new_title,
+        new_description: body.new_description || "",
+        new_tags: body.new_tags,
+        reasoning: body.reasoning || "",
+        generated_at: new Date().toISOString(),
+      });
+      const ins = await env.DB.prepare(
+        `INSERT INTO seo_history
+           (client_id, asset_type, video_id, action, new_title, new_description_first_line,
+            new_tags_count, new_tags_chars, changes_summary, payload_json, applied, notes)
+         VALUES (?1, ?2, ?3, 'reseo', ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)`
+      ).bind(
+        body.client_id,
+        body.asset_type || (body.isShort ? "short" : "video"),
+        body.video_id,
+        String(body.new_title).slice(0, 200),
+        descFirstLine,
+        body.new_tags.length,
+        tagsStr.length,
+        body.reasoning ? String(body.reasoning).slice(0, 500) : null,
+        payloadJson,
+        `Auto-generated by laptop Cowork Claude session. Source: ${body.source || "laptop"}`
+      ).run();
+      const seoId = ins?.meta?.last_row_id;
+
+      // Update unlisted_uploads if this video was tracked
+      await env.DB.prepare(
+        `UPDATE unlisted_uploads
+         SET seo_status = 'generated', seo_history_id = ?1,
+             seo_generated_at = CURRENT_TIMESTAMP, seo_model = 'cowork-claude'
+         WHERE video_id = ?2`
+      ).bind(seoId, body.video_id).run();
+
+      // Audit log + Discord
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind(
+          "auto_seo.generated",
+          "info",
+          `Auto-SEO proposal stored for video ${body.video_id}`,
+          body.client_id,
+          JSON.stringify({ seo_id: seoId, source: body.source || "laptop" })
+        ).run();
+      } catch {}
+      const client = await env.DB.prepare("SELECT name, discord_webhook_url FROM clients WHERE id = ?1").bind(body.client_id).first();
+      const msg = {
+        content: `📝 **Auto-SEO ready** — new proposal for ${client?.name || body.client_id}\n· Title: ${body.new_title.slice(0, 80)}\n· Video: https://youtu.be/${body.video_id}\n· Review in cockpit Pending SEO queue`,
+      };
+      postToDiscord(env, msg, "ops").catch(() => {});
+      if (client?.discord_webhook_url) {
+        fetch(client.discord_webhook_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: `Shinel · ${client.name}`, ...msg }),
+        }).catch(() => {});
+      }
+
+      return ok({ id: seoId, stored: true }, 201);
+    }
+
+    // ---- GET /admin/agency/unlisted-uploads — list tracked unlisted videos + their pipeline state
+    if (path === "/admin/agency/unlisted-uploads" && method === "GET") {
+      const status = url.searchParams.get("status"); // optional filter on seo_status
+      const where = [];
+      const binds = [];
+      let i = 1;
+      if (status) { where.push(`seo_status = ?${i++}`); binds.push(status); }
+      const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+      const stmt = env.DB.prepare(
+        `SELECT u.*, c.name AS client_name
+         FROM unlisted_uploads u
+         LEFT JOIN clients c ON u.client_id = c.id
+         ${whereClause}
+         ORDER BY u.detected_at DESC LIMIT 100`
+      );
+      const { results } = await (binds.length ? stmt.bind(...binds).all() : stmt.all());
+      return ok({ count: (results || []).length, uploads: results || [] });
+    }
+
+    // ---- POST /admin/agency/seo/generate-for-video — manual SEO generation
+    // Body: { video_id, client_id, title?, transcript, is_short? }
+    //
+    // OPTIONAL server-side path: calls Anthropic API directly. Only works if
+    // ANTHROPIC_API_KEY secret is set. The PRIMARY auto-SEO path runs
+    // in-skill on the always-on laptop (Cowork's native Claude session) —
+    // see SKILL.md's transcribe_video handler. This endpoint exists as a
+    // fallback for when the laptop is offline or you want to test the LLM
+    // generator directly with a manually-pasted transcript.
+    if (path === "/admin/agency/seo/generate-for-video" && method === "POST") {
+      if (!env.ANTHROPIC_API_KEY) {
+        return err("Server-side generation requires ANTHROPIC_API_KEY secret. Default pipeline uses the laptop's Cowork Claude — see SKILL.md.", 501);
+      }
+      const body = await request.json().catch(() => ({}));
+      if (!body.video_id || !body.client_id || !body.transcript) {
+        return err("video_id, client_id, and transcript are required");
+      }
+      const result = await generateAndStoreSeoProposal(env, {
+        videoId: body.video_id,
+        clientId: body.client_id,
+        title: body.title,
+        transcript: body.transcript,
+        isShort: !!body.is_short,
+      });
+      if (!result.ok) return err(result.error, 502);
+      return ok(result);
+    }
+
+    // ---- POST /admin/agency/unlisted-uploads/scan — enqueue Studio audit
+    // For one channel or all managed channels.
+    if (path === "/admin/agency/unlisted-uploads/scan" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      let channels;
+      if (body.channel_id) {
+        channels = [{ channel_id: body.channel_id, client_id: body.client_id }];
+      } else {
+        const r = await env.DB.prepare(
+          `SELECT cc.channel_id, cc.client_id
+           FROM client_channels cc
+           JOIN clients c ON cc.client_id = c.id
+           WHERE cc.active = 1
+             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.managed_by_us, 1) = 1`
+        ).all();
+        channels = r.results || [];
+      }
+      const enqueued = [];
+      for (const ch of channels) {
+        const tId = crypto.randomUUID();
+        await env.DB.prepare(
+          `INSERT INTO laptop_tasks (id, type, client_id, payload_json, priority, max_attempts, created_by)
+           VALUES (?1, 'unlisted_video_audit', ?2, ?3, 5, 2, 'manual-scan')`
+        ).bind(
+          tId,
+          ch.client_id,
+          JSON.stringify({ channel_id: ch.channel_id, source: "manual-scan" })
+        ).run();
+        notifyLaptopPush(env, "shinel-mainframe", {
+          type: "task_available", task_id: tId, task_type: "unlisted_video_audit",
+          client_id: ch.client_id, priority: 5, source: "manual-scan",
+        }).catch(() => {});
+        enqueued.push({ channel_id: ch.channel_id, task_id: tId });
+      }
+      return ok({ enqueued_count: enqueued.length, enqueued });
     }
 
     // ========================================================================
@@ -2685,13 +3054,18 @@ export async function runHealthCheck(env, opts = {}) {
     checks.push({ name: "d1", status: "error", message: e.message });
   }
 
-  // 2. YT API keys present (any of the pool)
-  const ytKeys = ["YT_API_KEY", "YT_API_KEY_2", "YT_API_KEY_3", "YT_API_KEY_4", "YT_API_KEY_5"]
+  // 2. YT API keys present — read from the canonical YOUTUBE_API_KEYS secret
+  // (comma-separated pool). Falls back to legacy single-key names if the
+  // pooled secret isn't set, so a half-configured worker still passes.
+  const ytKeysRaw = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || "";
+  const ytPooled = ytKeysRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  const ytLegacy = ["YT_API_KEY", "YT_API_KEY_2", "YT_API_KEY_3", "YT_API_KEY_4", "YT_API_KEY_5"]
     .filter((k) => env[k]).length;
+  const ytKeys = ytPooled.length || ytLegacy;
   checks.push({
     name: "yt_api_keys",
     status: ytKeys > 0 ? "ok" : "error",
-    message: ytKeys > 0 ? `${ytKeys} configured` : "no keys configured",
+    message: ytKeys > 0 ? `${ytKeys} configured (${ytPooled.length ? "pool" : "legacy"})` : "no keys configured",
     count: ytKeys,
   });
 
@@ -2745,11 +3119,14 @@ export async function runHealthCheck(env, opts = {}) {
     checks.push({ name: "cron", status: "error", message: e.message });
   }
 
-  // 6. KV reachable
+  // 6. KV reachable — READ ONLY check. The free tier caps KV PUTs at 1000/day,
+  // and an every-30-min probe write was burning ~48 writes/day just for
+  // health, on top of the todo pings + state transitions. Reads are unlimited,
+  // so we just confirm the namespace responds to a get() on a sentinel key
+  // that doesn't have to exist.
   try {
-    await env.SHINEL_AUDIT.put("app:health:probe", String(nowSec), { expirationTtl: 60 });
-    const v = await env.SHINEL_AUDIT.get("app:health:probe");
-    checks.push({ name: "kv", status: v ? "ok" : "warn", message: v ? "rw ok" : "read returned null" });
+    await env.SHINEL_AUDIT.get("app:health:last_state");
+    checks.push({ name: "kv", status: "ok", message: "read ok (write check skipped to save quota)" });
   } catch (e) {
     checks.push({ name: "kv", status: "error", message: e.message });
   }
@@ -2781,7 +3158,11 @@ export async function runHealthCheck(env, opts = {}) {
       await postToDiscord(env, { content: `✅ **Health recovered** — all checks passing again.` }, "default");
       alerted = true;
     }
-    await env.SHINEL_AUDIT.put("app:health:last_state", overall);
+    // ONLY write KV when state actually changes — saves writes on the
+    // common steady-state path (free-tier KV PUT cap is 1000/day).
+    if (overall !== last) {
+      await env.SHINEL_AUDIT.put("app:health:last_state", overall);
+    }
   } catch (e) { console.error("health alert gate failed:", e.message); }
 
   // Audit log
@@ -2797,6 +3178,366 @@ export async function runHealthCheck(env, opts = {}) {
   } catch {}
 
   return { ok: true, overall, checks, errors_count: errors.length, warns_count: warns.length, alerted };
+}
+
+// ---------------------------------------------------------------------------
+// runUnderperformerDetector — finds videos doing <30% of channel median view
+// count and auto-INSERTs a seo_history row (action='reseo', applied=0) so
+// the cockpit's Pending SEO queue surfaces them.
+//
+// Algorithm per managed channel:
+//   1. Pull last 30 video_stats snapshots (latest per video_id) for this channel
+//   2. Filter to videos that are >= 7 days old (giving CTR time to stabilize)
+//   3. Compute channel median view count
+//   4. For each video where views < 0.30 * median AND no existing flag exists:
+//      - INSERT INTO seo_history (action='reseo', applied=0, new_title=null,
+//        new_description=null, notes='Auto-flagged: views {n} vs median {m}')
+//      - INSERT INTO underperformer_flags (links back to seo_history.id)
+//   5. Sends a single Discord ping summarizing the batch
+//
+// The flagged proposals start WITHOUT new_title/new_description — the founder
+// fills them in via the cockpit modal (or a future LLM step). The point is to
+// surface candidates automatically; humans still curate the rewrites.
+//
+// KV-gated to once per day per channel to avoid spamming.
+// ---------------------------------------------------------------------------
+export async function runUnderperformerDetector(env, opts = {}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const gateKey = "app:underperformer:lastrun_date";
+  if (!opts.force) {
+    const last = await env.SHINEL_AUDIT.get(gateKey);
+    if (last === today) return { ok: true, skipped: "already ran today" };
+  }
+
+  // Get all channels we manage
+  const { results: channels } = await env.DB.prepare(
+    `SELECT cc.channel_id, cc.client_id, c.name AS client_name, c.discord_webhook_url
+     FROM client_channels cc
+     JOIN clients c ON cc.client_id = c.id
+     WHERE cc.active = 1
+       AND (c.status = 'active' OR c.status IS NULL)
+       AND COALESCE(c.managed_by_us, 1) = 1`
+  ).all();
+  if (!channels || !channels.length) return { ok: true, processed: 0, message: "no managed channels" };
+
+  const summary = { ok: true, channels_scanned: 0, candidates_flagged: 0, errors: 0, by_channel: [] };
+  const minAgeDays = 7;
+  const ratioThreshold = 0.30; // flag if views < 30% of channel median
+
+  for (const ch of channels) {
+    try {
+      // Get latest stats snapshot for each video on this channel
+      const { results: rows } = await env.DB.prepare(
+        `SELECT video_id, title, views, age_days, published_at, MAX(captured_at) AS latest
+         FROM video_stats
+         WHERE channel_id = ?1
+         GROUP BY video_id
+         ORDER BY MAX(captured_at) DESC
+         LIMIT 30`
+      ).bind(ch.channel_id).all();
+
+      const matureVideos = (rows || []).filter((v) => (v.age_days || 0) >= minAgeDays);
+      if (matureVideos.length < 5) {
+        summary.by_channel.push({ channel_id: ch.channel_id, skipped: "insufficient mature video stats" });
+        continue;
+      }
+      const sortedViews = matureVideos.map((v) => v.views || 0).sort((a, b) => a - b);
+      const median = sortedViews[Math.floor(sortedViews.length / 2)];
+      if (median < 50) {
+        summary.by_channel.push({ channel_id: ch.channel_id, skipped: `median too low (${median})` });
+        continue;
+      }
+      const threshold = Math.round(median * ratioThreshold);
+      const candidates = matureVideos.filter((v) => (v.views || 0) < threshold);
+      let flaggedHere = 0;
+
+      for (const c of candidates) {
+        // Skip if already flagged
+        const existing = await env.DB.prepare(
+          "SELECT video_id FROM underperformer_flags WHERE video_id = ?1"
+        ).bind(c.video_id).first();
+        if (existing) continue;
+
+        // Create the SEO proposal stub
+        const seoIns = await env.DB.prepare(
+          `INSERT INTO seo_history
+             (client_id, asset_type, video_id, action, new_title, notes, payload_json, applied)
+           VALUES (?1, 'video', ?2, 'reseo', ?3, ?4, ?5, 0)`
+        ).bind(
+          ch.client_id,
+          c.video_id,
+          c.title || "(untitled)",
+          `Auto-flagged: ${c.views} views vs channel median ${median} (ratio ${((c.views || 0) / median).toFixed(2)}). Needs RESEO.`,
+          JSON.stringify({ auto_flagged: true, current_views: c.views, channel_median: median, threshold, age_days: c.age_days })
+        ).run();
+        const seoId = seoIns?.meta?.last_row_id;
+
+        // Track the flag so we don't re-flag
+        await env.DB.prepare(
+          `INSERT INTO underperformer_flags (video_id, channel_id, client_id, flagged_views, channel_median, ratio, seo_history_id)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+        ).bind(c.video_id, ch.channel_id, ch.client_id, c.views || 0, median, (c.views || 0) / median, seoId).run();
+        flaggedHere++;
+        summary.candidates_flagged++;
+      }
+      summary.channels_scanned++;
+      summary.by_channel.push({
+        channel_id: ch.channel_id,
+        client: ch.client_name,
+        median,
+        threshold,
+        candidates: candidates.length,
+        newly_flagged: flaggedHere,
+      });
+    } catch (e) {
+      summary.errors++;
+      summary.by_channel.push({ channel_id: ch.channel_id, error: String(e.message || e).slice(0, 200) });
+    }
+  }
+
+  await env.SHINEL_AUDIT.put(gateKey, today);
+
+  try {
+    await env.DB.prepare(
+      `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+    ).bind(
+      "underperformer.detector.done",
+      summary.candidates_flagged > 0 ? "info" : "info",
+      `Underperformer detector: scanned ${summary.channels_scanned} channels, flagged ${summary.candidates_flagged} new candidates`,
+      JSON.stringify(summary)
+    ).run();
+  } catch {}
+
+  if (summary.candidates_flagged > 0) {
+    await postToDiscord(env, {
+      content: `🔻 **Underperformer detector** — ${summary.candidates_flagged} new RESEO candidate${summary.candidates_flagged === 1 ? "" : "s"} flagged. Open the cockpit's Pending SEO queue to review.`,
+    }, "ops").catch(() => {});
+  }
+
+  return summary;
+}
+
+// ---------------------------------------------------------------------------
+// captureChannelVideoStats — fetches the last N videos for a channel and
+// upserts their current view/like/comment counts into video_stats. Called
+// from the cron pulse pass so we get a daily time-series per video, which
+// the underperformer detector reads.
+//
+// Cheap: 1 playlistItems call + 1 videos.list batch per channel.
+// ---------------------------------------------------------------------------
+export async function captureChannelVideoStats(env, channelId, uploadsPlaylistId, clientId, apiKey, limit = 20) {
+  try {
+    const itemsRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=${limit}&playlistId=${uploadsPlaylistId}&key=${apiKey}`
+    );
+    if (!itemsRes.ok) return { ok: false, error: `playlistItems ${itemsRes.status}` };
+    const items = (await itemsRes.json()).items || [];
+    const videoIds = items.map((i) => i.contentDetails?.videoId).filter(Boolean);
+    if (!videoIds.length) return { ok: true, captured: 0 };
+    const vidsRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet,contentDetails&id=${videoIds.join(",")}&key=${apiKey}`
+    );
+    if (!vidsRes.ok) return { ok: false, error: `videos.list ${vidsRes.status}` };
+    const vids = (await vidsRes.json()).items || [];
+    const now = new Date();
+    const captureAt = now.toISOString();
+    let captured = 0;
+    for (const v of vids) {
+      const published = v.snippet?.publishedAt || captureAt;
+      const ageDays = Math.max(0, Math.floor((now.getTime() - new Date(published).getTime()) / 86400_000));
+      // Parse ISO 8601 duration PT#M#S → seconds
+      const dur = v.contentDetails?.duration || "PT0S";
+      const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      const durationSec = (parseInt(m?.[1] || 0, 10) * 3600) + (parseInt(m?.[2] || 0, 10) * 60) + parseInt(m?.[3] || 0, 10);
+      const isShort = durationSec > 0 && durationSec <= 60 ? 1 : 0;
+      await env.DB.prepare(
+        `INSERT INTO video_stats (channel_id, video_id, client_id, title, published_at, captured_at, views, likes, comments, duration_sec, is_short, age_days)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`
+      ).bind(
+        channelId,
+        v.id,
+        clientId || null,
+        v.snippet?.title || "",
+        published,
+        captureAt,
+        parseInt(v.statistics?.viewCount || 0, 10),
+        parseInt(v.statistics?.likeCount || 0, 10),
+        parseInt(v.statistics?.commentCount || 0, 10),
+        durationSec,
+        isShort,
+        ageDays
+      ).run();
+      captured++;
+    }
+    return { ok: true, captured };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e).slice(0, 200) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// runCompetitorResearch — daily-cadence competitor snapshot pass.
+//
+// For each active competitor (across all active managed clients), fetches:
+//   - current channel stats (subs, video count, view count) via YT API
+//   - last 10 uploads with view counts via uploads playlist + videos.list
+//   - computes median view count over the recent uploads
+//   - flags videos > 2× median as overperformers (viral signals)
+// Then INSERT OR REPLACE INTO competitor_history (deduped per day via
+// the existing UNIQUE index on client_id+channel_id+captured_date).
+//
+// KV-gated: only runs once per day per cron, even if the 30-min cron fires
+// many times. The competitor.research.lastrun key stores YYYY-MM-DD (UTC).
+//
+// Returns { ok, processed, errors, captured } summary.
+// ---------------------------------------------------------------------------
+export async function runCompetitorResearch(env, opts = {}) {
+  const today = new Date().toISOString().slice(0, 10); // UTC date
+  const gateKey = "app:competitor:lastrun_date";
+  if (!opts.force) {
+    const last = await env.SHINEL_AUDIT.get(gateKey);
+    if (last === today) return { ok: true, skipped: "already ran today", date: today };
+  }
+
+  // Resolve YT API key (try both env shapes — pooled then single)
+  const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || "";
+  const keys = keysStr.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!keys.length) {
+    return { ok: false, error: "no YOUTUBE_API_KEYS configured" };
+  }
+  // Round-robin pick — first key for simplicity (competitor pass is small)
+  const apiKey = keys[0];
+
+  const { results: competitors } = await env.DB.prepare(
+    `SELECT cm.*, c.name AS client_name
+     FROM competitors cm
+     JOIN clients c ON cm.client_id = c.id
+     WHERE cm.active = 1
+       AND (c.status = 'active' OR c.status IS NULL)
+       AND COALESCE(c.managed_by_us, 1) = 1
+     ORDER BY cm.client_id, cm.id`
+  ).all();
+  if (!competitors || !competitors.length) {
+    return { ok: true, processed: 0, message: "no active competitors found" };
+  }
+
+  const summary = { ok: true, processed: 0, errors: 0, captured: 0, overperformer_alerts: 0, detail: [] };
+
+  for (const comp of competitors) {
+    try {
+      // 1. Channel stats + uploads playlist ID
+      const channelRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${comp.channel_id}&key=${apiKey}`
+      );
+      if (!channelRes.ok) {
+        summary.errors++;
+        summary.detail.push({ channel_id: comp.channel_id, error: `channels.list ${channelRes.status}` });
+        continue;
+      }
+      const channelJson = await channelRes.json();
+      const channel = channelJson.items?.[0];
+      if (!channel) {
+        summary.errors++;
+        summary.detail.push({ channel_id: comp.channel_id, error: "channel not found" });
+        continue;
+      }
+      const stats = channel.statistics || {};
+      const uploadsPlaylist = channel.contentDetails?.relatedPlaylists?.uploads;
+
+      // 2. Last 10 uploads with stats — playlistItems + videos.list batch
+      let recentUploads = [];
+      let medianViews = 0;
+      let overperformers = [];
+      if (uploadsPlaylist) {
+        const itemsRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=10&playlistId=${uploadsPlaylist}&key=${apiKey}`
+        );
+        if (itemsRes.ok) {
+          const items = (await itemsRes.json()).items || [];
+          const videoIds = items.map((i) => i.contentDetails?.videoId).filter(Boolean).slice(0, 10);
+          if (videoIds.length) {
+            const vidsRes = await fetch(
+              `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds.join(",")}&key=${apiKey}`
+            );
+            if (vidsRes.ok) {
+              const vids = (await vidsRes.json()).items || [];
+              recentUploads = vids.map((v) => ({
+                id: v.id,
+                title: v.snippet?.title,
+                published_at: v.snippet?.publishedAt,
+                views: parseInt(v.statistics?.viewCount || 0, 10),
+                likes: parseInt(v.statistics?.likeCount || 0, 10),
+                comments: parseInt(v.statistics?.commentCount || 0, 10),
+              }));
+              // Median: sort ascending, take middle
+              const views = recentUploads.map((v) => v.views).sort((a, b) => a - b);
+              medianViews = views.length ? views[Math.floor(views.length / 2)] : 0;
+              // Overperformers: > 2× median AND median > 0
+              if (medianViews > 0) {
+                overperformers = recentUploads.filter((v) => v.views >= medianViews * 2);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Upsert today's snapshot
+      await env.DB.prepare(
+        `INSERT INTO competitor_history (client_id, channel_id, captured_date, subs, video_count, view_count, recent_uploads_json, median_recent_views, overperformers_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT(client_id, channel_id, captured_date) DO UPDATE SET
+           subs = excluded.subs,
+           video_count = excluded.video_count,
+           view_count = excluded.view_count,
+           recent_uploads_json = excluded.recent_uploads_json,
+           median_recent_views = excluded.median_recent_views,
+           overperformers_json = excluded.overperformers_json`
+      ).bind(
+        comp.client_id,
+        comp.channel_id,
+        today,
+        parseInt(stats.subscriberCount || 0, 10),
+        parseInt(stats.videoCount || 0, 10),
+        parseInt(stats.viewCount || 0, 10),
+        JSON.stringify(recentUploads),
+        medianViews,
+        JSON.stringify(overperformers)
+      ).run();
+
+      summary.processed++;
+      summary.captured++;
+      if (overperformers.length > 0) {
+        summary.overperformer_alerts += overperformers.length;
+      }
+    } catch (e) {
+      summary.errors++;
+      summary.detail.push({ channel_id: comp.channel_id, error: String(e.message || e).slice(0, 200) });
+    }
+  }
+
+  // Stamp last-run date (saves redundant work on subsequent cron ticks today)
+  await env.SHINEL_AUDIT.put(gateKey, today);
+
+  // Audit log
+  try {
+    await env.DB.prepare(
+      `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+    ).bind(
+      "competitor.research.done",
+      summary.errors > 0 ? "warn" : "info",
+      `Competitor research: processed ${summary.processed} · ${summary.overperformer_alerts} overperformer videos detected · ${summary.errors} errors`,
+      JSON.stringify(summary)
+    ).run();
+  } catch {}
+
+  // Discord ping if any overperformers detected (signal worth knowing about)
+  if (summary.overperformer_alerts > 0) {
+    await postToDiscord(env, {
+      content: `📊 **Competitor research** — ${summary.processed} channels scanned, **${summary.overperformer_alerts} overperformer videos** (>2× channel median) detected today. Check the cockpit's Competitor Overperformers card for details.`,
+    }, "ops").catch(() => {});
+  }
+
+  return summary;
 }
 
 // ---------------------------------------------------------------------------

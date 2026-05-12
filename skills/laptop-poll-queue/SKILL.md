@@ -267,7 +267,104 @@ Input: `task.payload_json` parsed as `{ video_id, new_title?, new_description?, 
 5. Click "Save" button (top-right)
 6. Wait for "Saved" confirmation toast
 
-Result: `{ video_id, applied: true, fields_updated: [...] }` or PATCH failed if save didn't confirm.
+Result: `{ video_id, applied: true, fields_updated: [...], changes: { title: true, description: true, tags: N } }` or PATCH failed if save didn't confirm.
+
+The worker side-effect on success flips `seo_history.applied=1` (matched by `task.payload_json.seo_id`), writes an audit log, and posts a Discord ping. On failure, the error is appended to the SEO row's notes so the cockpit modal shows it.
+
+### `unlisted_video_audit`  (NEW — auto-SEO trigger)
+Input: `task.payload_json` parsed as `{ channel_id, source }` (or null channel_id = scan every channel of `task.client_id`).
+
+Purpose: discover newly-uploaded unlisted videos on a managed creator's channel so the worker can auto-generate personalized SEO before they go public.
+
+1. Open `https://studio.youtube.com/channel/{channel_id}/videos?filter=visibility,UNLISTED` in the persistent Chrome session.
+2. Wait for the table to render. Each row has the video thumbnail, title, video_id (in the row's data-video-id attribute or in the edit URL `/video/{id}/edit`).
+3. Scrape the first 30 rows. For each: pull `video_id`, working `title`, scheduled publish time if visible in the "Visibility" cell, and detect if it's a Short (vertical thumbnail aspect-ratio hint).
+4. Filter to uploads within the last 7 days (look at the "Date uploaded" column — older videos are archive content we don't re-process automatically).
+
+Result: `{ videos: [{ video_id, title, scheduled_publish_at?, is_short? }], channel_id }`. The worker side-effect on completion inserts each new video into `unlisted_uploads` and enqueues a `transcribe_video` task per video.
+
+DO NOT click into any individual video — list-view scrape only. We don't want to accidentally edit anything in this pass.
+
+### `transcribe_video`  (NEW — auto-SEO step 2)
+Input: `task.payload_json` parsed as `{ video_id, source, title?, is_short? }`.
+
+Purpose: fetch transcript for an unlisted video AND generate the personalized SEO proposal in the SAME SKILL run — using your own Claude session (no external API call, no API key, no per-video cost).
+
+#### Step A — Fetch the transcript
+
+1. Open `https://youtubetotranscript.com/transcript?v={video_id}`
+2. Wait for the transcript text to render in the result panel.
+3. Copy the full transcript text (whole transcript, not just first few lines).
+4. If the page shows "no captions available" or "private video / sign in required", PATCH `transcribe_video` `failed` with `"no_transcript_available"` and skip Step B + C.
+
+Then PATCH this task `done` with `{ video_id, transcript: "<full text>", source: "youtubetotranscript", title? }`. The worker stores the transcript in `unlisted_uploads`.
+
+#### Step B — Fetch personalization context
+
+```
+GET {WORKER}/admin/agency/seo/context/{task.client_id}
+```
+
+Returns `{ context: { client, top_performers, applied_seo_patterns, competitor_overperformers } }`. Save the response in your working memory for Step C.
+
+#### Step C — Generate the SEO proposal (YOU do this, right here in the SKILL run)
+
+Using everything you have in working memory:
+- The transcript (truncate to first 2000 chars + last 500 if it's long)
+- The client's `niche_tag` and `secondary_niche_tag`
+- Their `top_performers` — past videos that already worked, sorted by view count
+- Their `applied_seo_patterns` — recent RESEO titles we shipped (their voice + style)
+- The recent `competitor_overperformers` — viral videos from their competitors
+
+Generate JSON with this shape:
+
+```json
+{
+  "new_title": "<60-70 chars, catches CTR + searchability, matches THIS creator's voice>",
+  "new_description": "<800-1500 chars: hook line, 2-3 paragraphs of context that the transcript supports, CTAs to subscribe / follow / stream links, hashtags at the bottom>",
+  "new_tags": ["<32 lowercase tags, mix of niche + transcript keywords + competitor-adjacent hooks, joined under 500 chars>"],
+  "reasoning": "<2-3 sentences explaining what choices you made and why — for the cockpit audit trail>"
+}
+```
+
+Constraints:
+- Only claim what the transcript supports — don't hallucinate facts about the video
+- Match the creator's existing title style (look at their top_performers)
+- Don't reproduce >15 words verbatim from the transcript (creator owns the content; SEO is metadata)
+- Tags must be deduped (use a Set)
+
+#### Step D — POST the proposal back to the worker
+
+```
+POST {WORKER}/admin/agency/seo/proposal
+Headers: X-Laptop-Token: {SHINEL_LAPTOP_TOKEN}
+Body: {
+  "video_id": "{from task payload}",
+  "client_id": "{from task payload or task.client_id}",
+  "isShort": {task.payload_json.is_short},
+  "new_title": "...",
+  "new_description": "...",
+  "new_tags": [...],
+  "reasoning": "...",
+  "source": "laptop:cowork-claude"
+}
+```
+
+The worker stores the row in `seo_history` (applied=0), updates `unlisted_uploads.seo_status='generated'`, fires a Discord ping. The proposal then appears in the cockpit's Pending SEO queue for the founder to review and dispatch.
+
+That's the whole auto-personal-SEO pipeline:
+
+```
+unlisted detected → transcribe (you) → fetch context (worker)
+                                    ↓
+                  generate SEO (YOU — Cowork Claude, in this same run)
+                                    ↓
+                  POST proposal (worker stores + Discord pings)
+                                    ↓
+                  Founder reviews + dispatches in cockpit
+```
+
+⚠ youtubetotranscript.com only works for videos with captions enabled. If the unlisted video has captions off, Step A fails — `unlisted_uploads.transcript_status='failed'`. A human can paste a transcript later via the manual endpoint and the SEO proposal will be regenerated.
 
 ### `milestone_story_create`
 Input: `task.client_id` + `task.payload_json` parsed as `{ target, current_subs }`.

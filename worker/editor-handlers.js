@@ -72,6 +72,54 @@ export async function handleEditorRoute(request, env, secret, url, requireAuthOr
   const path = url.pathname;
   const method = request.method;
 
+  // --- Public read-only routes for editor portfolios ---
+  // These run BEFORE the auth gate so anyone (visitors) can see published
+  // editor pages. Format: /editor/public/:slug
+  //                       /editor/public/:slug/portfolio
+  // Editor must have public_enabled=1 to appear.
+  const { ok: pubOk, err: pubErr } = respond(request, env);
+  const publicSlugMatch = path.match(/^\/editor\/public\/([a-z0-9_-]+)(?:\/portfolio)?$/i);
+  if (publicSlugMatch && method === "GET") {
+    const slug = publicSlugMatch[1].toLowerCase();
+    const isPortfolio = path.endsWith("/portfolio");
+    try {
+      const editor = await env.DB.prepare(
+        `SELECT id, name, slug, bio, avatar_url, cover_url, portfolio_color, socials_json, role
+         FROM editors
+         WHERE LOWER(slug) = ?1 AND public_enabled = 1 AND active = 1`
+      ).bind(slug).first();
+      if (!editor) return pubErr("editor profile not found or not public", 404);
+
+      if (isPortfolio) {
+        const { results } = await env.DB.prepare(
+          `SELECT id, asset_type, source, title, description, client_attribution,
+                  thumbnail_url, video_url, embed_youtube_id, tags, sort_order, featured, created_at
+           FROM editor_portfolio_items
+           WHERE editor_id = ?1 AND public_enabled = 1
+           ORDER BY featured DESC, sort_order ASC, created_at DESC
+           LIMIT 200`
+        ).bind(editor.id).all();
+        return pubOk({ items: results || [] });
+      }
+      // Profile only — no items here so the page can fetch portfolio lazily
+      return pubOk({
+        editor: {
+          name: editor.name,
+          slug: editor.slug,
+          bio: editor.bio || "",
+          avatar_url: editor.avatar_url,
+          cover_url: editor.cover_url,
+          portfolio_color: editor.portfolio_color || "#E85002",
+          role: editor.role,
+          socials: (() => { try { return JSON.parse(editor.socials_json || "{}"); } catch { return {}; } })(),
+        },
+      });
+    } catch (e) {
+      console.error("[editor public] error:", e);
+      return pubErr("internal error", 500);
+    }
+  }
+
   if (!path.startsWith("/editor/me/")) return null;
 
   const { ok, err } = respond(request, env);
@@ -190,6 +238,127 @@ export async function handleEditorRoute(request, env, secret, url, requireAuthOr
         JSON.stringify({ task_id: taskId, editor_id: editor.id, old: existing.status, new: newStatus })
       ).run();
       return ok({ id: taskId, status: newStatus, updated: true });
+    }
+
+    // ====================================================================
+    // EDITOR PROFILE + PORTFOLIO self-service
+    // ====================================================================
+
+    // PATCH /editor/me/profile  — editor edits their own public profile.
+    // Allowed: bio, avatar_url, cover_url, portfolio_color, socials, slug, public_enabled.
+    // Slug must be unique + URL-safe (a-z 0-9 - _).
+    if (path === "/editor/me/profile" && method === "PATCH") {
+      const body = await request.json().catch(() => ({}));
+      const sets = [];
+      const binds = [];
+      let i = 1;
+      const allowedDirect = ["bio", "avatar_url", "cover_url", "portfolio_color"];
+      for (const k of allowedDirect) if (body[k] !== undefined) {
+        sets.push(`${k} = ?${i++}`); binds.push(body[k]);
+      }
+      if (body.socials !== undefined) {
+        sets.push(`socials_json = ?${i++}`);
+        binds.push(JSON.stringify(body.socials || {}));
+      }
+      if (body.public_enabled !== undefined) {
+        sets.push(`public_enabled = ?${i++}`); binds.push(body.public_enabled ? 1 : 0);
+      }
+      if (body.slug !== undefined) {
+        const slug = String(body.slug).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        if (slug.length < 3) return err("slug must be at least 3 chars (a-z, 0-9, -, _)");
+        // Reject if slug already taken by another editor
+        const conflict = await env.DB.prepare(
+          "SELECT id FROM editors WHERE LOWER(slug) = ?1 AND id != ?2"
+        ).bind(slug, editor.id).first();
+        if (conflict) return err(`slug "${slug}" is already taken`, 409);
+        sets.push(`slug = ?${i++}`); binds.push(slug);
+      }
+      if (!sets.length) return err("no valid fields to update");
+      binds.push(editor.id);
+      await env.DB.prepare(`UPDATE editors SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      return ok({ updated: true });
+    }
+
+    // GET /editor/me/portfolio  — list MY portfolio items
+    if (path === "/editor/me/portfolio" && method === "GET") {
+      const { results } = await env.DB.prepare(
+        `SELECT id, asset_type, source, title, description, client_attribution,
+                thumbnail_url, video_url, embed_youtube_id, tags, sort_order, featured, public_enabled, created_at
+         FROM editor_portfolio_items
+         WHERE editor_id = ?1
+         ORDER BY featured DESC, sort_order ASC, created_at DESC`
+      ).bind(editor.id).all();
+      return ok({ count: (results || []).length, items: results || [] });
+    }
+
+    // POST /editor/me/portfolio  — create a new portfolio item
+    if (path === "/editor/me/portfolio" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.title) return err("title required");
+      const assetType = ["thumbnail", "video", "short", "reel"].includes(body.asset_type) ? body.asset_type : "video";
+      const source = body.source === "shinel" ? "shinel" : "personal";
+      // Extract YT video ID from a full URL if provided
+      let embedYtId = body.embed_youtube_id || null;
+      if (!embedYtId && body.video_url) {
+        const m = String(body.video_url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{6,15})/);
+        if (m) embedYtId = m[1];
+      }
+      const r = await env.DB.prepare(
+        `INSERT INTO editor_portfolio_items
+           (editor_id, asset_type, source, title, description, client_attribution,
+            thumbnail_url, video_url, embed_youtube_id, tags, sort_order, featured, public_enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`
+      ).bind(
+        editor.id, assetType, source,
+        String(body.title).slice(0, 200),
+        String(body.description || "").slice(0, 2000),
+        body.client_attribution ? String(body.client_attribution).slice(0, 200) : null,
+        body.thumbnail_url || null,
+        body.video_url || null,
+        embedYtId,
+        body.tags ? String(body.tags).slice(0, 500) : "",
+        parseInt(body.sort_order || 0, 10),
+        body.featured ? 1 : 0,
+        body.public_enabled === false ? 0 : 1
+      ).run();
+      return ok({ id: r?.meta?.last_row_id, created: true }, 201);
+    }
+
+    // PATCH/DELETE /editor/me/portfolio/:id
+    const portfolioMatch = path.match(/^\/editor\/me\/portfolio\/(\d+)$/);
+    if (portfolioMatch) {
+      const itemId = parseInt(portfolioMatch[1], 10);
+      // Ownership check
+      const owned = await env.DB.prepare(
+        "SELECT id FROM editor_portfolio_items WHERE id = ?1 AND editor_id = ?2"
+      ).bind(itemId, editor.id).first();
+      if (!owned) return err("portfolio item not found", 404);
+
+      if (method === "PATCH") {
+        const body = await request.json().catch(() => ({}));
+        const allowed = ["title", "description", "client_attribution", "thumbnail_url",
+          "video_url", "embed_youtube_id", "asset_type", "source", "tags",
+          "sort_order", "featured", "public_enabled"];
+        const sets = [];
+        const binds = [];
+        let i = 1;
+        for (const k of allowed) if (body[k] !== undefined) {
+          let v = body[k];
+          if (k === "featured" || k === "public_enabled") v = v ? 1 : 0;
+          if (k === "sort_order") v = parseInt(v || 0, 10);
+          sets.push(`${k} = ?${i++}`); binds.push(v);
+        }
+        if (!sets.length) return err("no valid fields");
+        sets.push(`updated_at = datetime('now')`);
+        binds.push(itemId);
+        await env.DB.prepare(`UPDATE editor_portfolio_items SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+        return ok({ id: itemId, updated: true });
+      }
+
+      if (method === "DELETE") {
+        await env.DB.prepare("DELETE FROM editor_portfolio_items WHERE id = ?1").bind(itemId).run();
+        return ok({ id: itemId, deleted: true });
+      }
     }
 
   } catch (e) {

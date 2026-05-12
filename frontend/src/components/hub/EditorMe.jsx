@@ -10,9 +10,10 @@
  */
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { RefreshCw, IndianRupee, ExternalLink, Briefcase, AlertCircle } from "lucide-react";
+import { RefreshCw, IndianRupee, ExternalLink, Briefcase, AlertCircle, FolderOpen } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken } from "../../utils/tokenStore";
+import EditorPortfolioPanel from "./EditorPortfolioPanel";
 
 const STATUS_STYLE = {
   "planned":          "bg-neutral-500/10 text-neutral-600",
@@ -48,10 +49,41 @@ function authedFetch(path, opts = {}) {
   });
 }
 
+function EditorTabs({ active, onChange }) {
+  const tabs = [
+    { key: "queue", label: "My Queue" },
+    { key: "portfolio", label: "My Portfolio" },
+  ];
+  return (
+    <div className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`px-3 md:px-4 py-2 text-sm font-bold border-b-2 -mb-px transition-colors ${
+            active === t.key
+              ? "border-[var(--orange)] text-[var(--orange)]"
+              : "border-transparent text-neutral-500 hover:text-neutral-700"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function EditorMe() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [tab, setTab] = useState(() => {
+    try { return localStorage.getItem("shinel_editor_me_tab") || "queue"; }
+    catch { return "queue"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("shinel_editor_me_tab", tab); } catch {}
+  }, [tab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,7 +144,7 @@ export default function EditorMe() {
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <header className="mb-4 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <div className="text-kicker text-[var(--orange)]">My queue</div>
+          <div className="text-kicker text-[var(--orange)]">My workspace</div>
           <h1 className="text-display-md font-bold mt-1">Hi, {data.editor.name}</h1>
           <div className="text-xs text-neutral-500 mt-1">
             {data.editor.role || "editor"}
@@ -121,14 +153,31 @@ export default function EditorMe() {
               : <> · Freelance · default {fmtINR(data.editor.payment_rate_inr)} per {data.editor.payment_per || "video"}</>}
           </div>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="text-xs px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-700 disabled:opacity-50 inline-flex items-center gap-1"
-        >
-          <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {data.editor.public_enabled && data.editor.slug && (
+            <a
+              href={`/editor/${data.editor.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-2.5 py-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 inline-flex items-center gap-1 font-bold"
+            >
+              <ExternalLink size={12} /> View public page
+            </a>
+          )}
+          <button
+            onClick={load}
+            disabled={loading}
+            className="text-xs px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-700 disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+        </div>
       </header>
+
+      {/* Tabs */}
+      <EditorTabs active={tab} onChange={setTab} />
+      {tab === "portfolio" && <EditorPortfolioPanel editor={data.editor} />}
+      {tab === "queue" && <>
 
       {/* Finance summary */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -175,6 +224,7 @@ export default function EditorMe() {
       <div className="text-[11px] text-neutral-400 text-center mt-6">
         Read-only view · Reach out to the team for any updates needed.
       </div>
+      </>}
     </div>
   );
 }

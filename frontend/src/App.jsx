@@ -129,6 +129,7 @@ const OpsCockpit = React.lazy(() => import("./components/hub/OpsCockpit.jsx"));
 const ClientDeepDive = React.lazy(() => import("./components/hub/ClientDeepDive.jsx"));
 const ProjectsPage = React.lazy(() => import("./components/hub/ProjectsPage.jsx"));
 const EditorMe = React.lazy(() => import("./components/hub/EditorMe.jsx"));
+const EditorPublicPage = React.lazy(() => import("./components/EditorPublicPage.jsx"));
 const MobileBottomNav = React.lazy(() => import("./components/hub/MobileBottomNav.jsx"));
 const ServicePage = React.lazy(() => import("./components/pages/ServicePage.jsx"));
 const AboutPage = React.lazy(() => import("./components/pages/AboutPage.jsx"));
@@ -639,6 +640,10 @@ export default function App() {
               <EditorMe />
             </ProtectedRoute>
           } />
+
+          {/* Public editor portfolio page — no auth required.
+              The worker filters by public_enabled=1 so unpublished editors 404. */}
+          <Route path="/editor/:slug" element={<EditorPublicPage />} />
 
           {/* ----------------------------- Dashboard ------------------------------ */}
           <Route path="/hub" element={
