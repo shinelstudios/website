@@ -683,13 +683,43 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
             ).bind(followers, task.client_id).run();
             // Update the matching instagram_accounts row (per-handle) — also
             // captures avatar URL if the scraper returned one.
+            //
+            // Robust handle matching: the DB might store handles as "@xyz" or
+            // "xyz", and the scraper might return either form too. We strip
+            // any leading @ on BOTH sides of the comparison and lowercase
+            // before matching. Previous code only stripped from the input
+            // side, so DB rows stored with @ never matched and stayed at 0.
             if (body.result.handle) {
-              const cleanHandle = String(body.result.handle).replace(/^@/, "");
-              await env.DB.prepare(
+              const cleanHandle = String(body.result.handle).replace(/^@/, "").trim().toLowerCase();
+              const updateRes = await env.DB.prepare(
                 `UPDATE instagram_accounts
-                 SET followers = ?1, avatar_url = COALESCE(?2, avatar_url)
-                 WHERE client_id = ?3 AND LOWER(handle) = LOWER(?4)`
+                 SET followers = ?1, avatar_url = COALESCE(?2, avatar_url),
+                     last_synced_at = strftime('%s', 'now')
+                 WHERE client_id = ?3
+                   AND LOWER(REPLACE(handle, '@', '')) = ?4`
               ).bind(followers, body.result.avatar_url || null, task.client_id, cleanHandle).run();
+
+              // If no row was updated, the handle exists in clients.instagram_handle
+              // but not in instagram_accounts. INSERT it so the per-handle SUM
+              // in opsSnapshot/public-stats includes this client going forward.
+              if (!updateRes?.meta?.changes) {
+                try {
+                  await env.DB.prepare(
+                    `INSERT INTO instagram_accounts
+                       (client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
+                     VALUES (?1, ?2, ?3, 'main', ?4, ?5, 1, 1)`
+                  ).bind(
+                    task.client_id,
+                    cleanHandle,
+                    `https://instagram.com/${cleanHandle}`,
+                    followers,
+                    body.result.avatar_url || null
+                  ).run();
+                  console.log(`[ig-fetch] inserted new instagram_accounts row for ${task.client_id} / @${cleanHandle}`);
+                } catch (insErr) {
+                  console.error("[ig-fetch] auto-insert failed:", insErr.message);
+                }
+              }
             }
           }
           // yt_video_reseo: close the loop on the SEO proposal.
