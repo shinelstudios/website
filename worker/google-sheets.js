@@ -164,6 +164,22 @@ export async function appendRow(env, spreadsheetId, tabName, values) {
 }
 
 /**
+ * Read a contiguous range of cells from a tab. Returns a 2D array of strings.
+ * Used by the importer to pull existing rows from the Monthly Tracker.
+ */
+export async function readRange(env, spreadsheetId, range) {
+  const token = await getAccessToken(env);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Sheets readRange failed (${res.status}): ${txt}`);
+  }
+  const j = await res.json();
+  return j.values || [];
+}
+
+/**
  * Update a specific row in a tab. ONLY call this for rows we previously
  * appended (tracked via projects.sheet_row_index). Never call this on a row
  * we didn't write — would clobber the founder's manual data.

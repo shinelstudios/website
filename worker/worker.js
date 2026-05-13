@@ -1716,6 +1716,82 @@ async function performClientSync(env, isForced = false, debug = false) {
         }
       }
 
+      // ★ Unconditional fan-out into client_channels — covers the case
+      // where the client has NO clients.youtube_id / handle (so the
+      // `if (ytIdentifier)` branch above was skipped entirely) but DOES
+      // have rows in client_channels. Without this, those channels never
+      // get their stats fetched and their uploads never reach pulse_activities,
+      // which is why Aish / Shinel Studios / Kundan never appeared on /live.
+      if (env.DB) {
+        try {
+          const { results: allChans } = await env.DB.prepare(
+            `SELECT channel_id FROM client_channels
+             WHERE client_id = ?1 AND active = 1`
+          ).bind(c.id).all();
+          for (const ch of (allChans || [])) {
+            // Skip if this channel was already handled by the primary path
+            // above (avoids double-fetch). If ytIdentifier was falsy, primary
+            // path didn't run so we'll fetch every channel here.
+            if (ytIdentifier && (ch.channel_id === c.youtubeId || ch.channel_id === c.handle)) continue;
+            try {
+              const chInfo = await fetchYouTubeChannelInfo(env, ch.channel_id);
+              if (!chInfo || chInfo.error || typeof chInfo.subscribers !== "number") continue;
+              const nowSec = Math.floor(Date.now() / 1000);
+              await env.DB.prepare(
+                `UPDATE client_channels
+                 SET subscribers = ?1, view_count = ?2, video_count = ?3,
+                     avatar_url = COALESCE(?4, avatar_url), last_synced_at = ?5
+                 WHERE channel_id = ?6`
+              ).bind(
+                Math.floor(chInfo.subscribers),
+                Math.floor(chInfo.viewCount || 0),
+                Math.floor(chInfo.videoCount || 0),
+                chInfo.logo || null,
+                nowSec,
+                ch.channel_id
+              ).run();
+              // Fetch this channel's recent uploads → INSERT into pulse_activities
+              if (chInfo.uploadsPlaylistId && c.status !== "old") {
+                try {
+                  const dailyGate = `app:vstats:${ch.channel_id}:${new Date().toISOString().slice(0, 10)}`;
+                  if (!(await env.SHINEL_AUDIT.get(dailyGate))) {
+                    const apiKey = await getYoutubeKey(env);
+                    if (apiKey) {
+                      await captureChannelVideoStats(env, ch.channel_id, chInfo.uploadsPlaylistId, c.id, apiKey, 20);
+                      await env.SHINEL_AUDIT.put(dailyGate, "1", { expirationTtl: 90_000 });
+                    }
+                  }
+                } catch (vErr) { console.error("video stats capture failed (fan-out):", vErr.message); }
+                try {
+                  const subPulse = await fetchYouTubePulse(env, ch.channel_id, chInfo.uploadsPlaylistId);
+                  const subVideos = subPulse.items || [];
+                  const windowLimit = now - (72 * 60 * 60 * 1000);
+                  for (const v of subVideos) {
+                    const ts = new Date(v.publishedAt).getTime();
+                    if (ts < windowLimit) continue;
+                    const act = {
+                      id: `act-${v.id}-${ts}`,
+                      clientName: c.name,
+                      channelId: ch.channel_id,
+                      title: v.title,
+                      thumbnail: v.thumbnail,
+                      url: `https://youtube.com/watch?v=${v.id}`,
+                      type: "VIDEO",
+                      timestamp: ts,
+                      publishedAt: v.publishedAt,
+                    };
+                    pulseActivities.push(act);
+                    await env.DB.prepare(
+                      "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(act.id, ch.channel_id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
+                  }
+                } catch (subErr) { console.error(`fan-out pulse fetch failed for ${ch.channel_id}:`, subErr.message); }
+              }
+            } catch (chErr) { console.error(`fan-out channel sync failed for ${ch.channel_id}:`, chErr.message); }
+          }
+        } catch (e) { console.error("client_channels fan-out failed:", e.message); }
+      }
+
       // 2. Instagram Stats
       if (c.instagramHandle || c.instagram_handle) {
         const igHandle = c.instagramHandle || c.instagram_handle;

@@ -96,6 +96,24 @@ export default function SheetSyncPanel() {
     finally { setBusy(null); }
   };
 
+  // Import existing sheet rows as projects (Sheet → D1)
+  const [importResult, setImportResult] = useState(null);
+  const runImport = async (dryRun) => {
+    if (!dryRun && !window.confirm(`Import EVERY new row from the current sheet tab as a project? Rows that don't match a known client name will be skipped. Cannot be undone — but it only inserts, never modifies existing rows.`)) return;
+    setBusy(dryRun ? "import-preview" : "import"); setImportResult(null); setError(null);
+    try {
+      const r = await authedFetch("/admin/agency/sheets/import-projects", {
+        method: "POST",
+        body: JSON.stringify({ dry_run: dryRun }),
+      });
+      const j = await r.json();
+      if (!r.ok) { setError(j.error || "Import failed"); return; }
+      setImportResult({ ...j, dry_run: dryRun });
+      if (!dryRun) await loadStatus();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(null); }
+  };
+
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-[var(--surface-elev)]">
       <header className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-100 dark:border-neutral-900 flex-wrap gap-2">
@@ -127,6 +145,23 @@ export default function SheetSyncPanel() {
             title="Read the sheet's dropdown lists. Cockpit will auto-snap values to these on next sync."
           >
             {busy === "dropdowns" ? "Reading…" : "View dropdowns"}
+          </button>
+          <button
+            onClick={() => runImport(true)}
+            disabled={busy != null || !status?.configured}
+            className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 text-blue-600 hover:bg-blue-500 hover:text-white disabled:opacity-50 inline-flex items-center gap-1 font-bold"
+            title="Preview which sheet rows would be imported as new projects (no writes)"
+          >
+            {busy === "import-preview" ? "…" : "👁 Preview import"}
+          </button>
+          <button
+            onClick={() => runImport(false)}
+            disabled={busy != null || !status?.configured}
+            className="text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white font-bold hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
+            title="Import every NEW row from the sheet as a project in the cockpit"
+          >
+            {busy === "import" ? <Loader size={12} className="animate-spin" /> : "⬇"}
+            Import from sheet
           </button>
           <button
             onClick={syncAll}
@@ -243,6 +278,56 @@ npx wrangler deploy`}</pre>
               </ul>
             </details>
           </div>
+        </div>
+      )}
+
+      {/* Import-from-sheet result */}
+      {importResult && (
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-xs mb-3">
+          <div className="font-semibold text-blue-700 dark:text-blue-400 mb-1 flex items-center gap-2">
+            {importResult.dry_run ? "👁 Preview" : "✅ Imported"} from "{importResult.tab}"
+          </div>
+          <div className="text-neutral-700 dark:text-neutral-300 grid grid-cols-2 gap-x-4 gap-y-0.5">
+            <div>Total rows in tab: <strong>{importResult.total_rows}</strong></div>
+            <div>{importResult.dry_run ? "Would import" : "New projects imported"}: <strong className="text-emerald-600">{importResult.imported}</strong></div>
+            <div>Already synced (skipped): <strong>{importResult.skipped_already_synced}</strong></div>
+            <div>No matching client (skipped): <strong className="text-yellow-600">{importResult.skipped_no_client}</strong></div>
+            {importResult.skipped_no_title > 0 && <div>Empty title rows skipped: <strong>{importResult.skipped_no_title}</strong></div>}
+            {importResult.errors?.length > 0 && <div>Errors: <strong className="text-red-600">{importResult.errors.length}</strong></div>}
+          </div>
+          {importResult.skipped_no_match?.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-yellow-700">Unmatched client names ({importResult.skipped_no_match.length})</summary>
+              <div className="mt-1 space-y-0.5 max-h-40 overflow-y-auto text-[10px]">
+                {importResult.skipped_no_match.map((m, i) => (
+                  <div key={i} className="font-mono">
+                    Row {m.row}: <span className="text-yellow-700">"{m.client_name}"</span> · {m.title}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-neutral-500 mt-1">Fix: rename the client in the sheet to match `clients.name`, or add the client to the cockpit first.</p>
+            </details>
+          )}
+          {importResult.imported_rows?.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-emerald-700">{importResult.dry_run ? "Would be imported" : "Imported rows"} ({importResult.imported_rows.length})</summary>
+              <div className="mt-1 space-y-0.5 max-h-60 overflow-y-auto text-[10px]">
+                {importResult.imported_rows.map((r, i) => (
+                  <div key={i}>Row {r.row}: {r.client} · {r.title}{r.status ? ` · ${r.status}` : ""}{r.editor ? ` · ${r.editor}` : ""}</div>
+                ))}
+              </div>
+            </details>
+          )}
+          {importResult.errors?.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-red-600">Errors ({importResult.errors.length})</summary>
+              <div className="mt-1 space-y-0.5 max-h-40 overflow-y-auto text-[10px]">
+                {importResult.errors.map((e, i) => (
+                  <div key={i}>Row {e.row}: {e.title} — <span className="text-red-600">{e.error}</span></div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       )}
 

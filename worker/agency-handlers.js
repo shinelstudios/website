@@ -27,6 +27,7 @@ import {
   currentMonthTabName,
   projectToRow,
   readDropdownRules,
+  readRange as sheetReadRange,
 } from "./google-sheets.js";
 import { generateAndStoreSeoProposal } from "./seo-generator.js";
 
@@ -675,7 +676,14 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       // Side-effects on successful task completion
       if (newStatus === "done" && body.result) {
         try {
-          if (task.type === "ig_followers_fetch" && task.client_id && body.result.followers != null) {
+          // Reject 0 results outright. The scraper sometimes can't parse the
+          // followers count (login wall, layout change, private account) and
+          // returns 0 in body.result.followers. The OLD code accepted that
+          // and overwrote a perfectly good 1.8M with 0. Now we require a
+          // strictly positive integer to do any write. If the scraper truly
+          // wanted to report "no followers", we'd accept a PATCH `failed`
+          // status with a clear reason instead.
+          if (task.type === "ig_followers_fetch" && task.client_id && Number(body.result.followers) > 0) {
             const followers = parseInt(body.result.followers, 10);
             // Update the legacy clients.instagram_followers (primary handle)
             await env.DB.prepare(
@@ -722,6 +730,24 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
               }
             }
           }
+          // Log a warning when the laptop reports a 0-follower result, so the
+          // founder can see in the Completion Log which handles consistently
+          // return 0 (probably login wall / private account / parse miss).
+          if (task.type === "ig_followers_fetch" && task.client_id
+              && (body.result.followers === 0 || body.result.followers === "0")) {
+            try {
+              await env.DB.prepare(
+                `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+              ).bind(
+                "ig.fetched_zero",
+                "warn",
+                `Scraper returned 0 followers for ${body.result.handle || "(unknown handle)"} — likely login wall or parse miss. Existing value preserved.`,
+                task.client_id,
+                JSON.stringify({ handle: body.result.handle, raw: body.result.raw || null, task_id: task.id })
+              ).run();
+            } catch {}
+          }
+
           // yt_video_reseo: close the loop on the SEO proposal.
           // The dispatched payload carried seo_id; on a successful laptop
           // apply we flip seo_history.applied=1 + applied_method='laptop',
@@ -2696,6 +2722,166 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         else { summary.failed++; summary.errors.push({ id: r.id, error: res.error || res.skipped }); }
       }
       return ok(summary);
+    }
+
+    // POST /admin/agency/sheets/import-projects
+    //
+    // Read every row in the current-month tab of Monthly Tracker and create
+    // a project in D1 for every row that doesn't already exist. Matches
+    // client_name → clients.id and editor_name → editors.id. Stores
+    // sheet_row_index on the new project so future cockpit edits update
+    // the same row.
+    //
+    // Body: { tab?: "May 2026", dry_run?: true }
+    //
+    // dry_run returns what WOULD be imported without writing anything.
+    if (path === "/admin/agency/sheets/import-projects" && method === "POST") {
+      if (!env.MONTHLY_TRACKER_SHEET_ID || !env.GOOGLE_SA_JSON) {
+        return err("Google Sheets not configured", 503);
+      }
+      const body = await request.json().catch(() => ({}));
+      const tab = body.tab || env.SHEET_TAB_OVERRIDE || currentMonthTabName();
+      const dryRun = !!body.dry_run;
+
+      // 1. Read sheet rows starting from row 2 (row 1 is headers)
+      let rows;
+      try {
+        rows = await sheetReadRange(env, env.MONTHLY_TRACKER_SHEET_ID, `${tab}!A2:O500`);
+      } catch (e) {
+        return err(`Read sheet failed: ${e.message}`, 502);
+      }
+
+      // 2. Load clients + editors for name lookup
+      const [clientRows, editorRows, alreadySynced] = await Promise.all([
+        env.DB.prepare("SELECT id, name FROM clients").all(),
+        env.DB.prepare("SELECT id, name FROM editors").all(),
+        env.DB.prepare(
+          "SELECT sheet_row_index FROM projects WHERE sheet_tab_name = ?1 AND sheet_row_index IS NOT NULL"
+        ).bind(tab).all(),
+      ]);
+      const clientByName = new Map(
+        (clientRows.results || []).map((c) => [String(c.name).trim().toLowerCase(), c.id])
+      );
+      const editorByName = new Map(
+        (editorRows.results || []).map((e) => [String(e.name).trim().toLowerCase(), e.id])
+      );
+      const syncedRowIndices = new Set(
+        (alreadySynced.results || []).map((r) => r.sheet_row_index)
+      );
+
+      // 3. Status normalization (sheet → cockpit)
+      const STATUS_NORMALIZE = {
+        "planned": "planned",
+        "started": "started",
+        "in progress": "in-progress",
+        "in-progress": "in-progress",
+        "in_progress": "in-progress",
+        "completed": "completed",
+        "posted": "posted",
+        "added to website": "added-to-website",
+        "paid": "paid",
+        "pending payment": "completed", // map to completed; payment tracked separately
+        "payment received": "paid",
+        "cancelled": "cancelled",
+      };
+
+      // 4. Process each row
+      const result = {
+        tab,
+        total_rows: rows.length,
+        imported: 0,
+        skipped_already_synced: 0,
+        skipped_no_client: 0,
+        skipped_no_title: 0,
+        skipped_no_match: [],
+        imported_rows: [],
+        errors: [],
+      };
+
+      for (let i = 0; i < rows.length; i++) {
+        const sheetRowIndex = i + 2; // 1-based; row 1 = header, row 2 = first data row
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const clientName = String(row[0] || "").trim();
+        const title = String(row[1] || "").trim();
+        const assetType = String(row[2] || "video").trim().toLowerCase();
+        const assetSubtype = String(row[3] || "").trim();
+        const statusRaw = String(row[4] || "planned").trim().toLowerCase();
+        const status = STATUS_NORMALIZE[statusRaw] || "planned";
+        const startDate = String(row[5] || "").trim();
+        const endDate = String(row[6] || "").trim();
+        const deadlineDate = String(row[7] || "").trim();
+        // I (idx 8) = Days to Deadline (formula — skip)
+        const editorName = String(row[9] || "").trim();
+        // K, L, M = editing minutes (sheet-only, skip)
+        const clientAmount = parseInt(String(row[13] || "0").replace(/[^0-9]/g, ""), 10) || 0;
+        const editorAmount = parseInt(String(row[14] || "0").replace(/[^0-9]/g, ""), 10) || 0;
+
+        if (!clientName) continue;
+        if (!title) { result.skipped_no_title++; continue; }
+        if (syncedRowIndices.has(sheetRowIndex)) { result.skipped_already_synced++; continue; }
+
+        const clientId = clientByName.get(clientName.toLowerCase());
+        if (!clientId) {
+          result.skipped_no_client++;
+          result.skipped_no_match.push({ row: sheetRowIndex, client_name: clientName, title });
+          continue;
+        }
+        const editorId = editorName ? editorByName.get(editorName.toLowerCase()) || null : null;
+
+        const projectId = crypto.randomUUID();
+        const dueDate = deadlineDate || null;
+        const completedAt = endDate || null;
+
+        if (!dryRun) {
+          try {
+            await env.DB.prepare(
+              `INSERT INTO projects (
+                 id, client_id, title, asset_type, status, assigned_editor_id,
+                 due_date, completed_at, editor_payment_inr, client_charge_inr,
+                 sheet_row_index, sheet_tab_name, sheet_synced_at
+               )
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, CURRENT_TIMESTAMP)`
+            ).bind(
+              projectId,
+              clientId,
+              title,
+              assetType,
+              status,
+              editorId,
+              dueDate,
+              completedAt,
+              editorAmount,
+              clientAmount,
+              sheetRowIndex,
+              tab
+            ).run();
+            result.imported++;
+            result.imported_rows.push({ row: sheetRowIndex, project_id: projectId, title, client: clientName });
+          } catch (e) {
+            result.errors.push({ row: sheetRowIndex, title, error: String(e.message || e).slice(0, 200) });
+          }
+        } else {
+          // dry run — just record what would happen
+          result.imported++;
+          result.imported_rows.push({ row: sheetRowIndex, title, client: clientName, status, editor: editorName });
+        }
+      }
+
+      // Audit log
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind(
+          dryRun ? "sheets.import.dryrun" : "sheets.import.done",
+          result.errors.length > 0 ? "warn" : "info",
+          `Import from ${tab}: ${result.imported} new projects${dryRun ? " (dry run)" : ""}, ${result.skipped_already_synced} already synced, ${result.skipped_no_client} unmatched clients`,
+          JSON.stringify({ tab, dry_run: dryRun, ...result })
+        ).run();
+      } catch {}
+
+      return ok(result);
     }
 
     // GET /admin/agency/sheets/dropdowns — read sheet's data validation rules
