@@ -2489,6 +2489,75 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ summary, report });
     }
 
+    // ---- POST /admin/agency/ig/manual-entry
+    //
+    // Set the follower count for a specific IG handle WITHOUT going through
+    // the scraper. Use when Instagram's scraping keeps failing (login wall,
+    // rate limit, private account, etc.) and you just want the number to
+    // appear correctly in Total Reach.
+    //
+    // Body: { client_id, handle, followers, avatar_url? }
+    if (path === "/admin/agency/ig/manual-entry" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.client_id || !body.handle || body.followers == null) {
+        return err("client_id, handle, and followers required");
+      }
+      const followers = parseInt(body.followers, 10);
+      if (!Number.isFinite(followers) || followers < 0) return err("followers must be a non-negative integer");
+      const clean = String(body.handle).replace(/^@/, "").trim().toLowerCase();
+
+      // Try UPDATE first (most common — row exists, just no count)
+      const upd = await env.DB.prepare(
+        `UPDATE instagram_accounts
+         SET followers = ?1, avatar_url = COALESCE(?2, avatar_url),
+             last_synced_at = strftime('%s', 'now')
+         WHERE client_id = ?3
+           AND LOWER(REPLACE(handle, '@', '')) = ?4`
+      ).bind(followers, body.avatar_url || null, body.client_id, clean).run();
+
+      let action = "updated";
+      if (!upd?.meta?.changes) {
+        // INSERT a new row
+        await env.DB.prepare(
+          `INSERT INTO instagram_accounts
+             (client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
+           VALUES (?1, ?2, ?3, 'main', ?4, ?5, 1, 1)`
+        ).bind(
+          body.client_id,
+          clean,
+          `https://instagram.com/${clean}`,
+          followers,
+          body.avatar_url || null
+        ).run();
+        action = "inserted";
+      }
+
+      // Also bump the legacy clients.instagram_followers if this is the main
+      // (most-followers) IG row — keeps the legacy field consistent.
+      await env.DB.prepare(
+        `UPDATE clients
+         SET instagram_followers = (
+           SELECT MAX(followers) FROM instagram_accounts WHERE client_id = ?1 AND active = 1
+         )
+         WHERE id = ?1`
+      ).bind(body.client_id).run();
+
+      // Audit log
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind(
+          "ig.manual_entry",
+          "info",
+          `Manual IG count set: @${clean} = ${followers.toLocaleString("en-IN")}`,
+          body.client_id,
+          JSON.stringify({ handle: clean, followers, source: "manual_entry" })
+        ).run();
+      } catch {}
+
+      return ok({ action, client_id: body.client_id, handle: clean, followers });
+    }
+
     // ---- POST /admin/agency/ig/diagnostic/resweep
     //
     // Re-enqueue ig_followers_fetch for every handle currently at 0 followers

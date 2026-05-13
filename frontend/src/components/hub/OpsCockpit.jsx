@@ -45,6 +45,7 @@ import SeoActionModal from "./SeoActionModal";
 import SeoRequestModal from "./SeoRequestModal";
 import SheetSyncPanel from "./SheetSyncPanel";
 import CompletionLogPanel from "./CompletionLogPanel";
+import IgDiagnosticModal from "./IgDiagnosticModal";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -382,6 +383,7 @@ export default function OpsCockpit() {
     try { return new URLSearchParams(window.location.search).get("seo-request") === "1"; }
     catch { return false; }
   });
+  const [igDiagOpen, setIgDiagOpen] = useState(false);
 
   // Background load of MY overdue+due-today todo count for the tab badge.
   // Cheap call; reused across tab switches via the same endpoint.
@@ -664,7 +666,19 @@ export default function OpsCockpit() {
       <div className={tab === "overview" ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : "hidden"}>
         {/* LEFT — clients + pending SEO */}
         <div className="space-y-5">
-          <SectionCard title="Clients" icon={Users}>
+          <SectionCard
+            title="Clients"
+            icon={Users}
+            action={
+              <button
+                onClick={() => setIgDiagOpen(true)}
+                className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded bg-pink-500/10 text-pink-600 border border-pink-500/30 hover:bg-pink-500 hover:text-white"
+                title="See why some IG handles show 0 — and fix them inline"
+              >
+                📷 IG Diagnostic
+              </button>
+            }
+          >
             <div className="space-y-2">
               {clients.map((c) => {
                 const status = (c.status || "active").toLowerCase();
@@ -1129,6 +1143,13 @@ export default function OpsCockpit() {
             fetchSnapshot();
             if (seoId) setOpenSeoId(seoId);
           }}
+        />
+      )}
+      {/* IG diagnostic modal — find + fix zero-follower handles inline */}
+      {igDiagOpen && (
+        <IgDiagnosticModal
+          onClose={() => setIgDiagOpen(false)}
+          onRefreshNeeded={fetchSnapshot}
         />
       )}
     </div>
