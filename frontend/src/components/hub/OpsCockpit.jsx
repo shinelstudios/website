@@ -819,8 +819,30 @@ export default function OpsCockpit() {
                           📁 Drive
                         </a>
                       )}
-                      {/* Hover actions: status toggle + add IG + drive */}
-                      <div className="opacity-0 group-hover:opacity-100 transition flex flex-col gap-0.5">
+                      {/* Always-visible status dropdown + secondary actions on hover.
+                          Founder feedback: hover-only buttons were invisible on
+                          mobile/touch and too easy to miss on desktop. Status
+                          dropdown is now the primary control surface for each
+                          client row — change at any time without leaving cockpit. */}
+                      <select
+                        value={status}
+                        disabled={busyClientId === c.id}
+                        onChange={(e) => setClientStatus(c.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-1 rounded border bg-transparent disabled:opacity-50 cursor-pointer ${
+                          status === "active"
+                            ? "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                            : status === "paused"
+                            ? "border-yellow-500/40 text-yellow-700 hover:bg-yellow-500/10"
+                            : "border-neutral-500/40 text-neutral-500 hover:bg-neutral-500/10"
+                        }`}
+                        title="Change client status (active / paused / inactive)"
+                      >
+                        <option value="active">● Active</option>
+                        <option value="paused">⏸ Paused</option>
+                        <option value="inactive">○ Inactive</option>
+                      </select>
+                      <div className="opacity-0 group-hover:opacity-100 transition flex flex-col gap-0.5 ml-1">
                         <button
                           onClick={() => setIgModalClient(c)}
                           className="text-[10px] px-1.5 py-0.5 rounded text-pink-500 hover:bg-pink-500/10"
@@ -835,25 +857,6 @@ export default function OpsCockpit() {
                         >
                           {c.drive_folder_url ? "Drive" : "+ Drive"}
                         </button>
-                        {!isInactive ? (
-                          <button
-                            onClick={() => setClientStatus(c.id, "inactive")}
-                            disabled={busyClientId === c.id}
-                            className="text-[10px] px-1.5 py-0.5 rounded text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800 disabled:opacity-50"
-                            title="Mark inactive — won't appear in default cockpit view"
-                          >
-                            Inactive
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setClientStatus(c.id, "active")}
-                            disabled={busyClientId === c.id}
-                            className="text-[10px] px-1.5 py-0.5 rounded text-green-600 hover:bg-green-500/10 disabled:opacity-50"
-                            title="Mark active — restore to fleet"
-                          >
-                            Reactivate
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
