@@ -31,7 +31,11 @@ export const CLIENT_REGISTRY = [
 
 export const CLIENT_PULSE_CONFIG = {
     expirationMs: 24 * 60 * 60 * 1000, // 24 hours
-    pollIntervalMs: 30 * 60 * 1000,   // 30 minutes
+    // Founder feedback May 2026: 30-minute poll felt completely non-realtime.
+    // New uploads can take 30 min for cron + 30 min for client poll = 1h on
+    // /live. Dropped to 60s — D1 query is cheap and the worker has its own
+    // edge cache on /clients/pulse so this doesn't hammer the origin.
+    pollIntervalMs: 60 * 1000,   // 60 seconds
 };
 
 // Social Media Links

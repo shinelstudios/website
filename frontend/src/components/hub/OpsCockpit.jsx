@@ -178,6 +178,34 @@ function ActionsMenu({ onAfterAction }) {
                 alert(lines.join("\n"));
               })}
             >❤ <span>System health check</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Underperformer scan", async () => {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/underperformer-detector/run`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  credentials: "include",
+                  body: JSON.stringify({ force: true }),
+                });
+                const j = await r.json();
+                alert(`Underperformer scan: ${j.candidates_flagged ?? 0} new candidates flagged across ${j.channels_scanned ?? 0} channels. Open Pending SEO queue to review.`);
+              })}
+            >🔻 <span>Run underperformer scan</span></button>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-[var(--surface-alt)] inline-flex items-center gap-2"
+              onClick={() => run("Competitor research", async () => {
+                const token = getAccessToken();
+                const r = await fetch(`${AUTH_BASE}/admin/agency/competitor-research/run`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  credentials: "include",
+                  body: JSON.stringify({ force: true }),
+                });
+                const j = await r.json();
+                alert(`Competitor research: scanned ${j.processed ?? 0} channels · ${j.overperformer_alerts ?? 0} overperformer videos detected.`);
+              })}
+            >📊 <span>Run competitor research</span></button>
           </div>
         </>
       )}
@@ -438,7 +466,9 @@ export default function OpsCockpit() {
   // Initial fetch + 30s poll
   useEffect(() => {
     fetchSnapshot();
-    const interval = setInterval(fetchSnapshot, 30_000);
+    // 15s poll (was 30s). User can see their own actions reflect within 15s
+    // instead of waiting half a minute. Backend D1 query is cheap.
+    const interval = setInterval(fetchSnapshot, 15_000);
     return () => clearInterval(interval);
   }, [fetchSnapshot]);
 

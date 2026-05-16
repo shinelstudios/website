@@ -214,6 +214,39 @@ export async function postToDiscord(env, payload, channel = "default") {
 }
 
 /**
+ * postToDiscordWithClient — unified helper that fans out a Discord ping to
+ * BOTH a global channel (ops/finance/etc.) AND the per-client webhook if the
+ * client has one configured on clients.discord_webhook_url.
+ *
+ * Replaces the ~12 copy-pasted blocks of "fetch ops channel + then fetch
+ * client webhook" sprinkled across worker.js + agency-handlers.js.
+ *
+ * Never throws. Fire-and-forget by default (don't await on hot paths).
+ */
+export async function postToDiscordWithClient(env, clientId, payload, channel = "ops") {
+  // 1. Global channel ping
+  postToDiscord(env, payload, channel).catch(() => {});
+  // 2. Per-client webhook
+  if (!clientId || !env.DB) return;
+  try {
+    const c = await env.DB.prepare(
+      "SELECT name, discord_webhook_url FROM clients WHERE id = ?1"
+    ).bind(clientId).first();
+    if (!c?.discord_webhook_url) return;
+    const body = typeof payload === "string"
+      ? { content: payload, username: `Shinel · ${c.name || "Client"}` }
+      : { username: `Shinel · ${c.name || "Client"}`, ...payload };
+    fetch(c.discord_webhook_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  } catch (e) {
+    console.error("[discord-per-client] lookup failed:", e.message);
+  }
+}
+
+/**
  * Main dispatcher. Returns a Response if it handled the URL, otherwise null.
  */
 export async function handleAgencyRoute(request, env, secret, url, requireTeamOrThrow, requireAuthOrThrow) {
@@ -382,7 +415,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         generated_at: new Date().toISOString(),
       }), {
         status: 200,
-        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=300, s-maxage=300" },
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=30, s-maxage=30" },
       });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
@@ -468,7 +501,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         },
       }), {
         status: 200,
-        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=300, s-maxage=300" },
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=30, s-maxage=30" },
       });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
@@ -714,9 +747,10 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
                 try {
                   await env.DB.prepare(
                     `INSERT INTO instagram_accounts
-                       (client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
-                     VALUES (?1, ?2, ?3, 'main', ?4, ?5, 1, 1)`
+                       (id, client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
+                     VALUES (?1, ?2, ?3, ?4, 'main', ?5, ?6, 1, 1)`
                   ).bind(
+                    crypto.randomUUID(),
                     task.client_id,
                     cleanHandle,
                     `https://instagram.com/${cleanHandle}`,
@@ -1088,7 +1122,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         ).all(),
 
         env.DB.prepare(
-          `SELECT client_id, name, channel_id, url, niche_tag, notes
+          // NOTE: competitors table doesn't have a `url` column — the URL is
+          // derived from channel_id (YouTube channel). Selecting `url` here
+          // silently crashed the snapshot for months because of the .catch
+          // fallback below, leaving the competitors list always empty.
+          `SELECT client_id, name, channel_id, niche_tag, notes
            FROM competitors WHERE active = 1`
         ).all().catch(() => ({ results: [] })),
 
@@ -1491,6 +1529,12 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       // Auto-sync to Monthly Tracker sheet (fire-and-forget — never blocks
       // project creation if Sheets API is down or unconfigured)
       syncProjectToSheet(env, id).catch(() => {});
+      // Discord ping — kick-off announcement to ops + per-client channel.
+      // (Founder explicit ask: "everything should be published in each
+      // client's Discord channel".)
+      postToDiscordWithClient(env, body.client_id, {
+        content: `📋 **New project queued** — ${body.title}\n· Type: ${body.asset_type || "video"}\n· Status: ${body.status || "planned"}`,
+      }, "ops").catch(() => {});
       return ok({ id, created: true }, 201);
     }
 
@@ -1540,11 +1584,29 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       binds.push(id);
       await env.DB.prepare(`UPDATE projects SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
 
-      // Fire Discord webhook for user-visible transitions (paid/posted/added-to-website)
-      // Route by event type: paid → finance channel; posted/added-to-website → ops.
-      if (statusChanged && ["paid", "posted", "added-to-website"].includes(body.status)) {
-        const emoji = body.status === "paid" ? "💰" : body.status === "posted" ? "🎬" : "🌐";
-        const labels = { paid: "Paid", posted: "Posted", "added-to-website": "Added to website" };
+      // Fire Discord webhook for EVERY meaningful status transition.
+      // Founder's policy: "everything should be published in each client's
+      // Discord channel". Previously only paid/posted/added-to-website
+      // fired — now every status change pings ops + per-client.
+      if (statusChanged && ["started", "in-progress", "completed", "paid", "posted", "added-to-website", "cancelled"].includes(body.status)) {
+        const emoji = ({
+          "started": "🚧",
+          "in-progress": "⚙",
+          "completed": "✅",
+          "paid": "💰",
+          "posted": "🎬",
+          "added-to-website": "🌐",
+          "cancelled": "🚫",
+        })[body.status] || "📋";
+        const labels = {
+          "started": "Started",
+          "in-progress": "In progress",
+          "completed": "Completed",
+          "paid": "Paid",
+          "posted": "Posted",
+          "added-to-website": "Added to website",
+          "cancelled": "Cancelled",
+        };
         const channel = body.status === "paid" ? "finance" : "ops";
         const lines = [
           `${emoji} **${labels[body.status]}** — ${old.title}`,
@@ -2543,12 +2605,13 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
 
       let action = "updated";
       if (!upd?.meta?.changes) {
-        // INSERT a new row
+        // INSERT a new row — id is TEXT PRIMARY KEY, not autoincrement
         await env.DB.prepare(
           `INSERT INTO instagram_accounts
-             (client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
-           VALUES (?1, ?2, ?3, 'main', ?4, ?5, 1, 1)`
+             (id, client_id, handle, url, role, followers, avatar_url, managed_by_us, active)
+           VALUES (?1, ?2, ?3, ?4, 'main', ?5, ?6, 1, 1)`
         ).bind(
+          crypto.randomUUID(),
           body.client_id,
           clean,
           `https://instagram.com/${clean}`,

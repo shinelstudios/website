@@ -127,7 +127,7 @@ function CardModal({ project, clients, editors, onClose, onSaved }) {
               onChange={(e) => setStatus(e.target.value)}
               className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm"
             >
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
@@ -292,7 +292,7 @@ function NewProjectModal({ clients, onClose, onCreated }) {
             <div>
               <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Status</label>
               <select value={form.status} onChange={update("status")} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm">
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
           </div>

@@ -6,6 +6,7 @@
  * Features: React Router setup, Lazy loading, Dark/Light theme management, Scroll to Hash, Auth state handling.
  */
 import React from "react";
+import ToastHost from "./components/ui/Toast";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import SiteHeader from "./components/SiteHeader.jsx";
@@ -432,6 +433,7 @@ export default function App() {
 
   return (
     <React.Suspense fallback={<LoadingScreen />}>
+      <ToastHost />
       <Routes key={location.pathname}>
         <Route element={<Layout />}>
           {/* ---------------------------- Public Pages ---------------------------- */}
