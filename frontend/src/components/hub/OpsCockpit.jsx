@@ -47,6 +47,7 @@ import SheetSyncPanel from "./SheetSyncPanel";
 import CompletionLogPanel from "./CompletionLogPanel";
 import IgDiagnosticModal from "./IgDiagnosticModal";
 import YtQuotaPanel from "./YtQuotaPanel";
+import InlineFollowerEdit from "./InlineFollowerEdit";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -787,7 +788,14 @@ export default function OpsCockpit() {
                         )}
                         {(c.ig_followers_total > 0 || c.ig_account_count > 0) && (
                           <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                            <span className="text-mono-num text-sm font-semibold">{fmtNum(c.ig_followers_total || 0)}</span>
+                            <span className="text-mono-num text-sm font-semibold">
+                              <InlineFollowerEdit
+                                clientId={c.id}
+                                currentFollowers={c.ig_followers_total || 0}
+                                platform="ig"
+                                onSaved={() => fetchSnapshot()}
+                              />
+                            </span>
                             <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-pink-500/10 text-pink-500">IG</span>
                           </div>
                         )}

@@ -376,33 +376,46 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         ).all(),
       ]);
 
-      const ytItems = (channels.results || []).map((c) => ({
-        type: "youtube",
-        client_id: c.client_id,
-        client_name: c.client_name,
-        // Display name: brand + channel handle/role if not the main channel
-        name: c.role === "main" ? c.client_name : `${c.client_name} · ${c.handle || c.role}`,
-        handle: c.handle || c.channel_id,
-        channel_id: c.channel_id,
-        subscribers: c.subscribers || 0,
-        url: c.studio_url || (c.channel_id?.startsWith("UC") ? `https://youtube.com/channel/${c.channel_id}` : null),
-        avatar_url: c.avatar_url || null,
-        category: c.niche_tag || "Creator",
-        managed: !!c.managed_by_us,
-      }));
+      // Public-facing display rule (founder policy May 2026):
+      // Always show the OFFICIAL handle, not our internal client name.
+      // Audiences recognize "@inkboymusik", not "Kamz Inkzone · @inkboymusik".
+      // The internal client_name is still returned in the payload (used for
+      // grouping / filtering on the admin side), but `name` is the handle.
+      const ytItems = (channels.results || []).map((c) => {
+        const cleanHandle = c.handle ? String(c.handle).replace(/^@/, "") : null;
+        // YT channel handles use @ prefix (matches YT's URL format /@handle).
+        // If no handle is stored, fall back to the channel ID.
+        const displayName = cleanHandle ? `@${cleanHandle}` : (c.channel_id || c.client_name || "Channel");
+        return {
+          type: "youtube",
+          client_id: c.client_id,
+          client_name: c.client_name,
+          name: displayName,
+          handle: cleanHandle || c.channel_id,
+          channel_id: c.channel_id,
+          subscribers: c.subscribers || 0,
+          url: c.studio_url || (c.channel_id?.startsWith("UC") ? `https://youtube.com/channel/${c.channel_id}` : null),
+          avatar_url: c.avatar_url || null,
+          category: c.niche_tag || "Creator",
+          managed: !!c.managed_by_us,
+        };
+      });
 
-      const igItems = (igAccounts.results || []).map((ig) => ({
-        type: "instagram",
-        client_id: ig.client_id,
-        client_name: ig.client_name,
-        name: ig.role === "main" ? ig.client_name : `${ig.client_name} · @${String(ig.handle).replace(/^@/, "")}`,
-        handle: `@${String(ig.handle).replace(/^@/, "")}`,
-        followers: ig.followers || 0,
-        url: ig.url || `https://instagram.com/${String(ig.handle).replace(/^@/, "")}`,
-        avatar_url: ig.avatar_url || null,
-        category: ig.niche_tag || "Creator",
-        managed: !!ig.managed_by_us && !!ig.ig_managed,
-      }));
+      const igItems = (igAccounts.results || []).map((ig) => {
+        const cleanHandle = String(ig.handle || "").replace(/^@/, "");
+        return {
+          type: "instagram",
+          client_id: ig.client_id,
+          client_name: ig.client_name,
+          name: cleanHandle ? `@${cleanHandle}` : (ig.client_name || "Instagram"),
+          handle: `@${cleanHandle}`,
+          followers: ig.followers || 0,
+          url: ig.url || `https://instagram.com/${cleanHandle}`,
+          avatar_url: ig.avatar_url || null,
+          category: ig.niche_tag || "Creator",
+          managed: !!ig.managed_by_us && !!ig.ig_managed,
+        };
+      });
 
       // Sort so the highest-reach items appear first
       const all = [...ytItems, ...igItems].sort((a, b) => (b.subscribers || b.followers || 0) - (a.subscribers || a.followers || 0));
