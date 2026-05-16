@@ -52,16 +52,78 @@ const respond = (request, env) => {
   };
 };
 
-// Look up the editors row matching the JWT email. Returns null if no editor
-// row exists (editor was never added to roster).
+// Look up the editors row matching the JWT email. If no row exists AND the
+// caller has a staff role (team/admin/editor/artist), auto-create one so
+// EVERY staff member can use /editor/me + build a portfolio without an
+// admin pre-adding them to the roster.
+//
+// Founder policy (May 2026): "portfolio should work for all our staff".
 async function getCurrentEditor(env, payload) {
   if (!env?.DB || !payload?.email) return null;
   try {
     const email = String(payload.email).trim().toLowerCase();
-    const row = await env.DB
+    let row = await env.DB
       .prepare("SELECT * FROM editors WHERE LOWER(email) = ? AND active = 1 LIMIT 1")
       .bind(email).first();
-    return row || null;
+    if (row) return row;
+
+    // No row — check if caller is staff (team/admin/editor/artist) and create
+    const roleStr = String(payload.role || "").toLowerCase();
+    const roles = roleStr.split(",").map((s) => s.trim()).filter(Boolean);
+    const isStaff = roles.some((r) => ["team", "admin", "editor", "artist"].includes(r));
+    if (!isStaff) return null;
+
+    // Derive a reasonable name from email local-part (e.g. "raghav@..." → "Raghav")
+    const localPart = email.split("@")[0] || "Staff";
+    const niceName = localPart
+      .replace(/[._-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    // Pick a default role for the editors row based on JWT role
+    const editorRole = roles.includes("admin") ? "admin"
+      : roles.includes("team") ? "team"
+      : roles.includes("artist") ? "artist"
+      : "editor";
+
+    const id = crypto.randomUUID();
+
+    // Pick a public slug. Prefer the email local-part; if taken, suffix.
+    // The slug reservation lets the editor's portfolio URL "just work" once they
+    // add a single item + publish, instead of forcing slug configuration first.
+    const baseSlug = (localPart || "staff").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    let slug = baseSlug;
+    try {
+      let attempt = 0;
+      while (attempt < 10) {
+        const taken = await env.DB.prepare(
+          "SELECT id FROM editors WHERE LOWER(slug) = ?1 LIMIT 1"
+        ).bind(slug).first();
+        if (!taken) break;
+        attempt++;
+        slug = `${baseSlug}-${attempt + 1}`;
+      }
+    } catch { slug = baseSlug; }
+
+    await env.DB.prepare(
+      `INSERT INTO editors (id, name, email, role, compensation_type, active, joined_at, slug, public_enabled)
+       VALUES (?1, ?2, ?3, ?4, 'salary', 1, datetime('now'), ?5, 1)`
+    ).bind(id, niceName, email, editorRole, slug).run();
+
+    row = await env.DB
+      .prepare("SELECT * FROM editors WHERE id = ?1")
+      .bind(id).first();
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+      ).bind(
+        "editor.auto_created",
+        "info",
+        `Auto-created editor row for staff member ${email}`,
+        JSON.stringify({ id, email, role: editorRole, source: "/editor/me access" })
+      ).run();
+    } catch {}
+
+    return row;
   } catch (e) {
     console.error("getCurrentEditor failed:", e?.message || e);
     return null;

@@ -1998,6 +1998,52 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id, deleted: true });
     }
 
+    // POST /admin/agency/editors/backfill-slugs  — one-shot back-fill
+    // For every editor row missing a slug, derive one from the email local-part
+    // (de-dup by suffixing -2, -3, ...) and set public_enabled = 1.
+    // Lets DK / Devansh / any pre-existing editor have a working portfolio URL
+    // without manually editing the database.
+    if (path === "/admin/agency/editors/backfill-slugs" && method === "POST") {
+      const { results } = await env.DB.prepare(
+        "SELECT id, name, email, slug, public_enabled FROM editors WHERE active = 1"
+      ).all();
+      const rows = results || [];
+      const taken = new Set(rows.map((r) => (r.slug || "").toLowerCase()).filter(Boolean));
+      const updates = [];
+      for (const r of rows) {
+        const next = {};
+        if (!r.slug || !r.slug.trim()) {
+          const localPart = (r.email || "").split("@")[0] || (r.name || "staff");
+          const base = localPart.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32) || "staff";
+          let slug = base;
+          let n = 2;
+          while (taken.has(slug)) { slug = `${base}-${n++}`; if (n > 50) break; }
+          taken.add(slug);
+          next.slug = slug;
+        }
+        if (!r.public_enabled) next.public_enabled = 1;
+        if (next.slug || next.public_enabled) {
+          const sets = []; const binds = []; let i = 1;
+          if (next.slug !== undefined) { sets.push(`slug = ?${i++}`); binds.push(next.slug); }
+          if (next.public_enabled !== undefined) { sets.push(`public_enabled = ?${i++}`); binds.push(1); }
+          binds.push(r.id);
+          await env.DB.prepare(`UPDATE editors SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+          updates.push({ id: r.id, name: r.name, email: r.email, ...next });
+        }
+      }
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind(
+          "editor.backfill_slugs",
+          "info",
+          `Back-filled slug/public for ${updates.length} editor rows`,
+          JSON.stringify({ updated: updates.length, examples: updates.slice(0, 5) })
+        ).run();
+      } catch {}
+      return ok({ scanned: rows.length, updated: updates.length, updates });
+    }
+
     // ---- Instagram accounts CRUD --------------------------------------------
     // GET /admin/agency/instagram[?clientId=X]  — list
     if (path === "/admin/agency/instagram" && method === "GET") {
