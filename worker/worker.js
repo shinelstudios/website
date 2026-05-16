@@ -1121,15 +1121,63 @@ async function fetchYouTubePulse(env, channelId, uploadsPlaylistId = null) {
       if (resp.ok) {
         const j = await resp.json().catch(() => ({}));
         if (j && j.items && j.items.length > 0) {
-          return {
-            items: j.items.map(item => ({
-              id: item.snippet.resourceId.videoId,
-              title: item.snippet.title,
-              thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url,
-              publishedAt: item.snippet.publishedAt,
-              type: "VIDEO"
-            }))
-          };
+          const items = j.items.map(item => ({
+            id: item.snippet.resourceId.videoId,
+            title: item.snippet.title,
+            thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url,
+            publishedAt: item.snippet.publishedAt,
+            type: "VIDEO",
+          }));
+
+          // ENRICH with content classification — second YT call (videos.list)
+          // batch fetches contentDetails + liveStreamingDetails + statistics
+          // for all items at once (1 unit total). Lets us tag each as
+          // short / live_now / live_past / live_upcoming / video.
+          try {
+            const videoIds = items.map((i) => i.id).filter(Boolean);
+            if (videoIds.length) {
+              const vidsApi = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,liveStreamingDetails,statistics,snippet&id=${videoIds.join(",")}&key=${encodeURIComponent(key)}`;
+              const vRes = await fetchWithRetry(vidsApi, { headers: { accept: "application/json" } }, 2);
+              recordYoutubeUsage(env, key, 1).catch(() => {});
+              if (vRes.ok) {
+                const vj = await vRes.json().catch(() => ({}));
+                const byId = new Map((vj.items || []).map((v) => [v.id, v]));
+                for (const it of items) {
+                  const v = byId.get(it.id);
+                  if (!v) continue;
+                  // Parse ISO 8601 duration (PT#H#M#S) → seconds
+                  const dur = v.contentDetails?.duration || "PT0S";
+                  const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                  it.duration_sec = (parseInt(m?.[1] || 0, 10) * 3600) + (parseInt(m?.[2] || 0, 10) * 60) + parseInt(m?.[3] || 0, 10);
+                  it.view_count = parseInt(v.statistics?.viewCount || 0, 10);
+                  it.like_count = parseInt(v.statistics?.likeCount || 0, 10);
+                  // Classify content type
+                  const live = v.liveStreamingDetails;
+                  const broadcast = v.snippet?.liveBroadcastContent; // "live" | "upcoming" | "none"
+                  if (broadcast === "live") {
+                    it.content_type = "live_now";
+                  } else if (broadcast === "upcoming") {
+                    it.content_type = "live_upcoming";
+                  } else if (live && live.actualEndTime) {
+                    it.content_type = "live_past";
+                  } else if (it.duration_sec > 0 && it.duration_sec <= 60) {
+                    it.content_type = "short";
+                  } else {
+                    it.content_type = "video";
+                  }
+                  // Keep existing legacy `type` field for back-compat (frontend reads either)
+                  it.type = it.content_type === "live_now" ? "LIVE" :
+                            it.content_type === "short" ? "SHORT" :
+                            it.content_type === "live_past" ? "LIVE_PAST" :
+                            "VIDEO";
+                }
+              }
+            }
+          } catch (enrichErr) {
+            console.warn("pulse enrichment failed:", enrichErr.message);
+          }
+
+          return { items };
         }
       } else if (resp.status === 403) {
         const errJson = await resp.json().catch(() => ({}));
@@ -1878,8 +1926,8 @@ async function performClientSync(env, isForced = false, debug = false) {
                     };
                     pulseActivities.push(act);
                     await env.DB.prepare(
-                      "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-                    ).bind(act.id, ch.channel_id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts).run();
+                      "INSERT OR IGNORE INTO pulse_activities (id, client_id, youtube_video_id, title, thumbnail, url, published_at, timestamp, content_type, duration_sec, view_count, like_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ).bind(act.id, ch.channel_id, v.id, v.title, v.thumbnail, act.url, v.publishedAt, ts, v.content_type || "video", v.duration_sec || 0, v.view_count || 0, v.like_count || 0).run();
                   }
                 } catch (subErr) { console.error(`fan-out pulse fetch failed for ${ch.channel_id}:`, subErr.message); }
               }
@@ -2890,6 +2938,9 @@ const handler = {
       if (env.DB) {
         try {
           const { results: activities } = await env.DB.prepare(
+            // ONLY active clients on /live page. Pause/inactive/old are hidden.
+            // Per founder policy: status flag controls site visibility for ALL
+            // surfaces — admins toggle it via the Clients panel dropdown.
             `SELECT p.*,
                     COALESCE(c1.name, c2.name) AS clientName,
                     COALESCE(c1.id, c2.id) AS resolved_client_id
@@ -2897,10 +2948,10 @@ const handler = {
              LEFT JOIN clients c1 ON p.client_id = c1.youtube_id
              LEFT JOIN client_channels cc ON p.client_id = cc.channel_id
              LEFT JOIN clients c2 ON cc.client_id = c2.id
-             WHERE COALESCE(COALESCE(c1.status, c2.status), 'active') != 'old'
+             WHERE (COALESCE(c1.status, c2.status, 'active') = 'active')
                AND (c1.id IS NOT NULL OR c2.id IS NOT NULL)
              ORDER BY p.timestamp DESC
-             LIMIT 50`
+             LIMIT 80`
           ).all();
 
           if (activities && activities.length > 0) {

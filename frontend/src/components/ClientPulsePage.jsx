@@ -62,20 +62,22 @@ const ClientPulsePage = () => {
 
         return activities
             .filter(a => {
-                const isWithinWindow = (now - Number(a.timestamp || 0)) < windowSize;
-
-                // 1) If stats are still loading, don't filter out yet (prevent flicker)
-                // 2) If the active set is empty but we have stats, it means the API fetch failed 
-                //    or the user hasn't synced. We trust the worker's filtered payload in this case.
-                if (statsLoading || activeCanonicalIds.size === 0) return isWithinWindow;
-
-                // Check if the activity's channel is in our active set OR if we are fallback-trusting the worker
-                return isWithinWindow && activeCanonicalIds.has(a.channelId);
+                // Backend already filters by status='active' on the SELECT.
+                // Frontend only adds time-window filtering. Don't double-filter
+                // by stats.activeCanonicalIds — that was hiding fresh channels
+                // whose useClientStats fetch hadn't caught up yet.
+                return (now - Number(a.timestamp || 0)) < windowSize;
             })
             .sort((a, b) => {
-                // Priority: LIVE > Newest
-                if (a.isLive && !b.isLive) return -1;
-                if (!a.isLive && b.isLive) return 1;
+                // Priority: LIVE NOW > LIVE UPCOMING > Newest (regardless of type)
+                const aLive = a.content_type === "live_now" || a.isLive;
+                const bLive = b.content_type === "live_now" || b.isLive;
+                if (aLive && !bLive) return -1;
+                if (!aLive && bLive) return 1;
+                const aUpcoming = a.content_type === "live_upcoming";
+                const bUpcoming = b.content_type === "live_upcoming";
+                if (aUpcoming && !bUpcoming) return -1;
+                if (!aUpcoming && bUpcoming) return 1;
                 return b.timestamp - a.timestamp;
             });
     }, [activities, stats, statsLoading]);
@@ -307,7 +309,15 @@ const ClientPulsePage = () => {
 
 const ActivityCard = ({ activity, index, meta }) => {
     const { getProxiedImage } = useClientStats();
-    const isLive = activity.isLive;
+    // Prefer the new `content_type` field (set by the backend after the
+    // pulse enrichment pass) over the legacy `isLive` boolean. Falls back
+    // to legacy fields for older pulse_activities rows.
+    const contentType = activity.content_type ||
+        (activity.isLive ? "live_now" : activity.type === "SHORT" ? "short" : "video");
+    const isLive = contentType === "live_now";
+    const isLivePast = contentType === "live_past";
+    const isLiveUpcoming = contentType === "live_upcoming";
+    const isShort = contentType === "short";
     const [isHovered, setIsHovered] = useState(false);
     const [imgError, setImgError] = useState(false);
     const videoId = useMemo(() => {
@@ -363,19 +373,43 @@ const ActivityCard = ({ activity, index, meta }) => {
                     )}
                 </AnimatePresence>
 
-                {/* Overlay Badges */}
-                <div className="absolute top-4 left-4 flex gap-2 z-10">
+                {/* Overlay Badges — categorical: LIVE NOW / UPCOMING / REPLAY / SHORT / VIDEO */}
+                <div className="absolute top-4 left-4 flex gap-2 z-10 flex-wrap">
                     {isLive && (
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest animate-pulse shadow-2xl">
                             <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                            Live Now
+                            🔴 Live Now
                         </div>
                     )}
-                    <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]"
-                        style={{ WebkitBackdropFilter: "blur(32px)" }}>
-                        {activity.type === 'VIDEO' ? <Play size={10} fill="currentColor" /> : <Radio size={10} />}
-                        {activity.type}
-                    </div>
+                    {isLiveUpcoming && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest shadow-xl">
+                            ⏰ Live Soon
+                        </div>
+                    )}
+                    {isLivePast && !isLive && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-900/80 text-white text-[10px] font-black uppercase tracking-widest backdrop-blur-xl">
+                            🎙 Stream Replay
+                        </div>
+                    )}
+                    {isShort && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest shadow-xl">
+                            📱 Short
+                        </div>
+                    )}
+                    {!isLive && !isLiveUpcoming && !isLivePast && !isShort && (
+                        <div className="px-3 py-1.5 rounded-full bg-[var(--surface)]/60 backdrop-blur-xl text-[var(--text)] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-[var(--border)]"
+                            style={{ WebkitBackdropFilter: "blur(32px)" }}>
+                            <Play size={10} fill="currentColor" />
+                            Video
+                        </div>
+                    )}
+                    {activity.view_count > 0 && (
+                        <div className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-xl text-white text-[10px] font-bold tracking-wider">
+                            👁 {activity.view_count >= 1000
+                                ? (activity.view_count / 1000).toFixed(activity.view_count >= 10_000 ? 0 : 1) + "K"
+                                : activity.view_count}
+                        </div>
+                    )}
                 </div>
 
             </div>
