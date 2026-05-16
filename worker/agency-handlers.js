@@ -2899,13 +2899,16 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
 
         if (!dryRun) {
           try {
+            // sheet_synced_at = NULL so the next bulk-sync rewrites this
+            // imported row with normalized cockpit values (e.g. "in-progress"
+            // canonical form vs the raw sheet "In Progress" we just imported).
             await env.DB.prepare(
               `INSERT INTO projects (
                  id, client_id, title, asset_type, status, assigned_editor_id,
                  due_date, completed_at, editor_payment_inr, client_charge_inr,
                  sheet_row_index, sheet_tab_name, sheet_synced_at
                )
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, CURRENT_TIMESTAMP)`
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL)`
             ).bind(
               projectId,
               clientId,

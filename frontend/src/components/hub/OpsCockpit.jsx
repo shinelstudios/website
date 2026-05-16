@@ -46,6 +46,7 @@ import SeoRequestModal from "./SeoRequestModal";
 import SheetSyncPanel from "./SheetSyncPanel";
 import CompletionLogPanel from "./CompletionLogPanel";
 import IgDiagnosticModal from "./IgDiagnosticModal";
+import YtQuotaPanel from "./YtQuotaPanel";
 
 // ---- helpers ---------------------------------------------------------------
 const fmtNum = (n) => {
@@ -1123,6 +1124,7 @@ export default function OpsCockpit() {
       {tab === "team" && <TeamPanel onChange={fetchSnapshot} />}
       {tab === "automation" && (
         <div className="space-y-5">
+          <YtQuotaPanel />
           <CompletionLogPanel />
           <SheetSyncPanel />
           <ScheduledTasksPanel clients={clients} />

@@ -274,10 +274,20 @@ export async function readDropdownRules(env, spreadsheetId, tabName) {
 export function matchToDropdown(value, allowedValues) {
   if (!value || !Array.isArray(allowedValues) || allowedValues.length === 0) return value;
   const v = String(value).trim().toLowerCase();
-  const match = allowedValues.find((a) => String(a).trim().toLowerCase() === v);
-  if (match) return match;
-  // Try partial / contains match: "reel" matches "Reel — vertical 9:16"
-  const partial = allowedValues.find((a) => String(a).trim().toLowerCase().startsWith(v) || v.startsWith(String(a).trim().toLowerCase()));
+  // Exact match (case-insensitive)
+  const exact = allowedValues.find((a) => String(a).trim().toLowerCase() === v);
+  if (exact) return exact;
+  // Loose prefix match — but ONLY when the shorter side is at least 4 chars
+  // long. Without this guard "in" would match against allowed "In Progress"
+  // and silently snap an entirely different status, OR a short cockpit
+  // value would match too many candidates and pick the wrong one.
+  // Founder feedback: previous loose match corrupted short statuses.
+  const partial = allowedValues.find((a) => {
+    const aLower = String(a).trim().toLowerCase();
+    const minLen = Math.min(v.length, aLower.length);
+    if (minLen < 4) return false;
+    return aLower.startsWith(v) || v.startsWith(aLower);
+  });
   return partial || value;
 }
 

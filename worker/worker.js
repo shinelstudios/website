@@ -910,18 +910,110 @@ const ytIdFrom = (url) => {
  * secrets. The git-history-leaked frontend key is no longer reachable
  * through any fallback path.
  */
+// ---------------------------------------------------------------------------
+// YT API quota safety
+//
+// Free tier per-key quota: 10,000 units/day.
+// Our usage:
+//   - channels.list:       1 unit
+//   - playlistItems.list:  1 unit
+//   - videos.list:         1 unit
+//   - search.list:       100 units (we rarely use it)
+//
+// We track usage per key in KV with a UTC-day key. Soft-exhaust at 8,500
+// (15% buffer) so a single bad burst can't black-hole the day. Hard 403
+// from Google still routes to `yt_key_exhausted:` (existing 1-hour cooldown).
+//
+// `recordYoutubeUsage(env, key, units)` should be called after every YT API
+// hit. This is a fire-and-forget KV write so it never blocks the request.
+// ---------------------------------------------------------------------------
+const YT_DAILY_LIMIT = 10_000;
+const YT_SOFT_LIMIT = 8_500;
+
+function ytTodayUtc() {
+  return new Date().toISOString().slice(0, 10); // "2026-05-12"
+}
+
+async function recordYoutubeUsage(env, key, units = 1) {
+  if (!env?.SHINEL_AUDIT || !key) return;
+  try {
+    const keyHash = await sha256Hex(key);
+    const k = `yt_quota:${keyHash}:${ytTodayUtc()}`;
+    const curr = parseInt((await env.SHINEL_AUDIT.get(k)) || "0", 10) || 0;
+    const next = curr + (Number(units) || 1);
+    // 25h TTL ensures the counter clears overnight UTC + 1h slack
+    await env.SHINEL_AUDIT.put(k, String(next), { expirationTtl: 90_000 });
+  } catch (e) {
+    console.warn("yt_quota record failed:", e?.message || e);
+  }
+}
+
 async function getYoutubeKey(env) {
   const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || "";
   const keys = keysStr.split(",").map(k => k.trim()).filter(Boolean);
 
+  // First pass — pick a key under SOFT limit AND not hard-exhausted.
   for (const k of keys) {
     const keyHash = await sha256Hex(k);
     const isExhausted = await env.SHINEL_AUDIT.get(`yt_key_exhausted:${keyHash}`);
-    if (!isExhausted) {
-      return k;
+    if (isExhausted) continue;
+    const used = parseInt((await env.SHINEL_AUDIT.get(`yt_quota:${keyHash}:${ytTodayUtc()}`)) || "0", 10);
+    if (used < YT_SOFT_LIMIT) return k;
+  }
+
+  // Second pass — every key is soft-throttled. Pick the LEAST used key that
+  // still has any quota left (hard limit 10K). Better than failing entirely.
+  let best = null;
+  let bestUsed = Number.MAX_SAFE_INTEGER;
+  for (const k of keys) {
+    const keyHash = await sha256Hex(k);
+    const isExhausted = await env.SHINEL_AUDIT.get(`yt_key_exhausted:${keyHash}`);
+    if (isExhausted) continue;
+    const used = parseInt((await env.SHINEL_AUDIT.get(`yt_quota:${keyHash}:${ytTodayUtc()}`)) || "0", 10);
+    if (used < YT_DAILY_LIMIT && used < bestUsed) {
+      best = k;
+      bestUsed = used;
     }
   }
-  return null;
+  return best;
+}
+
+// Cockpit-facing function — returns per-key usage summary.
+async function getYoutubeQuotaStatus(env) {
+  const keysStr = env.YOUTUBE_API_KEYS || env.YOUTUBE_API_KEY || "";
+  const keys = keysStr.split(",").map(k => k.trim()).filter(Boolean);
+  const today = ytTodayUtc();
+  const status = [];
+  let totalUsed = 0;
+  let healthyKeys = 0;
+  for (let i = 0; i < keys.length; i++) {
+    const keyHash = await sha256Hex(keys[i]);
+    const used = parseInt((await env.SHINEL_AUDIT.get(`yt_quota:${keyHash}:${today}`)) || "0", 10);
+    const hardExhausted = !!(await env.SHINEL_AUDIT.get(`yt_key_exhausted:${keyHash}`));
+    let state = "healthy";
+    if (hardExhausted) state = "exhausted_hard";
+    else if (used >= YT_SOFT_LIMIT) state = "exhausted_soft";
+    else if (used >= YT_SOFT_LIMIT * 0.7) state = "warning";
+    if (state === "healthy") healthyKeys++;
+    totalUsed += used;
+    status.push({
+      index: i,
+      key_preview: `…${keys[i].slice(-6)}`,
+      used,
+      limit_soft: YT_SOFT_LIMIT,
+      limit_hard: YT_DAILY_LIMIT,
+      percent_used: Math.round((used / YT_DAILY_LIMIT) * 1000) / 10,
+      state,
+    });
+  }
+  return {
+    date: today,
+    total_keys: keys.length,
+    healthy_keys: healthyKeys,
+    total_units_used: totalUsed,
+    total_units_available: keys.length * YT_DAILY_LIMIT,
+    keys: status,
+  };
 }
 
 async function fetchYouTubeViews(env, videoId) {
@@ -983,6 +1075,8 @@ async function fetchYouTubeChannelInfo(env, identifier) {
 
   try {
     const resp = await fetchWithRetry(api, { headers: { accept: "application/json" } });
+    // Count this hit against the daily quota (1 unit for channels.list)
+    recordYoutubeUsage(env, key, 1).catch(() => {});
     if (!resp.ok) {
       const errJson = await resp.json().catch(() => ({}));
       const message = errJson?.error?.message || "Unknown error";
@@ -1022,6 +1116,8 @@ async function fetchYouTubePulse(env, channelId, uploadsPlaylistId = null) {
     try {
       const api = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${encodeURIComponent(uploadsPlaylistId)}&maxResults=5&key=${encodeURIComponent(key)}`;
       const resp = await fetchWithRetry(api, { headers: { accept: "application/json" } }, 3);
+      // playlistItems.list = 1 unit
+      recordYoutubeUsage(env, key, 1).catch(() => {});
       if (resp.ok) {
         const j = await resp.json().catch(() => ({}));
         if (j && j.items && j.items.length > 0) {
@@ -2021,6 +2117,15 @@ const handler = {
       return new Response(null, { status: 204, headers: cors });
     }
     
+    // YT API quota status (open to authenticated team — read-only). Lets
+    // the cockpit show how close each key is to its daily 10K cap.
+    if (url.pathname === "/admin/agency/yt-quota" && request.method === "GET") {
+      try { await requireTeamOrThrow(request, secret, env); }
+      catch (e) { return json({ error: e?.message || "unauthorized" }, e?.status || 401, cors); }
+      const status = await getYoutubeQuotaStatus(env);
+      return json(status, 200, cors);
+    }
+
     // Agency platform routes — namespaced under /admin/agency/* so they
     // never collide with existing /admin/* routes. Returns null if the
     // request isn't for an agency route.
