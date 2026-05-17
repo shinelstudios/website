@@ -674,6 +674,80 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     }
   }
 
+  // ---- GET /admin/agency/health/integrity — data-integrity snapshot (admin) -
+  //
+  // Cheap D1 queries that surface known data-shape problems at a glance.
+  // Each is wrapped in safe(p, fallback) so a missing column doesn't 500 the
+  // whole endpoint. Requires team JWT (does its own auth gate inline because
+  // it sits in the pre-auth section alongside the other public/* health
+  // endpoints, but is NOT itself public).
+  if (path === "/admin/agency/health/integrity" && method === "GET") {
+    try { await requireTeamOrThrow(request, secret, env); }
+    catch (e) { return err(e?.message || "unauthorized", e?.status || 401); }
+    const safe = (p, fb) => p.catch(() => fb);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const staleClaimedCutoff = nowSec - 7200;          // 2h
+    const thirtyDaysAgoIso = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const [
+      orphanPulse,
+      staleClaimed,
+      urlFormIg,
+      urlFormYt,
+      noSocials,
+      agentLogTotal,
+      agentLogOldest,
+      leadsUnprocessed,
+    ] = await Promise.all([
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM pulse_activities pa
+         WHERE NOT EXISTS (SELECT 1 FROM clients c WHERE c.youtube_id = pa.client_id)
+           AND NOT EXISTS (SELECT 1 FROM client_channels cc WHERE cc.channel_id = pa.client_id)`
+      ).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM laptop_tasks
+         WHERE status = 'claimed' AND claimed_at < ?1`
+      ).bind(staleClaimedCutoff).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM instagram_accounts
+         WHERE handle LIKE '%instagram.com/%' AND active = 1`
+      ).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM client_channels
+         WHERE handle LIKE '%youtube.com/%' AND active = 1`
+      ).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM clients c
+         WHERE c.status = 'active'
+           AND NOT EXISTS (SELECT 1 FROM client_channels cc WHERE cc.client_id = c.id AND cc.active = 1)
+           AND NOT EXISTS (SELECT 1 FROM instagram_accounts ia WHERE ia.client_id = c.id AND ia.active = 1)`
+      ).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM agent_log`
+      ).first(), { n: 0 }),
+      safe(env.DB.prepare(
+        `SELECT (julianday('now') - julianday(MIN(created_at))) AS days FROM agent_log`
+      ).first(), { days: 0 }),
+      safe(env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM leads
+         WHERE status = 'new' AND created_at > ?1`
+      ).bind(thirtyDaysAgoIso).first(), { n: 0 }),
+    ]);
+    return ok({
+      ok: true,
+      checks: {
+        orphan_pulse_activities: orphanPulse?.n || 0,
+        stale_claimed_laptop_tasks: staleClaimed?.n || 0,
+        url_form_instagram_handles: urlFormIg?.n || 0,
+        url_form_youtube_handles: urlFormYt?.n || 0,
+        clients_without_socials: noSocials?.n || 0,
+        agent_log_total_rows: agentLogTotal?.n || 0,
+        agent_log_oldest_days: agentLogOldest?.days || 0,
+        leads_unprocessed_30d: leadsUnprocessed?.n || 0,
+      },
+      generated_at: new Date().toISOString(),
+    });
+  }
+
   // ---- GET /admin/agency/public/stats — CANONICAL source of truth ----
   //
   // EVERY surface that displays "Total Reach" reads this endpoint:
@@ -1524,9 +1598,34 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // ---- /admin/agency/ops/snapshot — single call powering the cockpit dashboard
     // Default filters to ACTIVE clients only; pass ?show_inactive=true to include
     // archived/old clients we no longer work with.
+    //
+    // Wrapped in a 30s KV cache (SHINEL_AUDIT) because each call fans out into
+    // a dozen COUNT(*) queries against D1 and the cockpit polls this endpoint
+    // aggressively. Read first; serve cached if < 30s old. Compute & cache on
+    // miss. Errors bypass the cache entirely so we don't pin a bad result.
     if (path === "/admin/agency/ops/snapshot" && method === "GET") {
       const showInactive = url.searchParams.get("show_inactive") === "true";
-      return ok(await opsSnapshot(env, { showInactive }));
+      const cacheKey = `ops_snapshot:${showInactive ? "all" : "active"}`;
+      try {
+        const cachedRaw = env.SHINEL_AUDIT ? await env.SHINEL_AUDIT.get(cacheKey) : null;
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && cached.cached_at && (Date.now() - cached.cached_at) < 30_000) {
+            return ok(cached.payload);
+          }
+        }
+      } catch { /* cache miss / parse error → fall through to compute */ }
+      const snapshot = await opsSnapshot(env, { showInactive });
+      try {
+        if (env.SHINEL_AUDIT) {
+          await env.SHINEL_AUDIT.put(
+            cacheKey,
+            JSON.stringify({ cached_at: Date.now(), payload: snapshot }),
+            { expirationTtl: 60 }
+          );
+        }
+      } catch { /* skip caching on errors */ }
+      return ok(snapshot);
     }
 
     // ---- /admin/agency/competitors  (list all)
@@ -5002,6 +5101,7 @@ export async function runCompetitorResearch(env, opts = {}) {
       const channelRes = await fetch(
         `https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&id=${comp.channel_id}&key=${apiKey}`
       );
+      try { await recordYoutubeUsage(env, apiKey, 1); } catch {}
       if (!channelRes.ok) {
         summary.errors++;
         summary.detail.push({ channel_id: comp.channel_id, error: `channels.list ${channelRes.status}` });
@@ -5025,6 +5125,7 @@ export async function runCompetitorResearch(env, opts = {}) {
         const itemsRes = await fetch(
           `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=10&playlistId=${uploadsPlaylist}&key=${apiKey}`
         );
+        try { await recordYoutubeUsage(env, apiKey, 1); } catch {}
         if (itemsRes.ok) {
           const items = (await itemsRes.json()).items || [];
           const videoIds = items.map((i) => i.contentDetails?.videoId).filter(Boolean).slice(0, 10);
@@ -5032,6 +5133,7 @@ export async function runCompetitorResearch(env, opts = {}) {
             const vidsRes = await fetch(
               `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds.join(",")}&key=${apiKey}`
             );
+            try { await recordYoutubeUsage(env, apiKey, 1); } catch {}
             if (vidsRes.ok) {
               const vids = (await vidsRes.json()).items || [];
               recentUploads = vids.map((v) => ({

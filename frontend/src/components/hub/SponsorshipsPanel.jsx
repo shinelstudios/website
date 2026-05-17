@@ -139,7 +139,7 @@ export default function SponsorshipsPanel() {
             const col = PIPELINE.find((c) => c.key === r.status) || PIPELINE[0];
             let pl = {}; try { pl = JSON.parse(r.payload_json || "{}"); } catch {}
             return (
-              <li key={r.id} className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 bg-[var(--surface-alt)]">
+              <li key={`${r.id}-${r.status}-${r.value_inr || 0}`} className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 bg-[var(--surface-alt)]">
                 <div className="flex items-start gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

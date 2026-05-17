@@ -46,10 +46,12 @@ const ClientPulsePage = () => {
         return () => window.removeEventListener("auth:changed", checkAdmin);
     }, []);
 
-    // Filter relevant activities (Strict 24 hours + Active Clients Only)
+    // Filter relevant activities (48 hours + Active Clients Only).
+    // Matches the worker's 48h backend window + the "48 h activity window"
+    // hero label so we don't silently hide rows that pass the SQL filter.
     const activeFeeds = useMemo(() => {
         const now = Date.now();
-        const windowSize = 24 * 60 * 60 * 1000; // Strict 24 hours
+        const windowSize = 48 * 60 * 60 * 1000;
 
         // Use stats for canonical ID lookup
         // We filter for 'active' status and map to the YouTube canonical ID (UC...)
@@ -131,7 +133,7 @@ const ClientPulsePage = () => {
         <div className="min-h-screen bg-[var(--surface)] text-[var(--text)] selection:bg-[var(--orange)]/30">
             <MetaTags
                 title="Client Pulse | Shinel Studios Live"
-                description="Real-time YouTube activity feed for our partner creators. New uploads and live streams from the last 24h."
+                description="Real-time YouTube activity feed for our partner creators. New uploads and live streams from the last 48h."
             />
 
             {/* --- HERO (editorial v2) --- */}
@@ -201,6 +203,7 @@ const ClientPulsePage = () => {
                                 disabled={isRefreshing || loading}
                                 className="p-2 rounded-xl bg-[var(--surface-alt)] border border-[var(--border)] text-[var(--text-muted)] hover:text-orange-500 hover:border-orange-500/50 transition-all disabled:opacity-50"
                                 title="Check for updates (Admin Only)"
+                                aria-label="Refresh pulse feed"
                             >
                                 <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
                             </button>

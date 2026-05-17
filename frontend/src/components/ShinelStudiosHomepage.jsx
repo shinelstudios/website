@@ -69,13 +69,21 @@ import StrategyWizard from './StrategyWizard';
 import { GrainOverlay } from "../design";
 import { AUTH_BASE } from "../config/constants";
 import EditorialHero from "./home/EditorialHero";
+// 2026-05-18: Press + awards authority strip — competitor audit #1 recommendation.
+import PressAndAwardsWall from "./home/PressAndAwardsWall.jsx";
 import EditorialServicesMarquee from "./home/EditorialServicesMarquee";
 import EditorialProcess from "./home/EditorialProcess";
 // Phase 3 homepage refresh — new editorial sections + value-add strips.
 import LiveNumbersBand from "./home/LiveNumbersBand.jsx";
 import JustShippedTicker from "./home/JustShippedTicker.jsx";
 import EditorialServicesGrid from "./home/EditorialServicesGrid.jsx";
+// 2026-05-18: ServicePillars replaces EditorialServicesGrid on the homepage.
+// The grid file is kept on disk for other pages / as a fallback.
+import ServicePillars from "./home/ServicePillars.jsx";
+// 2026-05-18: Dense brand-logo marquee between roster + creator-pitch CTA.
+import SponsorBrandStrip from "./home/SponsorBrandStrip.jsx";
 import EditorialBeforeAfterSection from "./home/EditorialBeforeAfterSection.jsx";
+import FeaturedCaseStudies from "./home/FeaturedCaseStudies.jsx";
 import ResultsStrip from "./home/ResultsStrip.jsx";
 import EditorialTestimonialsSection from "./home/EditorialTestimonialsSection.jsx";
 import PricingTeaser from "./home/PricingTeaser.jsx";
@@ -83,6 +91,8 @@ import EditorialAuditForm from "./home/EditorialAuditForm.jsx";
 import EditorialFollowUs from "./home/EditorialFollowUs.jsx";
 import EditorialToolsCTA from "./home/EditorialToolsCTA.jsx";
 import FAQAccordion from "./home/FAQAccordion.jsx";
+// Creator-side CTA — flips the messaging for creators who land on the homepage.
+import CreatorPitchCTA from "./home/CreatorPitchCTA.jsx";
 
 // Custom hooks
 import { useReducedMotion, useScrollPosition, useInView } from '../hooks/useCustomHooks';
@@ -1066,6 +1076,14 @@ export default function ShinelStudiosHomepage() {
             <EditorialHero onAudit={handleOpenCalendly} />
           </ErrorBoundary>
 
+          {/* 1a) Press + awards authority strip — "As Featured In" masthead row
+                 plus an industry awards row. Sits immediately after the hero
+                 so borrowed authority lands in <2s. Short editorial flourish,
+                 not a full block. Added 2026-05-18 (competitor audit #1). */}
+          <ErrorBoundary>
+            <PressAndAwardsWall />
+          </ErrorBoundary>
+
           {/* Ambient grain — fixed SVG noise, GPU-composited, 3% opacity */}
           <GrainOverlay />
 
@@ -1094,10 +1112,11 @@ export default function ShinelStudiosHomepage() {
             Then: Strategy Wizard + Contact CTA (existing).
           */}
 
-          {/* 2. Live numbers band */}
-          <ErrorBoundary>
-            <LiveNumbersBand />
-          </ErrorBoundary>
+          {/* 2. LiveNumbersBand REMOVED — the Trustbar marquee at the very top
+              already shows "Total Managed Reach" as one of its rotating items.
+              Stacking another giant counter created a duplicate-stat feel
+              (founder feedback May 2026). The trophy wall + receipts in the
+              creator hero carry the depth. */}
 
           {/* 3. Just shipped ticker */}
           <ErrorBoundary>
@@ -1109,9 +1128,11 @@ export default function ShinelStudiosHomepage() {
             <EditorialServicesMarquee />
           </ErrorBoundary>
 
-          {/* 5. Services (editorial grid) */}
+          {/* 5. Service pillars — "What we ship" (replaces EditorialServicesGrid
+              on the homepage as of 2026-05-18; grid component preserved
+              for other pages/routes). */}
           <ErrorBoundary fallback={<SectionSkeleton content="card" contentCount={4} />}>
-            <EditorialServicesGrid />
+            <ServicePillars />
           </ErrorBoundary>
 
           {/* 6. Editorial six-step process strip */}
@@ -1128,6 +1149,20 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
+          {/* 7a-bis. Sponsor brand strip — dense marquee of brands our
+              creators have shipped work for. Sits between the trophy wall
+              and the creator-side pitch CTA. */}
+          <ErrorBoundary>
+            <SponsorBrandStrip />
+          </ErrorBoundary>
+
+          {/* 7b. Creator-side pitch CTA — flips the message from "hire us" to
+              "apply to be repped". Sits between the trophy wall and the
+              scrolling marquee so creators see proof first, then the ask. */}
+          <ErrorBoundary>
+            <CreatorPitchCTA />
+          </ErrorBoundary>
+
           {/* 7c. The original scrolling marquee — kept as a "and 30 more channels" tail.
               (Receipts band removed — the hero LiveNumbersBand at the top already shows these stats.) */}
           <ErrorBoundary>
@@ -1139,6 +1174,15 @@ export default function ShinelStudiosHomepage() {
           {/* 8. Before/after demo (touch-safe slider replaces ServiceLens) */}
           <ErrorBoundary>
             <EditorialBeforeAfterSection />
+          </ErrorBoundary>
+
+          {/* 8.5. Featured case-study showcase \u2014 three real recent ships
+              (Kiaraa, Aish, Kamz) as poster cards with metric badges.
+              Sits between the before/after demo and the ResultsStrip
+              carousel so visitors get a "watch the cut" affordance before
+              the receipts band. */}
+          <ErrorBoundary>
+            <FeaturedCaseStudies />
           </ErrorBoundary>
 
           {/* 9. Results strip \u2014 case-study teaser carousel */}

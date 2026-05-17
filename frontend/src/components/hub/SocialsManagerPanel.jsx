@@ -264,6 +264,7 @@ export default function SocialsManagerPanel() {
 
       {editing && (
         <EditClientModal
+          key={editing.id}
           client={editing}
           onClose={() => setEditing(null)}
           onChange={async () => {

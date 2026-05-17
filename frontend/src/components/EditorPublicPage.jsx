@@ -60,7 +60,7 @@ export default function EditorPublicPage() {
       <div className="relative" style={{ background: `linear-gradient(180deg, ${color}11 0%, transparent 100%)` }}>
         {profile.cover_url && (
           <div className="h-48 md:h-64 w-full overflow-hidden">
-            <img src={profile.cover_url} alt="" className="w-full h-full object-cover opacity-50" />
+            <img src={profile.cover_url} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} className="w-full h-full object-cover opacity-50" />
           </div>
         )}
         <div className="container mx-auto px-4 max-w-5xl py-8">
@@ -69,7 +69,7 @@ export default function EditorPublicPage() {
           </Link>
           <div className="flex items-start gap-5">
             {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.name} className="w-24 h-24 rounded-2xl object-cover border-4" style={{ borderColor: color }} />
+              <img src={profile.avatar_url} alt={profile.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} className="w-24 h-24 rounded-2xl object-cover border-4" style={{ borderColor: color }} />
             ) : (
               <div className="w-24 h-24 rounded-2xl flex items-center justify-center text-white text-3xl font-black" style={{ background: color }}>
                 {profile.name?.charAt(0) || "E"}

@@ -13,7 +13,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Youtube, Instagram, ArrowRight } from "lucide-react";
+import { Sparkles, Youtube, Instagram, ArrowRight, Trophy, Crown, Tag } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
 
 function fmtCount(n) {
@@ -21,6 +21,27 @@ function fmtCount(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
   return String(n);
+}
+
+// Third chip on each card — pure derivation from public client fields.
+// We don't have growth deltas on the public clients endpoint, so we pick
+// a meaningful static-ish badge in priority order:
+//   1. IG >= 1M  → "1M+ club"  (Crown icon)
+//   2. YT >= 100K → "Top 0.1%" (Trophy icon)
+//   3. niche      → e.g. "Gaming", "Music" (Tag icon)
+// Returns null when none of those apply so the chip silently drops out.
+function thirdChipFor(creator) {
+  if ((creator.ig_followers || 0) >= 1_000_000) {
+    return { icon: Crown, label: "1M+ club" };
+  }
+  if ((creator.yt_subscribers || 0) >= 100_000) {
+    return { icon: Trophy, label: "Top 0.1%" };
+  }
+  if (creator.niche && typeof creator.niche === "string") {
+    const cap = creator.niche.charAt(0).toUpperCase() + creator.niche.slice(1).toLowerCase();
+    return { icon: Tag, label: cap };
+  }
+  return null;
 }
 
 // Deterministic per-name gradient so each creator card has a distinct
@@ -48,6 +69,7 @@ function CreatorCard({ creator, index }) {
   const hasYt = creator.yt_subscribers > 0;
   const hasIg = creator.ig_followers > 0;
   const reach = creator.reach || 0;
+  const thirdChip = thirdChipFor(creator);
 
   return (
     <Link
@@ -86,6 +108,11 @@ function CreatorCard({ creator, index }) {
             <Instagram size={11} /> {fmtCount(creator.ig_followers)}
           </span>
         )}
+        {thirdChip && (
+          <span className="creator-card__chip">
+            <thirdChip.icon size={11} /> {thirdChip.label}
+          </span>
+        )}
       </div>
 
       {/* Bottom: name + niche */}
@@ -112,16 +139,17 @@ function CreatorCard({ creator, index }) {
 export default function OurCreatorsHero({ limit = 12 }) {
   const [creators, setCreators] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     fetch(`${AUTH_BASE}/admin/agency/public/clients`)
       .then((r) => r.ok ? r.json() : Promise.reject(r.status))
       .then((j) => setCreators((j.clients || []).slice(0, limit)))
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [limit]);
 
-  if (!loading && creators.length === 0) return null;
+  if (!loading && !fetchError && creators.length === 0) return null;
 
   return (
     <section className="our-creators-hero">
@@ -145,6 +173,8 @@ export default function OurCreatorsHero({ limit = 12 }) {
             <li key={i} className="creator-card creator-card--skeleton" />
           ))}
         </ul>
+      ) : fetchError ? (
+        <p className="our-creators-hero__fallback">Roster temporarily unavailable.</p>
       ) : (
         <ul className="our-creators-hero__grid">
           {creators.map((c, i) => (
@@ -304,6 +334,14 @@ export default function OurCreatorsHero({ limit = 12 }) {
           background: rgba(0,0,0,0.7);
           border-radius: 4px;
           color: rgba(255,255,255,0.7);
+        }
+
+        .our-creators-hero__fallback {
+          font-size: 13px;
+          color: var(--text-muted, #a3a3a3);
+          opacity: 0.7;
+          margin: 0;
+          padding: 24px 0;
         }
 
         .our-creators-hero__cta {

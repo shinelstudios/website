@@ -8,7 +8,7 @@
  * Pulls from /admin/agency/public/clients (60s edge cache). No auth.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Sparkles, Users2, ArrowRight, Youtube, Instagram } from "lucide-react";
@@ -27,9 +27,30 @@ function gradientFor(name) {
   return `linear-gradient(135deg, hsl(${hue} 75% 55%) 0%, hsl(${(hue + 50) % 360} 70% 45%) 100%)`;
 }
 
+/**
+ * Canonicalize a raw niche_tag (e.g. "gaming-bgmi", "music-punjabi",
+ * "tattoo-art-india", "devotional-hindu", "vlog-daily") into a high-level
+ * category we surface as a filter chip. Client-side only — no API change.
+ */
+function categoryFor(rawNiche) {
+  const n = String(rawNiche || "").toLowerCase().trim();
+  if (!n) return "Other";
+  if (n.startsWith("gaming-") || n === "gaming") return "Gaming";
+  if (n.startsWith("music-") || n === "music") return "Music";
+  if (n.startsWith("tattoo-") || n === "tattoo") return "Tattoo & Art";
+  if (n.startsWith("devotional-") || n === "devotional") return "Devotional";
+  if (n.startsWith("vlog")) return "Vlogs";
+  return "Other";
+}
+
+// Display order for the chip row. "All" is always first.
+const CATEGORY_ORDER = ["Gaming", "Music", "Tattoo & Art", "Devotional", "Vlogs", "Other"];
+
 export default function OurCreatorsPage() {
   const [list, setList] = useState(null);
   const [err, setErr] = useState("");
+  // Selected chip category. "All" means no filter.
+  const [activeCat, setActiveCat] = useState("All");
 
   useEffect(() => {
     fetch(`${AUTH_BASE}/admin/agency/public/clients`)
@@ -39,6 +60,33 @@ export default function OurCreatorsPage() {
   }, []);
 
   const totalReach = (list || []).reduce((s, c) => s + (c.reach || 0), 0);
+
+  // Tally creators per high-level category. Skip categories with 0.
+  const categoryCounts = useMemo(() => {
+    const counts = { All: 0 };
+    for (const c of (list || [])) {
+      const cat = categoryFor(c.niche);
+      counts.All += 1;
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [list]);
+
+  // Build chip list in fixed order: All first, then any non-empty category.
+  const chips = useMemo(() => {
+    const out = [{ key: "All", count: categoryCounts.All || 0 }];
+    for (const cat of CATEGORY_ORDER) {
+      if ((categoryCounts[cat] || 0) > 0) out.push({ key: cat, count: categoryCounts[cat] });
+    }
+    return out;
+  }, [categoryCounts]);
+
+  // Filtered grid input — All shows everything; any chip narrows.
+  const visibleList = useMemo(() => {
+    if (!list) return list;
+    if (activeCat === "All") return list;
+    return list.filter((c) => categoryFor(c.niche) === activeCat);
+  }, [list, activeCat]);
 
   return (
     <>
@@ -67,6 +115,48 @@ export default function OurCreatorsPage() {
             </p>
           </header>
 
+          {/* Niche chip filter — derived client-side from niche_tag.
+              Hidden until data lands, and only when we have >1 category
+              (a single-bucket page doesn't need a filter). */}
+          {list && list.length > 0 && chips.length > 2 && (
+            <div
+              className="flex flex-wrap items-center justify-center gap-2 mb-8"
+              role="tablist"
+              aria-label="Filter creators by niche"
+            >
+              {chips.map((chip) => {
+                const isActive = activeCat === chip.key;
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveCat(chip.key)}
+                    className={[
+                      "inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition",
+                      isActive
+                        ? "bg-[var(--orange)] text-white border-[var(--orange)] shadow-sm"
+                        : "bg-[var(--surface-alt)] text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:border-[var(--orange)]",
+                    ].join(" ")}
+                  >
+                    <span>{chip.key}</span>
+                    <span
+                      className={[
+                        "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                        isActive
+                          ? "bg-white/25 text-white"
+                          : "bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300",
+                      ].join(" ")}
+                    >
+                      {chip.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Grid */}
           {err ? (
             <p className="text-center text-sm text-red-500">Couldn't load creators: {err}</p>
@@ -78,9 +168,20 @@ export default function OurCreatorsPage() {
             </ul>
           ) : list.length === 0 ? (
             <p className="text-center text-neutral-500">No public creators yet. Check back soon.</p>
+          ) : visibleList.length === 0 ? (
+            <p className="text-center text-neutral-500">
+              No creators in <strong>{activeCat}</strong> yet.{" "}
+              <button
+                type="button"
+                onClick={() => setActiveCat("All")}
+                className="underline text-[var(--orange)] font-semibold"
+              >
+                Show all
+              </button>
+            </p>
           ) : (
             <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {list.map((c) => (
+              {visibleList.map((c) => (
                 <li key={c.slug}>
                   <Link
                     to={`/c/${c.slug}`}
@@ -98,6 +199,7 @@ export default function OurCreatorsPage() {
                           src={c.avatar_url}
                           alt=""
                           loading="lazy"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           className="absolute bottom-2 left-2 w-12 h-12 rounded-full ring-2 ring-white object-cover"
                         />
                       )}

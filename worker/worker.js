@@ -7033,6 +7033,21 @@ const handler = {
       } catch (e) { console.error("Heartbeat write failed:", e.message); }
     }
     ctx.waitUntil((async () => {
+      // Once-per-day agent_log cleanup. KV-gated so we don't run on every
+      // hourly/30-min tick. Deletes rows older than 90 days to keep D1 storage
+      // bounded (every Discord ping, status change, cron tick writes a row).
+      try {
+        const cleanupKey = "agent_log_cleanup_last_run";
+        const last = await env.SHINEL_AUDIT.get(cleanupKey);
+        const now = Math.floor(Date.now() / 1000);
+        if (!last || (now - Number(last)) > 86400) {
+          try {
+            await env.DB.prepare("DELETE FROM agent_log WHERE created_at < date('now', '-90 days')").run();
+            await env.SHINEL_AUDIT.put(cleanupKey, String(now), { expirationTtl: 86400 * 2 });
+          } catch (e) { console.warn("agent_log cleanup failed:", e?.message); }
+        }
+      } catch (e) { console.warn("agent_log cleanup gate failed:", e?.message); }
+
       try {
         const result = await performClientSync(env, false, false);
         console.log(`CRON SUCCESS: Synced ${result.synced} creators.`);

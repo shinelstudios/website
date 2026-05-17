@@ -288,7 +288,7 @@ export default function EditClientModal({ client, onClose, onChange }) {
             </div>
             <ul className="space-y-2 mb-3">
               {client.channels.map((ch) => (
-                <li key={ch.id} className="flex items-center gap-2 rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 bg-[var(--surface-alt)]">
+                <li key={`${ch.id}-${ch.handle}-${ch.role}-${ch.managed_by_us}`} className="flex items-center gap-2 rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 bg-[var(--surface-alt)]">
                   <Youtube size={12} className="text-red-500 shrink-0" />
                   <input
                     type="text"
@@ -367,7 +367,7 @@ export default function EditClientModal({ client, onClose, onChange }) {
             </div>
             <ul className="space-y-2 mb-3">
               {client.instagram.map((ig) => (
-                <li key={ig.id} className="flex items-center gap-2 rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 bg-[var(--surface-alt)]">
+                <li key={`${ig.id}-${ig.handle}-${ig.role}-${ig.managed_by_us}`} className="flex items-center gap-2 rounded-md border border-neutral-200 dark:border-neutral-800 px-2 py-1.5 bg-[var(--surface-alt)]">
                   <Instagram size={12} className="text-pink-500 shrink-0" />
                   <input
                     type="text"
