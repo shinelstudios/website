@@ -19,6 +19,8 @@ import ScrollProgressBar from "./ScrollProgressBar";
 import QuickQuoteBar from "./QuickQuoteBar";
 import FloatingWhatsApp from "./FloatingWhatsApp";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
+const OurCreatorsHero = React.lazy(() => import("@/components/home/OurCreatorsHero.jsx"));
+const TrustedByLeaders = React.lazy(() => import("@/components/home/TrustedByLeaders.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
 // HeroSection retired in favour of EditorialHero. ServicesSection retired
 // in favour of EditorialServicesGrid (file kept on disk as fallback).
@@ -1117,10 +1119,24 @@ export default function ShinelStudiosHomepage() {
             <EditorialProcess />
           </ErrorBoundary>
 
-          {/* 7. Social proof (logos) */}
+          {/* 7a. Our Creators trophy wall — full portrait grid */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
+              <OurCreatorsHero limit={12} />
+            </React.Suspense>
+          </ErrorBoundary>
+
+          {/* 7b. Trusted by — stats + brand wall */}
           <ErrorBoundary>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
-              <CreatorsWorkedWithMarquee isDark={isDark} />
+              <TrustedByLeaders />
+            </React.Suspense>
+          </ErrorBoundary>
+
+          {/* 7c. The original scrolling marquee — kept as a "and 30 more channels" tail */}
+          <ErrorBoundary>
+            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
+              <CreatorsWorkedWithMarquee isDark={isDark} speedPps={22} gap={1.5} />
             </React.Suspense>
           </ErrorBoundary>
 

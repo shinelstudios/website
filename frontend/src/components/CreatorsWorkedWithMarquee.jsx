@@ -853,13 +853,13 @@ const CreatorsWorkedWithMarquee = ({
 
         .cw-avatar {
           position: relative;
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
+          width: 60px;
+          height: 60px;
+          border-radius: 14px;
           overflow: hidden;
           flex-shrink: 0;
           background: #111;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04);
         }
         .cw-avatar img {
           width: 100%;
@@ -896,8 +896,8 @@ const CreatorsWorkedWithMarquee = ({
 
         .cw-title {
           color: var(--text);
-          font-weight: 700;
-          font-size: 0.95rem;
+          font-weight: 800;
+          font-size: 1.05rem;
           line-height: 1.2;
           letter-spacing: -0.01em;
           max-width: 240px;

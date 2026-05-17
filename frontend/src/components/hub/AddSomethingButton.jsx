@@ -27,17 +27,54 @@ function authedFetch(path, opts = {}) {
 function NewClientModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     name: "", niche_tag: "", secondary_niche_tag: "",
-    retainer_tier: "", youtube_id: "", instagram_handle: "",
-    managed_by_us: true,
+    retainer_tier: "", managed_by_us: true,
+    yt_bulk: "",   // textarea, one channel per line (URL / @handle / UCxxx)
+    ig_bulk: "",   // textarea, one handle per line
+    tagline: "",
+    drive_folder_url: "",
+    discord_webhook_url: "",
   });
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null); // {step, total} during multi-step submit
   const [err, setErr] = useState(null);
   const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  // Parse a bulk textarea into clean tokens. Splits on newlines + commas.
+  // For YT: extracts UCxxx, @handle, or last URL segment.
+  // For IG: strips @ and instagram.com prefix.
+  function parseYtList(text) {
+    return (text || "")
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((raw) => {
+        // Strip URL prefixes
+        const m = raw.match(/youtube\.com\/(?:channel\/(UC[\w-]+)|@?([\w.-]+))/i);
+        if (m) return m[1] || ("@" + m[2]);
+        return raw;
+      });
+  }
+  function parseIgList(text) {
+    return (text || "")
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((raw) => {
+        const m = raw.match(/instagram\.com\/([^/?#]+)/i);
+        if (m) return m[1].replace(/^@/, "");
+        return raw.replace(/^@/, "");
+      });
+  }
+
   const save = async () => {
     if (!form.name.trim()) { setErr("Name required"); return; }
+    const ytList = parseYtList(form.yt_bulk);
+    const igList = parseIgList(form.ig_bulk);
     setBusy(true); setErr(null);
     try {
+      // STEP 1 — create the client. Pass the first YT/IG so the auto-create
+      // path inside the worker also seeds client_channels + instagram_accounts.
+      setProgress({ step: "Creating client…", index: 0, total: 1 + Math.max(ytList.length, 1) + Math.max(igList.length, 1) + 1 });
       const r = await authedFetch("/admin/agency/clients", {
         method: "POST",
         body: JSON.stringify({
@@ -45,16 +82,62 @@ function NewClientModal({ onClose, onSaved }) {
           niche_tag: form.niche_tag || null,
           secondary_niche_tag: form.secondary_niche_tag || null,
           retainer_tier: form.retainer_tier || null,
-          youtube_id: form.youtube_id || null,
-          instagram_handle: form.instagram_handle ? form.instagram_handle.replace(/^@/, "") : null,
+          youtube_id: ytList[0] || null,
+          instagram_handle: igList[0] || null,
           managed_by_us: form.managed_by_us,
         }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `API ${r.status}`);
-      onSaved?.(j.id);
+      const clientId = j.id;
+
+      // STEP 2 — add any additional YT channels beyond the first.
+      // The first is already there via the auto-create. Skip it.
+      let idx = 1;
+      for (const yt of ytList.slice(1)) {
+        setProgress({ step: `Adding YT ${idx}…`, index: idx, total: 1 + ytList.length + igList.length + 1 });
+        await authedFetch(`/admin/agency/clients/${clientId}/channels`, {
+          method: "POST",
+          body: JSON.stringify({ channel_id: yt, role: "secondary" }),
+        }).catch(() => {});
+        idx++;
+      }
+      // STEP 3 — add additional IG accounts beyond the first
+      for (const ig of igList.slice(1)) {
+        setProgress({ step: `Adding IG @${ig}…`, index: idx, total: 1 + ytList.length + igList.length + 1 });
+        await authedFetch(`/admin/agency/instagram`, {
+          method: "POST",
+          body: JSON.stringify({
+            client_id: clientId,
+            handle: ig,
+            url: `https://instagram.com/${ig}`,
+            role: "secondary",
+            managed_by_us: form.managed_by_us ? 1 : 0,
+          }),
+        }).catch(() => {});
+        idx++;
+      }
+      // STEP 4 — public profile + drive + discord (single PATCH for the lot)
+      const profilePayload = {};
+      if (form.tagline.trim()) profilePayload.tagline = form.tagline.trim();
+      if (form.drive_folder_url.trim()) profilePayload.drive_folder_url = form.drive_folder_url.trim();
+      if (Object.keys(profilePayload).length) {
+        setProgress({ step: "Saving public profile…", index: idx, total: idx + 1 });
+        await authedFetch(`/admin/agency/clients/${clientId}`, {
+          method: "PATCH",
+          body: JSON.stringify(profilePayload),
+        }).catch(() => {});
+      }
+      if (form.discord_webhook_url.trim()) {
+        await authedFetch(`/admin/agency/clients/${clientId}/discord`, {
+          method: "POST",
+          body: JSON.stringify({ discord_webhook_url: form.discord_webhook_url.trim() }),
+        }).catch(() => {});
+      }
+
+      onSaved?.(clientId);
       onClose();
-    } catch (e) { setErr(e.message); }
+    } catch (e) { setErr(e.message); setProgress(null); }
     finally { setBusy(false); }
   };
 
@@ -87,22 +170,57 @@ function NewClientModal({ onClose, onSaved }) {
             </div>
           </div>
           <div>
-            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">YouTube channel ID or handle</label>
-            <input value={form.youtube_id} onChange={update("youtube_id")} placeholder="UCxxxxxxxxxx or @handle" className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono" />
-            <p className="text-[10px] text-neutral-500 mt-1">Optional. Pulse sync will canonicalize @handle → UCxxx automatically.</p>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">YouTube channels — one per line</label>
+            <textarea
+              value={form.yt_bulk}
+              onChange={update("yt_bulk")}
+              placeholder={"UCxxxxxxx\n@theirhandle\nhttps://youtube.com/@anotherchannel"}
+              rows={3}
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono resize-y"
+            />
+            <p className="text-[10px] text-neutral-500 mt-1">Paste UCxxx IDs, @handles, or full URLs — one per line. First one is the main, rest become secondaries.</p>
           </div>
           <div>
-            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Instagram handle</label>
-            <input value={form.instagram_handle} onChange={update("instagram_handle")} placeholder="@theirhandle (or just theirhandle)" className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono" />
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Instagram accounts — one per line</label>
+            <textarea
+              value={form.ig_bulk}
+              onChange={update("ig_bulk")}
+              placeholder={"theirhandle\n@theirsecondhandle\nhttps://instagram.com/another"}
+              rows={3}
+              className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono resize-y"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Tagline (homepage card one-liner)</label>
+            <input value={form.tagline} onChange={update("tagline")} placeholder="e.g. India's top BGMI streamer" maxLength={80} className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Drive folder URL (optional)</label>
+              <input value={form.drive_folder_url} onChange={update("drive_folder_url")} placeholder="https://drive.google.com/drive/folders/…" className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-1 block">Discord webhook (optional)</label>
+              <input value={form.discord_webhook_url} onChange={update("discord_webhook_url")} placeholder="https://discord.com/api/webhooks/…" className="w-full bg-[var(--surface)] border border-neutral-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono" />
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={form.managed_by_us} onChange={(e) => setForm({ ...form, managed_by_us: e.target.checked })} />
             We manage this client (uncheck for tracked-only)
           </label>
           {err && <div className="text-xs text-red-500 bg-red-500/10 px-3 py-2 rounded">{err}</div>}
+          {progress && (
+            <div className="text-xs bg-[var(--orange)]/10 px-3 py-2 rounded">
+              <div className="font-bold text-[var(--orange)]">{progress.step}</div>
+              <div className="text-neutral-500 mt-0.5">Step {progress.index} of {progress.total}</div>
+              <div className="w-full h-1 bg-neutral-200 dark:bg-neutral-800 rounded mt-1.5 overflow-hidden">
+                <div className="h-full bg-[var(--orange)] transition-all" style={{ width: `${(progress.index / Math.max(progress.total, 1)) * 100}%` }} />
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800">Cancel</button>
+          <button onClick={onClose} className="text-sm px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800" disabled={busy}>Cancel</button>
           <button onClick={save} disabled={busy || !form.name.trim()} className="text-sm px-4 py-2 rounded-lg bg-[var(--orange)] text-white font-bold disabled:opacity-50">
             {busy ? "Onboarding…" : "Onboard"}
           </button>

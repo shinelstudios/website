@@ -381,10 +381,19 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       // Audiences recognize "@inkboymusik", not "Kamz Inkzone · @inkboymusik".
       // The internal client_name is still returned in the payload (used for
       // grouping / filtering on the admin side), but `name` is the handle.
+      // Sanitize handles: some rows accidentally hold a full URL like
+      // "https://www.youtube.com/@katkagaming". Extract the last @handle
+      // or path segment so the marquee never shows "@https://..." again.
+      const cleanHandleFn = (raw) => {
+        if (!raw) return null;
+        let h = String(raw).trim();
+        const m = h.match(/(?:youtube\.com|instagram\.com)\/(?:channel\/[^/?#]+|@?([^/?#]+))/i);
+        if (m && m[1]) h = m[1];
+        h = h.replace(/^@/, "").replace(/^https?:\/\//i, "").split(/[/?#]/)[0];
+        return h || null;
+      };
       const ytItems = (channels.results || []).map((c) => {
-        const cleanHandle = c.handle ? String(c.handle).replace(/^@/, "") : null;
-        // YT channel handles use @ prefix (matches YT's URL format /@handle).
-        // If no handle is stored, fall back to the channel ID.
+        const cleanHandle = cleanHandleFn(c.handle);
         const displayName = cleanHandle ? `@${cleanHandle}` : (c.channel_id || c.client_name || "Channel");
         return {
           type: "youtube",
@@ -402,7 +411,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       });
 
       const igItems = (igAccounts.results || []).map((ig) => {
-        const cleanHandle = String(ig.handle || "").replace(/^@/, "");
+        const cleanHandle = cleanHandleFn(ig.handle) || "";
         return {
           type: "instagram",
           client_id: ig.client_id,
@@ -575,15 +584,33 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
   if (path === "/admin/agency/public/clients" && method === "GET") {
     const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
     try {
-      const { results: clients } = await env.DB.prepare(
-        `SELECT id, slug, name, display_name, tagline, avatar_url, banner_url, niche_tag,
-                COALESCE(status, 'active') AS status, COALESCE(managed_by_us, 1) AS managed_by_us
-         FROM clients
-         WHERE public_enabled = 1
-           AND slug IS NOT NULL AND slug != ''
-           AND COALESCE(status, 'active') != 'old'
-         ORDER BY (status = 'active') DESC, name`
-      ).all();
+      // Two-step SELECT: try with the `featured` column, fall back gracefully
+      // if the migration hasn't been applied yet.
+      let clients;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, slug, name, display_name, tagline, avatar_url, banner_url, niche_tag,
+                  COALESCE(status, 'active') AS status, COALESCE(managed_by_us, 1) AS managed_by_us,
+                  COALESCE(featured, 0) AS featured
+           FROM clients
+           WHERE public_enabled = 1
+             AND slug IS NOT NULL AND slug != ''
+             AND COALESCE(status, 'active') != 'old'
+           ORDER BY featured DESC, (status = 'active') DESC, name`
+        ).all();
+        clients = r.results;
+      } catch {
+        const r = await env.DB.prepare(
+          `SELECT id, slug, name, display_name, tagline, avatar_url, banner_url, niche_tag,
+                  COALESCE(status, 'active') AS status, COALESCE(managed_by_us, 1) AS managed_by_us
+           FROM clients
+           WHERE public_enabled = 1
+             AND slug IS NOT NULL AND slug != ''
+             AND COALESCE(status, 'active') != 'old'
+           ORDER BY (status = 'active') DESC, name`
+        ).all();
+        clients = (r.results || []).map((c) => ({ ...c, featured: 0 }));
+      }
       if (!clients.length) {
         return new Response(JSON.stringify({ count: 0, clients: [] }), {
           status: 200,
@@ -621,13 +648,18 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           banner_url: c.banner_url || null,
           niche: c.niche_tag || null,
           status: c.status,
+          featured: !!c.featured,
           yt_handle: ch?.handle || null,
           yt_subscribers: ch?.subscribers || 0,
           ig_handle: ig?.handle || null,
           ig_followers: ig?.followers || 0,
           reach: (ch?.subscribers || 0) + (ig?.followers || 0),
         };
-      }).sort((a, b) => b.reach - a.reach);
+      }).sort((a, b) => {
+        // Featured wins, then highest reach
+        if (a.featured !== b.featured) return a.featured ? -1 : 1;
+        return b.reach - a.reach;
+      });
       return new Response(JSON.stringify({
         count: out.length,
         clients: out,
@@ -2153,16 +2185,29 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // Used by the cockpit "Socials Manager" panel so the founder can flip
     // managed_by_us per row without hunting through individual modals.
     if (path === "/admin/agency/socials" && method === "GET") {
-      // Return EVERY client regardless of status — including 'old' / archived.
-      // The Clients panel on the Overview tab shows all of them too; Socials
-      // Manager has to match so the founder can manage / un-archive any
-      // historical client from this view. The status dropdown chip on each
-      // row + the filter dropdown above keep things readable.
-      const { results: clients } = await env.DB.prepare(
-        `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us
-         FROM clients
-         ORDER BY (status = 'active') DESC, (status = 'old') ASC, name`
-      ).all();
+      // Return EVERY client regardless of status. Includes the public-profile
+      // fields (tagline, display_name, featured, public_enabled) so the
+      // EditClientModal can render them.
+      let clients;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us,
+                  display_name, tagline, public_enabled,
+                  COALESCE(featured, 0) AS featured
+           FROM clients
+           ORDER BY featured DESC, (status = 'active') DESC, (status = 'old') ASC, name`
+        ).all();
+        clients = r.results;
+      } catch {
+        // Featured column not migrated yet — graceful fallback.
+        const r = await env.DB.prepare(
+          `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us,
+                  display_name, tagline, public_enabled
+           FROM clients
+           ORDER BY (status = 'active') DESC, (status = 'old') ASC, name`
+        ).all();
+        clients = (r.results || []).map((c) => ({ ...c, featured: 0 }));
+      }
       // Two-step on client_channels for managed_by_us (migration may be pending)
       let channels;
       try {
@@ -2339,6 +2384,28 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id: chid, deleted: true });
     }
 
+    // ---- PATCH /admin/agency/clients/:id  — update public-profile fields
+    // Allowed: tagline (one-liner under name), display_name (override the
+    // internal client.name on public surfaces), featured (pin to top of
+    // OurCreatorsHero), niche_tag (display category), avatar_url, banner_url.
+    const clientPatchMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)$/);
+    if (clientPatchMatch && method === "PATCH") {
+      const id = clientPatchMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const allowed = ["tagline", "display_name", "featured", "niche_tag", "avatar_url", "banner_url", "public_enabled"];
+      const sets = []; const binds = []; let i = 1;
+      for (const k of allowed) {
+        if (body[k] !== undefined) {
+          const v = (k === "featured" || k === "public_enabled") ? (body[k] ? 1 : 0) : body[k];
+          sets.push(`${k} = ?${i++}`); binds.push(v);
+        }
+      }
+      if (!sets.length) return err("no editable fields");
+      binds.push(id);
+      await env.DB.prepare(`UPDATE clients SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      return ok({ id, updated: true });
+    }
+
     // ---- DELETE /admin/agency/clients/:id  — archive (soft delete)
     // Sets clients.status='old'. The 'old' status is excluded from every
     // public SELECT (pulse, marquee, reach, /creators) and from the cockpit
@@ -2350,8 +2417,9 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const id = clientDeleteMatch[1];
       const client = await env.DB.prepare("SELECT name, status FROM clients WHERE id = ?1").bind(id).first();
       if (!client) return err("client not found", 404);
+      // Note: clients table doesn't have updated_at (legacy schema). Just flip status.
       await env.DB.prepare(
-        "UPDATE clients SET status = 'old', updated_at = CURRENT_TIMESTAMP WHERE id = ?1"
+        "UPDATE clients SET status = 'old' WHERE id = ?1"
       ).bind(id).run();
       try {
         await env.DB.prepare(

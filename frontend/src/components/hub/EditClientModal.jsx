@@ -15,7 +15,7 @@
  */
 
 import { useState } from "react";
-import { X, Plus, Trash2, Youtube, Instagram, Check } from "lucide-react";
+import { X, Plus, Trash2, Youtube, Instagram, Check, Star, Sparkles } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
 import { getAccessToken } from "../../utils/tokenStore";
 
@@ -200,6 +200,84 @@ export default function EditClientModal({ client, onClose, onChange }) {
                   📦 archived — click to restore
                 </button>
               )}
+            </div>
+          </section>
+
+          {/* Public profile — controls what appears on /creators + the homepage hero */}
+          <section>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-2 flex items-center gap-1">
+              <Sparkles size={11} className="text-[var(--orange)]" /> Public profile (homepage + /c/&lt;slug&gt;)
+            </div>
+            <div className="space-y-2">
+              <div>
+                <label className="text-[11px] text-neutral-500 uppercase tracking-wider font-bold">Display name</label>
+                <input
+                  type="text"
+                  defaultValue={client.display_name || ""}
+                  placeholder={`(blank = use "${client.name}")`}
+                  maxLength={60}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (client.display_name || "")) {
+                      call(`/admin/agency/clients/${client.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ display_name: v || null }),
+                      }, "display_name");
+                    }
+                  }}
+                  className="w-full text-sm px-3 py-2 rounded bg-[var(--surface-alt)] border border-neutral-200 dark:border-neutral-700 focus:border-[var(--orange)] outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-neutral-500 uppercase tracking-wider font-bold">Tagline · one-liner under name on cards</label>
+                <input
+                  type="text"
+                  defaultValue={client.tagline || ""}
+                  placeholder="e.g. India's top tattoo storyteller"
+                  maxLength={80}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (client.tagline || "")) {
+                      call(`/admin/agency/clients/${client.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tagline: v }),
+                      }, "tagline");
+                    }
+                  }}
+                  className="w-full text-sm px-3 py-2 rounded bg-[var(--surface-alt)] border border-neutral-200 dark:border-neutral-700 focus:border-[var(--orange)] outline-none"
+                />
+                <p className="text-[10px] text-neutral-500 mt-1">Max 80 chars. Shown under the name on /creators cards and the homepage hero.</p>
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    defaultChecked={!!client.public_enabled}
+                    onChange={(e) => call(`/admin/agency/clients/${client.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ public_enabled: e.target.checked ? 1 : 0 }),
+                    }, "public_enabled")}
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider">Show on /creators</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    defaultChecked={!!client.featured}
+                    onChange={(e) => call(`/admin/agency/clients/${client.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ featured: e.target.checked ? 1 : 0 }),
+                    }, "featured")}
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Star size={11} className="text-amber-500" /> Featured (pin to top of homepage)
+                  </span>
+                </label>
+              </div>
             </div>
           </section>
 
