@@ -2016,29 +2016,48 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // sponsor inquiry payload + a status / notes / value_inr the founder edits
     // in the cockpit. Joined to clients(name) so the row reads cleanly.
     if (path === "/admin/agency/sponsorships" && method === "GET") {
+      // Two-step: try full SELECT with pipeline columns (status/notes/value_inr).
+      // Fall back to base columns if the sponsorship-pipeline migration hasn't
+      // been applied yet on this DB. Either way the panel renders.
       const statusFilter = url.searchParams.get("status");
-      const where = ["i.type = 'sponsor'"];
-      const binds = [];
-      let i = 1;
-      if (statusFilter) { where.push(`i.status = ?${i++}`); binds.push(statusFilter); }
-      binds.push(200);
-      const { results } = await env.DB.prepare(
-        `SELECT i.id, i.client_id, c.name AS client_name, c.slug AS client_slug,
-                i.payload_json, COALESCE(i.status, 'new') AS status, i.notes, i.assigned_to,
-                i.value_inr, i.created_at, i.updated_at, i.read_at
-         FROM client_inbox i
-         LEFT JOIN clients c ON c.id = i.client_id
-         WHERE ${where.join(" AND ")}
-         ORDER BY i.created_at DESC
-         LIMIT ?${i}`
-      ).bind(...binds).all();
-      const { results: stats } = await env.DB.prepare(
-        `SELECT COALESCE(status, 'new') AS status, COUNT(*) AS n,
-                COALESCE(SUM(value_inr), 0) AS total_inr
-         FROM client_inbox WHERE type = 'sponsor'
-         GROUP BY status`
-      ).all();
-      return ok({ count: (results || []).length, sponsorships: results, stats });
+      try {
+        const where = ["i.type = 'sponsor'"];
+        const binds = [];
+        let i = 1;
+        if (statusFilter) { where.push(`i.status = ?${i++}`); binds.push(statusFilter); }
+        binds.push(200);
+        const { results } = await env.DB.prepare(
+          `SELECT i.id, i.client_id, c.name AS client_name, c.slug AS client_slug,
+                  i.payload_json, COALESCE(i.status, 'new') AS status, i.notes, i.assigned_to,
+                  i.value_inr, i.created_at, i.updated_at, i.read_at
+           FROM client_inbox i
+           LEFT JOIN clients c ON c.id = i.client_id
+           WHERE ${where.join(" AND ")}
+           ORDER BY i.created_at DESC
+           LIMIT ?${i}`
+        ).bind(...binds).all();
+        const { results: stats } = await env.DB.prepare(
+          `SELECT COALESCE(status, 'new') AS status, COUNT(*) AS n,
+                  COALESCE(SUM(value_inr), 0) AS total_inr
+           FROM client_inbox WHERE type = 'sponsor'
+           GROUP BY status`
+        ).all();
+        return ok({ count: (results || []).length, sponsorships: results, stats });
+      } catch (e) {
+        if (/no such column/i.test(String(e?.message || ""))) {
+          const { results } = await env.DB.prepare(
+            `SELECT i.id, i.client_id, c.name AS client_name, c.slug AS client_slug,
+                    i.payload_json, i.created_at, i.read_at
+             FROM client_inbox i
+             LEFT JOIN clients c ON c.id = i.client_id
+             WHERE i.type = 'sponsor'
+             ORDER BY i.created_at DESC LIMIT 200`
+          ).all();
+          const annotated = (results || []).map((r) => ({ ...r, status: "new", notes: "", assigned_to: null, value_inr: null }));
+          return ok({ count: annotated.length, sponsorships: annotated, stats: [], _note: "sponsorship pipeline columns not yet migrated" });
+        }
+        throw e;
+      }
     }
 
     // ---- PATCH /admin/agency/sponsorships/:id  — update deal state
@@ -2140,22 +2159,50 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
          WHERE COALESCE(status, 'active') != 'old'
          ORDER BY (status = 'active') DESC, name`
       ).all();
-      const { results: channels } = await env.DB.prepare(
-        `SELECT id, client_id, channel_id, handle, role, active,
-                COALESCE(managed_by_us, 1) AS managed_by_us,
-                subscribers, view_count, video_count
-         FROM client_channels
-         WHERE active = 1
-         ORDER BY role, handle`
-      ).all();
-      const { results: igs } = await env.DB.prepare(
-        `SELECT id, client_id, handle, role, active,
-                COALESCE(managed_by_us, 1) AS managed_by_us,
-                follower_count, post_count
-         FROM instagram_accounts
-         WHERE active = 1
-         ORDER BY role, handle`
-      ).all();
+      // Two-step on client_channels for managed_by_us (migration may be pending)
+      let channels;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, client_id, channel_id, handle, role, active,
+                  COALESCE(managed_by_us, 1) AS managed_by_us,
+                  subscribers, view_count, video_count
+           FROM client_channels
+           WHERE active = 1
+           ORDER BY role, handle`
+        ).all();
+        channels = r.results;
+      } catch (e) {
+        if (/no such column/i.test(String(e?.message || ""))) {
+          const r = await env.DB.prepare(
+            `SELECT id, client_id, channel_id, handle, role, active,
+                    subscribers, view_count, video_count
+             FROM client_channels WHERE active = 1 ORDER BY role, handle`
+          ).all();
+          channels = (r.results || []).map((c) => ({ ...c, managed_by_us: 1 }));
+        } else throw e;
+      }
+      // IG accounts — managed_by_us already exists on this table per the
+      // ig-bulk migration. But guard the column names defensively in case
+      // an instance uses `followers` vs `follower_count`.
+      let igs;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, client_id, handle, role, active,
+                  COALESCE(managed_by_us, 1) AS managed_by_us,
+                  followers AS follower_count, post_count
+           FROM instagram_accounts
+           WHERE active = 1
+           ORDER BY role, handle`
+        ).all();
+        igs = r.results;
+      } catch (e) {
+        const r = await env.DB.prepare(
+          `SELECT id, client_id, handle, role, active,
+                  COALESCE(managed_by_us, 1) AS managed_by_us, followers AS follower_count
+           FROM instagram_accounts WHERE active = 1 ORDER BY role, handle`
+        ).all();
+        igs = r.results;
+      }
       const byClient = {};
       for (const c of clients || []) byClient[c.id] = { ...c, channels: [], instagram: [] };
       for (const ch of channels || []) if (byClient[ch.client_id]) byClient[ch.client_id].channels.push(ch);
@@ -2552,22 +2599,31 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
 
     // GET /admin/agency/leads[?status=new&source=wizard&limit=100]
     if (path === "/admin/agency/leads" && method === "GET") {
-      const status = url.searchParams.get("status");
-      const source = url.searchParams.get("source");
-      const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10), 500);
-      const where = []; const binds = []; let i = 1;
-      if (status) { where.push(`status = ?${i++}`); binds.push(status); }
-      if (source) { where.push(`source = ?${i++}`); binds.push(source); }
-      const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-      binds.push(limit);
-      const { results } = await env.DB.prepare(
-        `SELECT * FROM leads ${whereSql} ORDER BY created_at DESC LIMIT ?${i}`
-      ).bind(...binds).all();
-      // Stats summary by status — useful for the cockpit "Growth" tab
-      const { results: stats } = await env.DB.prepare(
-        "SELECT status, COUNT(*) as n FROM leads GROUP BY status"
-      ).all();
-      return ok({ count: (results || []).length, leads: results, stats });
+      try {
+        const status = url.searchParams.get("status");
+        const source = url.searchParams.get("source");
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10), 500);
+        const where = []; const binds = []; let i = 1;
+        if (status) { where.push(`status = ?${i++}`); binds.push(status); }
+        if (source) { where.push(`source = ?${i++}`); binds.push(source); }
+        const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+        binds.push(limit);
+        const { results } = await env.DB.prepare(
+          `SELECT * FROM leads ${whereSql} ORDER BY created_at DESC LIMIT ?${i}`
+        ).bind(...binds).all();
+        const { results: stats } = await env.DB.prepare(
+          "SELECT status, COUNT(*) as n FROM leads GROUP BY status"
+        ).all();
+        return ok({ count: (results || []).length, leads: results, stats });
+      } catch (e) {
+        // `leads` table missing — migration leads-table-2026-05-17.sql not yet
+        // applied. Return empty payload so the cockpit panel renders normally
+        // instead of crashing on a 500.
+        if (/no such table: leads/i.test(String(e?.message || ""))) {
+          return ok({ count: 0, leads: [], stats: [], _note: "leads table not yet migrated" });
+        }
+        throw e;
+      }
     }
 
     // PATCH /admin/agency/leads/:id  — update status / notes / assignment
