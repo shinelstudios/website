@@ -148,7 +148,7 @@ const ClientPulsePage = () => {
                                 <Kicker className="!m-0">Live Pulse</Kicker>
                                 <span className="inline-flex items-center gap-1.5 text-meta" style={{ color: "var(--orange)" }}>
                                     <Radio size={10} className="animate-pulse" />
-                                    syncing every 30 min
+                                    syncing every hour
                                 </span>
                             </div>
                         </RevealOnScroll>
@@ -160,14 +160,14 @@ const ClientPulsePage = () => {
                         <RevealOnScroll delay="160ms">
                             <Lede>
                                 The heartbeat of our partner creators. Live streams and fresh uploads
-                                from across our client network, synced every 30 minutes.
+                                from across our client network, synced every hour.
                             </Lede>
                         </RevealOnScroll>
 
                         <RevealOnScroll delay="240ms">
                             <div className="mt-6 flex items-center gap-4 text-meta" style={{ color: "var(--text-muted)" }}>
                                 <span className="inline-flex items-center gap-1.5">
-                                    <Clock size={12} /> 24 h activity window
+                                    <Clock size={12} /> 48 h activity window
                                 </span>
                             </div>
                         </RevealOnScroll>
@@ -221,14 +221,14 @@ const ClientPulsePage = () => {
                 }
 
                 {
-                    /* Cron is supposed to run every 30 min. If lastSync is
-                       > 90 min ago, something is genuinely stuck — the cron
+                    /* Cron is supposed to run hourly. If lastSync is
+                       > 3h ago, something is genuinely stuck — the cron
                        failed three ticks in a row, or the worker's having
                        trouble. Surface it so a quiet feed isn't mistaken
                        for a healthy system, and so admins know to check
                        wrangler tail. Skip when quotaExceeded is already
                        shown — that banner already explains the staleness. */
-                    !quotaExceeded && lastSync && (Date.now() - lastSync) > 90 * 60 * 1000 && (
+                    !quotaExceeded && lastSync && (Date.now() - lastSync) > 3 * 60 * 60 * 1000 && (
                         <div className="mb-10 p-6 rounded-3xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 flex items-center gap-4">
                             <Clock size={24} />
                             <div>
@@ -286,8 +286,8 @@ const ClientPulsePage = () => {
                             <Youtube size={64} className="mx-auto text-[var(--text-muted)]/20 mb-6" />
                             <h3 className="text-2xl font-bold text-[var(--text-muted)] mb-2">All caught up</h3>
                             <p className="text-[var(--text-muted)]/80 max-w-md mx-auto">
-                                No new uploads in the last 24 hours from our active client channels.
-                                The feed refreshes automatically every 30 minutes — check back soon.
+                                No new uploads in the last 48 hours from our active client channels.
+                                The feed refreshes automatically every hour — check back soon.
                             </p>
                         </div>
                     )
