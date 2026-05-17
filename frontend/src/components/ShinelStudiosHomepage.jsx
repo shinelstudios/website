@@ -20,7 +20,7 @@ import QuickQuoteBar from "./QuickQuoteBar";
 import FloatingWhatsApp from "./FloatingWhatsApp";
 const CreatorsWorkedWithMarquee = React.lazy(() => import("@/components/CreatorsWorkedWithMarquee.jsx"));
 const OurCreatorsHero = React.lazy(() => import("@/components/home/OurCreatorsHero.jsx"));
-const TrustedByLeaders = React.lazy(() => import("@/components/home/TrustedByLeaders.jsx"));
+const ScrollZoomReveal = React.lazy(() => import("@/components/home/ScrollZoomReveal.jsx"));
 const ExitIntentLeadModal = React.lazy(() => import("@/components/ExitIntentLeadModal.jsx"));
 // HeroSection retired in favour of EditorialHero. ServicesSection retired
 // in favour of EditorialServicesGrid (file kept on disk as fallback).
@@ -1119,24 +1119,20 @@ export default function ShinelStudiosHomepage() {
             <EditorialProcess />
           </ErrorBoundary>
 
-          {/* 7a. Our Creators trophy wall — full portrait grid */}
+          {/* 7a. Our Creators trophy wall — full portrait grid (with soft zoom-in on scroll) */}
           <ErrorBoundary>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={4} />}>
-              <OurCreatorsHero limit={12} />
+              <ScrollZoomReveal>
+                <OurCreatorsHero limit={12} />
+              </ScrollZoomReveal>
             </React.Suspense>
           </ErrorBoundary>
 
-          {/* 7b. Receipts band — three big creator-focused numbers (no brand wall — Shinel works with creators) */}
+          {/* 7c. The original scrolling marquee — kept as a "and 30 more channels" tail.
+              (Receipts band removed — the hero LiveNumbersBand at the top already shows these stats.) */}
           <ErrorBoundary>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
-              <TrustedByLeaders />
-            </React.Suspense>
-          </ErrorBoundary>
-
-          {/* 7c. The original scrolling marquee — kept as a "and 30 more channels" tail */}
-          <ErrorBoundary>
-            <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
-              <CreatorsWorkedWithMarquee isDark={isDark} speedPps={22} gap={1.5} />
+              <CreatorsWorkedWithMarquee isDark={isDark} speedPps={14} gap={1.6} />
             </React.Suspense>
           </ErrorBoundary>
 

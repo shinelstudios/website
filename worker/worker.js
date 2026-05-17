@@ -1652,8 +1652,7 @@ async function performClientSync(env, isForced = false, debug = false) {
             try {
               const { results: extraChannels } = await env.DB.prepare(
                 `SELECT channel_id FROM client_channels
-                 WHERE client_id = ?1 AND active = 1 AND channel_id != ?2
-                   AND COALESCE(managed_by_us, 1) = 1`
+                 WHERE client_id = ?1 AND active = 1 AND channel_id != ?2`
               ).bind(c.id, result.id).all();
               for (const ch of (extraChannels || [])) {
                 try {
@@ -1877,8 +1876,12 @@ async function performClientSync(env, isForced = false, debug = false) {
       if (env.DB) {
         try {
           const { results: allChans } = await env.DB.prepare(
+            // Founder policy May 2026: Pulse fans out to EVERY active client's
+            // socials, regardless of managed_by_us. Active = the gate. Managed
+            // controls whether we run SEO / posting work, not whether the
+            // upload shows up on /live.
             `SELECT channel_id FROM client_channels
-             WHERE client_id = ?1 AND active = 1 AND COALESCE(managed_by_us, 1) = 1`
+             WHERE client_id = ?1 AND active = 1`
           ).bind(c.id).all();
           for (const ch of (allChans || [])) {
             // Skip if this channel was already handled by the primary path
