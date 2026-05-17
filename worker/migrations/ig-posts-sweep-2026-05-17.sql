@@ -3,15 +3,16 @@
 -- 2026-05-17
 
 INSERT OR REPLACE INTO scheduled_tasks (
-  id, kind, cron, payload_json, enabled, description, created_by, created_at
+  id, name, description, cron, task_type, payload_json, enabled, created_by, created_at
 )
 VALUES (
   'st-ig-posts-sweep',
-  'prompt_dispatch',
+  'IG posts sweep',
+  'Every 2h: fetch recent IG posts for every managed IG handle. Surfaces posts on the public /live feed alongside YT uploads.',
   '0 */2 * * *',
+  'ig_posts_sweep',
   '{"prompt":"For every ACTIVE client where status=''active'', iterate every active row in instagram_accounts WHERE managed_by_us=1 and enqueue an ig_recent_posts_fetch task. Pass {handle, client_id} in the payload. Worker side-effects upsert the resulting posts into instagram_posts; they appear on /live within 60s of the laptop completing the task."}',
   1,
-  'Every 6h: fetch recent IG posts for every managed IG handle. Surfaces posts on the public /live feed alongside YT.',
   'migration',
   CURRENT_TIMESTAMP
 );
