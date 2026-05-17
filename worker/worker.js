@@ -2513,12 +2513,15 @@ const handler = {
         }
       } catch { /* best-effort: never fail logout */ }
 
-      // Must match the SameSite=None used on set for the clear to apply.
+      // Must match the SameSite=None + Partitioned used on set for the clear
+      // to apply. Without Partitioned here, Chrome treats this as a different
+      // cookie partition and the real cookie persists → logout doesn't stick.
       const clear = delCookie("ss_refresh", {
         httpOnly: true,
         secure: true,
         sameSite: "None",
         path: "/",
+        partitioned: true,
       });
       const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers });

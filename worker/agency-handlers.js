@@ -517,8 +517,9 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         safe(env.DB.prepare(
           `SELECT status, COUNT(*) AS n FROM leads GROUP BY status`
         ).all(), { results: [] }),
+        // Public endpoint — return only counts, never deal values.
         safe(env.DB.prepare(
-          `SELECT COALESCE(status,'new') AS status, COUNT(*) AS n, COALESCE(SUM(value_inr),0) AS total_inr
+          `SELECT COALESCE(status,'new') AS status, COUNT(*) AS n
            FROM client_inbox WHERE type = 'sponsor' GROUP BY status`
         ).all(), { results: [] }),
         safe(env.DB.prepare(
@@ -562,7 +563,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         pipeline: {
           leads_by_status: (leadsByStatus.results || []).reduce((m, r) => (m[r.status] = r.n, m), {}),
           sponsorships_by_status: (sponsorsByStatus.results || []).reduce(
-            (m, r) => (m[r.status] = { count: r.n, value_inr: r.total_inr }, m), {}
+            (m, r) => (m[r.status] = { count: r.n }, m), {}
           ),
         },
         top_socials_by_reach: topMixed,
@@ -888,6 +889,19 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const laptopId = String(body.laptop_id || "unknown");
       const count = Math.min(parseInt(body.count || 1, 10), 10);
       const nowSec = Math.floor(Date.now() / 1000);
+
+      // Stale-claim reaper. If a laptop crashed mid-task, the row stays in
+      // 'claimed' forever. Reset anything claimed > 2 hours ago back to
+      // pending so it can be picked up again. Cheap (single UPDATE per
+      // claim attempt) and self-healing.
+      try {
+        await env.DB.prepare(
+          `UPDATE laptop_tasks
+           SET status = 'pending', claimed_at = NULL, updated_at = CURRENT_TIMESTAMP
+           WHERE status = 'claimed' AND claimed_at IS NOT NULL
+             AND claimed_at < ?1`
+        ).bind(nowSec - 2 * 3600).run();
+      } catch { /* best-effort */ }
 
       const types = Array.isArray(body.types) && body.types.length > 0 ? body.types : null;
       let q = `SELECT * FROM laptop_tasks
@@ -4884,6 +4898,10 @@ export async function captureChannelVideoStats(env, channelId, uploadsPlaylistId
     const itemsRes = await fetch(
       `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=${limit}&playlistId=${uploadsPlaylistId}&key=${apiKey}`
     );
+    // Record the quota burn whether the response was 200 or 4xx — Google still
+    // charges quota on most error codes. Without this, captureChannelVideoStats
+    // silently bypassed the per-key quota counter (audit-found bug).
+    try { await recordYoutubeUsage(env, apiKey, 1); } catch {}
     if (!itemsRes.ok) return { ok: false, error: `playlistItems ${itemsRes.status}` };
     const items = (await itemsRes.json()).items || [];
     const videoIds = items.map((i) => i.contentDetails?.videoId).filter(Boolean);
@@ -4891,6 +4909,7 @@ export async function captureChannelVideoStats(env, channelId, uploadsPlaylistId
     const vidsRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet,contentDetails&id=${videoIds.join(",")}&key=${apiKey}`
     );
+    try { await recordYoutubeUsage(env, apiKey, 1); } catch {}
     if (!vidsRes.ok) return { ok: false, error: `videos.list ${vidsRes.status}` };
     const vids = (await vidsRes.json()).items || [];
     const now = new Date();
