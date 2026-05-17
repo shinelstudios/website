@@ -15,8 +15,9 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Globe2, Youtube, Instagram, RefreshCw, Check, X as XIcon } from "lucide-react";
+import { Globe2, Youtube, Instagram, RefreshCw, Check, X as XIcon, Pencil } from "lucide-react";
 import { authedFetch } from "../../utils/tokenStore";
+import EditClientModal from "./EditClientModal";
 
 const STATUS_OPTIONS = ["active", "paused", "inactive"];
 const STATUS_TONE = {
@@ -37,13 +38,15 @@ export default function SocialsManagerPanel() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all | active | inactive
   const [busy, setBusy] = useState({});
+  const [editing, setEditing] = useState(null); // client object when modal open
 
   async function load() {
     setLoading(true);
     try {
       const res = await authedFetch(`/admin/agency/socials`);
       const j = await res.json();
-      if (res.ok) setData(j);
+      if (res.ok) { setData(j); return j; }
+      return null;
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
@@ -136,7 +139,14 @@ export default function SocialsManagerPanel() {
             <li key={c.id} className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 bg-[var(--surface-alt)]">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <strong className="text-sm truncate">{c.name}</strong>
+                  <button
+                    onClick={() => setEditing(c)}
+                    className="text-sm font-bold truncate hover:text-[var(--orange)] hover:underline flex items-center gap-1.5 text-left"
+                    title="Open the full editor — add/remove channels, edit handles, change roles"
+                  >
+                    {c.name}
+                    <Pencil size={11} className="opacity-50 group-hover:opacity-100 shrink-0" />
+                  </button>
                   <select
                     value={c.status || "inactive"}
                     onChange={(e) => patchClientStatus(c, e.target.value)}
@@ -205,7 +215,23 @@ export default function SocialsManagerPanel() {
         <strong>Pulse:</strong> only fans out to clients with <code>status='active'</code> AND socials with <code>managed_by_us=1</code>.
         <br />
         <strong>Reach &amp; marquee:</strong> aggregate every client regardless of status, so historical work still shows on the homepage.
+        <br />
+        <strong>Tip:</strong> click any client name to open the full editor — add/remove channels + IG accounts, change roles, edit handles.
       </footer>
+
+      {editing && (
+        <EditClientModal
+          client={editing}
+          onClose={() => setEditing(null)}
+          onChange={async () => {
+            const fresh = await load();
+            if (fresh?.clients) {
+              const updated = fresh.clients.find((x) => x.id === editing.id);
+              if (updated) setEditing(updated);
+            }
+          }}
+        />
+      )}
     </section>
   );
 }
