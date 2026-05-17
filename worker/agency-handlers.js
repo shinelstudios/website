@@ -1933,7 +1933,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const includeInactive = url.searchParams.get("include_inactive") === "true";
       const where = includeInactive ? "" : "WHERE active = 1";
       const { results } = await env.DB.prepare(
-        `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes FROM editors ${where} ORDER BY active DESC, name`
+        `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes, slug, public_enabled FROM editors ${where} ORDER BY active DESC, name`
       ).all();
       return ok({ count: (results || []).length, editors: results });
     }

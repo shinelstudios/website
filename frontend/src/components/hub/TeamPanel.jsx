@@ -234,12 +234,31 @@ export default function TeamPanel({ onChange }) {
           Team Roster
           <span className="text-xs text-neutral-500 font-normal">· {editors.length}</span>
         </h3>
-        <button
-          onClick={() => setShowNew(true)}
-          className="text-xs px-3 py-1.5 rounded-md bg-[var(--orange)] text-white font-bold hover:opacity-90 flex items-center gap-1"
-        >
-          <Plus size={12} /> Add
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              if (!confirm("Back-fill missing slugs + publish flags for every active editor? This makes their /editor/public/<slug> URL live.")) return;
+              try {
+                const res = await authedFetch(`/admin/agency/editors/backfill-slugs`, { method: "POST" });
+                const j = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(`Failed: ${j.error || res.status}`); return; }
+                const sample = (j.updates || []).slice(0, 6).map((u) => `${u.name || u.email} → ${u.slug || "(slug already set)"}`).join("\n");
+                alert(`Scanned ${j.scanned} editors. Updated ${j.updated}.\n\n${sample || "(no changes needed)"}\n\nPublic URL pattern: /editor/public/<slug>`);
+                refresh();
+              } catch (e) { alert("Network error: " + e.message); }
+            }}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-[var(--surface-alt)]"
+            title="One-shot: set slug + public_enabled for any editor missing them"
+          >
+            Back-fill slugs
+          </button>
+          <button
+            onClick={() => setShowNew(true)}
+            className="text-xs px-3 py-1.5 rounded-md bg-[var(--orange)] text-white font-bold hover:opacity-90 flex items-center gap-1"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </div>
       </header>
 
       {editors.length === 0 ? (
@@ -257,7 +276,26 @@ export default function TeamPanel({ onChange }) {
                 className="w-full text-left flex items-center justify-between rounded-lg border border-neutral-100 dark:border-neutral-900 px-3 py-2 hover:bg-[var(--surface-alt)] transition group"
               >
                 <div>
-                  <div className="font-semibold text-sm">{ed.name}</div>
+                  <div className="font-semibold text-sm flex items-center gap-2">
+                    {ed.name}
+                    {ed.slug && ed.public_enabled ? (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); window.open(`/editor/${ed.slug}`, "_blank"); }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-700 dark:text-green-300 font-bold cursor-pointer hover:bg-green-500/30"
+                        title={`Open public portfolio at /editor/${ed.slug}`}
+                      >
+                        🌐 /editor/{ed.slug}
+                      </span>
+                    ) : ed.slug ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 font-bold" title="Slug set but portfolio not yet published — click row → toggle Publish">
+                        ⏸ unpublished
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-300/30 text-neutral-500 font-bold" title="No portfolio slug yet — click 'Back-fill slugs' above">
+                        no portfolio
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-neutral-500">
                     {ed.role || "editor"}
                     {ed.email && ` · ${ed.email}`}
