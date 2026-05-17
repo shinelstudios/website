@@ -2153,11 +2153,15 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     // Used by the cockpit "Socials Manager" panel so the founder can flip
     // managed_by_us per row without hunting through individual modals.
     if (path === "/admin/agency/socials" && method === "GET") {
+      // Return EVERY client regardless of status — including 'old' / archived.
+      // The Clients panel on the Overview tab shows all of them too; Socials
+      // Manager has to match so the founder can manage / un-archive any
+      // historical client from this view. The status dropdown chip on each
+      // row + the filter dropdown above keep things readable.
       const { results: clients } = await env.DB.prepare(
         `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us
          FROM clients
-         WHERE COALESCE(status, 'active') != 'old'
-         ORDER BY (status = 'active') DESC, name`
+         ORDER BY (status = 'active') DESC, (status = 'old') ASC, name`
       ).all();
       // Two-step on client_channels for managed_by_us (migration may be pending)
       let channels;

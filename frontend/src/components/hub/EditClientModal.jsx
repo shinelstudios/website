@@ -33,6 +33,10 @@ function authedFetch(path, opts = {}) {
 }
 
 const ROLE_OPTIONS = ["main", "secondary", "personal", "brand", "tracked"];
+// Status pills inside the editor. 'old' (archived) is reachable via the
+// Archive button at the bottom of the modal — putting it here would let
+// a misclick instantly hide a client, so we surface it only on the pill
+// when the client is ALREADY archived (so the founder can un-archive).
 const STATUS_OPTIONS = ["active", "paused", "inactive"];
 
 export default function EditClientModal({ client, onClose, onChange }) {
@@ -170,7 +174,7 @@ export default function EditClientModal({ client, onClose, onChange }) {
           {/* Status */}
           <section>
             <div className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-2">Status</div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {STATUS_OPTIONS.map((s) => (
                 <button
                   key={s}
@@ -186,6 +190,16 @@ export default function EditClientModal({ client, onClose, onChange }) {
                   {s}
                 </button>
               ))}
+              {client.status === "old" && (
+                <button
+                  onClick={() => patchStatus("active")}
+                  disabled={busy.status}
+                  className="text-xs px-3 py-1.5 rounded font-bold uppercase tracking-wider bg-amber-500/30 text-amber-700 dark:text-amber-300 border border-amber-500/50 hover:bg-amber-500/50"
+                  title="This client is currently archived. Click to un-archive (flip status back to active)."
+                >
+                  📦 archived — click to restore
+                </button>
+              )}
             </div>
           </section>
 

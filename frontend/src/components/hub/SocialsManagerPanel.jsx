@@ -109,9 +109,14 @@ export default function SocialsManagerPanel() {
   const filtered = useMemo(() => {
     if (filter === "all")      return data.clients;
     if (filter === "active")   return data.clients.filter((c) => c.status === "active");
-    if (filter === "inactive") return data.clients.filter((c) => c.status !== "active");
+    if (filter === "paused")   return data.clients.filter((c) => c.status === "paused" || c.status === "inactive");
+    if (filter === "archived") return data.clients.filter((c) => c.status === "old");
     return data.clients;
   }, [data.clients, filter]);
+
+  const totalActive = data.clients.filter((c) => c.status === "active").length;
+  const totalPaused = data.clients.filter((c) => c.status === "paused" || c.status === "inactive").length;
+  const totalArchived = data.clients.filter((c) => c.status === "old").length;
 
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-[var(--surface-elev)] space-y-4">
@@ -132,8 +137,9 @@ export default function SocialsManagerPanel() {
             className="text-xs rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 bg-[var(--surface-alt)]"
           >
             <option value="all">All ({data.clients.length})</option>
-            <option value="active">Active ({data.totals?.active || 0})</option>
-            <option value="inactive">Paused / Inactive ({(data.clients.length || 0) - (data.totals?.active || 0)})</option>
+            <option value="active">Active ({totalActive})</option>
+            <option value="paused">Paused / Inactive ({totalPaused})</option>
+            <option value="archived">Archived ({totalArchived})</option>
           </select>
           <button
             onClick={async () => {
