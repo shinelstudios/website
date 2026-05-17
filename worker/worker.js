@@ -2325,7 +2325,12 @@ const handler = {
           lastName: user.lastName || "",
         };
 
-        const access = await signAccess(payload, secret, 30); // 30m
+        // Access token bumped from 30m → 12h so the cockpit survives page
+        // reloads without needing /auth/refresh on every load. Refresh
+        // cookie is still cross-site (workers.dev) and Chrome's third-party
+        // cookie rules drop it intermittently even with Partitioned set;
+        // the longer access token is the belt to that suspenders.
+        const access = await signAccess(payload, secret, 60 * 12); // 12h
         const refresh = await signRefresh({ ...payload, kind: "refresh" }, secret, 7); // 7d
 
         // Per-device session tracking. We hook the refresh JTI because
@@ -2423,7 +2428,7 @@ const handler = {
             lastName: payload.lastName || "",
           },
           secret,
-          30
+          60 * 12 // 12h — matches the login mint TTL
         );
         const newRefresh = await signRefresh(
           {

@@ -11,7 +11,28 @@
  * refresh when the user logs in / out in another tab via `auth:changed`).
  */
 
-let _accessToken = null;
+// SessionStorage persistence — survives page reload but not new tabs.
+// XSS-exposed (same as localStorage) but the trade-off matters less than
+// the constant log-out churn from cross-site cookie issues with /auth/refresh.
+// Tokens here are still short-lived (30 min) and the worker rotates refresh
+// tokens on every silent refresh.
+const SS_KEY = "shinel_access_token_v1";
+
+function _readSession() {
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    return sessionStorage.getItem(SS_KEY) || null;
+  } catch { return null; }
+}
+function _writeSession(token) {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (token) sessionStorage.setItem(SS_KEY, token);
+    else sessionStorage.removeItem(SS_KEY);
+  } catch { /* private mode etc */ }
+}
+
+let _accessToken = _readSession();
 const _listeners = new Set();
 
 export function getAccessToken() {
@@ -20,6 +41,7 @@ export function getAccessToken() {
 
 export function setAccessToken(token) {
   _accessToken = token || null;
+  _writeSession(_accessToken);
   for (const cb of _listeners) {
     try { cb(_accessToken); } catch { /* ignore listener errors */ }
   }
