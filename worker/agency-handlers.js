@@ -1253,10 +1253,21 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       if (rest && rest !== "") {
         const runNowSuffix = "/run-now";
         if (rest.endsWith(runNowSuffix)) {
-          const id = rest.slice(0, -runNowSuffix.length);
+          // Strip the suffix, then decode the ID — task IDs can contain
+          // URL-encoded chars (the IG sweep historically baked URLs into
+          // the id via REPLACE(LOWER(handle), '@', '') when the handle
+          // was stored as a full URL). Without decoding, the D1 lookup
+          // gets the encoded form and fails with "task not found".
+          const raw = rest.slice(0, -runNowSuffix.length);
+          let id = raw;
+          try { id = decodeURIComponent(raw); } catch { /* keep raw */ }
           if (id) queueMatch = [path, id, "run-now"];
-        } else if (!rest.includes("/")) {
-          queueMatch = [path, rest, undefined];
+        } else {
+          // Single-segment ID — decode + accept even if it contains slashes
+          // (which happens when an ID got baked from a URL-encoded handle).
+          let id = rest;
+          try { id = decodeURIComponent(rest); } catch { /* keep raw */ }
+          queueMatch = [path, id, undefined];
         }
       }
     }
