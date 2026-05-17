@@ -16,7 +16,21 @@
 
 import { useState } from "react";
 import { X, Plus, Trash2, Youtube, Instagram, Check } from "lucide-react";
-import { authedFetch } from "../../utils/tokenStore";
+import { AUTH_BASE } from "../../config/constants";
+import { getAccessToken } from "../../utils/tokenStore";
+
+function authedFetch(path, opts = {}) {
+  const token = getAccessToken();
+  return fetch(`${AUTH_BASE}${path}`, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
+    credentials: "include",
+  });
+}
 
 const ROLE_OPTIONS = ["main", "secondary", "personal", "brand", "tracked"];
 const STATUS_OPTIONS = ["active", "paused", "inactive"];

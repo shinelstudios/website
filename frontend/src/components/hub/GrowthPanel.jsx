@@ -12,7 +12,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Sprout, Mail, ChevronDown, RefreshCw, ExternalLink, UserPlus2, Trash2 } from "lucide-react";
-import { authedFetch } from "../../utils/tokenStore";
+import { AUTH_BASE } from "../../config/constants";
+import { getAccessToken } from "../../utils/tokenStore";
+
+function authedFetch(path, opts = {}) {
+  const token = getAccessToken();
+  return fetch(`${AUTH_BASE}${path}`, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
+    credentials: "include",
+  });
+}
 
 const STATUS_COLUMNS = [
   { key: "new",        label: "New",        tone: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },

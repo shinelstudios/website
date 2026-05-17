@@ -16,8 +16,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Globe2, Youtube, Instagram, RefreshCw, Check, X as XIcon, Pencil } from "lucide-react";
-import { authedFetch } from "../../utils/tokenStore";
+import { AUTH_BASE } from "../../config/constants";
+import { getAccessToken } from "../../utils/tokenStore";
 import EditClientModal from "./EditClientModal";
+
+// Local authedFetch matches the (path, opts) pattern every other panel uses.
+// The tokenStore export uses (apiBase, path, init) which trips the panels up.
+function authedFetch(path, opts = {}) {
+  const token = getAccessToken();
+  return fetch(`${AUTH_BASE}${path}`, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {}),
+    },
+    credentials: "include",
+  });
+}
 
 const STATUS_OPTIONS = ["active", "paused", "inactive"];
 const STATUS_TONE = {
