@@ -1243,7 +1243,23 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
 
     // ---- Single-laptop-task routes: edit / cancel / run-now ----
     // Only pending tasks are mutable; once claimed they belong to the laptop.
-    const queueMatch = path.match(/^\/admin\/agency\/laptop\/queue\/([^\/]+)(?:\/(run-now))?$/);
+    // Match /admin/agency/laptop/queue/<id> OR /admin/agency/laptop/queue/<id>/run-now
+    // Done as explicit string parsing instead of regex so task IDs containing
+    // unusual chars (encoded slashes, dots, etc) don't silently fall through
+    // to "laptop endpoint not found".
+    let queueMatch = null;
+    if (path.startsWith("/admin/agency/laptop/queue/")) {
+      const rest = path.slice("/admin/agency/laptop/queue/".length);
+      if (rest && rest !== "") {
+        const runNowSuffix = "/run-now";
+        if (rest.endsWith(runNowSuffix)) {
+          const id = rest.slice(0, -runNowSuffix.length);
+          if (id) queueMatch = [path, id, "run-now"];
+        } else if (!rest.includes("/")) {
+          queueMatch = [path, rest, undefined];
+        }
+      }
+    }
     if (queueMatch) {
       const id = queueMatch[1];
       const subaction = queueMatch[2] || null;

@@ -79,7 +79,7 @@ function EditTaskModal({ task, clients, onClose, onSaved }) {
       catch (e) { setErr(`Payload must be valid JSON: ${e.message}`); setBusy(false); return; }
     }
     try {
-      const res = await authedFetch(`/admin/agency/laptop/queue/${task.id}`, {
+      const res = await authedFetch(`/admin/agency/laptop/queue/${encodeURIComponent(task.id)}`, {
         method: "PATCH",
         body: JSON.stringify({
           type,
@@ -239,7 +239,7 @@ export default function LaptopQueuePanel({ clients = [] }) {
   const runNow = async (task) => {
     setBusyTaskId(task.id);
     try {
-      const r = await authedFetch(`/admin/agency/laptop/queue/${task.id}/run-now`, { method: "POST", body: "{}" });
+      const r = await authedFetch(`/admin/agency/laptop/queue/${encodeURIComponent(task.id)}/run-now`, { method: "POST", body: "{}" });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Run-now failed"); return; }
       await refresh();
@@ -253,7 +253,7 @@ export default function LaptopQueuePanel({ clients = [] }) {
     if (!window.confirm(`${verb === "cancel" ? "Cancel" : "Delete"} this ${task.type} task?`)) return;
     setBusyTaskId(task.id);
     try {
-      const r = await authedFetch(`/admin/agency/laptop/queue/${task.id}`, { method: "DELETE" });
+      const r = await authedFetch(`/admin/agency/laptop/queue/${encodeURIComponent(task.id)}`, { method: "DELETE" });
       const j = await r.json();
       if (!r.ok) { alert(j.error || "Delete failed"); return; }
       await refresh();
