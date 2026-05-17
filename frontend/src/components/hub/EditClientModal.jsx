@@ -48,19 +48,30 @@ export default function EditClientModal({ client, onClose, onChange }) {
       `status`
     );
   }
-  function patchChannel(ch, body) {
-    return call(`/admin/agency/channels/${ch.id}`, {
+  // Best-effort reconcile after mutations that could change "the main social"
+  // (role change to/from 'main', delete, etc). Fire-and-forget so we never
+  // block the UI on it.
+  const reconcileSoon = () => {
+    authedFetch(`/admin/agency/socials/reconcile`, { method: "POST" }).catch(() => {});
+  };
+  async function patchChannel(ch, body) {
+    const r = await call(`/admin/agency/channels/${ch.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }, `ch-${ch.id}`);
+    if (r && (body.role !== undefined || body.active !== undefined)) reconcileSoon();
+    return r;
   }
-  function patchIg(ig, body) {
-    return call(`/admin/agency/instagram/${ig.id}`, {
+  async function patchIg(ig, body) {
+    const r = await call(`/admin/agency/instagram/${ig.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }, `ig-${ig.id}`);
+    if (r && (body.role !== undefined || body.active !== undefined)) reconcileSoon();
+    return r;
   }
   async function removeChannel(ch) {
     if (!confirm(`Remove channel @${ch.handle || ch.channel_id}? (Soft-delete — can be undone in D1.)`)) return;
-    await call(`/admin/agency/clients/${client.id}/channels/${ch.id}`, { method: "DELETE" }, `ch-${ch.id}`);
+    const r = await call(`/admin/agency/clients/${client.id}/channels/${ch.id}`, { method: "DELETE" }, `ch-${ch.id}`);
+    if (r) reconcileSoon();
   }
   async function removeIg(ig) {
     if (!confirm(`Remove @${ig.handle}? (Soft-delete — sets active=0.)`)) return;
@@ -79,7 +90,12 @@ export default function EditClientModal({ client, onClose, onChange }) {
         body: JSON.stringify({ channel_id: chId, handle: handle || null, role: newYt.role }) },
       `add-yt`
     );
-    if (ok) setNewYt({ channel_id: "", handle: "", role: "secondary" });
+    if (ok) {
+      setNewYt({ channel_id: "", handle: "", role: "secondary" });
+      // Auto-reconcile so clients.youtube_id picks up the new main if applicable.
+      // Fire-and-forget — failure is non-fatal.
+      authedFetch(`/admin/agency/socials/reconcile`, { method: "POST" }).catch(() => {});
+    }
   }
   async function addIg() {
     if (!newIg.handle.trim()) { setErr("Instagram handle required"); return; }
@@ -96,7 +112,11 @@ export default function EditClientModal({ client, onClose, onChange }) {
         }) },
       `add-ig`
     );
-    if (ok) setNewIg({ handle: "", role: "secondary", managed_by_us: true });
+    if (ok) {
+      setNewIg({ handle: "", role: "secondary", managed_by_us: true });
+      // Same: reconcile so clients.instagram_handle picks up the new main if applicable.
+      authedFetch(`/admin/agency/socials/reconcile`, { method: "POST" }).catch(() => {});
+    }
   }
 
   return (

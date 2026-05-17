@@ -2076,6 +2076,59 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id, updated: true });
     }
 
+    // ---- POST /admin/agency/socials/reconcile  — fix any drift between
+    // clients.youtube_id/instagram_handle (legacy single-value) and the
+    // canonical multi-row tables. Idempotent: safe to run any time. Returns
+    // the per-client diff so the cockpit can show what was fixed.
+    if (path === "/admin/agency/socials/reconcile" && method === "POST") {
+      const { results: clients } = await env.DB.prepare(
+        `SELECT id, name, youtube_id, instagram_handle FROM clients
+         WHERE COALESCE(status, 'active') != 'old'`
+      ).all();
+      const diffs = [];
+      for (const c of (clients || [])) {
+        // Pick canonical YT (main first, then highest sub-count active row)
+        const canonYt = await env.DB.prepare(
+          `SELECT channel_id FROM client_channels
+           WHERE client_id = ?1 AND active = 1
+           ORDER BY (role = 'main') DESC, COALESCE(subscribers, 0) DESC
+           LIMIT 1`
+        ).bind(c.id).first();
+        // Pick canonical IG (main first, then highest follower-count active row)
+        const canonIg = await env.DB.prepare(
+          `SELECT handle FROM instagram_accounts
+           WHERE client_id = ?1 AND active = 1
+           ORDER BY (role = 'main') DESC, COALESCE(followers, 0) DESC
+           LIMIT 1`
+        ).bind(c.id).first();
+
+        const wantYt = canonYt?.channel_id || c.youtube_id; // preserve if no canonical
+        const wantIg = canonIg?.handle || c.instagram_handle;
+        const updates = {};
+        if (canonYt?.channel_id && c.youtube_id !== canonYt.channel_id) updates.youtube_id = canonYt.channel_id;
+        if (canonIg?.handle && c.instagram_handle !== canonIg.handle) updates.instagram_handle = canonIg.handle;
+
+        if (Object.keys(updates).length) {
+          const sets = []; const binds = []; let i = 1;
+          for (const [k, v] of Object.entries(updates)) { sets.push(`${k} = ?${i++}`); binds.push(v); }
+          binds.push(c.id);
+          await env.DB.prepare(`UPDATE clients SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+          diffs.push({ id: c.id, name: c.name, before: { youtube_id: c.youtube_id, instagram_handle: c.instagram_handle }, after: updates });
+        }
+      }
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind(
+          "socials.reconcile_run",
+          "info",
+          `Reconciled ${diffs.length} client(s) — multi-row tables are canonical`,
+          JSON.stringify({ scanned: clients.length, updated: diffs.length, examples: diffs.slice(0, 5) })
+        ).run();
+      } catch {}
+      return ok({ scanned: clients.length, updated: diffs.length, diffs });
+    }
+
     // ---- GET /admin/agency/socials  — unified socials manager view
     // Returns every client (active + inactive) with their full YT/IG roster.
     // Used by the cockpit "Socials Manager" panel so the founder can flip

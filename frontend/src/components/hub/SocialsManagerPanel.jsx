@@ -120,6 +120,23 @@ export default function SocialsManagerPanel() {
             <option value="inactive">Paused / Inactive ({(data.clients.length || 0) - (data.totals?.active || 0)})</option>
           </select>
           <button
+            onClick={async () => {
+              if (!confirm("Reconcile every client's legacy youtube_id / instagram_handle with the canonical multi-row tables? Safe to re-run any time.")) return;
+              try {
+                const r = await authedFetch(`/admin/agency/socials/reconcile`, { method: "POST" });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) { alert(`Failed: ${j.error || r.status}`); return; }
+                const sample = (j.diffs || []).slice(0, 8).map((d) => `${d.name}: ${JSON.stringify(d.after)}`).join("\n");
+                alert(`Scanned ${j.scanned}. Updated ${j.updated}.\n\n${sample || "(no drift — everything already in sync)"}`);
+                load();
+              } catch (e) { alert("Network error: " + e.message); }
+            }}
+            className="text-xs px-2 py-1 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-[var(--surface-alt)]"
+            title="Resync clients.youtube_id + clients.instagram_handle with the canonical client_channels + instagram_accounts tables"
+          >
+            Reconcile
+          </button>
+          <button
             onClick={load}
             disabled={loading}
             className="text-xs px-2 py-1 rounded-md border border-neutral-300 dark:border-neutral-700 hover:bg-[var(--surface-alt)] flex items-center gap-1"
