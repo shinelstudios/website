@@ -1,34 +1,17 @@
 /**
- * TrustedByLeaders — stats + brand wall section.
+ * ReceiptsBand — three giant creator-focused numbers.
  *
- * Three big stat columns up top (clients · reach · posts shipped) pulled
- * live from /admin/agency/public/stats, then a horizontal logo wall
- * underneath. Scroll-reveal: stats count up when they enter the viewport.
+ * Shinel works with CREATORS, not brands. So no "trusted by brands" wall.
+ * Instead: a count-up stats band that flexes the roster + reach + work
+ * shipped for those creators. Pulls from /admin/agency/public/stats.
  *
- * Brand wall is a static list for v1 — the founder can add brands by
- * editing BRAND_WALL below or we wire it to a sponsorships table later.
+ * Scroll-reveal: numbers count from 0 → target when the section enters
+ * the viewport (1.4s ease-out cubic).
  */
 
 import React, { useEffect, useRef, useState } from "react";
 import { TrendingUp } from "lucide-react";
 import { AUTH_BASE } from "../../config/constants";
-
-// Static brand list for v1. Eventually replace with a server-driven list
-// pulled from client_inbox where status='signed' OR 'paid'.
-const BRAND_WALL = [
-  "Junglee Ludo",
-  "Valorant",
-  "BGMI",
-  "Krafton",
-  "Spotify India",
-  "Asus ROG",
-  "MPL",
-  "Free Fire MAX",
-  "Riot Games",
-  "Loco",
-  "Rooter",
-  "Nodwin",
-];
 
 function useCountUp(target, durationMs = 1200, start = false) {
   const [value, setValue] = useState(0);
@@ -93,10 +76,10 @@ export default function TrustedByLeaders() {
     <section ref={sectionRef} className="trusted-section">
       <div className="trusted-section__inner">
         <span className="trusted-section__kicker">
-          <TrendingUp size={12} /> Receipts, not promises
+          <TrendingUp size={12} /> The receipts
         </span>
         <h2 className="trusted-section__title">
-          Trusted by <em>industry leaders.</em>
+          The numbers behind the <em>roster.</em>
         </h2>
 
         <div className="trusted-stats">
@@ -118,30 +101,6 @@ export default function TrustedByLeaders() {
             sub="across our 4 years"
             visible={visible}
           />
-        </div>
-
-        {/* Brand wall */}
-        <div className="brand-wall">
-          <div className="brand-wall__header">
-            <span className="brand-wall__rule" />
-            <span className="brand-wall__label">Brands we've shipped sponsored content for</span>
-            <span className="brand-wall__rule" />
-          </div>
-          <ul className="brand-wall__list">
-            {BRAND_WALL.map((brand, i) => (
-              <li
-                key={brand}
-                className="brand-wall__item"
-                style={{
-                  opacity: visible ? 0.6 : 0,
-                  transform: visible ? "translateY(0)" : "translateY(20px)",
-                  transitionDelay: `${800 + i * 50}ms`,
-                }}
-              >
-                {brand}
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
 
@@ -217,40 +176,6 @@ export default function TrustedByLeaders() {
           letter-spacing: 0.01em;
         }
 
-        .brand-wall {
-          margin-top: 24px;
-        }
-        .brand-wall__header {
-          display: flex; align-items: center; gap: 16px;
-          margin-bottom: 28px;
-        }
-        .brand-wall__rule {
-          flex: 1; height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-        }
-        .brand-wall__label {
-          font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
-          text-transform: uppercase;
-          color: var(--text-muted, #a3a3a3);
-        }
-        .brand-wall__list {
-          list-style: none; padding: 0; margin: 0;
-          display: flex; flex-wrap: wrap; justify-content: center;
-          gap: clamp(20px, 3vw, 48px);
-        }
-        .brand-wall__item {
-          font-size: clamp(16px, 1.8vw, 24px);
-          font-weight: 800;
-          letter-spacing: 0.02em;
-          color: var(--text, #fafafa);
-          opacity: 0.6;
-          transition: opacity 700ms ease, transform 700ms ease, color 250ms ease;
-          cursor: default;
-        }
-        .brand-wall__item:hover {
-          opacity: 1 !important;
-          color: var(--orange, #E85002);
-        }
       `}</style>
     </section>
   );

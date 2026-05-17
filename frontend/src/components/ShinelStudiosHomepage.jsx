@@ -1126,7 +1126,7 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
-          {/* 7b. Trusted by — stats + brand wall */}
+          {/* 7b. Receipts band — three big creator-focused numbers (no brand wall — Shinel works with creators) */}
           <ErrorBoundary>
             <React.Suspense fallback={<SectionSkeleton content="card" contentCount={1} />}>
               <TrustedByLeaders />
