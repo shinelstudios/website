@@ -29,7 +29,6 @@ import {
   readDropdownRules,
   readRange as sheetReadRange,
 } from "./google-sheets.js";
-import { createClientDriveFolder } from "./google-drive.js";
 import { generateAndStoreSeoProposal } from "./seo-generator.js";
 
 // In-memory cache of dropdown rules per tab. Refreshed every 10 min so the
@@ -430,6 +429,132 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       }), {
         status: 200,
         headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=30, s-maxage=30" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
+    }
+  }
+
+  // ---- GET /admin/agency/public/snapshot-weekly — founder snapshot ---------
+  //
+  // Aggregate-only stats for the weekly snapshot artifact. No PII (no lead
+  // names, no sponsor brand names, no client_inbox payloads). Safe to leave
+  // public so the artifact can fetch without auth.
+  //
+  // Returns:
+  //   reach: { yt, ig, total }
+  //   counts: { active_clients, total_clients, paused_clients }
+  //   last_7d: { projects_completed, new_leads, sponsorship_inquiries, yt_uploads, ig_posts }
+  //   pipeline: { leads_by_status, sponsorships_by_status }
+  //   top_growing: [{ handle, kind, reach }]  — top 5 socials by reach (proxy for "biggest channels we work with")
+  if (path === "/admin/agency/public/snapshot-weekly" && method === "GET") {
+    const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const sevenDaysAgoSec = nowSec - 7 * 86400;
+
+      const [
+        clientsAgg,
+        ytReach,
+        igReach,
+        projects7d,
+        leads7d,
+        sponsors7d,
+        ytPulse7d,
+        igPosts7d,
+        leadsByStatus,
+        sponsorsByStatus,
+        topYt,
+        topIg,
+      ] = await Promise.all([
+        env.DB.prepare(
+          `SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN COALESCE(status,'active') = 'active' THEN 1 ELSE 0 END) AS active,
+             SUM(CASE WHEN status = 'paused'   THEN 1 ELSE 0 END) AS paused,
+             SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) AS inactive
+           FROM clients WHERE COALESCE(status,'active') != 'old'`
+        ).first(),
+        env.DB.prepare(
+          `SELECT COALESCE(SUM(cc.subscribers), 0) AS total
+           FROM client_channels cc JOIN clients c ON cc.client_id = c.id
+           WHERE cc.active = 1 AND COALESCE(c.status,'active') != 'old'`
+        ).first(),
+        env.DB.prepare(
+          `SELECT COALESCE(SUM(ia.followers), 0) AS total
+           FROM instagram_accounts ia JOIN clients c ON ia.client_id = c.id
+           WHERE ia.active = 1 AND COALESCE(c.status,'active') != 'old'`
+        ).first(),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM projects WHERE posted_at >= ?1 AND archived_at IS NULL`
+        ).bind(sevenDaysAgoSec).first(),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM leads WHERE strftime('%s', created_at) >= ?1`
+        ).bind(String(sevenDaysAgoSec)).first().catch(() => ({ n: 0 })),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM client_inbox WHERE type = 'sponsor' AND created_at >= ?1`
+        ).bind(sevenDaysAgoSec).first(),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM pulse_activities WHERE timestamp >= ?1`
+        ).bind(sevenDaysAgoSec * 1000).first(),
+        env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM instagram_posts WHERE posted_at >= ?1`
+        ).bind(sevenDaysAgoSec).first().catch(() => ({ n: 0 })),
+        env.DB.prepare(
+          `SELECT status, COUNT(*) AS n FROM leads GROUP BY status`
+        ).all().catch(() => ({ results: [] })),
+        env.DB.prepare(
+          `SELECT COALESCE(status,'new') AS status, COUNT(*) AS n, COALESCE(SUM(value_inr),0) AS total_inr
+           FROM client_inbox WHERE type = 'sponsor' GROUP BY status`
+        ).all(),
+        env.DB.prepare(
+          `SELECT cc.handle, MAX(cc.subscribers) AS reach, c.name AS client_name
+           FROM client_channels cc JOIN clients c ON cc.client_id = c.id
+           WHERE cc.active = 1 AND COALESCE(c.status,'active') != 'old'
+           GROUP BY cc.handle, c.id
+           ORDER BY MAX(cc.subscribers) DESC LIMIT 5`
+        ).all(),
+        env.DB.prepare(
+          `SELECT ia.handle, MAX(ia.followers) AS reach, c.name AS client_name
+           FROM instagram_accounts ia JOIN clients c ON ia.client_id = c.id
+           WHERE ia.active = 1 AND COALESCE(c.status,'active') != 'old'
+           GROUP BY ia.handle, c.id
+           ORDER BY MAX(ia.followers) DESC LIMIT 5`
+        ).all(),
+      ]);
+
+      const yt = ytReach?.total || 0;
+      const ig = igReach?.total || 0;
+      const topYtItems = (topYt.results || []).map((r) => ({ handle: r.handle, kind: "yt", reach: r.reach || 0, client: r.client_name }));
+      const topIgItems = (topIg.results || []).map((r) => ({ handle: r.handle, kind: "ig", reach: r.reach || 0, client: r.client_name }));
+      const topMixed = [...topYtItems, ...topIgItems].sort((a, b) => b.reach - a.reach).slice(0, 5);
+
+      return new Response(JSON.stringify({
+        generated_at: new Date().toISOString(),
+        reach: { yt, ig, total: yt + ig },
+        counts: {
+          active_clients: clientsAgg?.active || 0,
+          paused_clients: clientsAgg?.paused || 0,
+          inactive_clients: clientsAgg?.inactive || 0,
+          total_clients: clientsAgg?.total || 0,
+        },
+        last_7d: {
+          projects_completed: projects7d?.n || 0,
+          new_leads: leads7d?.n || 0,
+          sponsorship_inquiries: sponsors7d?.n || 0,
+          yt_uploads: ytPulse7d?.n || 0,
+          ig_posts: igPosts7d?.n || 0,
+        },
+        pipeline: {
+          leads_by_status: (leadsByStatus.results || []).reduce((m, r) => (m[r.status] = r.n, m), {}),
+          sponsorships_by_status: (sponsorsByStatus.results || []).reduce(
+            (m, r) => (m[r.status] = { count: r.n, value_inr: r.total_inr }, m), {}
+          ),
+        },
+        top_socials_by_reach: topMixed,
+      }), {
+        status: 200,
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=120, s-maxage=120" },
       });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
@@ -1822,38 +1947,6 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         await env.DB.prepare(
           `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
         ).bind("client.created", id, "info", `Onboarded new client: ${body.name}`, JSON.stringify(body)).run();
-
-        // Auto-create Google Drive folder (best-effort — never blocks the
-        // response). Skips silently when DRIVE_PARENT_FOLDER_ID or service
-        // account are missing. Stamps drive_folder_url on the client when
-        // the create succeeds.
-        ctx.waitUntil((async () => {
-          try {
-            const r = await createClientDriveFolder(env, body.name);
-            if (r.ok) {
-              await env.DB.prepare(
-                `UPDATE clients SET drive_folder_url = ?1, drive_folder_id = ?2 WHERE id = ?3`
-              ).bind(r.url, r.id, id).run();
-              await env.DB.prepare(
-                `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
-              ).bind(
-                "client.drive_folder_created", id, "info",
-                `Created Drive folder for ${body.name} (${r.subfolders.length} subfolders)`,
-                JSON.stringify({ url: r.url, id: r.id, failed_subfolders: r.failed_subfolders })
-              ).run();
-            } else {
-              await env.DB.prepare(
-                `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
-              ).bind(
-                "client.drive_folder_skipped", id, "warn",
-                `Drive folder NOT created for ${body.name}: ${r.error}`,
-                JSON.stringify({ error: r.error })
-              ).run();
-            }
-          } catch (driveErr) {
-            console.error("Drive folder auto-create failed:", driveErr?.message || driveErr);
-          }
-        })());
 
         return ok({ id, created: true, slug }, 201);
       } catch (e) {
