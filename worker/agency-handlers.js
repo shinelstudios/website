@@ -2262,6 +2262,46 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const clientId = clientChannelMatch[1];
       const body = await request.json().catch(() => ({}));
       if (!body.channel_id) return err("channel_id required (UCxxx or @handle)");
+
+      // Upsert: if a row with this channel_id already exists (even soft-deleted),
+      // reactivate + update metadata instead of failing on UNIQUE. Lets the
+      // founder "remove" then "re-add" without hitting a 409.
+      const existing = await env.DB.prepare(
+        "SELECT id, active FROM client_channels WHERE channel_id = ?1 LIMIT 1"
+      ).bind(body.channel_id).first();
+
+      if (existing) {
+        await env.DB.prepare(
+          `UPDATE client_channels SET
+             client_id = ?1,
+             handle = COALESCE(?2, handle),
+             role = COALESCE(?3, role),
+             language = COALESCE(?4, language),
+             niche_tag_override = COALESCE(?5, niche_tag_override),
+             studio_url = COALESCE(?6, studio_url),
+             active = 1,
+             managed_by_us = 1,
+             updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?7`
+        ).bind(
+          clientId,
+          body.handle || null,
+          body.role || null,
+          body.language || null,
+          body.niche_tag_override || null,
+          body.studio_url || null,
+          existing.id
+        ).run();
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind(
+          "client.channel_reactivated", clientId, "info",
+          `Reactivated channel ${body.channel_id} (was soft-deleted)`,
+          JSON.stringify({ id: existing.id, ...body })
+        ).run();
+        return ok({ id: existing.id, reactivated: true });
+      }
+
       const id = body.id || `cc-${clientId}-${crypto.randomUUID().slice(0, 6)}`;
       try {
         await env.DB.prepare(
@@ -2703,9 +2743,35 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     if (path === "/admin/agency/instagram" && method === "POST") {
       const body = await request.json().catch(() => ({}));
       if (!body.client_id || !body.handle) return err("client_id and handle required");
-      const cleanHandle = String(body.handle).trim();
+      const cleanHandle = String(body.handle).trim().replace(/^@/, "");
+      const url2 = body.url || `https://instagram.com/${cleanHandle}`;
+
+      // Upsert: re-activate any soft-deleted row with the same handle (case-insensitive)
+      // so "remove then re-add" works without hitting UNIQUE conflicts.
+      const existing = await env.DB.prepare(
+        "SELECT id, active FROM instagram_accounts WHERE LOWER(handle) = LOWER(?1) LIMIT 1"
+      ).bind(cleanHandle).first();
+
+      if (existing) {
+        await env.DB.prepare(
+          `UPDATE instagram_accounts SET
+             client_id = ?1, handle = ?2, url = ?3,
+             role = COALESCE(?4, role),
+             managed_by_us = ?5,
+             notes = COALESCE(?6, notes),
+             active = 1
+           WHERE id = ?7`
+        ).bind(
+          body.client_id, cleanHandle, url2,
+          body.role || null,
+          body.managed_by_us ? 1 : 0,
+          body.notes || null,
+          existing.id
+        ).run();
+        return ok({ id: existing.id, reactivated: true });
+      }
+
       const id = body.id || crypto.randomUUID();
-      const url2 = body.url || `https://instagram.com/${cleanHandle.replace(/^@/, "")}`;
       try {
         await env.DB.prepare(
           `INSERT INTO instagram_accounts (id, client_id, handle, url, role, managed_by_us, followers, notes, active)

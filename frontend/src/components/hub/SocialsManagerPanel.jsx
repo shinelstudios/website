@@ -200,10 +200,10 @@ export default function SocialsManagerPanel() {
                   {c.channels.map((ch) => (
                     <li key={ch.id} className="flex items-center gap-2 text-xs">
                       <Youtube size={12} className="text-red-500 shrink-0" />
-                      <span className="font-mono text-[11px] truncate flex-1">
+                      <span className="font-mono text-[12px] truncate flex-1 text-neutral-800 dark:text-neutral-200">
                         {ch.handle ? `@${ch.handle.replace(/^@/, "")}` : ch.channel_id}
-                        <span className="text-neutral-500 ml-1">· {ch.role}</span>
-                        <span className="text-neutral-500 ml-1">· {fmtCount(ch.subscribers)} subs</span>
+                        <span className="text-neutral-600 dark:text-neutral-400 ml-1.5 font-sans uppercase text-[10px] font-bold tracking-wider">{ch.role}</span>
+                        <span className="text-neutral-600 dark:text-neutral-400 ml-1.5 font-sans text-[11px]">· {fmtCount(ch.subscribers)} subs</span>
                       </span>
                       <ManagedToggle
                         value={!!ch.managed_by_us}
@@ -221,10 +221,10 @@ export default function SocialsManagerPanel() {
                   {c.instagram.map((ig) => (
                     <li key={ig.id} className="flex items-center gap-2 text-xs">
                       <Instagram size={12} className="text-pink-500 shrink-0" />
-                      <span className="font-mono text-[11px] truncate flex-1">
+                      <span className="font-mono text-[12px] truncate flex-1 text-neutral-800 dark:text-neutral-200">
                         @{(ig.handle || "").replace(/^@/, "")}
-                        <span className="text-neutral-500 ml-1">· {ig.role}</span>
-                        <span className="text-neutral-500 ml-1">· {fmtCount(ig.follower_count)} followers</span>
+                        <span className="text-neutral-600 dark:text-neutral-400 ml-1.5 font-sans uppercase text-[10px] font-bold tracking-wider">{ig.role}</span>
+                        <span className="text-neutral-600 dark:text-neutral-400 ml-1.5 font-sans text-[11px]">· {fmtCount(ig.follower_count)} followers</span>
                       </span>
                       <ManagedToggle
                         value={!!ig.managed_by_us}
@@ -274,15 +274,15 @@ function ManagedToggle({ value, onChange, disabled }) {
     <button
       onClick={() => onChange(!value)}
       disabled={disabled}
-      className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1 transition ${
+      className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1 transition border ${
         value
-          ? "bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30"
-          : "bg-neutral-300/30 text-neutral-500 hover:bg-neutral-400/30"
+          ? "bg-green-500/25 text-green-700 dark:text-green-300 border-green-500/40 hover:bg-green-500/35"
+          : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
       }`}
-      title={value ? "We manage this — appears in Pulse" : "Unmanaged — historical reach only"}
+      title={value ? "Active for Pulse — we monitor this social" : "Tracked only — counts toward reach but Pulse won't sync uploads"}
     >
       {value ? <Check size={10} /> : <XIcon size={10} />}
-      {value ? "managed" : "unmanaged"}
+      {value ? "we manage" : "tracked only"}
     </button>
   );
 }
