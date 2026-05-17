@@ -48,6 +48,7 @@ import CompletionLogPanel from "./CompletionLogPanel";
 import GrowthPanel from "./GrowthPanel";
 import SocialsManagerPanel from "./SocialsManagerPanel";
 import SponsorshipsPanel from "./SponsorshipsPanel";
+import WeeklySnapshotPanel from "./WeeklySnapshotPanel";
 import IgDiagnosticModal from "./IgDiagnosticModal";
 import YtQuotaPanel from "./YtQuotaPanel";
 import InlineFollowerEdit from "./InlineFollowerEdit";
@@ -700,6 +701,8 @@ export default function OpsCockpit() {
       {/* Two-column body — Overview tab shows clients/SEO/spikes/research grid.
           Other tabs hide it and just render their dedicated panel below. */}
       <div className={tab === "overview" ? "grid grid-cols-1 lg:grid-cols-2 gap-5" : "hidden"}>
+        {/* Spans both columns: top-of-page weekly briefing */}
+        <WeeklySnapshotPanel />
         {/* LEFT — clients + pending SEO */}
         <div className="space-y-5">
           <SectionCard
