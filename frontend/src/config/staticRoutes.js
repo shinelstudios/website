@@ -27,6 +27,7 @@ export const STATIC_ROUTES = [
   { path: "/",                kicker: "Shinel Studios",        title: "We edit videos that convert." },
   { path: "/about",           kicker: "About",                  title: "The studio behind your next hit." },
   { path: "/work",            kicker: "The Work",               title: "Channels we built. Videos that landed." },
+  { path: "/creators",        kicker: "Our Creators",           title: "Every creator we've shipped work for." },
   { path: "/pricing",         kicker: "Pricing",                title: "Pay per video or pay per month." },
   { path: "/faq",             kicker: "FAQ",                    title: "Quick answers, in plain English." },
   { path: "/contact",         kicker: "Contact",                title: "One reply, one project, one calendar slot." },

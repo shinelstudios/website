@@ -138,6 +138,7 @@ const FAQPage = React.lazy(() => import("./components/pages/FAQPage.jsx"));
 
 // Client Portal v1 — public per-client pages at /c/<slug> + self-edit at /clients/me/*
 const ClientPublicPage = React.lazy(() => import("./components/c/ClientPublicPage.jsx"));
+const OurCreatorsPage = React.lazy(() => import("./components/OurCreatorsPage.jsx"));
 const ClientPortalDashboard = React.lazy(() => import("./components/clientportal/ClientPortalDashboard.jsx"));
 const ClientPortalEditor = React.lazy(() => import("./components/clientportal/ClientPortalEditor.jsx"));
 const ClientPortalInbox = React.lazy(() => import("./components/clientportal/ClientPortalInbox.jsx"));
@@ -522,6 +523,7 @@ export default function App() {
           <Route path="/live-templates" element={<LiveTemplates />} />
 
           {/* Client portal — public per-client pages (/c/<slug>) + self-edit (/clients/me/*) */}
+          <Route path="/creators" element={<OurCreatorsPage />} />
           <Route path="/c/:slug" element={<ClientPublicPage />} />
           <Route
             path="/clients/me"

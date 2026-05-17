@@ -233,10 +233,48 @@ Errors:
 - HTTP 429 → PATCH `failed` with `"ig_rate_limited"`. **Stop further IG fetches this run** to avoid burning the IP. Other task types are fine.
 
 ### `ig_recent_posts_fetch`
-Same setup. After the page loads:
-1. `find` element matching "post grid" or "first post in profile"
-2. Read the first 12 grid items: `href` (post URL), `alt` (post caption preview), thumbnail src
-3. Result: `{ posts: [{ url, thumbnail, caption_alt }] }`
+Surfaces the client's IG feed onto the public **/live** page alongside YT uploads.
+Input: `task.client_id` (and optionally `task.payload_json.handle`). Look up the
+IG handle from context if not in payload.
+
+1. Open Chrome to `https://www.instagram.com/{handle}/` via `mcp__Claude_in_Chrome__navigate`.
+2. `read_page` (depth 6).
+3. Parse the first ~9 posts. For each one extract:
+   - `shortcode` — the path segment after `/p/` or `/reel/` (e.g. `/p/Cabc123/` → `Cabc123`)
+   - `url` — the absolute `https://www.instagram.com/p/<shortcode>/` URL
+   - `thumbnail_url` — the post's grid image `src` (the SQUARE-sized variant is fine)
+   - `caption` — the `alt` attribute on the thumbnail (IG bakes the caption into alt). Truncate to 500 chars.
+   - `post_type` — `"reel"` if the URL contains `/reel/`, else `"post"`
+   - `like_count` / `comment_count` — leave null if not visible without click-through
+   - `posted_at` — relative time on the card (e.g. "2d", "3h") → convert to unix sec.
+     If unparseable, fall back to `now - i * 86400` (best effort; the laptop will
+     overwrite with the true value on the next sweep when the post is older).
+
+4. POST the batch to the worker once you have all posts collected:
+
+```
+POST {WORKER_URL}/admin/agency/ig/posts
+Authorization: Bearer {ADMIN_JWT}
+Body: {
+  "client_id": "<client uuid>",
+  "handle": "<the @handle without @>",
+  "posts": [ { shortcode, url, thumbnail_url, caption, post_type,
+               like_count, comment_count, posted_at }, ... ]
+}
+```
+
+The worker upserts into `instagram_posts` (idempotent by shortcode) and surfaces
+them on the next /clients/pulse fetch.
+
+PATCH `done` with `{ handle, count: <posts.length>, sample_shortcodes: [first 3] }`.
+
+**Cadence:** only fire `ig_recent_posts_fetch` for IG accounts where
+`managed_by_us = 1` AND `clients.status = 'active'`. Skip unmanaged accounts —
+they're only there for reach aggregation, not posting cadence tracking.
+
+Errors:
+- Login wall → PATCH `failed` with `"ig_login_wall"`. Don't retry this run.
+- HTTP 429 → PATCH `failed` with `"ig_rate_limited"`. Stop further IG fetches this run.
 
 ### `yt_stream_seo_check`
 Input: `task.client_id` (or null = sweep all managed clients).

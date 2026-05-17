@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings, runCompetitorResearch, runUnderperformerDetector, captureChannelVideoStats } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings, runCompetitorResearch, runUnderperformerDetector, captureChannelVideoStats, postToDiscord } from "./agency-handlers.js";
 // Re-export the Durable Object so the runtime can instantiate it. Without
 // this line, `wrangler.toml`'s `class_name = "TaskPushHub"` would fail to
 // resolve and the worker would 500 on any /admin/agency/laptop/ws hit.
@@ -1645,7 +1645,8 @@ async function performClientSync(env, isForced = false, debug = false) {
             try {
               const { results: extraChannels } = await env.DB.prepare(
                 `SELECT channel_id FROM client_channels
-                 WHERE client_id = ?1 AND active = 1 AND channel_id != ?2`
+                 WHERE client_id = ?1 AND active = 1 AND channel_id != ?2
+                   AND COALESCE(managed_by_us, 1) = 1`
               ).bind(c.id, result.id).all();
               for (const ch of (extraChannels || [])) {
                 try {
@@ -1870,7 +1871,7 @@ async function performClientSync(env, isForced = false, debug = false) {
         try {
           const { results: allChans } = await env.DB.prepare(
             `SELECT channel_id FROM client_channels
-             WHERE client_id = ?1 AND active = 1`
+             WHERE client_id = ?1 AND active = 1 AND COALESCE(managed_by_us, 1) = 1`
           ).bind(c.id).all();
           for (const ch of (allChans || [])) {
             // Skip if this channel was already handled by the primary path
@@ -2937,20 +2938,37 @@ const handler = {
       // a real client row.
       if (env.DB) {
         try {
+          // UNION of YT pulse_activities and Instagram posts. Both feed into
+          // /live. IG rows are normalized to the same column names the
+          // frontend already renders (title, thumbnail, url, content_type,
+          // timestamp, clientName) so ClientPulsePage doesn't need to branch.
           const { results: activities } = await env.DB.prepare(
-            // ONLY active clients on /live page. Pause/inactive/old are hidden.
-            // Per founder policy: status flag controls site visibility for ALL
-            // surfaces — admins toggle it via the Clients panel dropdown.
-            `SELECT p.*,
-                    COALESCE(c1.name, c2.name) AS clientName,
-                    COALESCE(c1.id, c2.id) AS resolved_client_id
-             FROM pulse_activities p
-             LEFT JOIN clients c1 ON p.client_id = c1.youtube_id
-             LEFT JOIN client_channels cc ON p.client_id = cc.channel_id
-             LEFT JOIN clients c2 ON cc.client_id = c2.id
-             WHERE (COALESCE(c1.status, c2.status, 'active') = 'active')
-               AND (c1.id IS NOT NULL OR c2.id IS NOT NULL)
-             ORDER BY p.timestamp DESC
+            `SELECT * FROM (
+               SELECT p.id, p.client_id, p.title, p.thumbnail, p.url,
+                      p.timestamp, p.published_at, p.content_type, p.view_count, p.like_count,
+                      COALESCE(c1.name, c2.name) AS clientName,
+                      COALESCE(c1.id, c2.id) AS resolved_client_id
+               FROM pulse_activities p
+               LEFT JOIN clients c1 ON p.client_id = c1.youtube_id
+               LEFT JOIN client_channels cc ON p.client_id = cc.channel_id
+               LEFT JOIN clients c2 ON cc.client_id = c2.id
+               WHERE (COALESCE(c1.status, c2.status, 'active') = 'active')
+                 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL)
+
+               UNION ALL
+
+               SELECT ip.id, ip.client_id, COALESCE(ip.caption, '@' || ip.ig_handle) AS title,
+                      ip.thumbnail_url AS thumbnail, ip.url,
+                      (ip.posted_at * 1000) AS timestamp,
+                      ip.posted_at AS published_at,
+                      CASE WHEN ip.post_type = 'reel' THEN 'reel' ELSE 'instagram_post' END AS content_type,
+                      NULL AS view_count, ip.like_count,
+                      ic.name AS clientName, ic.id AS resolved_client_id
+               FROM instagram_posts ip
+               JOIN clients ic ON ip.client_id = ic.id
+               WHERE COALESCE(ic.status, 'active') = 'active'
+             )
+             ORDER BY timestamp DESC
              LIMIT 80`
           ).all();
 
@@ -3891,6 +3909,43 @@ const handler = {
         const list = await getJsonList(env, KV_LEADS_KEY);
         list.push(lead);
         await putJsonList(env, KV_LEADS_KEY, list);
+
+        // Mirror to D1 so leads are queryable from the cockpit and survive
+        // KV value-size limits (KV array grows unbounded otherwise).
+        // Fire-and-forget — KV is still the canonical store today.
+        if (env.DB) {
+          ctx.waitUntil((async () => {
+            try {
+              await env.DB.prepare(
+                `INSERT OR IGNORE INTO leads (id, name, email, handle, source, interests_json, quiz_data_json, status, created_at, last_updated)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'new', datetime('now'), datetime('now'))`
+              ).bind(
+                lead.id, lead.name, lead.email, lead.handle || null, lead.source,
+                JSON.stringify(interests), quizData ? JSON.stringify(quizData) : null
+              ).run();
+            } catch (e) {
+              console.warn("lead D1 mirror failed:", e?.message || e);
+            }
+          })());
+        }
+
+        // Discord ping — "ops" channel. Best-effort; failures don't block the
+        // submission response. Front-of-funnel events are the highest-leverage
+        // alerts the team can get, so this notification is the killer feature.
+        ctx.waitUntil(postToDiscord(env, {
+          embeds: [{
+            title: "🎯 New lead",
+            description: `**${lead.name}** · ${lead.email}` + (lead.handle ? `\n@${lead.handle}` : ""),
+            color: 0xE85002,
+            fields: [
+              { name: "Source", value: lead.source || "wizard", inline: true },
+              ...(interests.length ? [{ name: "Interests", value: interests.join(", ").slice(0, 200), inline: false }] : []),
+              ...(quizData ? [{ name: "Quiz", value: ("```json\n" + JSON.stringify(quizData).slice(0, 400) + "\n```") }] : [])
+            ],
+            timestamp: new Date(now).toISOString(),
+            footer: { text: `lead ${id}` }
+          }]
+        }, "ops").catch(() => {}));
 
         return json({ ok: true, id }, 200, cors);
       } catch (e) {

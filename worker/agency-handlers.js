@@ -29,6 +29,7 @@ import {
   readDropdownRules,
   readRange as sheetReadRange,
 } from "./google-sheets.js";
+import { createClientDriveFolder } from "./google-drive.js";
 import { generateAndStoreSeoProposal } from "./seo-generator.js";
 
 // In-memory cache of dropdown rules per tab. Refreshed every 10 min so the
@@ -357,7 +358,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
            FROM client_channels cc
            JOIN clients c ON cc.client_id = c.id
            WHERE cc.active = 1
-             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.status, 'active') != 'old'
            GROUP BY cc.channel_id, c.id
            ORDER BY MAX(cc.subscribers) DESC`
         ).all(),
@@ -370,7 +371,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
            FROM instagram_accounts ia
            JOIN clients c ON ia.client_id = c.id
            WHERE ia.active = 1
-             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.status, 'active') != 'old'
            GROUP BY LOWER(ia.handle), c.id
            ORDER BY MAX(ia.followers) DESC`
         ).all(),
@@ -435,6 +436,81 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     }
   }
 
+  // ---- GET /admin/agency/public/clients — public "Our Creators" grid -----
+  //
+  // Returns every client where public_enabled = 1, regardless of active
+  // status — historic clients still earn a card because their work counts
+  // as proof. Each entry rolls up the top YT + IG handle so the grid card
+  // can show "@official_handle · 1.2M subs" without a second API call.
+  if (path === "/admin/agency/public/clients" && method === "GET") {
+    const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
+    try {
+      const { results: clients } = await env.DB.prepare(
+        `SELECT id, slug, name, display_name, tagline, avatar_url, banner_url, niche_tag,
+                COALESCE(status, 'active') AS status, COALESCE(managed_by_us, 1) AS managed_by_us
+         FROM clients
+         WHERE public_enabled = 1
+           AND slug IS NOT NULL AND slug != ''
+           AND COALESCE(status, 'active') != 'old'
+         ORDER BY (status = 'active') DESC, name`
+      ).all();
+      if (!clients.length) {
+        return new Response(JSON.stringify({ count: 0, clients: [] }), {
+          status: 200,
+          headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=60, s-maxage=60" },
+        });
+      }
+      // Top channel + top IG per client (highest sub/follower count)
+      const ids = clients.map((c) => c.id);
+      const placeholders = ids.map((_, i) => `?${i + 1}`).join(",");
+      const [{ results: topChans }, { results: topIgs }] = await Promise.all([
+        env.DB.prepare(
+          `SELECT client_id, handle, channel_id, subscribers, avatar_url
+           FROM client_channels
+           WHERE active = 1 AND client_id IN (${placeholders})
+           GROUP BY client_id
+           HAVING subscribers = MAX(subscribers)`
+        ).bind(...ids).all(),
+        env.DB.prepare(
+          `SELECT client_id, handle, followers, avatar_url
+           FROM instagram_accounts
+           WHERE active = 1 AND client_id IN (${placeholders})
+           GROUP BY client_id
+           HAVING followers = MAX(followers)`
+        ).bind(...ids).all(),
+      ]);
+      const chById = {}; for (const c of (topChans || [])) chById[c.client_id] = c;
+      const igById = {}; for (const i of (topIgs || [])) igById[i.client_id] = i;
+      const out = clients.map((c) => {
+        const ch = chById[c.id]; const ig = igById[c.id];
+        return {
+          slug: c.slug,
+          name: c.display_name || c.name,
+          tagline: c.tagline || "",
+          avatar_url: c.avatar_url || ch?.avatar_url || ig?.avatar_url || null,
+          banner_url: c.banner_url || null,
+          niche: c.niche_tag || null,
+          status: c.status,
+          yt_handle: ch?.handle || null,
+          yt_subscribers: ch?.subscribers || 0,
+          ig_handle: ig?.handle || null,
+          ig_followers: ig?.followers || 0,
+          reach: (ch?.subscribers || 0) + (ig?.followers || 0),
+        };
+      }).sort((a, b) => b.reach - a.reach);
+      return new Response(JSON.stringify({
+        count: out.length,
+        clients: out,
+        generated_at: new Date().toISOString(),
+      }), {
+        status: 200,
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=60, s-maxage=60" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
+    }
+  }
+
   // ---- GET /admin/agency/public/stats — CANONICAL source of truth ----
   //
   // EVERY surface that displays "Total Reach" reads this endpoint:
@@ -465,27 +541,28 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
            WHERE (status = 'active' OR status IS NULL)
              AND COALESCE(managed_by_us, 1) = 1`
         ).first(),
-        // YT: sum across ALL channels of managed clients (multi-channel safe)
+        // YT: sum across ALL channels of every client we've ever managed.
+        // Founder policy (May 2026 v2): paused/inactive clients still count
+        // toward total reach — historical work is real reach. Only 'old'
+        // (archived) clients are excluded so we don't double-count merged
+        // duplicates left over from the early sheet imports.
         env.DB.prepare(
           `SELECT COALESCE(SUM(cc.subscribers), 0) AS total
            FROM client_channels cc
            JOIN clients c ON cc.client_id = c.id
            WHERE cc.active = 1
-             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.status, 'active') != 'old'
              AND COALESCE(c.managed_by_us, 1) = 1`
         ).first(),
-        // IG: sum across ALL active accounts of active managed clients.
-        // Previously gated by ia.managed_by_us=1 which excluded "tracked-only"
-        // accounts (e.g. Kamz's @kamzinkzoneclothing). Per founder policy
-        // (May 2026): track follower count for every client surface in our
-        // DB; the managed_by_us flag only governs whether WE do SEO/posting
-        // work on it, not whether we count its reach.
+        // IG: same rule as YT — include paused/inactive clients in reach.
+        // managed_by_us on the IG row only governs whether WE handle SEO /
+        // posting work; it never gates whether a follower counts toward reach.
         env.DB.prepare(
           `SELECT COALESCE(SUM(ia.followers), 0) AS total
            FROM instagram_accounts ia
            JOIN clients c ON ia.client_id = c.id
            WHERE ia.active = 1
-             AND (c.status = 'active' OR c.status IS NULL)
+             AND COALESCE(c.status, 'active') != 'old'
              AND COALESCE(c.managed_by_us, 1) = 1`
         ).first(),
         env.DB.prepare(
@@ -1746,11 +1823,237 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
         ).bind("client.created", id, "info", `Onboarded new client: ${body.name}`, JSON.stringify(body)).run();
 
+        // Auto-create Google Drive folder (best-effort — never blocks the
+        // response). Skips silently when DRIVE_PARENT_FOLDER_ID or service
+        // account are missing. Stamps drive_folder_url on the client when
+        // the create succeeds.
+        ctx.waitUntil((async () => {
+          try {
+            const r = await createClientDriveFolder(env, body.name);
+            if (r.ok) {
+              await env.DB.prepare(
+                `UPDATE clients SET drive_folder_url = ?1, drive_folder_id = ?2 WHERE id = ?3`
+              ).bind(r.url, r.id, id).run();
+              await env.DB.prepare(
+                `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+              ).bind(
+                "client.drive_folder_created", id, "info",
+                `Created Drive folder for ${body.name} (${r.subfolders.length} subfolders)`,
+                JSON.stringify({ url: r.url, id: r.id, failed_subfolders: r.failed_subfolders })
+              ).run();
+            } else {
+              await env.DB.prepare(
+                `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+              ).bind(
+                "client.drive_folder_skipped", id, "warn",
+                `Drive folder NOT created for ${body.name}: ${r.error}`,
+                JSON.stringify({ error: r.error })
+              ).run();
+            }
+          } catch (driveErr) {
+            console.error("Drive folder auto-create failed:", driveErr?.message || driveErr);
+          }
+        })());
+
         return ok({ id, created: true, slug }, 201);
       } catch (e) {
         if (String(e.message || "").includes("UNIQUE")) return err(`Client "${body.name}" already exists`, 409);
         throw e;
       }
+    }
+
+    // ---- POST /admin/agency/ig/posts  — laptop scraper bulk-upserts IG posts
+    // Body: { handle, client_id, posts: [{ shortcode, url, thumbnail_url, caption,
+    //   post_type, like_count, comment_count, posted_at (unix sec) }] }
+    // Idempotent: ON CONFLICT(shortcode) replaces. Used by the laptop SKILL
+    // handler `ig_recent_posts_fetch` running on the always-on Cowork laptop.
+    if (path === "/admin/agency/ig/posts" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const handle = String(body.handle || "").replace(/^@/, "").toLowerCase();
+      const clientId = body.client_id;
+      const posts = Array.isArray(body.posts) ? body.posts : [];
+      if (!handle || !clientId || !posts.length) return err("handle, client_id, posts[] required");
+      let inserted = 0, updated = 0;
+      for (const p of posts.slice(0, 50)) { // cap per request
+        if (!p.shortcode || !p.url || !p.posted_at) continue;
+        const id = `ig-${p.shortcode}`;
+        try {
+          const existing = await env.DB.prepare(
+            "SELECT id FROM instagram_posts WHERE shortcode = ?1"
+          ).bind(p.shortcode).first();
+          if (existing) {
+            await env.DB.prepare(
+              `UPDATE instagram_posts SET like_count = ?1, comment_count = ?2,
+                       thumbnail_url = COALESCE(?3, thumbnail_url),
+                       caption = COALESCE(?4, caption),
+                       fetched_at = strftime('%s','now')
+                       WHERE shortcode = ?5`
+            ).bind(p.like_count ?? null, p.comment_count ?? null,
+                   p.thumbnail_url || null, p.caption ? String(p.caption).slice(0, 500) : null,
+                   p.shortcode).run();
+            updated++;
+          } else {
+            await env.DB.prepare(
+              `INSERT INTO instagram_posts
+                (id, shortcode, client_id, ig_handle, url, thumbnail_url,
+                 caption, post_type, like_count, comment_count, posted_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
+            ).bind(id, p.shortcode, clientId, handle, p.url,
+                   p.thumbnail_url || null,
+                   p.caption ? String(p.caption).slice(0, 500) : null,
+                   p.post_type || "post",
+                   p.like_count ?? null, p.comment_count ?? null,
+                   Math.floor(Number(p.posted_at))).run();
+            inserted++;
+          }
+        } catch (e) {
+          console.error("ig_post upsert failed:", p.shortcode, e?.message);
+        }
+      }
+      return ok({ ok: true, inserted, updated, total: posts.length });
+    }
+
+    // ---- GET /admin/agency/sponsorships[?status=new]  — deal pipeline view
+    // Lives on top of client_inbox where type='sponsor'. Each row carries the
+    // sponsor inquiry payload + a status / notes / value_inr the founder edits
+    // in the cockpit. Joined to clients(name) so the row reads cleanly.
+    if (path === "/admin/agency/sponsorships" && method === "GET") {
+      const statusFilter = url.searchParams.get("status");
+      const where = ["i.type = 'sponsor'"];
+      const binds = [];
+      let i = 1;
+      if (statusFilter) { where.push(`i.status = ?${i++}`); binds.push(statusFilter); }
+      binds.push(200);
+      const { results } = await env.DB.prepare(
+        `SELECT i.id, i.client_id, c.name AS client_name, c.slug AS client_slug,
+                i.payload_json, COALESCE(i.status, 'new') AS status, i.notes, i.assigned_to,
+                i.value_inr, i.created_at, i.updated_at, i.read_at
+         FROM client_inbox i
+         LEFT JOIN clients c ON c.id = i.client_id
+         WHERE ${where.join(" AND ")}
+         ORDER BY i.created_at DESC
+         LIMIT ?${i}`
+      ).bind(...binds).all();
+      const { results: stats } = await env.DB.prepare(
+        `SELECT COALESCE(status, 'new') AS status, COUNT(*) AS n,
+                COALESCE(SUM(value_inr), 0) AS total_inr
+         FROM client_inbox WHERE type = 'sponsor'
+         GROUP BY status`
+      ).all();
+      return ok({ count: (results || []).length, sponsorships: results, stats });
+    }
+
+    // ---- PATCH /admin/agency/sponsorships/:id  — update deal state
+    const sponsorMatch = path.match(/^\/admin\/agency\/sponsorships\/([^\/]+)$/);
+    if (sponsorMatch && method === "PATCH") {
+      const id = sponsorMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const sets = []; const binds = []; let i = 1;
+      const allowed = ["status", "notes", "assigned_to", "value_inr"];
+      for (const k of allowed) {
+        if (body[k] !== undefined) { sets.push(`${k} = ?${i++}`); binds.push(body[k]); }
+      }
+      if (!sets.length) return err("no editable fields");
+      sets.push(`updated_at = ${Math.floor(Date.now() / 1000)}`);
+      binds.push(id);
+      await env.DB.prepare(`UPDATE client_inbox SET ${sets.join(", ")} WHERE id = ?${i} AND type = 'sponsor'`).bind(...binds).run();
+      // Discord ping on milestones — signed/paid/declined are the events the team wants in feed.
+      if (["signed", "paid"].includes(body.status)) {
+        const row = await env.DB.prepare(
+          `SELECT i.payload_json, i.value_inr, c.name AS client_name
+           FROM client_inbox i LEFT JOIN clients c ON c.id = i.client_id WHERE i.id = ?1`
+        ).bind(id).first();
+        let pl = {}; try { pl = JSON.parse(row?.payload_json || "{}"); } catch {}
+        postToDiscord(env, {
+          embeds: [{
+            title: body.status === "paid" ? "💰 Sponsorship paid" : "✍️ Sponsorship signed",
+            description: `**${pl.brand || pl.name || "(unknown brand)"}** — ${row?.client_name || ""}`,
+            color: body.status === "paid" ? 0x22c55e : 0xE85002,
+            fields: [
+              ...(body.value_inr || row?.value_inr ? [{ name: "Value", value: `₹${(body.value_inr || row.value_inr).toLocaleString("en-IN")}`, inline: true }] : []),
+            ],
+          }]
+        }, body.status === "paid" ? "finance" : "ops").catch(() => {});
+      }
+      return ok({ id, updated: true });
+    }
+
+    // ---- GET /admin/agency/socials  — unified socials manager view
+    // Returns every client (active + inactive) with their full YT/IG roster.
+    // Used by the cockpit "Socials Manager" panel so the founder can flip
+    // managed_by_us per row without hunting through individual modals.
+    if (path === "/admin/agency/socials" && method === "GET") {
+      const { results: clients } = await env.DB.prepare(
+        `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us
+         FROM clients
+         ORDER BY (status = 'active') DESC, name`
+      ).all();
+      const { results: channels } = await env.DB.prepare(
+        `SELECT id, client_id, channel_id, handle, role, active,
+                COALESCE(managed_by_us, 1) AS managed_by_us,
+                subscribers, view_count, video_count
+         FROM client_channels
+         WHERE active = 1
+         ORDER BY role, handle`
+      ).all();
+      const { results: igs } = await env.DB.prepare(
+        `SELECT id, client_id, handle, role, active,
+                COALESCE(managed_by_us, 1) AS managed_by_us,
+                follower_count, post_count
+         FROM instagram_accounts
+         WHERE active = 1
+         ORDER BY role, handle`
+      ).all();
+      const byClient = {};
+      for (const c of clients || []) byClient[c.id] = { ...c, channels: [], instagram: [] };
+      for (const ch of channels || []) if (byClient[ch.client_id]) byClient[ch.client_id].channels.push(ch);
+      for (const ig of igs || []) if (byClient[ig.client_id]) byClient[ig.client_id].instagram.push(ig);
+      return ok({
+        clients: Object.values(byClient),
+        totals: {
+          clients: clients.length,
+          active: clients.filter((c) => c.status === "active").length,
+          channels: channels.length,
+          managed_channels: channels.filter((c) => c.managed_by_us).length,
+          instagram: igs.length,
+          managed_instagram: igs.filter((i) => i.managed_by_us).length,
+        },
+      });
+    }
+
+    // ---- PATCH /admin/agency/channels/:id  — toggle managed_by_us / active / handle
+    const chPatchMatch = path.match(/^\/admin\/agency\/channels\/([^\/]+)$/);
+    if (chPatchMatch && method === "PATCH") {
+      const id = chPatchMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const sets = []; const binds = []; let i = 1;
+      if (body.managed_by_us !== undefined) { sets.push(`managed_by_us = ?${i++}`); binds.push(body.managed_by_us ? 1 : 0); }
+      if (body.active !== undefined)        { sets.push(`active = ?${i++}`);        binds.push(body.active ? 1 : 0); }
+      if (body.role !== undefined)          { sets.push(`role = ?${i++}`);          binds.push(body.role); }
+      if (body.handle !== undefined)        { sets.push(`handle = ?${i++}`);        binds.push(body.handle); }
+      if (!sets.length) return err("no editable fields");
+      sets.push(`updated_at = CURRENT_TIMESTAMP`);
+      binds.push(id);
+      await env.DB.prepare(`UPDATE client_channels SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      return ok({ id, updated: true });
+    }
+
+    // ---- PATCH /admin/agency/instagram/:id  — toggle managed_by_us / active / role
+    // (Existing manual-entry endpoint covers follower counts; this is the
+    // lightweight toggle path used by the Socials Manager grid.)
+    const igPatchMatch = path.match(/^\/admin\/agency\/instagram\/([^\/]+)$/);
+    if (igPatchMatch && method === "PATCH") {
+      const id = igPatchMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const sets = []; const binds = []; let i = 1;
+      if (body.managed_by_us !== undefined) { sets.push(`managed_by_us = ?${i++}`); binds.push(body.managed_by_us ? 1 : 0); }
+      if (body.active !== undefined)        { sets.push(`active = ?${i++}`);        binds.push(body.active ? 1 : 0); }
+      if (body.role !== undefined)          { sets.push(`role = ?${i++}`);          binds.push(body.role); }
+      if (body.handle !== undefined)        { sets.push(`handle = ?${i++}`);        binds.push(body.handle); }
+      if (!sets.length) return err("no editable fields");
+      binds.push(id);
+      await env.DB.prepare(`UPDATE instagram_accounts SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      return ok({ id, updated: true });
     }
 
     // ---- POST /admin/agency/clients/:id/channels  (add YT channel)
@@ -2042,6 +2345,94 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         ).run();
       } catch {}
       return ok({ scanned: rows.length, updated: updates.length, updates });
+    }
+
+    // ---- Leads CRUD (D1-backed) ----------------------------------------------
+    // KV is still the canonical store for compatibility with AdminLeadsPage,
+    // but every new submission also lands in D1 (see worker.js POST /leads).
+    // These admin endpoints let the cockpit query/edit the D1 copy + push
+    // status changes back.
+
+    // GET /admin/agency/leads[?status=new&source=wizard&limit=100]
+    if (path === "/admin/agency/leads" && method === "GET") {
+      const status = url.searchParams.get("status");
+      const source = url.searchParams.get("source");
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10), 500);
+      const where = []; const binds = []; let i = 1;
+      if (status) { where.push(`status = ?${i++}`); binds.push(status); }
+      if (source) { where.push(`source = ?${i++}`); binds.push(source); }
+      const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+      binds.push(limit);
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM leads ${whereSql} ORDER BY created_at DESC LIMIT ?${i}`
+      ).bind(...binds).all();
+      // Stats summary by status — useful for the cockpit "Growth" tab
+      const { results: stats } = await env.DB.prepare(
+        "SELECT status, COUNT(*) as n FROM leads GROUP BY status"
+      ).all();
+      return ok({ count: (results || []).length, leads: results, stats });
+    }
+
+    // PATCH /admin/agency/leads/:id  — update status / notes / assignment
+    const leadMatch = path.match(/^\/admin\/agency\/leads\/([^\/]+)$/);
+    if (leadMatch && method === "PATCH") {
+      const id = leadMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const sets = []; const binds = []; let i = 1;
+      const allowed = ["status", "notes", "assigned_to", "handle"];
+      for (const k of allowed) {
+        if (body[k] !== undefined) { sets.push(`${k} = ?${i++}`); binds.push(body[k]); }
+      }
+      if (!sets.length) return err("no editable fields");
+      sets.push(`last_updated = datetime('now')`);
+      if (body.status === "contacted") sets.push(`contacted_at = COALESCE(contacted_at, datetime('now'))`);
+      if (body.status === "closed" || body.status === "lost") sets.push(`closed_at = datetime('now')`);
+      binds.push(id);
+      await env.DB.prepare(`UPDATE leads SET ${sets.join(", ")} WHERE id = ?${i}`).bind(...binds).run();
+      // Discord ping on conversion (status -> closed) so the team sees the win
+      if (body.status === "closed") {
+        const lead = await env.DB.prepare("SELECT name, email FROM leads WHERE id = ?1").bind(id).first();
+        postToDiscord(env, {
+          embeds: [{
+            title: "💚 Lead converted",
+            description: `**${lead?.name || id}** · ${lead?.email || ""}`,
+            color: 0x22c55e,
+          }]
+        }, "ops").catch(() => {});
+      }
+      return ok({ id, updated: true });
+    }
+
+    // POST /admin/agency/leads/:id/convert  — promote a lead to a client row
+    // Creates a clients row pre-populated from the lead, then links it back via
+    // leads.client_id so future edits stay associated.
+    const leadConvertMatch = path.match(/^\/admin\/agency\/leads\/([^\/]+)\/convert$/);
+    if (leadConvertMatch && method === "POST") {
+      const id = leadConvertMatch[1];
+      const lead = await env.DB.prepare("SELECT * FROM leads WHERE id = ?1").bind(id).first();
+      if (!lead) return err("lead not found", 404);
+      if (lead.client_id) return err("lead already converted", 409);
+      const body = await request.json().catch(() => ({}));
+      const clientId = body.client_id || crypto.randomUUID();
+      // Try the minimal viable client insert — name + status='active'. Schemas
+      // vary across deploys so use INSERT OR IGNORE and let column defaults handle missing.
+      try {
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO clients (id, name, status) VALUES (?1, ?2, 'active')"
+        ).bind(clientId, body.name || lead.name).run();
+      } catch (e) { return err("client insert failed: " + (e?.message || e)); }
+      await env.DB.prepare(
+        `UPDATE leads SET status = 'closed', client_id = ?1, closed_at = datetime('now'), last_updated = datetime('now') WHERE id = ?2`
+      ).bind(clientId, id).run();
+      postToDiscord(env, {
+        embeds: [{
+          title: "🎉 Lead → Client",
+          description: `**${lead.name}** is now an active client.`,
+          color: 0xE85002,
+          fields: [{ name: "client_id", value: clientId, inline: true }],
+        }]
+      }, "ops").catch(() => {});
+      return ok({ id, clientId, converted: true });
     }
 
     // ---- Instagram accounts CRUD --------------------------------------------

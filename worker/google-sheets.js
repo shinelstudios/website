@@ -19,7 +19,12 @@
  *                          month-year like "May 2026")
  */
 
-const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+// Multi-scope token — we lazily lend the same token to google-drive.js so we
+// don't have to do two OAuth exchanges per cold start.
+// Full `drive` scope (not drive.file) is required so the SA can create a
+// brand-new SHARED DRIVE per client — drive.file only lets the SA see files
+// it created, which isn't enough for `POST /drives`.
+const SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
 // In-memory cache for the OAuth token (per isolate). Tokens are valid for
@@ -55,6 +60,8 @@ function pemToArrayBuffer(pem) {
 // ---------------------------------------------------------------------------
 // Service account → OAuth access token (Web Crypto JWT signing)
 // ---------------------------------------------------------------------------
+// Exported so google-drive.js shares the same in-isolate token cache.
+export { getAccessToken };
 async function getAccessToken(env) {
   const now = Math.floor(Date.now() / 1000);
   if (_tokenCache.token && _tokenCache.expires > now + 300) {

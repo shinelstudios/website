@@ -45,6 +45,9 @@ import SeoActionModal from "./SeoActionModal";
 import SeoRequestModal from "./SeoRequestModal";
 import SheetSyncPanel from "./SheetSyncPanel";
 import CompletionLogPanel from "./CompletionLogPanel";
+import GrowthPanel from "./GrowthPanel";
+import SocialsManagerPanel from "./SocialsManagerPanel";
+import SponsorshipsPanel from "./SponsorshipsPanel";
 import IgDiagnosticModal from "./IgDiagnosticModal";
 import YtQuotaPanel from "./YtQuotaPanel";
 import InlineFollowerEdit from "./InlineFollowerEdit";
@@ -247,6 +250,7 @@ const COCKPIT_TABS = [
   { key: "todos",      label: "My Todos" },
   { key: "pipeline",   label: "Pipeline" },
   { key: "finance",    label: "Finance" },
+  { key: "growth",     label: "Growth" },
   { key: "team",       label: "Team" },
   { key: "automation", label: "Automation" },
 ];
@@ -1132,6 +1136,13 @@ export default function OpsCockpit() {
         <PipelineKanban clients={clients} projectStatus={projectStatus} onChange={fetchSnapshot} />
       )}
       {tab === "finance" && <FinancePanel />}
+      {tab === "growth" && (
+        <div className="space-y-4">
+          <SocialsManagerPanel />
+          <GrowthPanel />
+          <SponsorshipsPanel />
+        </div>
+      )}
       {tab === "team" && <TeamPanel onChange={fetchSnapshot} />}
       {tab === "automation" && (
         <div className="space-y-5">
