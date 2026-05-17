@@ -95,18 +95,18 @@ export default function EditClientModal({ client, onClose, onChange }) {
     if (!confirm(`Remove @${ig.handle}? (Soft-delete — sets active=0.)`)) return;
     await patchIg(ig, { active: 0 });
   }
-  async function archiveClient() {
+  async function deleteClient() {
     const confirmText = prompt(
-      `Archive "${client.name}"?\n\n` +
-      `This hides them from every surface — Pulse, marquee, reach, cockpit Clients panel, /creators page. ` +
-      `Their channels, IG accounts, projects, and history all stay in D1 so the data is preserved and can be restored.\n\n` +
+      `Delete "${client.name}"?\n\n` +
+      `This removes them from every surface — Pulse, marquee, reach, cockpit, /creators page. ` +
+      `Past project history stays in D1 for accounting/audit but is hidden everywhere visible.\n\n` +
       `Type DELETE to confirm:`
     );
     if (confirmText !== "DELETE") return;
     const r = await call(
       `/admin/agency/clients/${client.id}`,
       { method: "DELETE" },
-      "archive"
+      "delete"
     );
     if (r) {
       onClose();
@@ -195,9 +195,9 @@ export default function EditClientModal({ client, onClose, onChange }) {
                   onClick={() => patchStatus("active")}
                   disabled={busy.status}
                   className="text-xs px-3 py-1.5 rounded font-bold uppercase tracking-wider bg-amber-500/30 text-amber-700 dark:text-amber-300 border border-amber-500/50 hover:bg-amber-500/50"
-                  title="This client is currently archived. Click to un-archive (flip status back to active)."
+                  title="This client was deleted. Click to restore (flip status back to active)."
                 >
-                  📦 archived — click to restore
+                  🗑 deleted — click to restore
                 </button>
               )}
             </div>
@@ -443,12 +443,12 @@ export default function EditClientModal({ client, onClose, onChange }) {
 
         <footer className="px-5 py-3 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-500 flex items-center justify-between flex-wrap gap-2">
           <button
-            onClick={archiveClient}
-            disabled={busy.archive}
-            className="text-xs px-3 py-1.5 rounded border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 font-bold flex items-center gap-1"
-            title="Archive — hides client from every surface but keeps the row in D1"
+            onClick={deleteClient}
+            disabled={busy.delete}
+            className="text-xs px-3 py-1.5 rounded border border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10 font-bold flex items-center gap-1"
+            title="Delete client — hides from every surface. Past project history kept for audit only."
           >
-            <Trash2 size={11} /> Archive client
+            <Trash2 size={11} /> Delete client
           </button>
           <div className="flex items-center gap-2">
             <span>Every change saves immediately.</span>

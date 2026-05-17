@@ -36,32 +36,30 @@ export default function LiveNumbersBand() {
 
   const data = stats || FALLBACK;
 
+  // Founder policy: ONE hero number only — total reach. Beats the noise of
+  // 3 competing stats and lets the trophy wall + receipts band downstream
+  // carry the depth. Total reach is the single most flexable number we have.
+  const totalReach = (data.totalViews && data.totalViews > 1_000_000)
+    ? data.totalViews
+    : (data.totalReach || data.totalViews || 0);
   return (
     <Section size="md" tone="surface" hairlineTop hairlineBottom>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10">
-        {[
-          { kicker: "This month", value: data.videosThisMonth, suffix: "+", label: "videos shipped" },
-          { kicker: "Lifetime",   value: data.totalViews,      formatter: "compact", label: "views generated" },
-          { kicker: "On the desk", value: data.hoursEdited,    suffix: "+ hrs", label: "of edits this year" },
-        ].map((stat, i) => (
-          <RevealOnScroll key={stat.label} delay={`${i * 80}ms`}>
-            <div className="text-center md:text-left">
-              <Eyebrow className="mb-2" style={{ color: "var(--orange)" }}>{stat.kicker}</Eyebrow>
-              <div className="text-display-lg leading-none mb-1.5" style={{ color: "var(--text)" }}>
-                <NumberTickIn
-                  to={stat.value}
-                  formatter={stat.formatter}
-                  suffix={stat.suffix || ""}
-                  duration={1600}
-                />
-              </div>
-              <p className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-                {stat.label}
-              </p>
-            </div>
-          </RevealOnScroll>
-        ))}
-      </div>
+      <RevealOnScroll>
+        <div className="text-center">
+          <Eyebrow className="mb-3" style={{ color: "var(--orange)" }}>Total managed reach</Eyebrow>
+          <div className="text-display-xl md:text-display-2xl leading-none mb-3" style={{ color: "var(--text)" }}>
+            <NumberTickIn
+              to={totalReach}
+              formatter="compact"
+              suffix="+"
+              duration={1800}
+            />
+          </div>
+          <p className="text-sm font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+            humans following the creators on our roster
+          </p>
+        </div>
+      </RevealOnScroll>
     </Section>
   );
 }

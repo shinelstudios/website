@@ -106,17 +106,22 @@ export default function SocialsManagerPanel() {
     } finally { setBusy((b) => { const n = { ...b }; delete n[`ig-${ig.id}`]; return n; }); }
   }
 
+  // Hide deleted clients (status='old') from the Socials Manager entirely —
+  // they're soft-deleted under the hood but the founder shouldn't see them.
+  // Restore happens via /admin/agency/socials/reconcile if ever needed.
+  const visibleClients = useMemo(
+    () => data.clients.filter((c) => c.status !== "old"),
+    [data.clients]
+  );
   const filtered = useMemo(() => {
-    if (filter === "all")      return data.clients;
-    if (filter === "active")   return data.clients.filter((c) => c.status === "active");
-    if (filter === "paused")   return data.clients.filter((c) => c.status === "paused" || c.status === "inactive");
-    if (filter === "archived") return data.clients.filter((c) => c.status === "old");
-    return data.clients;
-  }, [data.clients, filter]);
+    if (filter === "all")    return visibleClients;
+    if (filter === "active") return visibleClients.filter((c) => c.status === "active");
+    if (filter === "paused") return visibleClients.filter((c) => c.status === "paused" || c.status === "inactive");
+    return visibleClients;
+  }, [visibleClients, filter]);
 
-  const totalActive = data.clients.filter((c) => c.status === "active").length;
-  const totalPaused = data.clients.filter((c) => c.status === "paused" || c.status === "inactive").length;
-  const totalArchived = data.clients.filter((c) => c.status === "old").length;
+  const totalActive = visibleClients.filter((c) => c.status === "active").length;
+  const totalPaused = visibleClients.filter((c) => c.status === "paused" || c.status === "inactive").length;
 
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-[var(--surface-elev)] space-y-4">
@@ -136,10 +141,9 @@ export default function SocialsManagerPanel() {
             onChange={(e) => setFilter(e.target.value)}
             className="text-xs rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 bg-[var(--surface-alt)]"
           >
-            <option value="all">All ({data.clients.length})</option>
+            <option value="all">All ({visibleClients.length})</option>
             <option value="active">Active ({totalActive})</option>
             <option value="paused">Paused / Inactive ({totalPaused})</option>
-            <option value="archived">Archived ({totalArchived})</option>
           </select>
           <button
             onClick={async () => {
