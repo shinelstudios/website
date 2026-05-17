@@ -57,7 +57,7 @@ new_sqlite_classes = ["TaskPushHub"]
 
 # --- Cron Triggers ---
 [triggers]
-crons = ["*/30 * * * *"] # Every 30 mins
+crons = ["0 * * * *"] # Hourly. Pulse window is 48h so even with a missed tick we don't lose visibility on new uploads. Lighter YT API quota burn vs the old */30.
 
 # --- Plain (non-secret) env vars ---
 [vars]

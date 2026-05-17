@@ -1692,7 +1692,7 @@ async function performClientSync(env, isForced = false, debug = false) {
                       try {
                         const subPulse = await fetchYouTubePulse(env, ch.channel_id, chInfo.uploadsPlaylistId);
                         const subVideos = subPulse.items || [];
-                        const windowLimit = now - (72 * 60 * 60 * 1000); // 72h forgives cron outages
+                        const windowLimit = now - (48 * 60 * 60 * 1000); // 48h rolling window — founder policy May 2026
                         for (const v of subVideos) {
                           const ts = new Date(v.publishedAt).getTime();
                           if (ts < windowLimit) continue;
@@ -1740,7 +1740,7 @@ async function performClientSync(env, isForced = false, debug = false) {
             const videos = resultPulse.items || [];
             if (resultPulse.error) ytError = resultPulse.error;
 
-            const windowLimit = now - (72 * 60 * 60 * 1000); // 72h forgives cron outages
+            const windowLimit = now - (48 * 60 * 60 * 1000); // 48h rolling window — founder policy May 2026
 
             if (resultPulse.error || (videos.length === 0 && ytError)) {
               const oldPulseRaw = await env.SHINEL_AUDIT.get("app:clients:pulse", "json") || {};
@@ -1910,7 +1910,7 @@ async function performClientSync(env, isForced = false, debug = false) {
                 try {
                   const subPulse = await fetchYouTubePulse(env, ch.channel_id, chInfo.uploadsPlaylistId);
                   const subVideos = subPulse.items || [];
-                  const windowLimit = now - (72 * 60 * 60 * 1000);
+                  const windowLimit = now - (48 * 60 * 60 * 1000); // 48h rolling window
                   for (const v of subVideos) {
                     const ts = new Date(v.publishedAt).getTime();
                     if (ts < windowLimit) continue;
@@ -2938,10 +2938,11 @@ const handler = {
       // a real client row.
       if (env.DB) {
         try {
-          // UNION of YT pulse_activities and Instagram posts. Both feed into
-          // /live. IG rows are normalized to the same column names the
-          // frontend already renders (title, thumbnail, url, content_type,
-          // timestamp, clientName) so ClientPulsePage doesn't need to branch.
+          // 48h rolling window — anything older drops off /live automatically
+          // (the underlying tables keep the row for analytics, but the public
+          // pulse feed only shows the last 2 days).
+          const windowMs    = Date.now() - 48 * 60 * 60 * 1000;
+          const windowSecs  = Math.floor(windowMs / 1000);
           const { results: activities } = await env.DB.prepare(
             `SELECT * FROM (
                SELECT p.id, p.client_id, p.title, p.thumbnail, p.url,
@@ -2954,6 +2955,7 @@ const handler = {
                LEFT JOIN clients c2 ON cc.client_id = c2.id
                WHERE (COALESCE(c1.status, c2.status, 'active') = 'active')
                  AND (c1.id IS NOT NULL OR c2.id IS NOT NULL)
+                 AND p.timestamp >= ?1
 
                UNION ALL
 
@@ -2967,10 +2969,11 @@ const handler = {
                FROM instagram_posts ip
                JOIN clients ic ON ip.client_id = ic.id
                WHERE COALESCE(ic.status, 'active') = 'active'
+                 AND ip.posted_at >= ?2
              )
              ORDER BY timestamp DESC
              LIMIT 80`
-          ).all();
+          ).bind(windowMs, windowSecs).all();
 
           if (activities && activities.length > 0) {
             feed.activities = activities.map(a => ({
