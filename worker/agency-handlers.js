@@ -453,6 +453,11 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const nowSec = Math.floor(Date.now() / 1000);
       const sevenDaysAgoSec = nowSec - 7 * 86400;
 
+      // Defensive: every query has its own .catch fallback so a missing
+      // table / column in any one of them doesn't 500 the whole snapshot.
+      // (instagram_posts + leads + client_inbox.status/value_inr depend on
+      // migrations that may not have run yet on this DB.)
+      const safe = (p, fb) => p.catch(() => fb);
       const [
         clientsAgg,
         ytReach,
@@ -467,60 +472,60 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         topYt,
         topIg,
       ] = await Promise.all([
-        env.DB.prepare(
+        safe(env.DB.prepare(
           `SELECT
              COUNT(*) AS total,
              SUM(CASE WHEN COALESCE(status,'active') = 'active' THEN 1 ELSE 0 END) AS active,
              SUM(CASE WHEN status = 'paused'   THEN 1 ELSE 0 END) AS paused,
              SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) AS inactive
            FROM clients WHERE COALESCE(status,'active') != 'old'`
-        ).first(),
-        env.DB.prepare(
+        ).first(), { total: 0, active: 0, paused: 0, inactive: 0 }),
+        safe(env.DB.prepare(
           `SELECT COALESCE(SUM(cc.subscribers), 0) AS total
            FROM client_channels cc JOIN clients c ON cc.client_id = c.id
            WHERE cc.active = 1 AND COALESCE(c.status,'active') != 'old'`
-        ).first(),
-        env.DB.prepare(
+        ).first(), { total: 0 }),
+        safe(env.DB.prepare(
           `SELECT COALESCE(SUM(ia.followers), 0) AS total
            FROM instagram_accounts ia JOIN clients c ON ia.client_id = c.id
            WHERE ia.active = 1 AND COALESCE(c.status,'active') != 'old'`
-        ).first(),
-        env.DB.prepare(
+        ).first(), { total: 0 }),
+        safe(env.DB.prepare(
           `SELECT COUNT(*) AS n FROM projects WHERE posted_at >= ?1 AND archived_at IS NULL`
-        ).bind(sevenDaysAgoSec).first(),
-        env.DB.prepare(
+        ).bind(sevenDaysAgoSec).first(), { n: 0 }),
+        safe(env.DB.prepare(
           `SELECT COUNT(*) AS n FROM leads WHERE strftime('%s', created_at) >= ?1`
-        ).bind(String(sevenDaysAgoSec)).first().catch(() => ({ n: 0 })),
-        env.DB.prepare(
+        ).bind(String(sevenDaysAgoSec)).first(), { n: 0 }),
+        safe(env.DB.prepare(
           `SELECT COUNT(*) AS n FROM client_inbox WHERE type = 'sponsor' AND created_at >= ?1`
-        ).bind(sevenDaysAgoSec).first(),
-        env.DB.prepare(
+        ).bind(sevenDaysAgoSec).first(), { n: 0 }),
+        safe(env.DB.prepare(
           `SELECT COUNT(*) AS n FROM pulse_activities WHERE timestamp >= ?1`
-        ).bind(sevenDaysAgoSec * 1000).first(),
-        env.DB.prepare(
+        ).bind(sevenDaysAgoSec * 1000).first(), { n: 0 }),
+        safe(env.DB.prepare(
           `SELECT COUNT(*) AS n FROM instagram_posts WHERE posted_at >= ?1`
-        ).bind(sevenDaysAgoSec).first().catch(() => ({ n: 0 })),
-        env.DB.prepare(
+        ).bind(sevenDaysAgoSec).first(), { n: 0 }),
+        safe(env.DB.prepare(
           `SELECT status, COUNT(*) AS n FROM leads GROUP BY status`
-        ).all().catch(() => ({ results: [] })),
-        env.DB.prepare(
+        ).all(), { results: [] }),
+        safe(env.DB.prepare(
           `SELECT COALESCE(status,'new') AS status, COUNT(*) AS n, COALESCE(SUM(value_inr),0) AS total_inr
            FROM client_inbox WHERE type = 'sponsor' GROUP BY status`
-        ).all(),
-        env.DB.prepare(
+        ).all(), { results: [] }),
+        safe(env.DB.prepare(
           `SELECT cc.handle, MAX(cc.subscribers) AS reach, c.name AS client_name
            FROM client_channels cc JOIN clients c ON cc.client_id = c.id
            WHERE cc.active = 1 AND COALESCE(c.status,'active') != 'old'
            GROUP BY cc.handle, c.id
            ORDER BY MAX(cc.subscribers) DESC LIMIT 5`
-        ).all(),
-        env.DB.prepare(
+        ).all(), { results: [] }),
+        safe(env.DB.prepare(
           `SELECT ia.handle, MAX(ia.followers) AS reach, c.name AS client_name
            FROM instagram_accounts ia JOIN clients c ON ia.client_id = c.id
            WHERE ia.active = 1 AND COALESCE(c.status,'active') != 'old'
            GROUP BY ia.handle, c.id
            ORDER BY MAX(ia.followers) DESC LIMIT 5`
-        ).all(),
+        ).all(), { results: [] }),
       ]);
 
       const yt = ytReach?.total || 0;
@@ -2328,9 +2333,20 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     if (path === "/admin/agency/editors" && method === "GET") {
       const includeInactive = url.searchParams.get("include_inactive") === "true";
       const where = includeInactive ? "" : "WHERE active = 1";
-      const { results } = await env.DB.prepare(
-        `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes, slug, public_enabled FROM editors ${where} ORDER BY active DESC, name`
-      ).all();
+      // Two-step SELECT: try the full column list, fall back to the core
+      // columns if portfolio fields haven't been migrated yet on this DB.
+      let results;
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes, slug, public_enabled FROM editors ${where} ORDER BY active DESC, name`
+        ).all();
+        results = r.results;
+      } catch {
+        const r = await env.DB.prepare(
+          `SELECT id, name, email, phone, role, skills_json, payment_rate_inr, payment_per, compensation_type, monthly_salary_inr, discord_user_id, active, joined_at, notes FROM editors ${where} ORDER BY active DESC, name`
+        ).all();
+        results = (r.results || []).map((e) => ({ ...e, slug: null, public_enabled: 0 }));
+      }
       return ok({ count: (results || []).length, editors: results });
     }
 

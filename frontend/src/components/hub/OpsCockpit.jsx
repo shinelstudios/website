@@ -408,7 +408,11 @@ export default function OpsCockpit() {
   }, [tab]);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [showInactive, setShowInactive] = useState(false);
+  // Default to showing ALL clients (active + paused + inactive). Founder
+  // policy (May 2026): no client should silently disappear from the cockpit
+  // list — the row stays visible with a status badge so it can be re-activated
+  // or its socials browsed at any time.
+  const [showInactive, setShowInactive] = useState(true);
   const [busyClientId, setBusyClientId] = useState(null);
   const [igModalClient, setIgModalClient] = useState(null);
   const [driveModalClient, setDriveModalClient] = useState(null);

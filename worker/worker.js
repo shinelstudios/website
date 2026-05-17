@@ -156,6 +156,13 @@ function setCookie(name, value, opts = {}) {
   if (opts.secure) parts.push("Secure");
   if (opts.httpOnly) parts.push("HttpOnly");
   if (opts.domain) parts.push(`Domain=${opts.domain}`);
+  // CHIPS / Partitioned cookies — required for cross-site cookies on Chrome
+  // (and increasingly Safari/Firefox) under the new third-party cookie rules.
+  // shinelstudios.in (frontend) calling shinel-auth.shinelstudioofficial.workers.dev
+  // is cross-site, so Set-Cookie on /auth/* responses gets silently dropped
+  // unless we mark the cookie Partitioned. Without it, page reload sends a
+  // stale token that's already been rotated server-side → 401, log-out loop.
+  if (opts.partitioned) parts.push("Partitioned");
   return parts.join("; ");
 }
 function delCookie(name, opts = {}) {
@@ -2342,6 +2349,7 @@ const handler = {
           sameSite: "None",
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
+          partitioned: true,
         });
 
         await audit(env, "login", { email, success: true, ip });
@@ -2434,6 +2442,7 @@ const handler = {
           sameSite: "None",
           path: "/",
           maxAge: 60 * 60 * 24 * 7,
+          partitioned: true,
         });
 
         // Update the device's session row with the new refresh JTI so the
@@ -2459,6 +2468,7 @@ const handler = {
           secure: true,
           sameSite: "None",
           path: "/",
+          partitioned: true,
         });
         const headers = { ...cors, "content-type": "application/json", "set-cookie": clear };
         return new Response(JSON.stringify({ error: "Invalid refresh session", details: err.message }), {
