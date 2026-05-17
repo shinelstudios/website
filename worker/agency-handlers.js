@@ -2137,6 +2137,7 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const { results: clients } = await env.DB.prepare(
         `SELECT id, name, status, COALESCE(managed_by_us, 1) AS managed_by_us
          FROM clients
+         WHERE COALESCE(status, 'active') != 'old'
          ORDER BY (status = 'active') DESC, name`
       ).all();
       const { results: channels } = await env.DB.prepare(
@@ -2245,6 +2246,40 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       const chid = chDeleteMatch[2];
       await env.DB.prepare("UPDATE client_channels SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?1").bind(chid).run();
       return ok({ id: chid, deleted: true });
+    }
+
+    // ---- DELETE /admin/agency/clients/:id  — archive (soft delete)
+    // Sets clients.status='old'. The 'old' status is excluded from every
+    // public SELECT (pulse, marquee, reach, /creators) and from the cockpit
+    // Clients panel. Row + child rows (channels, IG, projects) stay in D1
+    // so we keep the audit trail and can un-archive any time by re-flipping
+    // status to 'active'. Hard DELETE is not exposed: too many FKs.
+    const clientDeleteMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)$/);
+    if (clientDeleteMatch && method === "DELETE") {
+      const id = clientDeleteMatch[1];
+      const client = await env.DB.prepare("SELECT name, status FROM clients WHERE id = ?1").bind(id).first();
+      if (!client) return err("client not found", 404);
+      await env.DB.prepare(
+        "UPDATE clients SET status = 'old', updated_at = CURRENT_TIMESTAMP WHERE id = ?1"
+      ).bind(id).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind(
+          "client.archived", id, "info",
+          `Archived client: ${client.name}`,
+          JSON.stringify({ previous_status: client.status })
+        ).run();
+      } catch {}
+      // Discord notification — archive feels like a Big Decision, the team should know
+      postToDiscord(env, {
+        embeds: [{
+          title: "📦 Client archived",
+          description: `**${client.name}** has been moved to status \`old\`. Hidden from all public surfaces. Can be un-archived by setting status back to active.`,
+          color: 0x737373,
+        }]
+      }, "ops").catch(() => {});
+      return ok({ id, archived: true });
     }
 
     // ---- POST /admin/agency/clients/:id/status   (mark active/inactive/paused)

@@ -77,6 +77,23 @@ export default function EditClientModal({ client, onClose, onChange }) {
     if (!confirm(`Remove @${ig.handle}? (Soft-delete — sets active=0.)`)) return;
     await patchIg(ig, { active: 0 });
   }
+  async function archiveClient() {
+    const confirmText = prompt(
+      `Archive "${client.name}"?\n\n` +
+      `This hides them from every surface — Pulse, marquee, reach, cockpit Clients panel, /creators page. ` +
+      `Their channels, IG accounts, projects, and history all stay in D1 so the data is preserved and can be restored.\n\n` +
+      `Type DELETE to confirm:`
+    );
+    if (confirmText !== "DELETE") return;
+    const r = await call(
+      `/admin/agency/clients/${client.id}`,
+      { method: "DELETE" },
+      "archive"
+    );
+    if (r) {
+      onClose();
+    }
+  }
   async function addChannel() {
     if (!newYt.channel_id.trim()) { setErr("YouTube channel ID or @handle required"); return; }
     // Accept full URL or just ID/handle — strip the URL prefix
@@ -318,11 +335,21 @@ export default function EditClientModal({ client, onClose, onChange }) {
           </section>
         </div>
 
-        <footer className="px-5 py-3 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-500 flex items-center justify-between">
-          <span>Every change saves immediately. Close when done.</span>
-          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded bg-[var(--surface-alt)] hover:bg-[var(--surface)] font-bold">
-            Close
+        <footer className="px-5 py-3 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-500 flex items-center justify-between flex-wrap gap-2">
+          <button
+            onClick={archiveClient}
+            disabled={busy.archive}
+            className="text-xs px-3 py-1.5 rounded border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 font-bold flex items-center gap-1"
+            title="Archive — hides client from every surface but keeps the row in D1"
+          >
+            <Trash2 size={11} /> Archive client
           </button>
+          <div className="flex items-center gap-2">
+            <span>Every change saves immediately.</span>
+            <button onClick={onClose} className="text-xs px-3 py-1.5 rounded bg-[var(--surface-alt)] hover:bg-[var(--surface)] font-bold">
+              Close
+            </button>
+          </div>
         </footer>
       </div>
     </div>
