@@ -24,7 +24,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import * as Sentry from "@sentry/cloudflare";
-import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings, runCompetitorResearch, runUnderperformerDetector, captureChannelVideoStats, postToDiscord } from "./agency-handlers.js";
+import { handleAgencyRoute, runAutoPromoteToWebsite, runWeeklyDigest, runEditorSummary, runScheduledTaskTick, runHealthCheck, runPersonalTodoPings, runCompetitorResearch, runUnderperformerDetector, captureChannelVideoStats, postToDiscord, invalidateOpsSnapshotCache } from "./agency-handlers.js";
 // Re-export the Durable Object so the runtime can instantiate it. Without
 // this line, `wrangler.toml`'s `class_name = "TaskPushHub"` would fail to
 // resolve and the worker would 500 on any /admin/agency/laptop/ws hit.
@@ -2057,6 +2057,15 @@ async function performClientSync(env, isForced = false, debug = false) {
   await env.SHINEL_AUDIT.put(lastSyncKey, String(now));
   // Clear the in-progress lock established at the top of this function.
   await env.SHINEL_AUDIT.put(syncStateKey, JSON.stringify({ status: "idle", finishedAt: now }), { expirationTtl: 24 * 3600 });
+
+  // BUG FIX (stale-count pipeline): the pulse sync above just rewrote
+  // client_channels.subscribers + clients.subscribers for every active
+  // channel. The cockpit Overview tile reads /admin/agency/ops/snapshot,
+  // which is wrapped in a 30s KV cache (`ops_snapshot:active|all`). Without
+  // this invalidation, the cockpit kept showing pre-sync numbers for up
+  // to 30s after each cron tick — most visible on the very next page load
+  // after a fresh sync, which is when the founder usually checks.
+  try { await invalidateOpsSnapshotCache(env); } catch {}
 
   // --- ADDITIONAL SNAPSHOTS & AUDITS ---
   const dateStr = new Date(now).toISOString().split('T')[0];

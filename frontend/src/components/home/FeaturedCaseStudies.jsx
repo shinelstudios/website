@@ -7,13 +7,85 @@
  * the "watch the cut" affordance), title, client name, publish date,
  * type chip, and 2–3 metric badges.
  *
- * Data: hardcoded 3-project list — real Shinel ships, no D1 schema yet.
+ * Data: fetched on mount from /admin/agency/public/case-studies (D1-backed
+ * since the case-studies-2026-05-18 migration). The hardcoded list below
+ * stays as a fallback so the section never renders blank if:
+ *   - the migration hasn't been applied yet on a fresh deploy
+ *   - the worker fetch fails (network blip, edge cache miss)
+ *   - the founder soft-deleted every row in the cockpit
+ * The fallback list matches the seed rows in case-studies-2026-05-18.sql.
  * Section header reuses the kicker / italic-em h2 / lede pattern from
  * OurCreatorsHero so the editorial voice stays consistent.
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { Sparkles, Play, Eye, Users, Radio, Heart, Music2, Gamepad2 } from "lucide-react";
+import {
+  Sparkles, Play, Eye, Users, Radio, Heart, Music2, Gamepad2,
+  Shield, ShieldCheck, Clock, TrendingUp,
+} from "lucide-react";
+import { AUTH_BASE } from "../../config/constants";
+
+// Icon name (string from D1) → lucide-react component. Anything missing
+// from this map falls back to Sparkles so the row still renders.
+const ICON_MAP = {
+  Eye, Users, Radio, Heart, Music2, Gamepad2, Sparkles, Play,
+  Shield, ShieldCheck, Clock, TrendingUp,
+};
+
+// "stream" → "Stream", "music_video" → "Music Video", etc. Used for the
+// poster chip + meta chip labels.
+function prettifyAssetType(t) {
+  if (!t) return "Project";
+  return String(t)
+    .split(/[_-]/)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(" ");
+}
+function iconForAssetType(t) {
+  switch (String(t || "").toLowerCase()) {
+    case "stream":      return Gamepad2;
+    case "music_video": return Music2;
+    case "short":       return Play;
+    case "long_form":   return Play;
+    default:            return Sparkles;
+  }
+}
+
+// "8 days ago" / "30 days ago" — same vocabulary the old hardcoded list used.
+function relativeLabel(unixSec) {
+  if (!unixSec) return "";
+  const nowSec = Math.floor(Date.now() / 1000);
+  const diff = Math.max(0, nowSec - Number(unixSec));
+  const day = 86400;
+  if (diff < day)            return "today";
+  if (diff < 2 * day)        return "1 day ago";
+  if (diff < 30 * day)       return `${Math.floor(diff / day)} days ago`;
+  if (diff < 60 * day)       return "1 month ago";
+  if (diff < 365 * day)      return `${Math.floor(diff / (30 * day))} months ago`;
+  return `${Math.floor(diff / (365 * day))} years ago`;
+}
+
+// Convert a D1 row (from /admin/agency/public/case-studies) into the shape
+// the card renderer expects. Kept separate so the fallback list and the
+// fetched list go through the same downstream path.
+function studyFromApi(row) {
+  const typeIcon = iconForAssetType(row.asset_type);
+  const metrics = (row.metrics || []).map((m) => ({
+    icon: ICON_MAP[m.icon] || Sparkles,
+    // Prefer "<value> <label>" when both exist (matches the old visual);
+    // fall back to whichever one is set so partially-filled rows still render.
+    label: m.value && m.label ? `${m.value} ${m.label}` : (m.value || m.label || ""),
+  })).filter((m) => m.label);
+  return {
+    id: row.id,
+    title: row.title,
+    client: row.client_name || "",
+    type: prettifyAssetType(row.asset_type),
+    typeIcon,
+    publishedLabel: relativeLabel(row.posted_at),
+    metrics,
+  };
+}
 
 // Deterministic per-title gradient so each card has its own mood — same
 // trick as OurCreatorsHero. Used as the 16:9 poster background until we
@@ -24,46 +96,48 @@ function gradientFor(seedStr) {
   return `linear-gradient(135deg, hsl(${hue} 75% 32%) 0%, hsl(${(hue + 60) % 360} 70% 16%) 60%, hsl(${(hue + 120) % 360} 60% 10%) 100%)`;
 }
 
-// Real Shinel projects — refresh quarterly. Keep to 3 so the grid stays
-// editorial on desktop (3-col) and skim-friendly on mobile (1-col stack).
-const CASE_STUDIES = [
+// Fallback list — kept in lockstep with the seed rows in
+// migrations/case-studies-seed-real-2026-05-18.sql. Used ONLY when the D1
+// fetch fails or returns count:0 (migration pending, founder deleted
+// everything, network blip). Refresh whenever the seed migration changes.
+const FALLBACK_CASE_STUDIES = [
   {
-    id: "kiaraa-pharaoh",
-    title: "BGMI 4.3 PHARAOH MODE LIVE",
-    client: "Kiaraa Gaming",
-    type: "Stream",
-    typeIcon: Gamepad2,
-    publishedLabel: "8 days ago",
+    id: "aish-remonetization",
+    title: "AiSH is Live — Channel Cleanup & Remonetization",
+    client: "AiSH is Live",
+    type: "Long Form",
+    typeIcon: Play,
+    publishedLabel: "1 month ago",
     metrics: [
-      { icon: Eye,   label: "18K Views" },
-      { icon: Users, label: "250 Peak" },
-      { icon: Radio, label: "Stream" },
+      { icon: Shield,   label: "Demonetization → Monetized" },
+      { icon: Clock,    label: "9-day Resolution" },
+      { icon: Sparkles, label: "Original Content + SEO" },
     ],
   },
   {
-    id: "aish-1v1-subs",
-    title: "ONLY HEADSHOTS!? — 1v1 vs Subs LIVE | BGMI Hindi",
-    client: "Aish is Live",
-    type: "Stream",
-    typeIcon: Gamepad2,
-    publishedLabel: "8 days ago",
+    id: "kundan-parashar-takeover",
+    title: "Kundan Parashar — End-of-2024 Channel Takeover",
+    client: "Kundan Parashar",
+    type: "Long Form",
+    typeIcon: Play,
+    publishedLabel: "6 months ago",
     metrics: [
-      { icon: Eye,   label: "12K Views" },
-      { icon: Users, label: "180 Peak" },
-      { icon: Radio, label: "Stream" },
+      { icon: Users,    label: "10K+ Subscribers" },
+      { icon: Eye,      label: "250K+ Total Views" },
+      { icon: Sparkles, label: "Devotional Niche" },
     ],
   },
   {
-    id: "kamz-naina",
-    title: "NAINA · Inkboy Musik",
-    client: "Kamz Inkzone",
-    type: "Music Video",
-    typeIcon: Music2,
-    publishedLabel: "30 days ago",
+    id: "ap-sports-arena-reels",
+    title: "AP Sports Arena — Reels That Punch Above the Page",
+    client: "AP Sports Arena",
+    type: "Short",
+    typeIcon: Play,
+    publishedLabel: "2 weeks ago",
     metrics: [
-      { icon: Eye,   label: "80K Views" },
-      { icon: Heart, label: "8.5K Likes" },
-      { icon: Music2, label: "Music" },
+      { icon: Eye,        label: "10K+ Avg Views per Reel" },
+      { icon: TrendingUp, label: "50K+ Peak Reel" },
+      { icon: Sparkles,   label: "New Page" },
     ],
   },
 ];
@@ -137,6 +211,26 @@ function CaseStudyCard({ study, index }) {
 }
 
 export default function FeaturedCaseStudies() {
+  // D1-backed fetch: hydrate from /admin/agency/public/case-studies on mount.
+  // The hardcoded FALLBACK_CASE_STUDIES list is the initial state so the
+  // section renders instantly during the fetch and stays populated if the
+  // worker call fails or returns nothing.
+  const [studies, setStudies] = useState(FALLBACK_CASE_STUDIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${AUTH_BASE}/admin/agency/public/case-studies`)
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((j) => {
+        if (cancelled) return;
+        const rows = Array.isArray(j?.studies) ? j.studies : [];
+        if (!rows.length) return; // keep fallback when API returns empty
+        setStudies(rows.map(studyFromApi));
+      })
+      .catch(() => { /* swallow — fallback already showing */ });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <section className="featured-case-studies">
       <div className="featured-case-studies__header">
@@ -152,7 +246,7 @@ export default function FeaturedCaseStudies() {
       </div>
 
       <ul className="featured-case-studies__grid">
-        {CASE_STUDIES.map((s, i) => (
+        {studies.map((s, i) => (
           <li key={s.id}>
             <CaseStudyCard study={s} index={i} />
           </li>

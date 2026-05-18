@@ -1076,13 +1076,9 @@ export default function ShinelStudiosHomepage() {
             <EditorialHero onAudit={handleOpenCalendly} />
           </ErrorBoundary>
 
-          {/* 1a) Press + awards authority strip — "As Featured In" masthead row
-                 plus an industry awards row. Sits immediately after the hero
-                 so borrowed authority lands in <2s. Short editorial flourish,
-                 not a full block. Added 2026-05-18 (competitor audit #1). */}
-          <ErrorBoundary>
-            <PressAndAwardsWall />
-          </ErrorBoundary>
+          {/* PressAndAwardsWall removed — no press coverage yet, no awards yet.
+                 Will add when real. Import retained so re-mounting is a one-line
+                 change once we have legitimate press/awards to display. */}
 
           {/* Ambient grain — fixed SVG noise, GPU-composited, 3% opacity */}
           <GrainOverlay />
@@ -1149,12 +1145,9 @@ export default function ShinelStudiosHomepage() {
             </React.Suspense>
           </ErrorBoundary>
 
-          {/* 7a-bis. Sponsor brand strip — dense marquee of brands our
-              creators have shipped work for. Sits between the trophy wall
-              and the creator-side pitch CTA. */}
-          <ErrorBoundary>
-            <SponsorBrandStrip />
-          </ErrorBoundary>
+          {/* SponsorBrandStrip removed — Shinel hasn't worked with those brands;
+              honest social proof only. Import retained so re-mounting is a
+              one-line change once real brand relationships are in place. */}
 
           {/* 7b. Creator-side pitch CTA — flips the message from "hire us" to
               "apply to be repped". Sits between the trophy wall and the

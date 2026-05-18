@@ -55,6 +55,26 @@ const BASE_HEADERS = {
   "Cache-Control": "no-store",
 };
 
+// Bust the ops/snapshot KV cache (both `active` and `all` variants). The
+// cockpit Overview tile band reads /admin/agency/ops/snapshot, which is
+// wrapped in a 30s KV cache. Any write path that mutates follower /
+// subscriber counts (ig manual entry, ig_followers_fetch task completion,
+// YT pulse sync) must call this AFTER the D1 write so the next read
+// recomputes against fresh data instead of serving up to 30s of stale.
+export async function invalidateOpsSnapshotCache(env) {
+  if (!env || !env.SHINEL_AUDIT) return;
+  try {
+    await Promise.all([
+      env.SHINEL_AUDIT.delete("ops_snapshot:active"),
+      env.SHINEL_AUDIT.delete("ops_snapshot:all"),
+    ]);
+  } catch (e) {
+    // Cache invalidation never throws — worst case the next read is stale
+    // for up to 30s, which is the original behaviour.
+    console.error("[ops-snapshot] cache invalidation failed:", e?.message || e);
+  }
+}
+
 // Merge CORS headers (echoed from request Origin) into every response so
 // browser fetches from localhost:5173 + shinelstudios.in succeed. The worker's
 // global OPTIONS handler already covers preflight; this is for actual responses.
@@ -674,6 +694,71 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
     }
   }
 
+  // ---- GET /admin/agency/public/case-studies — homepage "See what landed" grid
+  //
+  // Powers the FeaturedCaseStudies section on the marketing site. Returns up to
+  // 6 case studies, ordered: featured first, then sort_order, then most recent.
+  // Two-step SELECT with graceful fallback so a fresh deploy without the
+  // case_studies migration applied returns count:0 instead of a 500.
+  if (path === "/admin/agency/public/case-studies" && method === "GET") {
+    const corsOpen = { ...corsHeaders(request, env), "Access-Control-Allow-Origin": "*" };
+    try {
+      let rows = [];
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, client_id, title, client_name, asset_type, posted_at,
+                  poster_url, video_url,
+                  metric_1_label, metric_1_value, metric_1_icon,
+                  metric_2_label, metric_2_value, metric_2_icon,
+                  metric_3_label, metric_3_value, metric_3_icon,
+                  COALESCE(sort_order, 0) AS sort_order,
+                  COALESCE(featured, 0)   AS featured
+           FROM case_studies
+           WHERE COALESCE(public_enabled, 1) = 1
+           ORDER BY featured DESC, sort_order ASC, COALESCE(posted_at, 0) DESC
+           LIMIT 6`
+        ).all();
+        rows = r.results || [];
+      } catch {
+        // Migration not yet applied — return empty so the React component
+        // falls back to its bundled hardcoded list.
+        rows = [];
+      }
+      const studies = rows.map((r) => {
+        const metrics = [];
+        for (const i of [1, 2, 3]) {
+          const label = r[`metric_${i}_label`];
+          const value = r[`metric_${i}_value`];
+          const icon  = r[`metric_${i}_icon`];
+          if (label || value) metrics.push({ label: label || "", value: value || "", icon: icon || null });
+        }
+        return {
+          id: r.id,
+          client_id: r.client_id,
+          title: r.title,
+          client_name: r.client_name || "",
+          asset_type: r.asset_type || null,
+          posted_at: r.posted_at || null,
+          poster_url: r.poster_url || null,
+          video_url: r.video_url || null,
+          metrics,
+          featured: !!r.featured,
+          sort_order: r.sort_order || 0,
+        };
+      });
+      return new Response(JSON.stringify({
+        count: studies.length,
+        studies,
+        generated_at: new Date().toISOString(),
+      }), {
+        status: 200,
+        headers: { ...BASE_HEADERS, ...corsOpen, "Cache-Control": "public, max-age=60, s-maxage=60" },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...BASE_HEADERS, ...corsOpen } });
+    }
+  }
+
   // ---- GET /admin/agency/health/integrity — data-integrity snapshot (admin) -
   //
   // Cheap D1 queries that surface known data-shape problems at a glance.
@@ -1253,6 +1338,17 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
                 client_id: cand.client_id, priority: 5, source: "milestone_check",
               }).catch(() => {});
             }
+          }
+
+          // BUG FIX (stale-count pipeline): the ig_followers_fetch task above
+          // writes fresh IG follower counts to instagram_accounts.followers +
+          // clients.instagram_followers, but the cockpit's Overview snapshot
+          // (/admin/agency/ops/snapshot) is wrapped in a 30s KV cache and
+          // continued to serve the pre-write numbers. Bust the cache here so
+          // the very next snapshot read re-aggregates against the new D1 row.
+          // Only fire for task types that actually mutate reach numbers.
+          if (task.type === "ig_followers_fetch" && task.client_id && Number(body.result.followers) > 0) {
+            await invalidateOpsSnapshotCache(env);
           }
         } catch (e) { console.error("post-complete side-effect failed:", e.message); }
       }
@@ -2444,6 +2540,132 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       return ok({ id, updated: true });
     }
 
+    // ---- Case studies admin CRUD ----------------------------------------
+    // Mirror of the public /admin/agency/public/case-studies endpoint, but
+    // returns EVERY row (including public_enabled = 0) so the cockpit can
+    // toggle visibility. Same two-step fallback so we don't 500 on a fresh
+    // deploy before the case-studies-2026-05-18 migration is applied.
+    if (path === "/admin/agency/case-studies" && method === "GET") {
+      try {
+        const r = await env.DB.prepare(
+          `SELECT id, client_id, title, client_name, asset_type, posted_at,
+                  poster_url, video_url,
+                  metric_1_label, metric_1_value, metric_1_icon,
+                  metric_2_label, metric_2_value, metric_2_icon,
+                  metric_3_label, metric_3_value, metric_3_icon,
+                  COALESCE(sort_order, 0)    AS sort_order,
+                  COALESCE(featured, 0)      AS featured,
+                  COALESCE(public_enabled, 1) AS public_enabled,
+                  created_at, updated_at
+           FROM case_studies
+           ORDER BY featured DESC, sort_order ASC, COALESCE(posted_at, 0) DESC`
+        ).all();
+        return ok({ count: (r.results || []).length, studies: r.results || [] });
+      } catch (e) {
+        if (/no such table/i.test(String(e?.message || ""))) {
+          return ok({ count: 0, studies: [], migration_pending: true });
+        }
+        throw e;
+      }
+    }
+
+    // POST /admin/agency/case-studies — create a new case study
+    if (path === "/admin/agency/case-studies" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      if (!body.title) return err("title required");
+      const id = body.id || `cs-${crypto.randomUUID().slice(0, 8)}`;
+      await env.DB.prepare(
+        `INSERT INTO case_studies (
+           id, client_id, title, client_name, asset_type, posted_at,
+           poster_url, video_url,
+           metric_1_label, metric_1_value, metric_1_icon,
+           metric_2_label, metric_2_value, metric_2_icon,
+           metric_3_label, metric_3_value, metric_3_icon,
+           sort_order, featured, public_enabled,
+           created_at, updated_at
+         ) VALUES (
+           ?1, ?2, ?3, ?4, ?5, ?6,
+           ?7, ?8,
+           ?9,  ?10, ?11,
+           ?12, ?13, ?14,
+           ?15, ?16, ?17,
+           ?18, ?19, ?20,
+           datetime('now'), datetime('now')
+         )`
+      ).bind(
+        id,
+        body.client_id || null,
+        body.title,
+        body.client_name || null,
+        body.asset_type || null,
+        body.posted_at ? Number(body.posted_at) : null,
+        body.poster_url || null,
+        body.video_url || null,
+        body.metric_1_label || null, body.metric_1_value || null, body.metric_1_icon || null,
+        body.metric_2_label || null, body.metric_2_value || null, body.metric_2_icon || null,
+        body.metric_3_label || null, body.metric_3_value || null, body.metric_3_icon || null,
+        body.sort_order != null ? Number(body.sort_order) : 0,
+        body.featured ? 1 : 0,
+        body.public_enabled === 0 || body.public_enabled === false ? 0 : 1
+      ).run();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, client_id, level, message, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+        ).bind(
+          "case_study.created", body.client_id || null, "info",
+          `Case study created: ${body.title}`,
+          JSON.stringify({ id, title: body.title, client_name: body.client_name })
+        ).run();
+      } catch {}
+      return ok({ id, created: true });
+    }
+
+    // PATCH /admin/agency/case-studies/:id — update fields
+    const csPatchMatch = path.match(/^\/admin\/agency\/case-studies\/([^\/]+)$/);
+    if (csPatchMatch && method === "PATCH") {
+      const id = csPatchMatch[1];
+      const body = await request.json().catch(() => ({}));
+      const editable = [
+        "client_id", "title", "client_name", "asset_type", "posted_at",
+        "poster_url", "video_url",
+        "metric_1_label", "metric_1_value", "metric_1_icon",
+        "metric_2_label", "metric_2_value", "metric_2_icon",
+        "metric_3_label", "metric_3_value", "metric_3_icon",
+        "sort_order", "featured", "public_enabled",
+      ];
+      const sets = []; const binds = []; let i = 1;
+      for (const k of editable) {
+        if (body[k] === undefined) continue;
+        let v = body[k];
+        if (k === "featured" || k === "public_enabled") v = v ? 1 : 0;
+        if (k === "sort_order" || k === "posted_at") v = v == null ? null : Number(v);
+        sets.push(`${k} = ?${i++}`); binds.push(v);
+      }
+      if (!sets.length) return err("no editable fields");
+      sets.push(`updated_at = datetime('now')`);
+      binds.push(id);
+      const res = await env.DB.prepare(
+        `UPDATE case_studies SET ${sets.join(", ")} WHERE id = ?${i}`
+      ).bind(...binds).run();
+      if (!res.meta?.changes) return err("case study not found", 404);
+      return ok({ id, updated: true });
+    }
+
+    // DELETE /admin/agency/case-studies/:id — hard delete
+    if (csPatchMatch && method === "DELETE") {
+      const id = csPatchMatch[1];
+      const res = await env.DB.prepare(
+        `DELETE FROM case_studies WHERE id = ?1`
+      ).bind(id).run();
+      if (!res.meta?.changes) return err("case study not found", 404);
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_log (action, level, message, payload_json) VALUES (?1, ?2, ?3, ?4)`
+        ).bind("case_study.deleted", "info", `Case study deleted: ${id}`, JSON.stringify({ id })).run();
+      } catch {}
+      return ok({ id, deleted: true });
+    }
+
     // ---- POST /admin/agency/clients/:id/channels  (add YT channel)
     // Body: { channel_id, handle?, role?, language?, niche_tag_override?, studio_url? }
     const clientChannelMatch = path.match(/^\/admin\/agency\/clients\/([^\/]+)\/channels$/);
@@ -3624,6 +3846,12 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           JSON.stringify({ handle: clean, followers, source: "manual_entry" })
         ).run();
       } catch {}
+
+      // BUG FIX (stale-count pipeline): without this, the cockpit Overview
+      // tile would keep serving the 30s-cached snapshot from BEFORE this
+      // manual write, making it look like the override "didn't take" for
+      // up to half a minute. Bust the KV cache now.
+      await invalidateOpsSnapshotCache(env);
 
       return ok({ action, client_id: body.client_id, handle: clean, followers });
     }

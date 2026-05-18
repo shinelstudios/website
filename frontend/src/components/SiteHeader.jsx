@@ -42,6 +42,7 @@ import {
   Instagram,
   HelpCircle,
   Mail,
+  Users2,
 } from "lucide-react";
 import NotificationHub from "./ui/NotificationHub.jsx";
 import TrustBar from "./Trustbar.jsx";
@@ -727,6 +728,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
              for authenticated nav. */}
           <div className="hidden md:flex items-center gap-10 relative">
             <DesktopNavLink label="Work" to="/work" />
+            <DesktopNavLink label="Creators" to="/creators" />
             <DesktopNavLink label="Tools" to="/tools" />
             <DesktopNavLink label="Pricing" to="/pricing" />
             <DesktopNavLink label="Blog" to="/blog" />
@@ -1051,6 +1053,7 @@ const SiteHeader = ({ isDark, setIsDark }) => {
                       muscle memory still works. */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <MobileCardLink to="/work" icon={FolderOpen} title="Work" subtitle="All services & samples" />
+                    <MobileCardLink to="/creators" icon={Users2} title="Creators" subtitle="Every creator we ship for" />
                     <MobileCardLink to="/tools" icon={Wand2} title="Tools" subtitle="Creator utilities" />
                     <MobileCardLink to="/pricing" icon={DollarSign} title="Pricing" subtitle="Plans & quotes" />
                     <MobileCardLink to="/blog" icon={Lightbulb} title="Blog" subtitle="Insights & News" />
