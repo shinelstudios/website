@@ -223,14 +223,36 @@ Input: `task.client_id` (and optionally `task.payload_json.handle`). Look up the
 3. **Follower count** — appears in `<meta name="description" content="14k Followers, 432 Following, 200 Posts — ...">`. Parse digits, handle suffixes (`12.5k` → 12500, `1.2M` → 1_200_000).
 4. **Avatar URL** — also capture the profile picture. Look in `<meta property="og:image">` first (most reliable), otherwise the header `<img>` element with the round 150×150 picture. Get the full HTTPS URL.
 
-PATCH `done` with `{ handle, followers, raw, avatar_url }`. Worker auto-writes:
+#### REQUIRED: `diagnostics` object on EVERY PATCH
+
+Whether you PATCH `done` or `failed`, the result body MUST carry a `diagnostics` object so the worker can write an audible audit row. The worker's observability layer keys off these fields — leaving them out makes failures silent again.
+
+```
+diagnostics: {
+  meta_tag_found: bool,           // did we find <meta name="description">?
+  meta_tag_content: string|null,  // first 200 chars of the meta if found
+  login_wall_detected: bool,      // did the page redirect to /accounts/login/ or show the login modal?
+  rate_limit_detected: bool,      // did we see HTTP 429 or IG's "Please wait a few minutes" page?
+  redirect_url: string|null,      // if Chrome redirected, where to?
+  parse_method: "meta_tag" | "json_ld" | "header_img" | "none",
+  raw_followers_text: string|null // the raw "14k Followers" string before we parsed it
+}
+```
+
+Fill every field. On SUCCESS, set `login_wall_detected: false`, `rate_limit_detected: false`, `meta_tag_found: true`, etc. — so we have a clean baseline to audit against later. NEVER omit the object; an empty `diagnostics: {}` is fine if you truly have nothing, but missing entirely is not.
+
+#### Status decision matrix
+
+- **Success (followers parsed > 0):** PATCH `done` with `{ handle, followers, raw, avatar_url, diagnostics }`.
+- **Login wall / CAPTCHA detected:** PATCH `failed` with `error: "ig_login_wall"` AND include the full `diagnostics` object inside `result` (so the worker can pull `diagnostics.redirect_url` etc. into the audit row). Don't retry this run.
+- **HTTP 429 / "Please wait a few minutes":** PATCH `failed` with `error: "ig_rate_limited"` AND `result.diagnostics` populated. **Stop further IG fetches this run** to avoid burning the IP. Other task types are fine.
+- **Scraper ran but couldn't find a follower number:** PATCH `done` with `followers: 0` and `diagnostics.parse_method: "none"` plus whatever you DID see (`meta_tag_found`, `meta_tag_content`). The worker's `> 0` guard will reject the write but will log a `ig_fetch_zero_result` row with your diagnostics — exactly what the founder needs to debug.
+
+Worker side-effects on a successful (>0) write:
 - `clients.instagram_followers` ← the count
 - `instagram_accounts.followers` ← the count (matched by handle)
 - `instagram_accounts.avatar_url` ← the profile pic URL (preserves existing if scraper missed it)
-
-Errors:
-- Login wall / CAPTCHA → PATCH `failed` with `"ig_login_wall"`. Don't retry this run.
-- HTTP 429 → PATCH `failed` with `"ig_rate_limited"`. **Stop further IG fetches this run** to avoid burning the IP. Other task types are fine.
+- A single `agent_log` row with action `ig_fetch_success | ig_fetch_zero_result | ig_fetch_guard_block | ig_fetch_login_wall | ig_fetch_rate_limited | ig_fetch_handler_error` (so the cockpit can show the founder why a sync did or didn't move the number).
 
 ### `ig_recent_posts_fetch`
 Surfaces the client's IG feed onto the public **/live** page alongside YT uploads.

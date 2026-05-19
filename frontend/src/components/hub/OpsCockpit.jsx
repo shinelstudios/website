@@ -50,6 +50,7 @@ import SocialsManagerPanel from "./SocialsManagerPanel";
 import SponsorshipsPanel from "./SponsorshipsPanel";
 import WeeklySnapshotPanel from "./WeeklySnapshotPanel";
 import IgDiagnosticModal from "./IgDiagnosticModal";
+import IgAttemptsModal, { IgWhyZeroChip, IgStaleSyncDot } from "./IgAttemptsModal";
 import YtQuotaPanel from "./YtQuotaPanel";
 import InlineFollowerEdit from "./InlineFollowerEdit";
 
@@ -423,6 +424,9 @@ export default function OpsCockpit() {
     catch { return false; }
   });
   const [igDiagOpen, setIgDiagOpen] = useState(false);
+  // Per-client "why is this IG count what it is?" modal.
+  // Held as the client object so the modal can show name/handle in its header.
+  const [igAttemptsClient, setIgAttemptsClient] = useState(null);
 
   // Background load of MY overdue+due-today todo count for the tab badge.
   // Cheap call; reused across tab switches via the same endpoint.
@@ -797,7 +801,7 @@ export default function OpsCockpit() {
                             <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-red-500/10 text-red-500">YT</span>
                           </div>
                         )}
-                        {(c.ig_followers_total > 0 || c.ig_account_count > 0) && (
+                        {(c.ig_followers_total > 0 || c.ig_account_count > 0 || c.instagram_handle) && (
                           <div className="flex items-center justify-end gap-1.5 mt-0.5">
                             <span className="text-mono-num text-sm font-semibold">
                               <InlineFollowerEdit
@@ -808,9 +812,32 @@ export default function OpsCockpit() {
                               />
                             </span>
                             <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-pink-500/10 text-pink-500">IG</span>
+                            {/* "Why 0?" — only when the count is actually 0 but
+                                this client has at least one IG handle on file.
+                                Inactive/IG-only clients still get the chip; the
+                                tag doesn't suppress it (we may still care). */}
+                            {(!c.ig_followers_total || c.ig_followers_total === 0)
+                              && (c.ig_account_count > 0 || c.instagram_handle) && (
+                              <IgWhyZeroChip
+                                onOpen={() => setIgAttemptsClient(c)}
+                              />
+                            )}
+                            {/* Forward-compatible: yellow dot when followers>0
+                                but the last sync attempt actually failed. The
+                                ops snapshot does NOT yet expose this field, so
+                                this renders nothing today; wire it once
+                                /admin/agency/ops/snapshot adds
+                                ig_last_attempt_status + ig_last_attempt_at. */}
+                            {c.ig_followers_total > 0 && (
+                              <IgStaleSyncDot
+                                lastStatus={c.ig_last_attempt_status}
+                                lastAtUnix={c.ig_last_attempt_at}
+                                onOpen={() => setIgAttemptsClient(c)}
+                              />
+                            )}
                           </div>
                         )}
-                        {(!c.yt_subs_total && !c.subscribers && !c.ig_followers_total && !c.ig_account_count) && (
+                        {(!c.yt_subs_total && !c.subscribers && !c.ig_followers_total && !c.ig_account_count && !c.instagram_handle) && (
                           <>
                             <div className="text-mono-num text-sm font-semibold">—</div>
                             <div className="text-[10px] uppercase tracking-wider text-neutral-500">no socials</div>
@@ -1210,6 +1237,16 @@ export default function OpsCockpit() {
       {igDiagOpen && (
         <IgDiagnosticModal
           onClose={() => setIgDiagOpen(false)}
+          onRefreshNeeded={fetchSnapshot}
+        />
+      )}
+      {/* Per-client "why is this IG count what it is?" attempts modal —
+          opened by the "Why 0?" chip or the stale-sync yellow dot. */}
+      {igAttemptsClient && (
+        <IgAttemptsModal
+          clientId={igAttemptsClient.id}
+          clientName={igAttemptsClient.name}
+          onClose={() => setIgAttemptsClient(null)}
           onRefreshNeeded={fetchSnapshot}
         />
       )}

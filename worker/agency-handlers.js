@@ -1131,6 +1131,30 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
         id
       ).run();
 
+      // Observability state for ig_followers_fetch. Populated below and used
+      // AFTER side-effects run to write a single agent_log row + maybe ping
+      // Discord. Keeps the audible-outcome logic in one place.
+      let igObs = null;
+      if (task.type === "ig_followers_fetch" && task.client_id) {
+        // Pre-read client row so we can format the success/zero/block notes
+        // and so we know whether the strict-positive guard would block
+        // because no clients row exists at all.
+        const clientRow = await env.DB.prepare(
+          "SELECT id, name, instagram_handle, instagram_followers FROM clients WHERE id = ?1"
+        ).bind(task.client_id).first().catch(() => null);
+        const resHandle = body.result?.handle ? String(body.result.handle).replace(/^@/, "").trim().toLowerCase() : null;
+        igObs = {
+          clientRow,
+          clientName: clientRow?.name || "(unknown client)",
+          handle: resHandle || (clientRow?.instagram_handle ? String(clientRow.instagram_handle).replace(/^@/, "").trim().toLowerCase() : "(unknown handle)"),
+          prevFollowers: Number(clientRow?.instagram_followers || 0),
+          newFollowers: Number(body.result?.followers || 0),
+          diagnostics: body.result?.diagnostics || null,
+          wrote: false,        // did we actually update instagram_followers?
+          guardBlockReason: null, // set when >0 but write blocked (e.g. no clients row)
+        };
+      }
+
       // Side-effects on successful task completion
       if (newStatus === "done" && body.result) {
         try {
@@ -1143,10 +1167,21 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
           // status with a clear reason instead.
           if (task.type === "ig_followers_fetch" && task.client_id && Number(body.result.followers) > 0) {
             const followers = parseInt(body.result.followers, 10);
-            // Update the legacy clients.instagram_followers (primary handle)
-            await env.DB.prepare(
-              "UPDATE clients SET instagram_followers = ?1 WHERE id = ?2"
-            ).bind(followers, task.client_id).run();
+            // Belt-and-suspenders: if the clients row doesn't exist at all,
+            // record a guard_block reason so the observability layer can
+            // explain "we tried to write but nothing matched".
+            if (igObs && !igObs.clientRow) {
+              igObs.guardBlockReason = "no_clients_row_for_client_id";
+            } else {
+              // Update the legacy clients.instagram_followers (primary handle)
+              const cliUpd = await env.DB.prepare(
+                "UPDATE clients SET instagram_followers = ?1 WHERE id = ?2"
+              ).bind(followers, task.client_id).run();
+              if (igObs) igObs.wrote = !!(cliUpd?.meta?.changes);
+              if (igObs && !cliUpd?.meta?.changes) {
+                igObs.guardBlockReason = "clients_update_zero_rows";
+              }
+            }
             // Update the matching instagram_accounts row (per-handle) — also
             // captures avatar URL if the scraper returned one.
             //
@@ -1188,23 +1223,6 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
                 }
               }
             }
-          }
-          // Log a warning when the laptop reports a 0-follower result, so the
-          // founder can see in the Completion Log which handles consistently
-          // return 0 (probably login wall / private account / parse miss).
-          if (task.type === "ig_followers_fetch" && task.client_id
-              && (body.result.followers === 0 || body.result.followers === "0")) {
-            try {
-              await env.DB.prepare(
-                `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
-              ).bind(
-                "ig.fetched_zero",
-                "warn",
-                `Scraper returned 0 followers for ${body.result.handle || "(unknown handle)"} — likely login wall or parse miss. Existing value preserved.`,
-                task.client_id,
-                JSON.stringify({ handle: body.result.handle, raw: body.result.raw || null, task_id: task.id })
-              ).run();
-            } catch {}
           }
 
           // yt_video_reseo: close the loop on the SEO proposal.
@@ -1351,6 +1369,142 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
             await invalidateOpsSnapshotCache(env);
           }
         } catch (e) { console.error("post-complete side-effect failed:", e.message); }
+      }
+
+      // ---- IG fetch observability: ONE agent_log row per PATCH ----
+      //
+      // Replaces the old silent `> 0` guard. We still PROTECT existing
+      // follower counts (the guard at line ~1144 stays), we just now make
+      // every outcome audible. Six possible `action` values (the user's
+      // requested `kind`s, mapped to this DB's actual column name):
+      //
+      //   ig_fetch_success         — done, >0, write landed
+      //   ig_fetch_zero_result     — done, 0, guard rejected the write
+      //   ig_fetch_guard_block     — done, >0, but no clients row matched
+      //   ig_fetch_login_wall      — failed, error mentions login_wall
+      //   ig_fetch_rate_limited    — failed, error mentions rate_limited
+      //   ig_fetch_handler_error   — failed, any other error
+      //
+      // Also fires a Discord alert when [zero_result|login_wall|handler_error]
+      // has happened >=3 times for this client in last 24h, with a once-per-day
+      // dedup row (action='ig_fetch_alert_sent') so we don't spam.
+      if (task.type === "ig_followers_fetch" && igObs) {
+        try {
+          const diagnosticsSummary = (() => {
+            const d = igObs.diagnostics;
+            if (!d || typeof d !== "object") return "diagnostics=none";
+            const parts = [];
+            if ("meta_tag_found" in d) parts.push(`meta_tag=${d.meta_tag_found ? "found" : "missing"}`);
+            if ("login_wall_detected" in d) parts.push(`login_wall=${!!d.login_wall_detected}`);
+            if ("rate_limit_detected" in d) parts.push(`rate_limit=${!!d.rate_limit_detected}`);
+            if (d.parse_method) parts.push(`parse_method=${d.parse_method}`);
+            if (d.redirect_url) parts.push(`redirect=${String(d.redirect_url).slice(0, 80)}`);
+            return parts.length ? parts.join(", ") : "diagnostics=empty";
+          })();
+
+          let action = null, level = "info", note = null;
+          const errStr = String(body.error || "").toLowerCase();
+
+          if (newStatus === "done" && igObs.wrote && igObs.newFollowers > 0) {
+            action = "ig_fetch_success";
+            level = "info";
+            note = `client=${igObs.clientName} handle=${igObs.handle} followers=${igObs.newFollowers} (was ${igObs.prevFollowers})`;
+          } else if (newStatus === "done" && igObs.newFollowers === 0) {
+            action = "ig_fetch_zero_result";
+            level = "warn";
+            note = `client=${igObs.clientName} handle=${igObs.handle} scraper returned 0 — possible login wall / private acct / wrong handle. Diagnostics: ${diagnosticsSummary}`;
+          } else if (newStatus === "done" && igObs.newFollowers > 0 && !igObs.wrote) {
+            action = "ig_fetch_guard_block";
+            level = "warn";
+            note = `client=${igObs.clientName} handle=${igObs.handle} new=${igObs.newFollowers} guard blocked write — reason=${igObs.guardBlockReason || "unknown"}`;
+          } else if (newStatus === "failed" && /login[_\s-]?wall/.test(errStr)) {
+            action = "ig_fetch_login_wall";
+            level = "error";
+            note = `client=${igObs.clientName} handle=${igObs.handle} IG hit login wall`;
+          } else if (newStatus === "failed" && /rate[_\s-]?limit/.test(errStr)) {
+            action = "ig_fetch_rate_limited";
+            level = "warn";
+            note = `client=${igObs.clientName} handle=${igObs.handle} HTTP 429 from IG — paused this run`;
+          } else if (newStatus === "failed") {
+            action = "ig_fetch_handler_error";
+            level = "error";
+            note = `client=${igObs.clientName} handle=${igObs.handle} error=${(body.error || "unknown").slice(0, 200)}`;
+          }
+
+          if (action) {
+            try {
+              await env.DB.prepare(
+                `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+              ).bind(
+                action,
+                level,
+                note,
+                task.client_id,
+                JSON.stringify({
+                  task_id: task.id,
+                  handle: igObs.handle,
+                  followers: igObs.newFollowers,
+                  prev_followers: igObs.prevFollowers,
+                  wrote: igObs.wrote,
+                  guard_block_reason: igObs.guardBlockReason,
+                  diagnostics: igObs.diagnostics || null,
+                  error: body.error || null,
+                  status: newStatus,
+                })
+              ).run();
+            } catch (logErr) {
+              console.error("[ig-fetch] agent_log insert failed:", logErr.message);
+            }
+
+            // Discord alert on persistent failure. Only for the three "bad
+            // outcome" actions — guard_block / rate_limited / success are
+            // not user-facing emergencies. Once-per-day dedup so we don't
+            // spam the ops channel.
+            const ALERT_ACTIONS = new Set(["ig_fetch_zero_result", "ig_fetch_login_wall", "ig_fetch_handler_error"]);
+            if (ALERT_ACTIONS.has(action)) {
+              try {
+                const nameForMatch = `%client=${igObs.clientName}%`;
+                const failCnt = await env.DB.prepare(
+                  `SELECT COUNT(*) AS cnt FROM agent_log
+                   WHERE action LIKE 'ig_fetch_%'
+                     AND action != 'ig_fetch_success'
+                     AND action != 'ig_fetch_alert_sent'
+                     AND message LIKE ?1
+                     AND created_at > datetime('now', '-1 day')`
+                ).bind(nameForMatch).first().catch(() => ({ cnt: 0 }));
+                const cnt = Number(failCnt?.cnt || 0);
+                if (cnt >= 3) {
+                  // Check dedup row in the last 24h
+                  const dedup = await env.DB.prepare(
+                    `SELECT 1 FROM agent_log
+                     WHERE action = 'ig_fetch_alert_sent'
+                       AND client_id = ?1
+                       AND created_at > datetime('now', '-1 day')
+                     LIMIT 1`
+                  ).bind(task.client_id).first().catch(() => null);
+                  if (!dedup) {
+                    postToDiscord(env, {
+                      content: `⚠ IG fetch failing repeatedly for ${igObs.clientName} (handle: ${igObs.handle}) — ${cnt} failures in last 24h. Latest reason: ${action}.`,
+                    }, "ops").catch(() => {});
+                    try {
+                      await env.DB.prepare(
+                        `INSERT INTO agent_log (action, level, message, client_id, payload_json) VALUES (?1, ?2, ?3, ?4, ?5)`
+                      ).bind(
+                        "ig_fetch_alert_sent",
+                        "info",
+                        `Discord ops alert sent for ${igObs.clientName} (${cnt} failures in 24h, latest=${action})`,
+                        task.client_id,
+                        JSON.stringify({ cnt, latest_action: action, handle: igObs.handle, task_id: task.id })
+                      ).run();
+                    } catch {}
+                  }
+                }
+              } catch (alertErr) {
+                console.error("[ig-fetch] discord alert path failed:", alertErr.message);
+              }
+            }
+          }
+        } catch (e) { console.error("[ig-fetch] observability block failed:", e.message); }
       }
 
       // Failure side-effects — stamp the SEO row with the error so the
@@ -3778,6 +3932,82 @@ export async function handleAgencyRoute(request, env, secret, url, requireTeamOr
       };
 
       return ok({ summary, report });
+    }
+
+    // ---- GET /admin/agency/ig/recent-attempts?clientId={id}&limit=10
+    //
+    // Per-client view of recent ig_followers_fetch task attempts with
+    // human-readable summaries. Used by the cockpit to answer
+    // "why is this client still at 0?" without needing to spelunk the DB.
+    // Auth: team JWT (inherits the auth gate at top of this block).
+    if (path === "/admin/agency/ig/recent-attempts" && method === "GET") {
+      const clientId = url.searchParams.get("clientId");
+      if (!clientId) return err("clientId query param required");
+      const limitRaw = parseInt(url.searchParams.get("limit") || "10", 10);
+      const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 10, 1), 50);
+
+      const client = await env.DB.prepare(
+        "SELECT id, name, instagram_handle, instagram_followers FROM clients WHERE id = ?1"
+      ).bind(clientId).first();
+      if (!client) return err("client not found", 404);
+
+      const { results: tasks } = await env.DB.prepare(
+        `SELECT id, status, result_json, error, claimed_at, completed_at, created_at, attempts
+         FROM laptop_tasks
+         WHERE type = 'ig_followers_fetch'
+           AND client_id = ?1
+         ORDER BY created_at DESC
+         LIMIT ${limit}`
+      ).bind(clientId).all();
+
+      // Summarize one task into a human-readable one-liner. Looks at status
+      // + result.diagnostics + error to give the cockpit something honest
+      // to display next to each row.
+      function summarizeAttempt(t) {
+        const result = safeJsonParse(t.result_json) || null;
+        if (t.status === "pending") return "queued — waiting for laptop to claim";
+        if (t.status === "claimed") return "claimed by laptop — running now";
+        if (t.status === "cancelled") return "cancelled";
+        if (t.status === "failed") {
+          const errLc = String(t.error || "").toLowerCase();
+          if (/login[_\s-]?wall/.test(errLc)) return "IG login wall — scraper couldn't see the profile";
+          if (/rate[_\s-]?limit/.test(errLc)) return "rate limited (HTTP 429) — paused this run";
+          if (/no[_\s-]?transcript|not[_\s-]?found/.test(errLc)) return `scraper error: ${t.error}`;
+          return `failed: ${(t.error || "unknown error").slice(0, 160)}`;
+        }
+        if (t.status === "done") {
+          const followers = Number(result?.followers || 0);
+          if (followers > 0) return `success — ${followers.toLocaleString("en-IN")} followers`;
+          // followers === 0 — explain why
+          const d = result?.diagnostics || {};
+          if (d.login_wall_detected) return "scraper returned 0 — login wall detected (write blocked by guard)";
+          if (d.rate_limit_detected) return "scraper returned 0 — rate limit detected (write blocked by guard)";
+          if (d.meta_tag_found === false) return "scraper returned 0 — meta tag missing (parse failure, write blocked by guard)";
+          return "scraper returned 0 — possible login wall / private acct / wrong handle (write blocked by guard)";
+        }
+        return `status=${t.status}`;
+      }
+
+      const attempts = (tasks || []).map((t) => ({
+        id: t.id,
+        status: t.status,
+        result: safeJsonParse(t.result_json),
+        error: t.error,
+        claimed_at: t.claimed_at,
+        completed_at: t.completed_at,
+        created_at: t.created_at,
+        attempts: t.attempts,
+        summary: summarizeAttempt(t),
+      }));
+
+      return ok({
+        ok: true,
+        client_id: client.id,
+        client_name: client.name,
+        instagram_handle: client.instagram_handle,
+        current_followers: Number(client.instagram_followers || 0),
+        attempts,
+      });
     }
 
     // ---- POST /admin/agency/ig/manual-entry
